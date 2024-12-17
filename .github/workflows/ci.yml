@@ -1,0 +1,264 @@
+name: CI
+on: [push]
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      # Label used to access the service container
+      db:
+        # Docker Hub image
+        image: postgres:12.22
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        env:
+          PGPORT: 5433
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # pragma: allowlist secret
+          POSTGRES_DB: postgres
+        ports:
+          - 5433:5433
+
+      redis:
+        image: redis:7.4.1
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: update apt
+        run: sudo apt-get update -y
+
+      - name: Apt install
+        run: cat Aptfile | sudo xargs apt-get install
+
+      - name: Install poetry
+        uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
+        with:
+          version: 1.7.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5
+        with:
+          python-version: "3.12.6"
+          cache: "poetry"
+
+      - name: Validate lockfile
+        run: poetry check --lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Create test local state
+        run: ./scripts/test/stub-data.sh
+
+      - name: Tests
+        run: |
+          poetry run ./manage.py collectstatic --noinput --clear
+          export MEDIA_ROOT="$(mktemp -d)"
+          ./scripts/test/python_tests.sh
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres # pragma: allowlist secret
+          MITOL_SECURE_SSL_REDIRECT: "False"
+          MITOL_DB_DISABLE_SSL: "True"
+          MITOL_FEATURES_DEFAULT: "True"
+          CELERY_TASK_ALWAYS_EAGER: "True"
+          CELERY_BROKER_URL: redis://localhost:6379/4
+          CELERY_RESULT_BACKEND: redis://localhost:6379/4
+          MITOL_APP_BASE_URL: http://localhost:8002/
+          MAILGUN_KEY: fake_mailgun_key
+          MAILGUN_SENDER_DOMAIN: other.fake.site
+          MITOL_COOKIE_DOMAIN: localhost
+          MITOL_COOKIE_NAME: cookie_monster
+
+      - name: Upload coverage to CodeCov
+        uses: codecov/codecov-action@7f8b4b4bde536c465e797be725718b88c5d95e0e # v5.1.1
+        with:
+          file: ./coverage.xml
+
+  # # javascript-tests:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+  #     - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+  #       with:
+  #         node-version: "^20"
+  #         cache: yarn
+  #         cache-dependency-path: yarn.lock
+
+  #     - name: Setup environment
+  #       run: sudo apt-get install libelf1
+
+  #     - name: Install dependencies
+  #       run: yarn install --immutable
+
+  #     - name: Dependencies are consistent
+  #       run: yarn syncpack list-mismatches
+
+  #     - name: Format check
+  #       run: yarn workspace frontends fmt-check
+
+  #     - name: Style lint
+  #       run: yarn run style-lint
+
+  #     - name: Lints
+  #       run: yarn run lint-check
+
+  #     - name: Build Next.js frontend
+  #       run: yarn workspace main build
+  #       env:
+  #         NODE_ENV: production
+  #         NEXT_PUBLIC_ORIGIN: https://ai.learn.mit.edu
+  #         NEXT_PUBLIC_MITOL_API_BASE_URL: https://api.ai.learn.mit.edu
+  #         NEXT_PUBLIC_CSRF_COOKIE_NAME: cookie-monster
+  #         NEXT_PUBLIC_SITE_NAME: MIT Learn
+  #         NEXT_PUBLIC_MITOL_SUPPORT_EMAIL: help@ci.learn.mit.edu
+  #       # do this before typecheck. See https://github.com/vercel/next.js/issues/53959#issuecomment-1735563224
+
+  #     - name: Typecheck
+  #       run: yarn run typecheck
+
+  #     - name: Get number of CPU cores
+  #       id: cpu-cores
+  #       uses: SimenB/github-actions-cpu-cores@97ba232459a8e02ff6121db9362b09661c875ab8 # v2
+
+  #     - name: Tests
+  #       run: yarn test --max-workers ${{ steps.cpu-cores.outputs.count }}
+  #       env:
+  #         CODECOV: true
+  #         NODE_ENV: test
+
+  #     - name: Upload coverage to CodeCov
+  #       uses: codecov/codecov-action@7f8b4b4bde536c465e797be725718b88c5d95e0e # v5.1.1
+  #       with:
+  #         file: coverage/lcov.info
+
+  # build-nextjs-container:
+  #   needs: javascript-tests
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+  #     - name: Build the Docker image
+  #       env:
+  #         ORIGIN: https://next.ai.rc.learn.mit.edu
+  #         MITOL_API_BASE_URL: https://ai.rc.learn.mit.edu
+  #         SITE_NAME: MIT Learn
+  #         SUPPORT_EMAIL: mitlearn-support@mit.edu
+  #         MITOL_AXIOS_WITH_CREDENTIALS: true
+  #         CSRF_COOKIE_NAME: ${{ secrets.CSRF_COOKIE_NAME_RC }}
+  #         POSTHOG_API_HOST: https://app.posthog.com
+  #         POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID_RC }}
+  #         POSTHOG_API_KEY: ${{ secrets.POSTHOG_PROJECT_API_KEY_RC }}
+  #         SENTRY_DSN: ${{ secrets.SENTRY_DSN_RC }}
+  #         SENTRY_ENV: ${{ secrets.MITOL_ENVIRONMENT_RC }}
+  #         SENTRY_PROFILES_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILES_SAMPLE_RATE_RC }}
+  #         SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE_RC }}
+  #         APPZI_URL: ${{ secrets.APPZI_URL_RC }}
+  #         VERSION: ${{ github.sha }}
+  #       run: |
+  #         docker build \
+  #           -f frontends/main/Dockerfile.web \
+  #           --build-arg NEXT_PUBLIC_ORIGIN=$ORIGIN \
+  #           --build-arg NEXT_PUBLIC_MITOL_API_BASE_URL=$MITOL_API_BASE_URL \
+  #           --build-arg NEXT_PUBLIC_SITE_NAME="$SITE_NAME" \
+  #           --build-arg NEXT_PUBLIC_MITOL_SUPPORT_EMAIL=$SUPPORT_EMAIL \
+  #           --build-arg NEXT_PUBLIC_EMBEDLY_KEY=$EMBEDLY_KEY \
+  #           --build-arg NEXT_PUBLIC_MITOL_AXIOS_WITH_CREDENTIALS=$MITOL_AXIOS_WITH_CREDENTIALS \
+  #           --build-arg NEXT_PUBLIC_CSRF_COOKIE_NAME=$CSRF_COOKIE_NAME \
+  #           --build-arg NEXT_PUBLIC_POSTHOG_API_HOST=$POSTHOG_API_HOST \
+  #           --build-arg NEXT_PUBLIC_POSTHOG_PROJECT_ID=$POSTHOG_PROJECT_ID \
+  #           --build-arg NEXT_PUBLIC_POSTHOG_API_KEY=$POSTHOG_API_KEY \
+  #           --build-arg NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN \
+  #           --build-arg NEXT_PUBLIC_SENTRY_ENV=$SENTRY_ENV \
+  #           --build-arg NEXT_PUBLIC_SENTRY_PROFILES_SAMPLE_RATE=$SENTRY_PROFILES_SAMPLE_RATE \
+  #           --build-arg NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE=$SENTRY_TRACES_SAMPLE_RATE \
+  #           --build-arg NEXT_PUBLIC_APPZI_URL=$APPZI_URL \
+  #           --build-arg NEXT_PUBLIC_VERSION=$VERSION \
+  #           -t mitodl/mit-learn-frontend:$VERSION .
+
+
+  openapi-generated-client-check-v0:
+    # This job checks that the output of openapi-generator-typescript-axios that
+    # is checked into version control is up-to-date.
+    env:
+      OPENAPI_SCHEMA: ./openapi/specs/v0.yaml
+      GENERATOR_IGNORE_FILE: ./frontends/api/.openapi-generator-ignore
+      GENERATOR_OUTPUT_DIR_CI: ./frontends/api/tmp/generated/v0
+      GENERATOR_OUTPUT_DIR_VC: ./frontends/api/src/generated/v0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: "^20"
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Generate Fresh API Client
+        uses: openapi-generators/openapitools-generator-action@v1
+        with:
+          generator: typescript-axios
+          openapi-file: $OPENAPI_SCHEMA
+          generator-tag: v7.2.0
+          command-args: |
+            --output $GENERATOR_OUTPUT_DIR_CI \
+            --ignore-file-override $GENERATOR_IGNORE_FILE \
+            -c scripts/openapi-configs/typescript-axios-v0.yaml
+
+      - name: Format freshly generated client
+        run: npx prettier $GENERATOR_OUTPUT_DIR_CI/**/*.ts --no-semi --write
+
+      - name: Check VC client is up-to-date
+        run: |
+          diff $GENERATOR_OUTPUT_DIR_CI $GENERATOR_OUTPUT_DIR_VC \
+          || { echo "OpenAPI spec is out of date. Please regenerate via ./scripts/generate_openapi.sh"; exit 1; }
+
+  openapi-generated-client-check-v1:
+    # This job checks that the output of openapi-generator-typescript-axios that
+    # is checked into version control is up-to-date.
+    env:
+      OPENAPI_SCHEMA: ./openapi/specs/v1.yaml
+      GENERATOR_IGNORE_FILE: ./frontends/api/.openapi-generator-ignore
+      GENERATOR_OUTPUT_DIR_CI: ./frontends/api/tmp/generated/v1
+      GENERATOR_OUTPUT_DIR_VC: ./frontends/api/src/generated/v1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: "^20"
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Generate Fresh API Client
+        uses: openapi-generators/openapitools-generator-action@v1
+        with:
+          generator: typescript-axios
+          openapi-file: $OPENAPI_SCHEMA
+          generator-tag: v7.2.0
+          command-args: |
+            --output $GENERATOR_OUTPUT_DIR_CI \
+            --ignore-file-override $GENERATOR_IGNORE_FILE \
+            -c scripts/openapi-configs/typescript-axios-v1.yaml
+
+      - name: Format freshly generated client
+        run: npx prettier $GENERATOR_OUTPUT_DIR_CI/**/*.ts --no-semi --write
+
+      - name: Check VC client is up-to-date
+        run: |
+          diff $GENERATOR_OUTPUT_DIR_CI $GENERATOR_OUTPUT_DIR_VC \
+          || { echo "OpenAPI spec is out of date. Please regenerate via ./scripts/generate_openapi.sh"; exit 1; }

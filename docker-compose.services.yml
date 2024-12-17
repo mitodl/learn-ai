@@ -1,0 +1,72 @@
+services:
+  db:
+    profiles:
+      - backend
+    image: postgres:12.22
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - 5433:5433
+    environment:
+      - PGPORT=5433
+      - PGUSER=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  redis:
+    profiles:
+      - backend
+    image: redis:7.4.1
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping", "|", "grep", "PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379"
+
+  nginx:
+    profiles:
+      - backend
+    build:
+      context: ./nginx
+    ports:
+      - "8002:8002"
+    links:
+      - web
+    environment:
+      PORT: 8002
+      NGINX_UWSGI_PASS: "web:8001"
+    volumes:
+      - ./config:/etc/nginx/templates
+
+  litellm:
+    profiles:
+      - backend
+    build:
+      dockerfile: Dockerfile-litellm
+    ports:
+      - "4000:4000"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5433/litellm
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
+      - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./config:/app
+
+volumes:
+  pgdata:
+  # note: these are here instead of docker-compose.apps.yml because `extends` doesn't pull them in
+  django_media:
+  yarn-cache:

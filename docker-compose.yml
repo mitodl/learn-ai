@@ -1,0 +1,33 @@
+include:
+  - docker-compose.services.yml
+
+services:
+  web:
+    extends:
+      file: docker-compose.apps.yml
+      service: ai
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
+
+  celery:
+    extends:
+      file: docker-compose.apps.yml
+      service: celery
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
