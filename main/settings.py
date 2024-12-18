@@ -15,8 +15,7 @@ import datetime
 import logging
 import os
 import platform
-from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
@@ -347,7 +346,12 @@ AUTHORIZATION_URL = get_string(
 
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 STATIC_URL = "/static/"
-STATIC_ROOT = Path(BASE_DIR) / "staticfiles"
+CLOUDFRONT_DIST = get_string("CLOUDFRONT_DIST", None)
+if CLOUDFRONT_DIST:
+    STATIC_URL = urljoin(f"https://{CLOUDFRONT_DIST}.cloudfront.net", STATIC_URL)
+
+STATIC_ROOT = "staticfiles"
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # noqa: PTH118
 
 # Important to define this so DEBUG works properly
 INTERNAL_IPS = (get_string("HOST_IP", "127.0.0.1"),)
@@ -596,7 +600,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.NamespaceVersioning",
-    "ALLOWED_VERSIONS": ["v0", "v1"],
+    "ALLOWED_VERSIONS": ["v0"],
     "ORDERING_PARAM": "sortby",
 }
 
