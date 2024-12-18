@@ -15,7 +15,7 @@ class RecommendationAgentConsumer(AsyncWebsocketConsumer):
         log.info("Username is %s", self.username)
         from ai_agents.agents import SearchAgent
 
-        self.agent = SearchAgent()
+        self.agent = SearchAgent(self.username)
         await super().connect()
 
     async def receive(self, text_data: str) -> str:

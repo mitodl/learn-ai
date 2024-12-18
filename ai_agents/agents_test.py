@@ -51,6 +51,7 @@ def test_search_agent_service_initialization_defaults(model, temperature, instru
     name = "My search agent"
 
     search_agent = SearchAgent(
+        "user",
         name=name,
         model=model,
         temperature=temperature,
@@ -71,7 +72,7 @@ def test_search_agent_service_initialization_defaults(model, temperature, instru
 
 def test_clear_chat_history(client, user, chat_history):
     """Test that the SearchAgent clears chat_history."""
-    search_agent = SearchAgent()
+    search_agent = SearchAgent(user.username)
     search_agent.agent.chat_history.extend(chat_history)
     assert len(search_agent.agent.chat_history) == 2
     search_agent.clear_chat_history()
@@ -103,7 +104,7 @@ def test_search_agent_tool(settings, mocker, search_results):
         "ai_agents.agents.requests.get",
         return_value=mocker.Mock(json=mocker.Mock(return_value=search_results)),
     )
-    search_agent = SearchAgent(name="test agent")
+    search_agent = SearchAgent("anonymous", name="test agent")
     search_parameters = {
         "q": "physics",
         "resource_type": ["course", "program"],
@@ -137,7 +138,7 @@ def test_get_completion(settings, mocker, debug, search_results):
         "ai_agents.agents.OpenAIAgent.stream_chat",
         return_value=mocker.Mock(response_gen=iter(expected_return_value)),
     )
-    search_agent = SearchAgent(name="test agent")
+    search_agent = SearchAgent("anonymous", name="test agent")
     search_agent.search_parameters = metadata["metadata"]["search_parameters"]
     search_agent.search_results = metadata["metadata"]["search_results"]
     search_agent.instructions = metadata["metadata"]["system_prompt"]

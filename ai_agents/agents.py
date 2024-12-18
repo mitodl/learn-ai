@@ -48,6 +48,7 @@ class BaseChatAgent(ABC):
 
     def __init__(
         self,
+        user_id: str,
         *,
         name: str = "AI Chat Agent",
         model: Optional[str] = None,
@@ -55,12 +56,13 @@ class BaseChatAgent(ABC):
         instructions: Optional[str] = None,
     ):
         """Initialize the AI chat agent service"""
+        self.user_id = user_id
         self.assistant_name = name
         self.ai = settings.AI_MODEL_API
         self.model = model or settings.AI_MODEL
         self.temperature = temperature or DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
-        if settings.AI_PROXY_CLASS:
+        if settings.AI_PROXY_CLASS and settings.AI_PROXY_URL:
             self.proxy = import_string(f"ai_agents.proxy.{settings.AI_PROXY_CLASS}")()
         else:
             self.proxy = None
@@ -275,6 +277,7 @@ Search parameters: {{"q": "mathematics"}}
 
     def __init__(
         self,
+        user_id: str,
         *,
         name: Optional[str] = "Learning Resource Search AI Assistant",
         model: Optional[str] = None,
@@ -283,6 +286,7 @@ Search parameters: {{"q": "mathematics"}}
     ):
         """Initialize the AI search agent service"""
         super().__init__(
+            user_id,
             name=name,
             model=model or settings.AI_MODEL,
             temperature=temperature,
@@ -290,6 +294,7 @@ Search parameters: {{"q": "mathematics"}}
         )
         self.search_parameters = []
         self.search_results = []
+
         self.agent = self.create_agent()
         self.create_agent()
 

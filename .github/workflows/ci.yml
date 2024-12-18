@@ -61,7 +61,7 @@ jobs:
           export MEDIA_ROOT="$(mktemp -d)"
           ./scripts/test/python_tests.sh
         env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres # pragma: allowlist secret
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/postgres # pragma: allowlist secret
           MITOL_SECURE_SSL_REDIRECT: "False"
           MITOL_DB_DISABLE_SSL: "True"
           MITOL_FEATURES_DEFAULT: "True"
