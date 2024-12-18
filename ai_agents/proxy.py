@@ -14,9 +14,11 @@ log = logging.getLogger(__name__)
 
 
 class AIProxy(ABC):
-    """Abstract base helper class for an AI proxy/gateway."""
+    """
+    Abstract base helper class for an AI proxy/gateway.
+    """
 
-    REQUIRED_SETTINGS = []
+    REQUIRED_SETTINGS = ["AI_PROXY_URL", "AI_PROXY_AUTH_TOKEN", "AI_PROXY_CLASS"]
 
     def __init__(self):
         """Raise an error if required settings are missing."""
@@ -48,12 +50,18 @@ class LiteLLMProxy(AIProxy):
     REQUIRED_SETTINGS = ("AI_PROXY_URL", "AI_PROXY_AUTH_TOKEN")
 
     def get_api_kwargs(self) -> dict:
+        """
+        Return the api kwargs required to connect to the proxy.
+        """
         return {
             "api_base": settings.AI_PROXY_URL,
             "api_key": settings.AI_PROXY_AUTH_TOKEN,
         }
 
     def get_additional_kwargs(self, service: BaseChatAgent) -> dict:
+        """
+        Return any additional kwargs that should be sent to the proxy.
+        """
         return {
             "user": service.user_id,
             "store": True,
@@ -67,7 +75,7 @@ class LiteLLMProxy(AIProxy):
             },
         }
 
-    def create_proxy_user(self, user_id, endpoint="new") -> None:
+    def create_proxy_user(self, user_id: str, endpoint: str = "new") -> None:
         """
         Set the rate limit for the user by creating a LiteLLM customer account.
         Anonymous users will share the same rate limit.

@@ -129,7 +129,7 @@ class BaseChatAgent(ABC):
             yield f"\n\n<!-- {self.get_comment_metadata()} -->\n\n"
 
 
-class SearchAgent(BaseChatAgent):
+class RecommendationAgent(BaseChatAgent):
     """Service class for the AI search function agent"""
 
     JOB_ID = "SEARCH_JOB"

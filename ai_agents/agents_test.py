@@ -5,11 +5,9 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
-from llama_index.core.base.llms.types import MessageRole
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
-from ai_agents.agents import SearchAgent
-from ai_agents.factories import ChatMessageFactory
+from ai_agents.agents import RecommendationAgent
 from main.test_utils import assert_json_equal
 
 
@@ -19,15 +17,6 @@ def ai_settings(settings):
     settings.AI_CACHE = "default"
     settings.AI_PROXY_URL = ""
     return settings
-
-
-@pytest.fixture
-def chat_history():
-    """Return one round trip chat history for testing."""
-    return [
-        ChatMessageFactory(role=MessageRole.USER),
-        ChatMessageFactory(role=MessageRole.ASSISTANT),
-    ]
 
 
 @pytest.fixture
@@ -47,10 +36,10 @@ def search_results():
     ],
 )
 def test_search_agent_service_initialization_defaults(model, temperature, instructions):
-    """Test the SearchAgent class instantiation."""
+    """Test the RecommendationAgent class instantiation."""
     name = "My search agent"
 
-    search_agent = SearchAgent(
+    search_agent = RecommendationAgent(
         "user",
         name=name,
         model=model,
@@ -71,10 +60,10 @@ def test_search_agent_service_initialization_defaults(model, temperature, instru
 
 
 def test_clear_chat_history(client, user, chat_history):
-    """Test that the SearchAgent clears chat_history."""
-    search_agent = SearchAgent(user.username)
+    """Test that the RecommendationAgent clears chat_history."""
+    search_agent = RecommendationAgent(user.username)
     search_agent.agent.chat_history.extend(chat_history)
-    assert len(search_agent.agent.chat_history) == 2
+    assert len(search_agent.agent.chat_history) == 4
     search_agent.clear_chat_history()
     assert search_agent.agent.chat_history == []
 
@@ -104,7 +93,7 @@ def test_search_agent_tool(settings, mocker, search_results):
         "ai_agents.agents.requests.get",
         return_value=mocker.Mock(json=mocker.Mock(return_value=search_results)),
     )
-    search_agent = SearchAgent("anonymous", name="test agent")
+    search_agent = RecommendationAgent("anonymous", name="test agent")
     search_parameters = {
         "q": "physics",
         "resource_type": ["course", "program"],
@@ -124,13 +113,13 @@ def test_search_agent_tool(settings, mocker, search_results):
 @pytest.mark.django_db
 @pytest.mark.parametrize("debug", [True, False])
 def test_get_completion(settings, mocker, debug, search_results):
-    """Test that the SearchAgent get_completion method returns expected values."""
+    """Test that the RecommendationAgent get_completion method returns expected values."""
     settings.AI_DEBUG = debug
     metadata = {
         "metadata": {
             "search_parameters": {"q": "physics"},
             "search_results": search_results.get("results"),
-            "system_prompt": SearchAgent.INSTRUCTIONS,
+            "system_prompt": RecommendationAgent.INSTRUCTIONS,
         }
     }
     expected_return_value = [b"Here ", b"are ", b"some ", b"results"]
@@ -138,7 +127,7 @@ def test_get_completion(settings, mocker, debug, search_results):
         "ai_agents.agents.OpenAIAgent.stream_chat",
         return_value=mocker.Mock(response_gen=iter(expected_return_value)),
     )
-    search_agent = SearchAgent("anonymous", name="test agent")
+    search_agent = RecommendationAgent("anonymous", name="test agent")
     search_agent.search_parameters = metadata["metadata"]["search_parameters"]
     search_agent.search_results = metadata["metadata"]["search_results"]
     search_agent.instructions = metadata["metadata"]["system_prompt"]

@@ -1,9 +1,9 @@
 from django.urls import re_path
 
-from . import consumers
+from ai_agents import consumers
 
 websocket_urlpatterns = [
-    # other websocket URLs here
+    # websocket URLs go here
     re_path(
         r"ws/recommendation_agent/",
         consumers.RecommendationAgentConsumer.as_asgi(),

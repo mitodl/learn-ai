@@ -1,10 +1,15 @@
 import pytest
+from llama_cloud import MessageRole
+
+from ai_agents.factories import ChatMessageFactory
 
 
 @pytest.fixture
-def mock_search_agent_service(mocker):
-    """Mock the SearchAgentService class."""
-    return mocker.patch(
-        "ai_agents.views.SearchAgentService",
-        autospec=True,
-    )
+def chat_history():
+    """Return one round trip chat history for testing."""
+    return [
+        ChatMessageFactory.create(role=MessageRole.USER),
+        ChatMessageFactory.create(role=MessageRole.ASSISTANT),
+        ChatMessageFactory.create(role=MessageRole.USER),
+        ChatMessageFactory.create(role=MessageRole.ASSISTANT),
+    ]

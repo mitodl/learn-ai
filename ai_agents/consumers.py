@@ -4,23 +4,28 @@ import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from llama_index.core.base.llms.types import ChatMessage
 
+from ai_agents.agents import RecommendationAgent
+from ai_agents.serializers import ChatRequestSerializer
+
 log = logging.getLogger(__name__)
 
 
 class RecommendationAgentConsumer(AsyncWebsocketConsumer):
+    """
+    Async websocket consumer for the recommendation agent.
+    """
+
     async def connect(self):
         """Connect to the websocket and initialize the AI agent."""
         user = self.scope.get("user", None)
-        self.username = user.username if user else "anonymous"
-        log.info("Username is %s", self.username)
-        from ai_agents.agents import SearchAgent
+        self.user_id = user.username if user else "anonymous"
+        log.info("Username is %s", self.user_id)
 
-        self.agent = SearchAgent(self.username)
+        self.agent = RecommendationAgent(self.user_id)
         await super().connect()
 
     async def receive(self, text_data: str) -> str:
         """Send the message to the AI agent and return its response."""
-        from ai_agents.serializers import ChatRequestSerializer
 
         try:
             text_data_json = json.loads(text_data)
@@ -33,7 +38,7 @@ class RecommendationAgentConsumer(AsyncWebsocketConsumer):
             model = serializer.validated_data.pop("model", None)
 
             if clear_history:
-                self.agent.agent.chat_history.clear()
+                self.agent.clear_chat_history()
             if model:
                 self.agent.agent.agent_worker._llm.model = model  # noqa: SLF001
             if temperature:
