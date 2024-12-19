@@ -8,7 +8,9 @@ from typing import Optional
 import pydantic
 import requests
 from django.conf import settings
+from django.core.cache import caches
 from django.utils.module_loading import import_string
+from llama_cloud import ChatMessage
 from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.agent import AgentRunner
 from llama_index.core.constants import DEFAULT_TEMPERATURE
@@ -45,6 +47,7 @@ class BaseChatAgent(ABC):
     # For LiteLLM tracking purposes
     JOB_ID = "BASECHAT_JOB"
     TASK_NAME = "BASECHAT_TASK"
+    CACHE_PREFIX = "base_ai_"
 
     def __init__(
         self,
@@ -67,6 +70,39 @@ class BaseChatAgent(ABC):
         else:
             self.proxy = None
         self.agent = None
+        self.save_history = settings.AI_CACHE_HISTORY and self.user_id
+        if self.save_history:
+            self.cache = caches[settings.AI_CACHE]
+            self.cache_timeout = settings.AI_CACHE_TIMEOUT
+            self.cache_key = f"{self.CACHE_PREFIX}{self.user_id}"
+
+    def get_or_create_chat_history_cache(self) -> None:
+        """
+        Get the user chat history from the cache and load it into the
+        llamaindex agent's chat history (agent.chat_history).
+        Create an empty cache key if it doesn't exist.
+        """
+        if self.cache_key in self.cache:
+            try:
+                for message in json.loads(self.cache.get(self.cache_key)):
+                    self.agent.chat_history.append(ChatMessage(**message))
+            except json.JSONDecodeError:
+                self.cache.set(self.cache_key, "[]", timeout=self.cache_timeout)
+        else:
+            if self.proxy:
+                self.proxy.create_proxy_user(self.user_id)
+            self.cache.set(self.cache_key, "[]", timeout=self.cache_timeout)
+
+    def save_chat_history(self) -> None:
+        """Save the agent chat history to the cache"""
+        chat_history = [
+            message.dict()
+            for message in self.agent.chat_history
+            if message.role != "tool" and message.content
+        ]
+        self.cache.set(
+            self.cache_key, json.dumps(chat_history), timeout=settings.AI_CACHE_TIMEOUT
+        )
 
     def create_agent(self) -> AgentRunner:
         """Create an AgentRunner for the relevant AI source"""
@@ -87,6 +123,9 @@ class BaseChatAgent(ABC):
     def clear_chat_history(self) -> None:
         """Clear the chat history from the cache"""
         self.agent.chat_history.clear()
+        if self.save_history:
+            self.cache.delete(self.cache_key)
+            self.get_or_create_chat_history_cache()
 
     @abstractmethod
     def get_comment_metadata(self):
@@ -127,6 +166,8 @@ class BaseChatAgent(ABC):
             log.exception("Error running AI agent")
         if debug:
             yield f"\n\n<!-- {self.get_comment_metadata()} -->\n\n"
+        if self.save_history:
+            self.save_chat_history()
 
 
 class RecommendationAgent(BaseChatAgent):
@@ -370,12 +411,15 @@ Search parameters: {{"q": "mathematics"}}
                 self.proxy.get_additional_kwargs(self) if self.proxy else {}
             ),
         )
-        return OpenAIAgent.from_tools(
+        agent = OpenAIAgent.from_tools(
             tools=self.create_tools(),
             llm=llm,
             verbose=True,
             system_prompt=self.instructions,
         )
+        if settings.AI_CACHE_HISTORY:
+            self.get_or_create_chat_history_cache()
+        return agent
 
     def create_tools(self):
         """Create tools required by the agent"""

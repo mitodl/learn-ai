@@ -18,8 +18,16 @@ class RecommendationAgentConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         """Connect to the websocket and initialize the AI agent."""
         user = self.scope.get("user", None)
-        self.user_id = user.username if user else "anonymous"
-        log.info("Username is %s", self.user_id)
+        session = self.scope.get("session", None)
+
+        if user and user.username:
+            self.user_id = user.username
+        elif session:
+            if not session.session_key:
+                session.save()
+            self.user_id = session.session_key
+        else:
+            self.user_id = None
 
         self.agent = RecommendationAgent(self.user_id)
         await super().connect()
