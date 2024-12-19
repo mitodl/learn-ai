@@ -50,6 +50,7 @@ uvicorn = {extras = ["standard"], version = "^0.32.1"}
 django-guardian = "^2.4.0"
 named-enum = "^1.4.0"
 ulid-py = "^0.2.0"
+channels-redis = "^4.2.1"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.24"

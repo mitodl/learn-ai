@@ -10,9 +10,9 @@ import requests
 from django.conf import settings
 from django.core.cache import caches
 from django.utils.module_loading import import_string
-from llama_cloud import ChatMessage
 from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.agent import AgentRunner
+from llama_index.core.base.llms.types import ChatMessage
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 from llama_index.core.tools import FunctionTool, ToolMetadata
 from llama_index.llms.openai import OpenAI
@@ -335,8 +335,6 @@ Search parameters: {{"q": "mathematics"}}
         )
         self.search_parameters = []
         self.search_results = []
-
-        self.agent = self.create_agent()
         self.create_agent()
 
     def search_courses(self, q: str, **kwargs) -> str:
@@ -411,15 +409,15 @@ Search parameters: {{"q": "mathematics"}}
                 self.proxy.get_additional_kwargs(self) if self.proxy else {}
             ),
         )
-        agent = OpenAIAgent.from_tools(
+        self.agent = OpenAIAgent.from_tools(
             tools=self.create_tools(),
             llm=llm,
             verbose=True,
             system_prompt=self.instructions,
         )
-        if settings.AI_CACHE_HISTORY:
+        if self.save_history:
             self.get_or_create_chat_history_cache()
-        return agent
+        return self.agent
 
     def create_tools(self):
         """Create tools required by the agent"""

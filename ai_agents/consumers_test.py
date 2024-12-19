@@ -41,7 +41,7 @@ def agent_user():
 @pytest.fixture
 def recommendation_consumer(agent_user):
     """Return a recommendation consumer."""
-    consumer = consumers.RecommendationAgentConsumer()
+    consumer = consumers.RecommendationAgentWSConsumer()
     consumer.scope = {"user": agent_user}
     return consumer
 
