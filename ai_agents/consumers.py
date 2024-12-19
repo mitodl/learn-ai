@@ -27,7 +27,7 @@ def process_message(message_json, agent) -> str:
     model = serializer.validated_data.pop("model", None)
 
     if clear_history:
-        agent.agent.clear_chat_history()
+        agent.clear_chat_history()
     if model:
         agent.agent.agent_worker._llm.model = model  # noqa: SLF001
     if temperature:

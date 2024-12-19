@@ -118,6 +118,9 @@ async def test_clear_history(mocker, clear_history, recommendation_consumer):
     mock_clear = mocker.patch(
         "ai_agents.consumers.RecommendationAgent.clear_chat_history"
     )
+    mocker.patch(
+        "ai_agents.agents.RecommendationAgent.get_completion",
+    )
     await recommendation_consumer.connect()
     await recommendation_consumer.receive(
         json.dumps({"clear_history": clear_history, "message": "hello"})
