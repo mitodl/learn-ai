@@ -117,7 +117,7 @@ class RecommendationAgentSSEConsumer(AsyncHttpConsumer):
         # Headers are only sent after the first body event.
         # Set "more_body" to tell the interface server to not
         # finish the response yet:
-        payload = "\nevent: ping", "data: null\n\n\n"
+        payload = "\nevent: ping\ndata: null\n\n\n"
         await self.send_body(payload.encode("utf-8"), more_body=True)
 
         try:

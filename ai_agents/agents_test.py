@@ -122,7 +122,10 @@ def test_get_completion(settings, mocker, debug, search_results):
             "system_prompt": RecommendationAgent.INSTRUCTIONS,
         }
     }
+    comment_metadata = f"\n\n<!-- {json.dumps(metadata)} -->\n\n".encode()
     expected_return_value = [b"Here ", b"are ", b"some ", b"results"]
+    if debug:
+        expected_return_value.append(comment_metadata)
     mocker.patch(
         "ai_agents.agents.OpenAIAgent.stream_chat",
         return_value=mocker.Mock(response_gen=iter(expected_return_value)),

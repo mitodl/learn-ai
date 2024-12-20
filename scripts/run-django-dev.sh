@@ -13,4 +13,7 @@ python3 manage.py createcachetable
 # run ONLY data migrations
 RUN_DATA_MIGRATIONS=true python3 manage.py migrate --noinput
 
-gunicorn main.asgi:application -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8001 --workers 4 --threads 2
+uvicorn main.asgi:application --reload --host 0.0.0.0 --port 8001
+
+# production might best be run via a combo of gunicorn and uvicorn?
+#gunicorn main.asgi:application -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8001 --workers 4 --threads 2
