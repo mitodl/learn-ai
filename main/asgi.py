@@ -8,13 +8,13 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "main.settings")
 
 django_asgi_app = get_asgi_application()
 
-import ai_agents.routing  # noqa: E402
+import ai_chatbots.routing  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
-        "http": AuthMiddlewareStack(URLRouter(ai_agents.routing.http_patterns)),
+        "http": AuthMiddlewareStack(URLRouter(ai_chatbots.routing.http_patterns)),
         "websocket": AuthMiddlewareStack(
-            URLRouter(ai_agents.routing.websocket_patterns)
+            URLRouter(ai_chatbots.routing.websocket_patterns)
         ),
     }
 )

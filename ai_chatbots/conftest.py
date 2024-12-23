@@ -1,7 +1,7 @@
 import pytest
 from llama_cloud import MessageRole
 
-from ai_agents.factories import ChatMessageFactory
+from ai_chatbots.factories import ChatMessageFactory
 
 
 @pytest.fixture(autouse=True)

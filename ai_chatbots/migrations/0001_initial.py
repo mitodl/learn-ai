@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import migrations
 
-from ai_agents import constants
+from ai_chatbots import constants
 
 
 def add_ai_prompt_editor_group(apps, schema_editor):

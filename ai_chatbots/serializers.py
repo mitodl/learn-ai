@@ -1,4 +1,4 @@
-"""Serializers for the ai_agents app"""
+"""Serializers for the ai_chatbots app"""
 
 from django.conf import settings
 from rest_framework import serializers

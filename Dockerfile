@@ -55,5 +55,6 @@ RUN apt-get clean && apt-get purge
 
 USER mitodl
 
+EXPOSE 8888
 EXPOSE 8001
 ENV PORT 8001

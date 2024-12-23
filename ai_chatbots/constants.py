@@ -1,14 +1,28 @@
 """Constants for the AI Chat application."""
 
+from llama_index.agent.openai import OpenAIAgent
+from llama_index.llms.openai import OpenAI
 from named_enum import ExtendedEnum
 
 
-class AIModelAPI(ExtendedEnum):
+class LLMClassEnum(ExtendedEnum):
     """
-    Enum for AI model APIs.  Add new AI APIs here.
+    Enum for determining which LLM class to
+    use based on settings.AI_PROVIDER. For example,
+    if AI_PROVIDER == "openai", the OpenAI LLM class
+    should be used.
     """
 
-    openai = "openai"
+    openai = OpenAI
+
+
+class AgentClassEnum(ExtendedEnum):
+    """
+    Enum for determining which AgentRunner to
+    use based on settings.AI_PROVIDER.
+    """
+
+    openai = OpenAIAgent
 
 
 GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"

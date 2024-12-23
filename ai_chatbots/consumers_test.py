@@ -1,4 +1,4 @@
-"""Tests for ai_agents consumers"""
+"""Tests for ai_chatbots consumers"""
 
 import json
 from random import randint
@@ -7,9 +7,9 @@ import pytest
 from llama_cloud import MessageRole
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
-from ai_agents import consumers
-from ai_agents.agents import RecommendationAgent
-from ai_agents.factories import ChatMessageFactory
+from ai_chatbots import consumers
+from ai_chatbots.chatbots import ResourceRecommendationBot
+from ai_chatbots.factories import ChatMessageFactory
 from main.factories import UserFactory
 
 
@@ -17,7 +17,7 @@ from main.factories import UserFactory
 def mock_connect(mocker):
     """Mock the AsyncWebsocketConsumer connect function"""
     return mocker.patch(
-        "ai_agents.consumers.AsyncWebsocketConsumer.connect",
+        "ai_chatbots.consumers.AsyncWebsocketConsumer.connect",
         new_callable=mocker.AsyncMock,
     )
 
@@ -26,7 +26,8 @@ def mock_connect(mocker):
 def mock_send(mocker):
     """Mock the AsyncWebsocketConsumer connect function"""
     return mocker.patch(
-        "ai_agents.consumers.AsyncWebsocketConsumer.send", new_callable=mocker.AsyncMock
+        "ai_chatbots.consumers.AsyncWebsocketConsumer.send",
+        new_callable=mocker.AsyncMock,
     )
 
 
@@ -41,7 +42,7 @@ def agent_user():
 @pytest.fixture
 def recommendation_consumer(agent_user):
     """Return a recommendation consumer."""
-    consumer = consumers.RecommendationAgentWSConsumer()
+    consumer = consumers.RecommendationBotWSConsumer()
     consumer.scope = {"user": agent_user}
     return consumer
 
@@ -81,7 +82,7 @@ async def test_recommend_agent_receive(  # noqa: PLR0913
     """Test the receive function of the recommendation agent."""
     response = ChatMessageFactory.create(role=MessageRole.ASSISTANT)
     mock_completion = mocker.patch(
-        "ai_agents.agents.RecommendationAgent.get_completion",
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
         side_effect=[response.content.split(" ")],
     )
     data = {
@@ -97,13 +98,16 @@ async def test_recommend_agent_receive(  # noqa: PLR0913
     await recommendation_consumer.receive(json.dumps(data))
 
     assert recommendation_consumer.agent.user_id.startswith("test_user")
-    assert recommendation_consumer.agent.agent.agent_worker._llm.temperature == (  # noqa: SLF001
+    agent_worker = recommendation_consumer.agent.agent.agent_worker
+    assert agent_worker._llm.temperature == (  # noqa: SLF001
         temperature if temperature else DEFAULT_TEMPERATURE
     )
     assert recommendation_consumer.agent.agent.agent_worker.prefix_messages[
         0
-    ].content == (instructions if instructions else RecommendationAgent.INSTRUCTIONS)
-    assert recommendation_consumer.agent.agent.agent_worker._llm.model == (  # noqa: SLF001
+    ].content == (
+        instructions if instructions else ResourceRecommendationBot.INSTRUCTIONS
+    )
+    assert agent_worker._llm.model == (  # noqa: SLF001
         model if model else settings.AI_MODEL
     )
 
@@ -116,10 +120,10 @@ async def test_recommend_agent_receive(  # noqa: PLR0913
 async def test_clear_history(mocker, clear_history, recommendation_consumer):
     """Test the clear history function of the recommendation agent."""
     mock_clear = mocker.patch(
-        "ai_agents.consumers.RecommendationAgent.clear_chat_history"
+        "ai_chatbots.consumers.ResourceRecommendationBot.clear_chat_history"
     )
     mocker.patch(
-        "ai_agents.agents.RecommendationAgent.get_completion",
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
     )
     await recommendation_consumer.connect()
     await recommendation_consumer.receive(

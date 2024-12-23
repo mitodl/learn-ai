@@ -5,7 +5,7 @@ services:
   web:
     extends:
       file: docker-compose.apps.yml
-      service: ai
+      service: web
     env_file:
       - path: env/shared.env
       - path: env/shared.local.env

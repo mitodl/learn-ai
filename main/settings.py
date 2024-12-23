@@ -100,7 +100,7 @@ INSTALLED_APPS = (
     "channels",
     # Put our apps after this point
     "main",
-    "ai_agents",
+    "ai_chatbots",
     "openapi",
 )
 
@@ -568,7 +568,7 @@ AI_MIT_SEARCH_URL = get_string(
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MODEL = get_string(name="AI_MODEL", default="gpt-4o")
-AI_MODEL_API = get_string(name="AI_MODEL_API", default="openai")
+AI_PROVIDER = get_string(name="AI_PROVIDER", default="openai")
 
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")

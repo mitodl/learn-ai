@@ -1,4 +1,4 @@
-"""Test factory classes for ai_agents tests"""
+"""Test factory classes for ai_chatbots tests"""
 
 import factory
 from factory.fuzzy import FuzzyChoice

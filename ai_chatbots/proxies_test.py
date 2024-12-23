@@ -1,4 +1,4 @@
-"""Tests for ai_agents proxy functionality"""
+"""Tests for ai_chatbots proxies functionality"""
 
 
 def test_litellm_create_user():

@@ -7,13 +7,13 @@ from channels.layers import get_channel_layer
 from django.utils.text import slugify
 from llama_index.core.base.llms.types import ChatMessage
 
-from ai_agents.agents import RecommendationAgent
-from ai_agents.serializers import ChatRequestSerializer
+from ai_chatbots.chatbots import ResourceRecommendationBot
+from ai_chatbots.serializers import ChatRequestSerializer
 
 log = logging.getLogger(__name__)
 
 
-def process_message(message_json, agent) -> str:
+def process_message(message_json, chatbot) -> str:
     """
     Validate the message, update the agent if necessary
     """
@@ -27,19 +27,19 @@ def process_message(message_json, agent) -> str:
     model = serializer.validated_data.pop("model", None)
 
     if clear_history:
-        agent.clear_chat_history()
+        chatbot.clear_chat_history()
     if model:
-        agent.agent.agent_worker._llm.model = model  # noqa: SLF001
+        chatbot.agent.agent_worker._llm.model = model  # noqa: SLF001
     if temperature:
-        agent.agent.agent_worker._llm.temperature = temperature  # noqa: SLF001
+        chatbot.agent.agent_worker._llm.temperature = temperature  # noqa: SLF001
     if instructions:
-        agent.agent.agent_worker.prefix_messages = [
+        chatbot.agent.agent_worker.prefix_messages = [
             ChatMessage(content=instructions, role="system")
         ]
     return message_text
 
 
-class RecommendationAgentWSConsumer(AsyncWebsocketConsumer):
+class RecommendationBotWSConsumer(AsyncWebsocketConsumer):
     """
     Async websocket consumer for the recommendation agent.
     """
@@ -58,7 +58,7 @@ class RecommendationAgentWSConsumer(AsyncWebsocketConsumer):
         else:
             self.user_id = None
 
-        self.agent = RecommendationAgent(self.user_id)
+        self.agent = ResourceRecommendationBot(self.user_id)
         await super().connect()
 
     async def receive(self, text_data: str) -> str:
@@ -76,7 +76,7 @@ class RecommendationAgentWSConsumer(AsyncWebsocketConsumer):
             await self.send(text_data="!endResponse")
 
 
-class RecommendationAgentSSEConsumer(AsyncHttpConsumer):
+class RecommendationBotSSEConsumer(AsyncHttpConsumer):
     async def handle(self, message: str):
         user = self.scope.get("user", None)
         session = self.scope.get("session", None)
@@ -91,7 +91,7 @@ class RecommendationAgentSSEConsumer(AsyncHttpConsumer):
             log.info("Anon user, no session")
             self.user_id = "Anonymous"
 
-        agent = RecommendationAgent(self.user_id)
+        agent = ResourceRecommendationBot(self.user_id)
 
         self.channel_layer = get_channel_layer()
         self.room_name = "recommendation_bot"

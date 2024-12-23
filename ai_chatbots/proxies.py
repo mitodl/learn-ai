@@ -2,13 +2,14 @@
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Optional
 from urllib.parse import urljoin
+from uuid import uuid4
 
 import requests
 from django.conf import settings
 
-from ai_agents.agents import BaseChatAgent
-from ai_agents.constants import AI_ANONYMOUS_USER
+from ai_chatbots.constants import AI_ANONYMOUS_USER
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class AIProxy(ABC):
 
     REQUIRED_SETTINGS = ["AI_PROXY_URL", "AI_PROXY_AUTH_TOKEN", "AI_PROXY_CLASS"]
 
-    def __init__(self):
+    def __init__(self, *args):  # noqa: ARG002
         """Raise an error if required settings are missing."""
         missing_settings = [
             setting
@@ -36,8 +37,11 @@ class AIProxy(ABC):
         """Get the api kwargs required to connect to the proxy."""
 
     @abstractmethod
-    def get_additional_kwargs(self, service: BaseChatAgent) -> dict:
-        """Get any additional kwargs that should be sent to the proxy"""
+    def get_additional_kwargs(self, user_id: str, task_id: str) -> dict:
+        """
+        Get any additional kwargs that should be sent to the proxy
+        Assumption is that it will typically need a user id and task id
+        """
 
     @abstractmethod
     def create_proxy_user(self, endpoint: str) -> None:
@@ -58,18 +62,25 @@ class LiteLLMProxy(AIProxy):
             "api_key": settings.AI_PROXY_AUTH_TOKEN,
         }
 
-    def get_additional_kwargs(self, service: BaseChatAgent) -> dict:
+    def get_additional_kwargs(
+        self, user_id: Optional[str] = None, task_id: Optional[str] = None
+    ) -> dict:
         """
         Return any additional kwargs that should be sent to the proxy.
+
+        Args:
+            user_id: The id of the user making a request
+            task_id: The unique id of the AI task being performed
+
         """
         return {
-            "user": service.user_id,
+            "user": user_id,
             "store": True,
             "extra_body": {
                 "metadata": {
                     "tags": [
-                        f"jobID:{service.JOB_ID}",
-                        f"taskName:{service.TASK_NAME}",
+                        f"jobID:{uuid4()}",
+                        f"taskName:{task_id}",
                     ]
                 }
             },

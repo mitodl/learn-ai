@@ -51,6 +51,9 @@ django-guardian = "^2.4.0"
 named-enum = "^1.4.0"
 ulid-py = "^0.2.0"
 channels-redis = "^4.2.1"
+langchain = "^0.3.13"
+langchain-openai = "^0.2.14"
+langgraph = "^0.2.60"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.24"
@@ -76,6 +79,7 @@ pytest-xdist = { version = "^3.6.1", extras = ["psutil"] }
 anys = "^0.3.0"
 locust = "^2.31.2"
 pytest-asyncio = "^0.25.0"
+jupyter = "^1.1.1"
 
 
 [build-system]

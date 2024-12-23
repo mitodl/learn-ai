@@ -7,7 +7,8 @@ import pytest
 from django.conf import settings
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
-from ai_agents.agents import RecommendationAgent
+from ai_chatbots.chatbots import ResourceRecommendationBot
+from ai_chatbots.constants import LLMClassEnum
 from main.test_utils import assert_json_equal
 
 
@@ -35,41 +36,38 @@ def search_results():
         (None, None, None),
     ],
 )
-def test_search_agent_service_initialization_defaults(model, temperature, instructions):
-    """Test the RecommendationAgent class instantiation."""
-    name = "My search agent"
+def test_chatbot_initialization_defaults(model, temperature, instructions):
+    """Test the ResourceRecommendationBot class instantiation."""
+    name = "My search bot"
 
-    search_agent = RecommendationAgent(
+    chatbot = ResourceRecommendationBot(
         "user",
         name=name,
         model=model,
         temperature=temperature,
         instructions=instructions,
     )
-    assert search_agent.model == (model if model else settings.AI_MODEL)
-    assert search_agent.temperature == (
-        temperature if temperature else DEFAULT_TEMPERATURE
+    assert chatbot.model == (model if model else settings.AI_MODEL)
+    assert chatbot.temperature == (temperature if temperature else DEFAULT_TEMPERATURE)
+    assert chatbot.instructions == (
+        instructions if instructions else chatbot.instructions
     )
-    assert search_agent.instructions == (
-        instructions if instructions else search_agent.instructions
-    )
-    assert search_agent.agent.__class__.__name__ == "OpenAIAgent"
-    assert search_agent.agent.agent_worker._llm.model == (  # noqa: SLF001
-        model if model else settings.AI_MODEL
-    )
+    worker_llm = chatbot.agent.agent_worker._llm  # noqa: SLF001
+    assert worker_llm.__class__ == LLMClassEnum.openai.value
+    assert worker_llm.model == (model if model else settings.AI_MODEL)
 
 
 def test_clear_chat_history(client, user, chat_history):
     """Test that the RecommendationAgent clears chat_history."""
-    search_agent = RecommendationAgent(user.username)
-    search_agent.agent.chat_history.extend(chat_history)
-    assert len(search_agent.agent.chat_history) == 4
-    search_agent.clear_chat_history()
-    assert search_agent.agent.chat_history == []
+    chatbot = ResourceRecommendationBot(user.username)
+    chatbot.agent.chat_history.extend(chat_history)
+    assert len(chatbot.agent.chat_history) == 4
+    chatbot.clear_chat_history()
+    assert chatbot.agent.chat_history == []
 
 
 @pytest.mark.django_db
-def test_search_agent_tool(settings, mocker, search_results):
+def test_chatbot_tool(settings, mocker, search_results):
     """The search agent tool should be created and function correctly."""
     settings.AI_MIT_SEARCH_LIMIT = 5
     retained_attributes = [
@@ -90,10 +88,10 @@ def test_search_agent_tool(settings, mocker, search_results):
         expected_results.append(simple_result)
 
     mock_post = mocker.patch(
-        "ai_agents.agents.requests.get",
+        "ai_chatbots.chatbots.requests.get",
         return_value=mocker.Mock(json=mocker.Mock(return_value=search_results)),
     )
-    search_agent = RecommendationAgent("anonymous", name="test agent")
+    chatbot = ResourceRecommendationBot("anonymous", name="test agent")
     search_parameters = {
         "q": "physics",
         "resource_type": ["course", "program"],
@@ -102,7 +100,7 @@ def test_search_agent_tool(settings, mocker, search_results):
         "offered_by": "xpro",
         "limit": 5,
     }
-    tool = search_agent.create_tools()[0]
+    tool = chatbot.create_tools()[0]
     results = tool._fn(**search_parameters)  # noqa: SLF001
     mock_post.assert_called_once_with(
         settings.AI_MIT_SEARCH_URL, params=search_parameters, timeout=30
@@ -119,7 +117,7 @@ def test_get_completion(settings, mocker, debug, search_results):
         "metadata": {
             "search_parameters": {"q": "physics"},
             "search_results": search_results.get("results"),
-            "system_prompt": RecommendationAgent.INSTRUCTIONS,
+            "system_prompt": ResourceRecommendationBot.INSTRUCTIONS,
         }
     }
     comment_metadata = f"\n\n<!-- {json.dumps(metadata)} -->\n\n".encode()
@@ -127,24 +125,22 @@ def test_get_completion(settings, mocker, debug, search_results):
     if debug:
         expected_return_value.append(comment_metadata)
     mocker.patch(
-        "ai_agents.agents.OpenAIAgent.stream_chat",
+        "ai_chatbots.constants.OpenAIAgent.stream_chat",
         return_value=mocker.Mock(response_gen=iter(expected_return_value)),
     )
-    search_agent = RecommendationAgent("anonymous", name="test agent")
-    search_agent.search_parameters = metadata["metadata"]["search_parameters"]
-    search_agent.search_results = metadata["metadata"]["search_results"]
-    search_agent.instructions = metadata["metadata"]["system_prompt"]
-    search_agent.search_parameters = {"q": "physics"}
-    search_agent.search_results = search_results
+    chatbot = ResourceRecommendationBot("anonymous", name="test agent")
+    chatbot.search_parameters = metadata["metadata"]["search_parameters"]
+    chatbot.search_results = metadata["metadata"]["search_results"]
+    chatbot.instructions = metadata["metadata"]["system_prompt"]
+    chatbot.search_parameters = {"q": "physics"}
+    chatbot.search_results = search_results
     results = "".join(
         [
             str(chunk)
-            for chunk in search_agent.get_completion(
-                "I want to learn physics", debug=debug
-            )
+            for chunk in chatbot.get_completion("I want to learn physics", debug=debug)
         ]
     )
-    search_agent.agent.stream_chat.assert_called_once_with("I want to learn physics")
+    chatbot.agent.stream_chat.assert_called_once_with("I want to learn physics")
     assert "".join([str(value) for value in expected_return_value]) in results
     if debug:
         assert '\n\n<!-- {"metadata":' in results

@@ -10,24 +10,23 @@ import requests
 from django.conf import settings
 from django.core.cache import caches
 from django.utils.module_loading import import_string
-from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.agent import AgentRunner
 from llama_index.core.base.llms.types import ChatMessage
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 from llama_index.core.tools import FunctionTool, ToolMetadata
-from llama_index.llms.openai import OpenAI
 from openai import BadRequestError
 from pydantic import Field
 
-from ai_agents.constants import AIModelAPI, LearningResourceType, OfferedBy
-from ai_agents.utils import enum_zip
+from ai_chatbots.api import get_agent, get_llm
+from ai_chatbots.constants import LearningResourceType, OfferedBy
+from ai_chatbots.utils import enum_zip
 
 log = logging.getLogger(__name__)
 
 
-class BaseChatAgent(ABC):
+class BaseChatbot(ABC):
     """
-    Base service class for an AI chat agent
+    Base AI chatbot class
 
     Llamaindex was chosen to implement this because it provides
     a far easier framework than native OpenAi or LiteLLM to
@@ -42,10 +41,9 @@ class BaseChatAgent(ABC):
     https://docs.litellm.ai/docs/completion/function_call
     """
 
-    INSTRUCTIONS = "Provide instructions for the AI assistant"
+    INSTRUCTIONS = "You are a friendly chatbot, answer the user's questions"
 
     # For LiteLLM tracking purposes
-    JOB_ID = "BASECHAT_JOB"
     TASK_NAME = "BASECHAT_TASK"
     CACHE_PREFIX = "base_ai_"
 
@@ -53,20 +51,21 @@ class BaseChatAgent(ABC):
         self,
         user_id: str,
         *,
-        name: str = "AI Chat Agent",
+        name: str = "MIT Open Learning Chatbot",
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
     ):
-        """Initialize the AI chat agent service"""
+        """Initialize the AI chatbot"""
         self.user_id = user_id
         self.assistant_name = name
-        self.ai = settings.AI_MODEL_API
         self.model = model or settings.AI_MODEL
         self.temperature = temperature or DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
         if settings.AI_PROXY_CLASS and settings.AI_PROXY_URL:
-            self.proxy = import_string(f"ai_agents.proxy.{settings.AI_PROXY_CLASS}")()
+            self.proxy = import_string(f"ai_chatbots.proxy.{settings.AI_PROXY_CLASS}")(
+                user_id=user_id, task_id=self.TASK_NAME
+            )
         else:
             self.proxy = None
         self.agent = None
@@ -104,21 +103,13 @@ class BaseChatAgent(ABC):
             self.cache_key, json.dumps(chat_history), timeout=settings.AI_CACHE_TIMEOUT
         )
 
+    @abstractmethod
     def create_agent(self) -> AgentRunner:
         """Create an AgentRunner for the relevant AI source"""
-        if self.ai == AIModelAPI.openai.value:
-            return self.create_openai_agent()
-        else:
-            error = f"AI source {self.ai} is not supported"
-            raise NotImplementedError(error)
 
     def create_tools(self):
         """Create any tools required by the agent"""
         return []
-
-    @abstractmethod
-    def create_openai_agent(self) -> OpenAIAgent:
-        """Create an OpenAI agent"""
 
     def clear_chat_history(self) -> None:
         """Clear the chat history from the cache"""
@@ -170,11 +161,34 @@ class BaseChatAgent(ABC):
             self.save_chat_history()
 
 
-class RecommendationAgent(BaseChatAgent):
-    """Service class for the AI search function agent"""
+class FunctionCallingChatbot(BaseChatbot):
+    """Function calling chatbot, using a FunctionCallingAgent"""
 
-    JOB_ID = "SEARCH_JOB"
-    TASK_NAME = "SEARCH_TASK"
+    TASK_NAME = "FUNCTION_CALL_TASK"
+
+    def create_agent(self) -> AgentRunner:
+        """
+        Create a function calling agent
+        """
+        llm = get_llm(self.model, self.proxy)
+        self.agent = get_agent().from_tools(
+            tools=self.create_tools(),
+            llm=llm,
+            verbose=True,
+            system_prompt=self.instructions,
+        )
+        if self.save_history:
+            self.get_or_create_chat_history_cache()
+        return self.agent
+
+
+class ResourceRecommendationBot(FunctionCallingChatbot):
+    """
+    Chatbot that searches for learning resources in the MIT Learn catalog,
+    then recommends the best results to the user based on their query.
+    """
+
+    TASK_NAME = "RECOMMENDATION_TASK"
 
     INSTRUCTIONS = f"""You are an assistant helping users find courses from a catalog
 of learning resources. Users can ask about specific topics, levels, or recommendations
@@ -272,7 +286,7 @@ Search parameters: {{"q": "mathematics"}}
             q: The search query string
             resource_type: Filter by type of resource (course, program, etc)
             free: Filter for free resources only
-            certificate: Filter for resources offering certificates
+            certification: Filter for resources offering certificates
             offered_by: Filter by institution offering the resource
         """
 
@@ -291,7 +305,7 @@ Search parameters: {{"q": "mathematics"}}
             default=None,
             description="Whether the resource is free to access, true|false",
         )
-        certificate: Optional[bool] = Field(
+        certification: Optional[bool] = Field(
             default=None,
             description=(
                 "Whether the resource offers a certificate upon completion, true|false"
@@ -309,7 +323,7 @@ Search parameters: {{"q": "mathematics"}}
                     "q": "machine learning",
                     "resource_type": ["course"],
                     "free": True,
-                    "certificate": False,
+                    "certification": False,
                     "offered_by": "MIT",
                 }
             ]
@@ -325,7 +339,7 @@ Search parameters: {{"q": "mathematics"}}
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
     ):
-        """Initialize the AI search agent service"""
+        """Initialize the chatbot"""
         super().__init__(
             user_id,
             name=name,
@@ -335,7 +349,7 @@ Search parameters: {{"q": "mathematics"}}
         )
         self.search_parameters = []
         self.search_results = []
-        self.create_agent()
+        super().create_agent()
 
     def search_courses(self, q: str, **kwargs) -> str:
         """
@@ -391,33 +405,6 @@ Search parameters: {{"q": "mathematics"}}
         except requests.exceptions.RequestException as e:
             log.exception("Error querying MIT API")
             return json.dumps({"error": str(e)})
-
-    def create_openai_agent(self) -> OpenAIAgent:
-        """
-        Create an OpenAI-specific llamaindex agent for function calling
-
-        Using `OpenAI` instead of a more universal `LiteLLM` because
-        the `LiteLLM` class as implemented by llamaindex does not
-        support function calling. ie:
-        agent = FunctionCallingAgentWorker.from_tools(....
-        > AssertionError: llm must be an instance of FunctionCallingLLM
-        """
-        llm = OpenAI(
-            model=self.model,
-            **(self.proxy.get_api_kwargs() if self.proxy else {}),
-            additional_kwargs=(
-                self.proxy.get_additional_kwargs(self) if self.proxy else {}
-            ),
-        )
-        self.agent = OpenAIAgent.from_tools(
-            tools=self.create_tools(),
-            llm=llm,
-            verbose=True,
-            system_prompt=self.instructions,
-        )
-        if self.save_history:
-            self.get_or_create_chat_history_cache()
-        return self.agent
 
     def create_tools(self):
         """Create tools required by the agent"""

@@ -1,8 +1,8 @@
-"""Tests for ai_agents utils"""
+"""Tests for ai_chatbots utils"""
 
 from named_enum import ExtendedEnum
 
-from ai_agents.utils import enum_zip
+from ai_chatbots.utils import enum_zip
 
 
 def test_enum_zip():
