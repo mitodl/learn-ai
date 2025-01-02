@@ -128,7 +128,8 @@ class RecommendationBotSSEConsumer(AsyncHttpConsumer):
         except:  # noqa: E722
             log.exception("Error in RecommendationAgentConsumer")
         finally:
-            self.disconnect()
+            await self.send_event(event="", more_body=False)
+            await self.disconnect()
 
     async def disconnect(self):
         await self.channel_layer.group_discard(f"sse_{self.user_id}", self.channel_name)
@@ -137,7 +138,7 @@ class RecommendationBotSSEConsumer(AsyncHttpConsumer):
         # Send response event
         log.info(event)
         data = f"event: agent_response\ndata: {event}\n\n"
-        await self.send_body(data.encode("utf-8"), more_body=True)
+        await self.send_body(data.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):
         """
