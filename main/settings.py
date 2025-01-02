@@ -92,7 +92,6 @@ INSTALLED_APPS = (
     "drf_spectacular",
     "oauth2_provider",
     "server_status",
-    "corsheaders",
     "anymail",
     "hijack",
     "hijack.contrib.admin",
@@ -118,14 +117,18 @@ MIDDLEWARE = (
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "hijack.middleware.HijackUserMiddleware",
 )
 
-# CORS
-CORS_ALLOWED_ORIGINS = get_list_of_str("CORS_ALLOWED_ORIGINS", [])
-CORS_ALLOWED_ORIGIN_REGEXES = get_list_of_str("CORS_ALLOWED_ORIGIN_REGEXES", [])
-
+# CORS--- Used when initializing starlette.middleware.cors
+CORS_ALLOW_ORIGINS = get_list_of_str("CORS_ALLOW_ORIGINS", [])
+CORS_ALLOW_METHODS = get_list_of_str(
+    "CORS_ALLOW_METHODS",
+    [
+        "POST",
+        "OPTIONS",
+    ],
+)
 CORS_ALLOW_CREDENTIALS = get_bool("CORS_ALLOW_CREDENTIALS", True)  # noqa: FBT003
 CORS_ALLOW_HEADERS = (
     # defaults
@@ -147,7 +150,7 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = get_string(
 
 CSRF_COOKIE_SECURE = get_bool("CSRF_COOKIE_SECURE", True)  # noqa: FBT003
 CSRF_COOKIE_DOMAIN = get_string("CSRF_COOKIE_DOMAIN", None)
-CSRF_COOKIE_NAME = get_string("CSRF_COOKIE_NAME", "csrftoken")
+CSRF_COOKIE_NAME = get_string("CSRF_COOKIE_NAME", "cor")
 
 CSRF_HEADER_NAME = get_string("CSRF_HEADER_NAME", "HTTP_X_CSRFTOKEN")
 
