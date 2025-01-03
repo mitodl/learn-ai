@@ -7,9 +7,6 @@ services:
       file: docker-compose.apps.yml
       service: web
     env_file:
-      - path: env/shared.env
-      - path: env/shared.local.env
-        required: false
       - path: env/backend.env
       - path: env/backend.local.env
         required: false
@@ -22,9 +19,6 @@ services:
       file: docker-compose.apps.yml
       service: celery
     env_file:
-      - path: env/shared.env
-      - path: env/shared.local.env
-        required: false
       - path: env/backend.env
       - path: env/backend.local.env
         required: false
