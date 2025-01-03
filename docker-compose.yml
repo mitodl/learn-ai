@@ -31,3 +31,15 @@ services:
       # DEPRECATED: legacy .env file at the repo root
       - path: .env
         required: false
+
+  watch:
+    extends:
+      file: docker-compose.apps.yml
+      service: watch
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/frontend.env
+      - path: env/frontend.local.env
+        required: false

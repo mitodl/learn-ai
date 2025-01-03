@@ -112,11 +112,10 @@ celerybeat-schedule
 docs/_site
 
 .pnp.*
-frontends/.yarn
-!frontends/.yarn/releases
-
-.yarn/*
+.yarn
 !.yarn/releases
+.next
+next-env.d.ts
 
 # Typescript
 tsconfig.tsbuildinfo
