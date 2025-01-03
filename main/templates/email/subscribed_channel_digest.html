@@ -1,7 +1,4 @@
-{% extends "email/email_base.html" %}
-{% load humanize %}
-
-{% block content %}
+{% extends "email/email_base.html" %} {% load humanize %} {% block content %}
 
 <!-- 1 Column Text : BEGIN -->
 
@@ -111,8 +108,7 @@
               color: #a31f34;
             "
           >
-            View
-            {{item.resource_type|title}}&nbsp;&rarr;
+            View {{item.resource_type|title}}&nbsp;&rarr;
           </a>
           <p style="margin: 0 0 10px">
             <!--

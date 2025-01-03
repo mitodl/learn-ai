@@ -1,1787 +1,1747 @@
 {
-    "count": 3094,
-    "next": "https://api.learn.mit.edu/api/v1/learning_resources/?format=json&limit=10&offset=10&resource_type=course",
-    "previous": null,
-    "results": [
-      {
-        "id": 2683,
-        "topics": [
-          {
-            "id": 684,
-            "name": "Business & Management",
-            "icon": "RiBriefcase3Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/business-management/"
-          },
-          {
-            "id": 686,
-            "name": "Organizations & Leadership",
-            "icon": "RiBriefcase3Line",
-            "parent": 684,
-            "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+  "count": 3094,
+  "next": "https://api.learn.mit.edu/api/v1/learning_resources/?format=json&limit=10&offset=10&resource_type=course",
+  "previous": null,
+  "results": [
+    {
+      "id": 2683,
+      "topics": [
+        {
+          "id": 684,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/business-management/"
         },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "999.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "999.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5034,
-            "instructors": [
-              {
-                "id": 1,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "David Niño"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "999.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+LASERx4+R17",
-            "title": "Discovering and Implementing Your Leadership Strengths",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-05-05T05:00:00Z",
-            "end_date": "2025-05-26T23:59:00Z",
-            "enrollment_start": "2024-03-06T00:00:00Z",
-            "enrollment_end": "2025-05-12T23:59:00Z",
-            "prices": [
-              "999.00"
-            ],
-            "checksum": "-697770738028332156",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4521,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-4_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 7,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+LASERx4",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+LASERx4",
-        "title": "Discovering and Implementing Your Leadership Strengths",
-        "description": "\u003Cp\u003EA three-week online course for technical professionals that will empower you with the essential skills needed to solve problems, innovate, and drive change.\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx4/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": null,
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "1.25",
-        "location": ""
+        {
+          "id": 686,
+          "name": "Organizations & Leadership",
+          "icon": "RiBriefcase3Line",
+          "parent": 684,
+          "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
       },
-      {
-        "id": 2684,
-        "topics": [
-          {
-            "id": 684,
-            "name": "Business & Management",
-            "icon": "RiBriefcase3Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/business-management/"
-          },
-          {
-            "id": 686,
-            "name": "Organizations & Leadership",
-            "icon": "RiBriefcase3Line",
-            "parent": 684,
-            "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "999.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "999.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5038,
-            "instructors": [
-              {
-                "id": 2,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "John Van Maanen"
-              },
-              {
-                "id": 1,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "David Niño"
-              },
-              {
-                "id": 3,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Ray Reagans"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "999.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+LASERx3+R18",
-            "title": "Navigating and Leveraging Culture and Networks",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": null,
-            "end_date": "2025-07-07T23:59:00Z",
-            "enrollment_start": "2024-03-06T00:00:00Z",
-            "enrollment_end": "2025-06-23T23:59:00Z",
-            "prices": [
-              "999.00"
-            ],
-            "checksum": "-2454531300035230075",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4522,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-3_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 1,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+LASERx3",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+LASERx3",
-        "title": "Navigating and Leveraging Culture and Networks",
-        "description": "\u003Cp\u003EA three-week online course for technical professionals that will empower you with the essential skills needed to solve problems, innovate, and drive change.\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx3/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": null,
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "1.25",
-        "location": ""
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
       },
-      {
-        "id": 2685,
-        "topics": [
-          {
-            "id": 687,
-            "name": "Negotiation & Communication",
-            "icon": "RiBriefcase3Line",
-            "parent": 684,
-            "channel_url": "https://learn.mit.edu/c/topic/negotiation-communication/"
-          },
-          {
-            "id": 684,
-            "name": "Business & Management",
-            "icon": "RiBriefcase3Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/business-management/"
-          },
-          {
-            "id": 686,
-            "name": "Organizations & Leadership",
-            "icon": "RiBriefcase3Line",
-            "parent": 684,
-            "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "999.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "999.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5040,
-            "instructors": [
-              {
-                "id": 4,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Lawrence Susskind"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "999.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+LASERx2+R17",
-            "title": "Negotiating and Applying Influence and Power",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-03-10T05:00:00Z",
-            "end_date": "2025-03-31T23:59:00Z",
-            "enrollment_start": "2024-03-06T00:00:00Z",
-            "enrollment_end": "2025-03-17T23:59:00Z",
-            "prices": [
-              "999.00"
-            ],
-            "checksum": "-1750136799629861871",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4523,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-2_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 0,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+LASERx2",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+LASERx2",
-        "title": "Negotiating and Applying Influence and Power",
-        "description": "\u003Cp\u003EA three-week online course for technical professionals that will empower you with the essential skills needed to solve problems, innovate, and drive change.\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx2/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": "2025-03-10T05:00:00Z",
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "1.25",
-        "location": ""
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
       },
-      {
-        "id": 2686,
-        "topics": [
-          {
-            "id": 684,
-            "name": "Business & Management",
-            "icon": "RiBriefcase3Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/business-management/"
-          },
-          {
-            "id": 686,
-            "name": "Organizations & Leadership",
-            "icon": "RiBriefcase3Line",
-            "parent": 684,
-            "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "999.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "999.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5044,
-            "instructors": [
-              {
-                "id": 5,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Edward F. Crawley"
-              },
-              {
-                "id": 6,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Nelson Repenning"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "999.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+LASERx1+R17",
-            "title": "Understanding Organizational Strategy and Capabilities",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-02-03T05:00:00Z",
-            "end_date": "2025-03-03T23:59:00Z",
-            "enrollment_start": "2024-03-06T00:00:00Z",
-            "enrollment_end": "2025-02-10T23:59:00Z",
-            "prices": [
-              "999.00"
-            ],
-            "checksum": "-3288845846013208467",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4524,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-1_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 6,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
+      "prices": ["999.00"],
+      "resource_prices": [
+        {
+          "amount": "999.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5034,
+          "instructors": [
             {
-              "value": "course-v1:xPRO+LASERx1",
-              "department": null,
-              "listing_type": "primary"
+              "id": 1,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "David Niño"
             }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+LASERx1",
-        "title": "Understanding Organizational Strategy and Capabilities",
-        "description": "BECOME A VITAL PART OF YOUR ORGANIZATION'S FUTURE\u003Cp\u003EMore and more organizations are calling on you, their technical professionals, to drive complex projects under high-pressure conditions; collaborate or oversee distributed teams; and facilitate the collective work of skilled individuals. With technology accelerating at an unprecedented pace, you are uniquely suited to guide your organization into the future.\u003C/p\u003E\u003Cp\u003ETo help you on this journey, MIT xPRO has teamed with MIT’s School of Engineering and Sloan School of Management to present an analytical framework for you to understand your organization’s strategy, sources of power, and cultural environment all while helping you identify your own skills and strengths.\u003C/p\u003E\u003Cp\u003EComplement your technical expertise with the skills necessary to spot opportunities, discern big problems, and enable teams to collectively solve them.\u003C/p\u003E\u003Cp\u003EExpectations are high. Are you ready?\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx1/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": "2025-02-03T05:00:00Z",
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "1.25",
-        "location": ""
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "999.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+LASERx4+R17",
+          "title": "Discovering and Implementing Your Leadership Strengths",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-05-05T05:00:00Z",
+          "end_date": "2025-05-26T23:59:00Z",
+          "enrollment_start": "2024-03-06T00:00:00Z",
+          "enrollment_end": "2025-05-12T23:59:00Z",
+          "prices": ["999.00"],
+          "checksum": "-697770738028332156",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4521,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-4_New.jpg",
+        "description": null,
+        "alt": null
       },
-      {
-        "id": 2687,
-        "topics": [
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 7,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
           {
-            "id": 684,
-            "name": "Business & Management",
-            "icon": "RiBriefcase3Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/business-management/"
-          },
-          {
-            "id": 694,
-            "name": "Systems Thinking",
-            "icon": "RiBriefcase3Line",
-            "parent": 684,
-            "channel_url": "https://learn.mit.edu/c/topic/systems-thinking/"
-          },
-          {
-            "id": 747,
-            "name": "Engineering",
-            "icon": "RiRobot2Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/engineering/"
-          },
-          {
-            "id": 757,
-            "name": "Systems Engineering",
-            "icon": "RiRobot2Line",
-            "parent": 747,
-            "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
+            "value": "course-v1:xPRO+LASERx4",
+            "department": null,
+            "listing_type": "primary"
           }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "1179.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "1179.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5046,
-            "instructors": [
-              {
-                "id": 5,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Edward F. Crawley"
-              },
-              {
-                "id": 7,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Bruce G. Cameron"
-              },
-              {
-                "id": 8,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Olivier L. de Weck"
-              },
-              {
-                "id": 9,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Dov Dori"
-              },
-              {
-                "id": 10,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Steven Eppinger"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "1179.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+SysEngx1+R23",
-            "title": "Architecture of Complex Systems",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-02-03T05:00:00Z",
-            "end_date": "2025-03-10T23:30:00Z",
-            "enrollment_start": "2024-02-22T05:00:00Z",
-            "enrollment_end": "2025-02-10T23:59:00Z",
-            "prices": [
-              "1179.00"
-            ],
-            "checksum": "6518649140102922818",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4525,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_1_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 1,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+SysEngx1",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+SysEngx1",
-        "title": "Architecture of Complex Systems",
-        "description": "\u003Cp\u003ECourse 1 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx1/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": null,
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "2.50",
-        "location": ""
+        ]
       },
-      {
-        "id": 2688,
-        "topics": [
-          {
-            "id": 747,
-            "name": "Engineering",
-            "icon": "RiRobot2Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/engineering/"
-          },
-          {
-            "id": 757,
-            "name": "Systems Engineering",
-            "icon": "RiRobot2Line",
-            "parent": 747,
-            "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      "readable_id": "course-v1:xPRO+LASERx4",
+      "title": "Discovering and Implementing Your Leadership Strengths",
+      "description": "\u003Cp\u003EA three-week online course for technical professionals that will empower you with the essential skills needed to solve problems, innovate, and drive change.\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx4/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": null,
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "1.25",
+      "location": ""
+    },
+    {
+      "id": 2684,
+      "topics": [
+        {
+          "id": 684,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/business-management/"
         },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "1179.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "1179.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5049,
-            "instructors": [
-              {
-                "id": 7,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Bruce G. Cameron"
-              },
-              {
-                "id": 8,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Olivier L. de Weck"
-              },
-              {
-                "id": 11,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Donna Rhodes"
-              },
-              {
-                "id": 12,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Adam Ross"
-              },
-              {
-                "id": 13,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Warren Hoburg"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "1179.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+SysEngx3+R22",
-            "title": "Model-Based Systems Engineering: Documentation and Analysis",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-01-13T05:00:00Z",
-            "end_date": "2025-02-17T23:30:00Z",
-            "enrollment_start": "2024-02-22T05:00:00Z",
-            "enrollment_end": "2025-01-20T23:59:00Z",
-            "prices": [
-              "1179.00"
-            ],
-            "checksum": "-6943059180350808566",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4526,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_3_Card_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 7,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+SysEngx3",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+SysEngx3",
-        "title": "Model-Based Systems Engineering: Documentation and Analysis",
-        "description": "\u003Cp\u003ECourse 3 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx3/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": "2025-01-13T05:00:00Z",
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "2.00",
-        "location": ""
+        {
+          "id": 686,
+          "name": "Organizations & Leadership",
+          "icon": "RiBriefcase3Line",
+          "parent": 684,
+          "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
       },
-      {
-        "id": 2689,
-        "topics": [
-          {
-            "id": 747,
-            "name": "Engineering",
-            "icon": "RiRobot2Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/engineering/"
-          },
-          {
-            "id": 757,
-            "name": "Systems Engineering",
-            "icon": "RiRobot2Line",
-            "parent": 747,
-            "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "1179.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "1179.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5055,
-            "instructors": [
-              {
-                "id": 7,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Bruce G. Cameron"
-              },
-              {
-                "id": 8,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Olivier L. de Weck"
-              },
-              {
-                "id": 11,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Donna Rhodes"
-              },
-              {
-                "id": 12,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Adam Ross"
-              },
-              {
-                "id": 13,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Warren Hoburg"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "1179.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+SysEngx2+R24",
-            "title": "Models in Engineering",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-05-19T05:00:00Z",
-            "end_date": "2025-06-16T23:30:00Z",
-            "enrollment_start": "2024-02-22T05:00:00Z",
-            "enrollment_end": "2025-05-26T23:59:00Z",
-            "prices": [
-              "1179.00"
-            ],
-            "checksum": "3858416184832896121",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4527,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_2_Card_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 3,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+SysEngx2",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+SysEngx2",
-        "title": "Models in Engineering",
-        "description": "\u003Cp\u003ECourse 2 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx2/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": null,
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "2.00",
-        "location": ""
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
       },
-      {
-        "id": 2690,
-        "topics": [
-          {
-            "id": 698,
-            "name": "Data Science, Analytics & Computer Technology",
-            "icon": "RiLineChartLine",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/data-science-analytics-computer-technology/"
-          },
-          {
-            "id": 702,
-            "name": "Algorithms and Data Structures",
-            "icon": "RiRobot2Line",
-            "parent": 698,
-            "channel_url": "https://learn.mit.edu/c/topic/algorithms-and-data-structures/"
-          },
-          {
-            "id": 747,
-            "name": "Engineering",
-            "icon": "RiRobot2Line",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/engineering/"
-          },
-          {
-            "id": 757,
-            "name": "Systems Engineering",
-            "icon": "RiRobot2Line",
-            "parent": 747,
-            "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "1179.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "1179.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5057,
-            "instructors": [
-              {
-                "id": 7,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Bruce G. Cameron"
-              },
-              {
-                "id": 11,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Donna Rhodes"
-              },
-              {
-                "id": 12,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "Adam Ross"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "1179.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+SysEngx4+R22",
-            "title": "Quantitative Methods in Systems Engineering",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-02-24T05:00:00Z",
-            "end_date": "2025-03-24T23:30:00Z",
-            "enrollment_start": "2024-02-23T05:00:00Z",
-            "enrollment_end": "2025-03-03T23:59:00Z",
-            "prices": [
-              "1179.00"
-            ],
-            "checksum": "-6869124753439168977",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4528,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_4_Card_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 3,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
-            {
-              "value": "course-v1:xPRO+SysEngx4",
-              "department": null,
-              "listing_type": "primary"
-            }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+SysEngx4",
-        "title": "Quantitative Methods in Systems Engineering",
-        "description": "\u003Cp\u003ECourse 4 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx4/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": "2025-02-24T05:00:00Z",
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "2.00",
-        "location": ""
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
       },
-      {
-        "id": 2691,
-        "topics": [
-          {
-            "id": 698,
-            "name": "Data Science, Analytics & Computer Technology",
-            "icon": "RiLineChartLine",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/data-science-analytics-computer-technology/"
-          },
-          {
-            "id": 702,
-            "name": "Algorithms and Data Structures",
-            "icon": "RiRobot2Line",
-            "parent": 698,
-            "channel_url": "https://learn.mit.edu/c/topic/algorithms-and-data-structures/"
-          }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
-        },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
-        },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "1529.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "1529.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5001,
-            "instructors": [
-              {
-                "id": 14,
-                "first_name": "Isaac",
-                "last_name": "Chuang",
-                "full_name": "Isaac Chuang"
-              },
-              {
-                "id": 15,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "William Oliver"
-              },
-              {
-                "id": 16,
-                "first_name": "Peter",
-                "last_name": "Shor",
-                "full_name": "Peter Shor"
-              },
-              {
-                "id": 17,
-                "first_name": "Aram",
-                "last_name": "Harrow",
-                "full_name": "Aram Harrow"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "1529.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+QCFx1+R19",
-            "title": "Introduction to Quantum Computing",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-02-03T05:00:00Z",
-            "end_date": "2025-03-03T23:30:00Z",
-            "enrollment_start": "2024-02-24T05:00:00Z",
-            "enrollment_end": "2025-02-10T23:59:00Z",
-            "prices": [
-              "1529.00"
-            ],
-            "checksum": "-3762946636103751909",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4529,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/QCx_Course_1_Card_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 5,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
+      "prices": ["999.00"],
+      "resource_prices": [
+        {
+          "amount": "999.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5038,
+          "instructors": [
             {
-              "value": "course-v1:xPRO+QCFx1",
-              "department": null,
-              "listing_type": "primary"
+              "id": 2,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "John Van Maanen"
+            },
+            {
+              "id": 1,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "David Niño"
+            },
+            {
+              "id": 3,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Ray Reagans"
             }
-          ]
-        },
-        "readable_id": "course-v1:xPRO+QCFx1",
-        "title": "Introduction to Quantum Computing",
-        "description": "\u003Cp\u003E\u003Cb\u003ECourse 1 of 2 in the\u003C/b\u003E \u003Cb\u003E\u003Ci\u003EQuantum Computing Fundamentals\u003C/i\u003E\u003C/b\u003E\u003Cb\u003E professional certificate program.\u003C/b\u003E To earn a Professional Certificate and CEUs, you must complete the two courses in the program. For those who do not want to commit to the full program, courses can be taken on an individual basis for a certificate of completion and CEUs.\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+QCFx1/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": "2025-02-03T05:00:00Z",
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "2.00",
-        "location": ""
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "999.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+LASERx3+R18",
+          "title": "Navigating and Leveraging Culture and Networks",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": null,
+          "end_date": "2025-07-07T23:59:00Z",
+          "enrollment_start": "2024-03-06T00:00:00Z",
+          "enrollment_end": "2025-06-23T23:59:00Z",
+          "prices": ["999.00"],
+          "checksum": "-2454531300035230075",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4522,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-3_New.jpg",
+        "description": null,
+        "alt": null
       },
-      {
-        "id": 2692,
-        "topics": [
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 1,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
           {
-            "id": 702,
-            "name": "Algorithms and Data Structures",
-            "icon": "RiRobot2Line",
-            "parent": 698,
-            "channel_url": "https://learn.mit.edu/c/topic/algorithms-and-data-structures/"
-          },
-          {
-            "id": 698,
-            "name": "Data Science, Analytics & Computer Technology",
-            "icon": "RiLineChartLine",
-            "parent": null,
-            "channel_url": "https://learn.mit.edu/c/topic/data-science-analytics-computer-technology/"
-          },
-          {
-            "id": 710,
-            "name": "Computer Science",
-            "icon": "RiRobot2Line",
-            "parent": 698,
-            "channel_url": "https://learn.mit.edu/c/topic/computer-science/"
+            "value": "course-v1:xPRO+LASERx3",
+            "department": null,
+            "listing_type": "primary"
           }
-        ],
-        "position": null,
-        "offered_by": {
-          "code": "xpro",
-          "name": "MIT xPRO",
-          "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+        ]
+      },
+      "readable_id": "course-v1:xPRO+LASERx3",
+      "title": "Navigating and Leveraging Culture and Networks",
+      "description": "\u003Cp\u003EA three-week online course for technical professionals that will empower you with the essential skills needed to solve problems, innovate, and drive change.\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx3/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": null,
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "1.25",
+      "location": ""
+    },
+    {
+      "id": 2685,
+      "topics": [
+        {
+          "id": 687,
+          "name": "Negotiation & Communication",
+          "icon": "RiBriefcase3Line",
+          "parent": 684,
+          "channel_url": "https://learn.mit.edu/c/topic/negotiation-communication/"
         },
-        "platform": {
-          "code": "xpro",
-          "name": "MIT xPRO"
+        {
+          "id": 684,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/business-management/"
         },
-        "course_feature": [],
-        "departments": [],
-        "certification": true,
-        "certification_type": {
-          "code": "professional",
-          "name": "Professional Certificate"
-        },
-        "prices": [
-          "1529.00"
-        ],
-        "resource_prices": [
-          {
-            "amount": "1529.00",
-            "currency": "USD"
-          }
-        ],
-        "runs": [
-          {
-            "id": 5005,
-            "instructors": [
-              {
-                "id": 14,
-                "first_name": "Isaac",
-                "last_name": "Chuang",
-                "full_name": "Isaac Chuang"
-              },
-              {
-                "id": 15,
-                "first_name": null,
-                "last_name": null,
-                "full_name": "William Oliver"
-              },
-              {
-                "id": 16,
-                "first_name": "Peter",
-                "last_name": "Shor",
-                "full_name": "Peter Shor"
-              },
-              {
-                "id": 17,
-                "first_name": "Aram",
-                "last_name": "Harrow",
-                "full_name": "Aram Harrow"
-              }
-            ],
-            "image": null,
-            "level": [],
-            "delivery": [
-              {
-                "code": "online",
-                "name": "Online"
-              }
-            ],
-            "format": [
-              {
-                "code": "asynchronous",
-                "name": "Asynchronous"
-              }
-            ],
-            "pace": [
-              {
-                "code": "self_paced",
-                "name": "Self-paced"
-              }
-            ],
-            "resource_prices": [
-              {
-                "amount": "1529.00",
-                "currency": "USD"
-              }
-            ],
-            "run_id": "course-v1:xPRO+QCFx2+R19",
-            "title": "Quantum Algorithms for Cybersecurity, Chemistry, and Optimization",
-            "description": null,
-            "full_description": null,
-            "last_modified": null,
-            "published": true,
-            "languages": null,
-            "url": null,
-            "slug": null,
-            "semester": null,
-            "year": null,
-            "start_date": "2025-03-10T05:00:00Z",
-            "end_date": "2025-04-07T23:30:00Z",
-            "enrollment_start": "2024-02-24T05:00:00Z",
-            "enrollment_end": "2025-03-17T23:59:00Z",
-            "prices": [
-              "1529.00"
-            ],
-            "checksum": "2498338567428372852",
-            "availability": "dated",
-            "location": ""
-          }
-        ],
-        "image": {
-          "id": 4530,
-          "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/QC2_Program_card_New.jpg",
-          "description": null,
-          "alt": null
-        },
-        "learning_path_parents": [],
-        "user_list_parents": [],
-        "views": 3,
-        "delivery": [
-          {
-            "code": "online",
-            "name": "Online"
-          }
-        ],
-        "free": false,
-        "resource_category": "course",
-        "format": [
-          {
-            "code": "asynchronous",
-            "name": "Asynchronous"
-          }
-        ],
-        "pace": [
-          {
-            "code": "self_paced",
-            "name": "Self-paced"
-          }
-        ],
-        "resource_type": "course",
-        "course": {
-          "course_numbers": [
+        {
+          "id": 686,
+          "name": "Organizations & Leadership",
+          "icon": "RiBriefcase3Line",
+          "parent": 684,
+          "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["999.00"],
+      "resource_prices": [
+        {
+          "amount": "999.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5040,
+          "instructors": [
             {
-              "value": "course-v1:xPRO+QCFx2",
-              "department": null,
-              "listing_type": "primary"
+              "id": 4,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Lawrence Susskind"
             }
-          ]
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "999.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+LASERx2+R17",
+          "title": "Negotiating and Applying Influence and Power",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-03-10T05:00:00Z",
+          "end_date": "2025-03-31T23:59:00Z",
+          "enrollment_start": "2024-03-06T00:00:00Z",
+          "enrollment_end": "2025-03-17T23:59:00Z",
+          "prices": ["999.00"],
+          "checksum": "-1750136799629861871",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4523,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-2_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 0,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+LASERx2",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+LASERx2",
+      "title": "Negotiating and Applying Influence and Power",
+      "description": "\u003Cp\u003EA three-week online course for technical professionals that will empower you with the essential skills needed to solve problems, innovate, and drive change.\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx2/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": "2025-03-10T05:00:00Z",
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "1.25",
+      "location": ""
+    },
+    {
+      "id": 2686,
+      "topics": [
+        {
+          "id": 684,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/business-management/"
         },
-        "readable_id": "course-v1:xPRO+QCFx2",
-        "title": "Quantum Computing Algorithms for Cybersecurity, Chemistry, and Optimization",
-        "description": "\u003Cp\u003E\u003Cb\u003ECourse 2 of 2 in the\u003C/b\u003E \u003Cb\u003E\u003Ci\u003EQuantum Computing Fundamentals\u003C/i\u003E\u003C/b\u003E\u003Cb\u003E professional certificate program.\u003C/b\u003E Learners may enroll in each course independently and receive a certificate of completion and CEUs. However, both courses are required in order to get the Professional Certificate in Quantum Computing Fundamentals.\u003C/p\u003E\u003Cp\u003E\u003C/p\u003E",
-        "full_description": null,
-        "last_modified": null,
-        "published": true,
-        "languages": null,
-        "url": "https://xpro.mit.edu/courses/course-v1:xPRO+QCFx2/",
-        "ocw_topics": [],
-        "professional": true,
-        "next_start_date": "2025-03-10T05:00:00Z",
-        "availability": "dated",
-        "completeness": 1,
-        "license_cc": false,
-        "continuing_ed_credits": "2.00",
-        "location": ""
-      }
-    ]
-  }
+        {
+          "id": 686,
+          "name": "Organizations & Leadership",
+          "icon": "RiBriefcase3Line",
+          "parent": 684,
+          "channel_url": "https://learn.mit.edu/c/topic/organizations-leadership/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["999.00"],
+      "resource_prices": [
+        {
+          "amount": "999.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5044,
+          "instructors": [
+            {
+              "id": 5,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Edward F. Crawley"
+            },
+            {
+              "id": 6,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Nelson Repenning"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "999.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+LASERx1+R17",
+          "title": "Understanding Organizational Strategy and Capabilities",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-02-03T05:00:00Z",
+          "end_date": "2025-03-03T23:59:00Z",
+          "enrollment_start": "2024-03-06T00:00:00Z",
+          "enrollment_end": "2025-02-10T23:59:00Z",
+          "prices": ["999.00"],
+          "checksum": "-3288845846013208467",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4524,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/NEW-LP-Course-1_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 6,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+LASERx1",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+LASERx1",
+      "title": "Understanding Organizational Strategy and Capabilities",
+      "description": "BECOME A VITAL PART OF YOUR ORGANIZATION'S FUTURE\u003Cp\u003EMore and more organizations are calling on you, their technical professionals, to drive complex projects under high-pressure conditions; collaborate or oversee distributed teams; and facilitate the collective work of skilled individuals. With technology accelerating at an unprecedented pace, you are uniquely suited to guide your organization into the future.\u003C/p\u003E\u003Cp\u003ETo help you on this journey, MIT xPRO has teamed with MIT’s School of Engineering and Sloan School of Management to present an analytical framework for you to understand your organization’s strategy, sources of power, and cultural environment all while helping you identify your own skills and strengths.\u003C/p\u003E\u003Cp\u003EComplement your technical expertise with the skills necessary to spot opportunities, discern big problems, and enable teams to collectively solve them.\u003C/p\u003E\u003Cp\u003EExpectations are high. Are you ready?\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+LASERx1/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": "2025-02-03T05:00:00Z",
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "1.25",
+      "location": ""
+    },
+    {
+      "id": 2687,
+      "topics": [
+        {
+          "id": 684,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/business-management/"
+        },
+        {
+          "id": 694,
+          "name": "Systems Thinking",
+          "icon": "RiBriefcase3Line",
+          "parent": 684,
+          "channel_url": "https://learn.mit.edu/c/topic/systems-thinking/"
+        },
+        {
+          "id": 747,
+          "name": "Engineering",
+          "icon": "RiRobot2Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/engineering/"
+        },
+        {
+          "id": 757,
+          "name": "Systems Engineering",
+          "icon": "RiRobot2Line",
+          "parent": 747,
+          "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["1179.00"],
+      "resource_prices": [
+        {
+          "amount": "1179.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5046,
+          "instructors": [
+            {
+              "id": 5,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Edward F. Crawley"
+            },
+            {
+              "id": 7,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Bruce G. Cameron"
+            },
+            {
+              "id": 8,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Olivier L. de Weck"
+            },
+            {
+              "id": 9,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Dov Dori"
+            },
+            {
+              "id": 10,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Steven Eppinger"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "1179.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+SysEngx1+R23",
+          "title": "Architecture of Complex Systems",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-02-03T05:00:00Z",
+          "end_date": "2025-03-10T23:30:00Z",
+          "enrollment_start": "2024-02-22T05:00:00Z",
+          "enrollment_end": "2025-02-10T23:59:00Z",
+          "prices": ["1179.00"],
+          "checksum": "6518649140102922818",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4525,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_1_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 1,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+SysEngx1",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+SysEngx1",
+      "title": "Architecture of Complex Systems",
+      "description": "\u003Cp\u003ECourse 1 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx1/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": null,
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "2.50",
+      "location": ""
+    },
+    {
+      "id": 2688,
+      "topics": [
+        {
+          "id": 747,
+          "name": "Engineering",
+          "icon": "RiRobot2Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/engineering/"
+        },
+        {
+          "id": 757,
+          "name": "Systems Engineering",
+          "icon": "RiRobot2Line",
+          "parent": 747,
+          "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["1179.00"],
+      "resource_prices": [
+        {
+          "amount": "1179.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5049,
+          "instructors": [
+            {
+              "id": 7,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Bruce G. Cameron"
+            },
+            {
+              "id": 8,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Olivier L. de Weck"
+            },
+            {
+              "id": 11,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Donna Rhodes"
+            },
+            {
+              "id": 12,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Adam Ross"
+            },
+            {
+              "id": 13,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Warren Hoburg"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "1179.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+SysEngx3+R22",
+          "title": "Model-Based Systems Engineering: Documentation and Analysis",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-01-13T05:00:00Z",
+          "end_date": "2025-02-17T23:30:00Z",
+          "enrollment_start": "2024-02-22T05:00:00Z",
+          "enrollment_end": "2025-01-20T23:59:00Z",
+          "prices": ["1179.00"],
+          "checksum": "-6943059180350808566",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4526,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_3_Card_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 7,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+SysEngx3",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+SysEngx3",
+      "title": "Model-Based Systems Engineering: Documentation and Analysis",
+      "description": "\u003Cp\u003ECourse 3 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx3/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": "2025-01-13T05:00:00Z",
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "2.00",
+      "location": ""
+    },
+    {
+      "id": 2689,
+      "topics": [
+        {
+          "id": 747,
+          "name": "Engineering",
+          "icon": "RiRobot2Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/engineering/"
+        },
+        {
+          "id": 757,
+          "name": "Systems Engineering",
+          "icon": "RiRobot2Line",
+          "parent": 747,
+          "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["1179.00"],
+      "resource_prices": [
+        {
+          "amount": "1179.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5055,
+          "instructors": [
+            {
+              "id": 7,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Bruce G. Cameron"
+            },
+            {
+              "id": 8,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Olivier L. de Weck"
+            },
+            {
+              "id": 11,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Donna Rhodes"
+            },
+            {
+              "id": 12,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Adam Ross"
+            },
+            {
+              "id": 13,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Warren Hoburg"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "1179.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+SysEngx2+R24",
+          "title": "Models in Engineering",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-05-19T05:00:00Z",
+          "end_date": "2025-06-16T23:30:00Z",
+          "enrollment_start": "2024-02-22T05:00:00Z",
+          "enrollment_end": "2025-05-26T23:59:00Z",
+          "prices": ["1179.00"],
+          "checksum": "3858416184832896121",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4527,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_2_Card_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 3,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+SysEngx2",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+SysEngx2",
+      "title": "Models in Engineering",
+      "description": "\u003Cp\u003ECourse 2 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx2/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": null,
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "2.00",
+      "location": ""
+    },
+    {
+      "id": 2690,
+      "topics": [
+        {
+          "id": 698,
+          "name": "Data Science, Analytics & Computer Technology",
+          "icon": "RiLineChartLine",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/data-science-analytics-computer-technology/"
+        },
+        {
+          "id": 702,
+          "name": "Algorithms and Data Structures",
+          "icon": "RiRobot2Line",
+          "parent": 698,
+          "channel_url": "https://learn.mit.edu/c/topic/algorithms-and-data-structures/"
+        },
+        {
+          "id": 747,
+          "name": "Engineering",
+          "icon": "RiRobot2Line",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/engineering/"
+        },
+        {
+          "id": 757,
+          "name": "Systems Engineering",
+          "icon": "RiRobot2Line",
+          "parent": 747,
+          "channel_url": "https://learn.mit.edu/c/topic/systems-engineering/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["1179.00"],
+      "resource_prices": [
+        {
+          "amount": "1179.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5057,
+          "instructors": [
+            {
+              "id": 7,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Bruce G. Cameron"
+            },
+            {
+              "id": 11,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Donna Rhodes"
+            },
+            {
+              "id": 12,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "Adam Ross"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "1179.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+SysEngx4+R22",
+          "title": "Quantitative Methods in Systems Engineering",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-02-24T05:00:00Z",
+          "end_date": "2025-03-24T23:30:00Z",
+          "enrollment_start": "2024-02-23T05:00:00Z",
+          "enrollment_end": "2025-03-03T23:59:00Z",
+          "prices": ["1179.00"],
+          "checksum": "-6869124753439168977",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4528,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/SysEng_Course_4_Card_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 3,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+SysEngx4",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+SysEngx4",
+      "title": "Quantitative Methods in Systems Engineering",
+      "description": "\u003Cp\u003ECourse 4 of 4 in \u003Ci\u003EArchitecture and Systems Engineering: Models and Methods to Manage Complex Systems\u003C/i\u003E\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+SysEngx4/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": "2025-02-24T05:00:00Z",
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "2.00",
+      "location": ""
+    },
+    {
+      "id": 2691,
+      "topics": [
+        {
+          "id": 698,
+          "name": "Data Science, Analytics & Computer Technology",
+          "icon": "RiLineChartLine",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/data-science-analytics-computer-technology/"
+        },
+        {
+          "id": 702,
+          "name": "Algorithms and Data Structures",
+          "icon": "RiRobot2Line",
+          "parent": 698,
+          "channel_url": "https://learn.mit.edu/c/topic/algorithms-and-data-structures/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["1529.00"],
+      "resource_prices": [
+        {
+          "amount": "1529.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5001,
+          "instructors": [
+            {
+              "id": 14,
+              "first_name": "Isaac",
+              "last_name": "Chuang",
+              "full_name": "Isaac Chuang"
+            },
+            {
+              "id": 15,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "William Oliver"
+            },
+            {
+              "id": 16,
+              "first_name": "Peter",
+              "last_name": "Shor",
+              "full_name": "Peter Shor"
+            },
+            {
+              "id": 17,
+              "first_name": "Aram",
+              "last_name": "Harrow",
+              "full_name": "Aram Harrow"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "1529.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+QCFx1+R19",
+          "title": "Introduction to Quantum Computing",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-02-03T05:00:00Z",
+          "end_date": "2025-03-03T23:30:00Z",
+          "enrollment_start": "2024-02-24T05:00:00Z",
+          "enrollment_end": "2025-02-10T23:59:00Z",
+          "prices": ["1529.00"],
+          "checksum": "-3762946636103751909",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4529,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/QCx_Course_1_Card_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 5,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+QCFx1",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+QCFx1",
+      "title": "Introduction to Quantum Computing",
+      "description": "\u003Cp\u003E\u003Cb\u003ECourse 1 of 2 in the\u003C/b\u003E \u003Cb\u003E\u003Ci\u003EQuantum Computing Fundamentals\u003C/i\u003E\u003C/b\u003E\u003Cb\u003E professional certificate program.\u003C/b\u003E To earn a Professional Certificate and CEUs, you must complete the two courses in the program. For those who do not want to commit to the full program, courses can be taken on an individual basis for a certificate of completion and CEUs.\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+QCFx1/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": "2025-02-03T05:00:00Z",
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "2.00",
+      "location": ""
+    },
+    {
+      "id": 2692,
+      "topics": [
+        {
+          "id": 702,
+          "name": "Algorithms and Data Structures",
+          "icon": "RiRobot2Line",
+          "parent": 698,
+          "channel_url": "https://learn.mit.edu/c/topic/algorithms-and-data-structures/"
+        },
+        {
+          "id": 698,
+          "name": "Data Science, Analytics & Computer Technology",
+          "icon": "RiLineChartLine",
+          "parent": null,
+          "channel_url": "https://learn.mit.edu/c/topic/data-science-analytics-computer-technology/"
+        },
+        {
+          "id": 710,
+          "name": "Computer Science",
+          "icon": "RiRobot2Line",
+          "parent": 698,
+          "channel_url": "https://learn.mit.edu/c/topic/computer-science/"
+        }
+      ],
+      "position": null,
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "course_feature": [],
+      "departments": [],
+      "certification": true,
+      "certification_type": {
+        "code": "professional",
+        "name": "Professional Certificate"
+      },
+      "prices": ["1529.00"],
+      "resource_prices": [
+        {
+          "amount": "1529.00",
+          "currency": "USD"
+        }
+      ],
+      "runs": [
+        {
+          "id": 5005,
+          "instructors": [
+            {
+              "id": 14,
+              "first_name": "Isaac",
+              "last_name": "Chuang",
+              "full_name": "Isaac Chuang"
+            },
+            {
+              "id": 15,
+              "first_name": null,
+              "last_name": null,
+              "full_name": "William Oliver"
+            },
+            {
+              "id": 16,
+              "first_name": "Peter",
+              "last_name": "Shor",
+              "full_name": "Peter Shor"
+            },
+            {
+              "id": 17,
+              "first_name": "Aram",
+              "last_name": "Harrow",
+              "full_name": "Aram Harrow"
+            }
+          ],
+          "image": null,
+          "level": [],
+          "delivery": [
+            {
+              "code": "online",
+              "name": "Online"
+            }
+          ],
+          "format": [
+            {
+              "code": "asynchronous",
+              "name": "Asynchronous"
+            }
+          ],
+          "pace": [
+            {
+              "code": "self_paced",
+              "name": "Self-paced"
+            }
+          ],
+          "resource_prices": [
+            {
+              "amount": "1529.00",
+              "currency": "USD"
+            }
+          ],
+          "run_id": "course-v1:xPRO+QCFx2+R19",
+          "title": "Quantum Algorithms for Cybersecurity, Chemistry, and Optimization",
+          "description": null,
+          "full_description": null,
+          "last_modified": null,
+          "published": true,
+          "languages": null,
+          "url": null,
+          "slug": null,
+          "semester": null,
+          "year": null,
+          "start_date": "2025-03-10T05:00:00Z",
+          "end_date": "2025-04-07T23:30:00Z",
+          "enrollment_start": "2024-02-24T05:00:00Z",
+          "enrollment_end": "2025-03-17T23:59:00Z",
+          "prices": ["1529.00"],
+          "checksum": "2498338567428372852",
+          "availability": "dated",
+          "location": ""
+        }
+      ],
+      "image": {
+        "id": 4530,
+        "url": "https://ol-xpro-app-production.s3.amazonaws.com/original_images/QC2_Program_card_New.jpg",
+        "description": null,
+        "alt": null
+      },
+      "learning_path_parents": [],
+      "user_list_parents": [],
+      "views": 3,
+      "delivery": [
+        {
+          "code": "online",
+          "name": "Online"
+        }
+      ],
+      "free": false,
+      "resource_category": "course",
+      "format": [
+        {
+          "code": "asynchronous",
+          "name": "Asynchronous"
+        }
+      ],
+      "pace": [
+        {
+          "code": "self_paced",
+          "name": "Self-paced"
+        }
+      ],
+      "resource_type": "course",
+      "course": {
+        "course_numbers": [
+          {
+            "value": "course-v1:xPRO+QCFx2",
+            "department": null,
+            "listing_type": "primary"
+          }
+        ]
+      },
+      "readable_id": "course-v1:xPRO+QCFx2",
+      "title": "Quantum Computing Algorithms for Cybersecurity, Chemistry, and Optimization",
+      "description": "\u003Cp\u003E\u003Cb\u003ECourse 2 of 2 in the\u003C/b\u003E \u003Cb\u003E\u003Ci\u003EQuantum Computing Fundamentals\u003C/i\u003E\u003C/b\u003E\u003Cb\u003E professional certificate program.\u003C/b\u003E Learners may enroll in each course independently and receive a certificate of completion and CEUs. However, both courses are required in order to get the Professional Certificate in Quantum Computing Fundamentals.\u003C/p\u003E\u003Cp\u003E\u003C/p\u003E",
+      "full_description": null,
+      "last_modified": null,
+      "published": true,
+      "languages": null,
+      "url": "https://xpro.mit.edu/courses/course-v1:xPRO+QCFx2/",
+      "ocw_topics": [],
+      "professional": true,
+      "next_start_date": "2025-03-10T05:00:00Z",
+      "availability": "dated",
+      "completeness": 1,
+      "license_cc": false,
+      "continuing_ed_credits": "2.00",
+      "location": ""
+    }
+  ]
+}

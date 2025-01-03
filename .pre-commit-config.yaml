@@ -20,26 +20,14 @@ repos:
       - id: check-merge-conflict
       - id: check-toml
       - id: debug-statements
-  #- repo: local
-  #   hooks:
-  #     - id: prettier
-  #       name: prettier
-  #       entry: npx prettier --write
-  #       language: node
-  #       types_or:
-  #         [
-  #           javascript,
-  #           jsx,
-  #           ts,
-  #           tsx,
-  #           json,
-  #           scss,
-  #           sass,
-  #           css,
-  #           yaml,
-  #           markdown,
-  #           html,
-  #         ]
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: npx prettier --write
+        language: node
+        types_or:
+          [javascript, jsx, ts, tsx, json, scss, sass, css, yaml, markdown]
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.10.0-1
     hooks:
@@ -79,28 +67,19 @@ repos:
       - id: ruff-format
       - id: ruff
         args: [--extend-ignore=D1, --fix]
-  # - repo: local
-  #   hooks:
-  #     - id: eslint
-  #       name: eslint
-  #       description: "Lint JS/TS files and apply automatic fixes"
-  #       entry: npx eslint --config frontends/.eslintrc.js --fix
-  #       language: node
-  #       types_or: [javascript, jsx, ts, tsx]
-  #       args: []
-  #       exclude: "(node_modules/|.yarn/)"
-  #       require_serial: false
-  #       additional_dependencies:
-  #         - eslint@8
-  #     - id: style-lint
-  #       name: style-lint
-  #       description: "Lint CSS"
-  #       entry: npx stylelint --allow-empty-input --fix
-  #       language: node
-  #       types: [scss, jsx, ts, tsx]
-  #       args: []
-  #       exclude: node_modules/
-  #       require_serial: false
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        description: "Lint JS/TS files and apply automatic fixes"
+        entry: npm exec --prefix frontend-demo -- eslint --fix --config frontend-demo/.eslintrc.js
+        language: node
+        types_or: [javascript, jsx, ts, tsx]
+        args: []
+        exclude: "(node_modules/|.yarn/)"
+        require_serial: false
+        additional_dependencies:
+          - eslint@8
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.10.0.1
     hooks:

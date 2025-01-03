@@ -60,7 +60,7 @@
       }
 
       /* What it does: Centers email on Android 4.4 */
-      div[style*='margin: 16px 0'] {
+      div[style*="margin: 16px 0"] {
         margin: 0 !important;
       }
 
@@ -355,17 +355,15 @@
                 text-align: center;
               "
             >
-              {% block footer %}
-
-              If you don't want to receive these emails in the future, you can
+              {% block footer %} If you don't want to receive these emails in
+              the future, you can
               <a
                 href="{{ APP_BASE_URL }}/dashboard/settings/"
                 style="text-decoration: underline"
                 >unsubscribe</a
               >. <br /><br />
 
-              {% endblock %}
-              {% block footer-address %}
+              {% endblock %} {% block footer-address %}
               <b>MIT Learn</b>&nbsp;&bull;&nbsp;77 Massachusetts
               Avenue&nbsp;&bull;&nbsp;Cambridge, MA 02139&nbsp;&bull;&nbsp;USA
               {% endblock %}
