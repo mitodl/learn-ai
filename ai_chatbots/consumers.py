@@ -77,6 +77,10 @@ class RecommendationBotWSConsumer(AsyncWebsocketConsumer):
 
 
 class RecommendationBotSSEConsumer(AsyncHttpConsumer):
+    """
+    Async HTTP SSE consumer for the recommendation agent.
+    """
+
     async def handle(self, message: str):
         user = self.scope.get("user", None)
         session = self.scope.get("session", None)
@@ -117,27 +121,30 @@ class RecommendationBotSSEConsumer(AsyncHttpConsumer):
         # Headers are only sent after the first body event.
         # Set "more_body" to tell the interface server to not
         # finish the response yet:
-        payload = "\nevent: ping\ndata: null\n\n\n"
+        payload = "event: ping\ndata: null\n\n"
         await self.send_body(payload.encode("utf-8"), more_body=True)
 
         try:
             message_text = process_message(message, agent)
 
             for chunk in agent.get_completion(message_text):
-                await self.send_event(event=chunk)
+                await self.send_event(event=chunk, more_body=True)
         except:  # noqa: E722
             log.exception("Error in RecommendationAgentConsumer")
         finally:
-            self.disconnect()
+            await self.send_event(event="", more_body=False)
+            await self.disconnect()
 
     async def disconnect(self):
-        await self.channel_layer.group_discard(f"sse_{self.user_id}", self.channel_name)
+        await self.channel_layer.group_discard(
+            f"recommendation_bot_{self.user_id}", self.channel_name
+        )
 
-    async def send_event(self, event: str):
+    async def send_event(self, event: str, more_body):
         # Send response event
         log.info(event)
         data = f"event: agent_response\ndata: {event}\n\n"
-        await self.send_body(data.encode("utf-8"), more_body=True)
+        await self.send_body(data.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):
         """
