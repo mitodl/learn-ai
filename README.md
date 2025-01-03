@@ -23,20 +23,19 @@ You can start it by running `docker compose up`
 
 ## Configuration
 
-Configuration can be put in the following files which are gitignored:
+Configuration can be put in the following file which is gitignored:
 
 ```
 mit-learn/
   ├── env/
-  │   └── backend.local.env (provided only to frontend containers)
-  └── .env (legacy file)
+      └── backend.local.env
+
 ```
 
-You will need at minimum the following environment variables to run locally:
+You will need at minimum the following environment variable to run locally:
 
 ```
 OPENAI_API_KEY=<your_openai_api_key>
-MITOL_APP_BASE_URL=http://ai.open.odl.local:8002
 ```
 
 ## Committing & Formatting
