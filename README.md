@@ -62,10 +62,10 @@ pre-commit init-templatedir ~/.git-template
 
 ## Sample Requests
 
-Run the following curl command to test the SSE recommendation agent API:
+Run the following curl command to test the HTTP recommendation agent API:
 
 ```
-curl 'http://ai.open.odl.local:8002/sse/recommendation_agent/' \
+curl 'http://ai.open.odl.local:8002/http/recommendation_agent/' \
   -H 'Accept: */*' \
   -H 'Connection: keep-alive' \
   -H 'Origin: http://ai.open.odl.local:8002' \

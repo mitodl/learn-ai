@@ -13,8 +13,8 @@ websocket_patterns = [
 
 http_patterns = [
     re_path(
-        r"sse/recommendation_agent/",
-        consumers.RecommendationBotSSEConsumer.as_asgi(),
+        r"http/recommendation_agent/",
+        consumers.RecommendationBotHttpConsumer.as_asgi(),
         name="recommendation_agent_sse",
     ),
 ]

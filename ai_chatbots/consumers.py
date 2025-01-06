@@ -76,9 +76,9 @@ class RecommendationBotWSConsumer(AsyncWebsocketConsumer):
             await self.send(text_data="!endResponse")
 
 
-class RecommendationBotSSEConsumer(AsyncHttpConsumer):
+class RecommendationBotHttpConsumer(AsyncHttpConsumer):
     """
-    Async HTTP SSE consumer for the recommendation agent.
+    Async HTTP consumer for the recommendation agent.
     """
 
     async def handle(self, message: str):
@@ -121,18 +121,17 @@ class RecommendationBotSSEConsumer(AsyncHttpConsumer):
         # Headers are only sent after the first body event.
         # Set "more_body" to tell the interface server to not
         # finish the response yet:
-        payload = "event: ping\ndata: null\n\n"
-        await self.send_body(payload.encode("utf-8"), more_body=True)
+        await self.send_chunk("")
 
         try:
             message_text = process_message(message, agent)
 
             for chunk in agent.get_completion(message_text):
-                await self.send_event(event=chunk, more_body=True)
+                await self.send_chunk(chunk)
         except:  # noqa: E722
             log.exception("Error in RecommendationAgentConsumer")
         finally:
-            await self.send_event(event="", more_body=False)
+            await self.send_chunk("", more_body=False)
             await self.disconnect()
 
     async def disconnect(self):
@@ -140,15 +139,13 @@ class RecommendationBotSSEConsumer(AsyncHttpConsumer):
             f"recommendation_bot_{self.user_id}", self.channel_name
         )
 
-    async def send_event(self, event: str, more_body):
-        # Send response event
-        log.info(event)
-        data = f"event: agent_response\ndata: {event}\n\n"
-        await self.send_body(data.encode("utf-8"), more_body=more_body)
+    async def send_chunk(self, chunk: str, *, more_body: bool = True):
+        log.info(chunk)
+        await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):
         """
-        Receives an SSE request and holds the connection open
+        Receives a request and holds the connection open
         until the client or server chooses to disconnect.
         """
         try:
