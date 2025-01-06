@@ -49,7 +49,7 @@
     "eslint-config-mitodl": "^1.0.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "^2.27.5",
-    "eslint-plugin-jest": "^27.1.1",
+    "eslint-plugin-jest": "^28.0.0",
     "eslint-plugin-mocha": "^10.0.5",
     "eslint-plugin-react": "^7.30.1",
     "eslint-plugin-react-hooks": "^4.6.0",
