@@ -46,7 +46,7 @@
     "casual-browserify": "^1.5.19-2",
     "css-mediaquery": "^0.1.2",
     "eslint": "^9.0.0",
-    "eslint-config-mitodl": "^1.0.0",
+    "eslint-config-mitodl": "^2.0.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-jest": "^27.1.1",
