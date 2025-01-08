@@ -3,8 +3,6 @@ include:
 
 services:
   web:
-    profiles:
-      - backend
     build:
       context: .
       dockerfile: Dockerfile
@@ -26,8 +24,6 @@ services:
       - django_media:/var/media
 
   celery:
-    profiles:
-      - backend
     build:
       context: .
       dockerfile: Dockerfile
