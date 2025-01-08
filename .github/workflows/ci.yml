@@ -78,3 +78,40 @@ jobs:
         uses: codecov/codecov-action@1e68e06f1dbfde0e4cefc87efeba9e4643565303 # v5.1.2
         with:
           file: ./coverage.xml
+  javascript-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend-demo
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: "^22"
+          cache: yarn
+          cache-dependency-path: frontend-demo/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Format
+        run: yarn run fmt-check
+
+      - name: Lints
+        run: yarn run lint-check
+
+        # do build before typecheck. See https://github.com/vercel/next.js/issues/53959#issuecomment-1735563224
+      - name: Build
+        run: yarn build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_MITOL_API_BASE_URL: "http://ai.test.local:8003"
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Tests
+        run: yarn test
+        env:
+          CODECOV: true
+          NODE_ENV: test

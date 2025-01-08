@@ -1,5 +1,4 @@
 {
   "$schema": "http://json.schemastore.org/prettierrc",
-  "semi": false,
-  "plugins": ["prettier-plugin-django-alpine"]
+  "semi": false
 }

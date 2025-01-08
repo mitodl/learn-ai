@@ -43,3 +43,16 @@ services:
     volumes:
       - .:/src
       - django_media:/var/media
+
+  watch:
+    working_dir: /src
+    image: node:22.11
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        yarn install
+        yarn start
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./frontend-demo:/src
