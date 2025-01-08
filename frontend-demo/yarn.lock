@@ -1261,9 +1261,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/smoot-design@npm:^1.2.1":
-  version: 1.2.1
-  resolution: "@mitodl/smoot-design@npm:1.2.1"
+"@mitodl/smoot-design@https://github.com/mitodl/smoot-design.git#30f59df543232b85cf03a08633283bfcc80351c9":
+  version: 0.0.0
+  resolution: "@mitodl/smoot-design@https://github.com/mitodl/smoot-design.git#commit=30f59df543232b85cf03a08633283bfcc80351c9"
   dependencies:
     "@emotion/react": "npm:^11.11.1"
     "@emotion/styled": "npm:^11.11.0"
@@ -1274,7 +1274,6 @@ __metadata:
     "@mui/system": "npm:^6.1.6"
     "@remixicon/react": "npm:^4.2.0"
     "@types/jest": "npm:^29.5.14"
-    ai: "npm:^4.0.13"
     classnames: "npm:^2.5.1"
     lodash: "npm:^4.17.21"
     react-markdown: "npm:^9.0.1"
@@ -1283,7 +1282,7 @@ __metadata:
   peerDependencies:
     react: ^18 || ^19
     react-dom: ^18 || ^19
-  checksum: 10c0/83c75548164977f79424932b9702fca722dc9296585052f28ebe67d92884faaa47aef53673944eca18db73963bd8b401795cd500cbe298ec5b08fb904fb958a8
+  checksum: 10c0/9227a994888dff50124c28f77fc095bd44d9d43039c57bc9f56c67bd0f02bcf6132233b3524abb5ebd617a6f03e5383010d2d3433d8470b126c0313eec77df4d
   languageName: node
   linkType: hard
 
@@ -2717,7 +2716,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ai@npm:^4.0.13, ai@npm:^4.0.25":
+"ai@npm:^4.0.25":
   version: 4.0.25
   resolution: "ai@npm:4.0.25"
   dependencies:
@@ -9944,7 +9943,7 @@ __metadata:
     "@emotion/react": "npm:^11.11.1"
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
-    "@mitodl/smoot-design": "npm:^1.2.1"
+    "@mitodl/smoot-design": "https://github.com/mitodl/smoot-design.git#30f59df543232b85cf03a08633283bfcc80351c9"
     "@mui/material": "npm:^6.1.8"
     "@mui/material-nextjs": "npm:^6.1.8"
     "@remixicon/react": "npm:^4.2.0"
