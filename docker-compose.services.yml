@@ -1,7 +1,5 @@
 services:
   db:
-    profiles:
-      - backend
     image: postgres:12.22
     healthcheck:
       test: ["CMD", "pg_isready"]
@@ -19,8 +17,6 @@ services:
       - pgdata:/var/lib/postgresql
 
   redis:
-    profiles:
-      - backend
     image: redis:7.4.2
     healthcheck:
       test: ["CMD", "redis-cli", "ping", "|", "grep", "PONG"]
@@ -31,8 +27,6 @@ services:
       - "6379"
 
   nginx:
-    profiles:
-      - backend
     build:
       context: ./nginx
     ports:
@@ -46,8 +40,6 @@ services:
       - ./config:/etc/nginx/templates
 
   litellm:
-    profiles:
-      - backend
     build:
       dockerfile: Dockerfile-litellm
     ports:
