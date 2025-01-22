@@ -8,7 +8,7 @@ websocket_patterns = [
         r"ws/recommendation_agent/",
         consumers.RecommendationBotWSConsumer.as_asgi(),
         name="recommendation_agent_ws",
-    ),
+    )
 ]
 
 http_patterns = [
@@ -16,5 +16,10 @@ http_patterns = [
         r"http/recommendation_agent/",
         consumers.RecommendationBotHttpConsumer.as_asgi(),
         name="recommendation_agent_sse",
+    ),
+        re_path(
+        r"http/tutor_agent/",
+        consumers.TutorBotHttpConsumer.as_asgi(),
+        name="tutor_agent_sse",
     ),
 ]
