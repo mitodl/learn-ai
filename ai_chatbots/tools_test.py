@@ -47,7 +47,7 @@ def mock_get(mocker, search_results):
 def test_search_courses(  # noqa: PLR0913
     settings, params, mock_get, search_results, search_url, limit
 ):
-    """Test the search_courses tool."""
+    """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SEARCH_URL = search_url
     settings.AI_MIT_SEARCH_LIMIT = limit
     expected_params = {"limit": limit, **params}

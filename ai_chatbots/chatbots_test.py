@@ -1,4 +1,4 @@
-"""Tests for AI agent services."""
+"""Tests for AI chatbots."""
 
 import json
 
@@ -44,7 +44,7 @@ def test_chatbot_initialization_defaults(model, temperature, instructions):
 
 @pytest.mark.django_db
 def test_chatbot_tool(settings, mocker, search_results):
-    """The search agent tool should be created and function correctly."""
+    """The ResourceRecommendationBot tool should be created and function correctly."""
     settings.AI_MIT_SEARCH_LIMIT = 5
     retained_attributes = [
         "title",
@@ -91,7 +91,7 @@ def test_chatbot_tool(settings, mocker, search_results):
 @pytest.mark.django_db
 @pytest.mark.parametrize("debug", [True, False])
 async def test_get_completion(settings, mocker, debug, search_results):
-    """Test that the RecommendationAgent get_completion method returns expected values."""
+    """Test that the ResourceRecommendationBot get_completion method returns expected values."""
     settings.AI_DEBUG = debug
     user_msg = "I want to learn physics"
     metadata = {

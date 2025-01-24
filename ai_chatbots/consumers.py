@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 def process_message(message_json) -> str:
     """
-    Validate the message, update the agent if necessary
+    Validate the message and return the serializer.
     """
     text_data_json = json.loads(message_json)
     serializer = ChatRequestSerializer(data=text_data_json)
@@ -24,6 +24,7 @@ def process_message(message_json) -> str:
 
 
 def create_chatbot(user_id, thread_id, serializer):
+    """Return a ResourceRecommendationBot instance"""
     temperature = serializer.validated_data.pop("temperature", None)
     instructions = serializer.validated_data.pop("instructions", None)
     model = serializer.validated_data.pop("model", None)
@@ -43,6 +44,7 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
     """
 
     async def handle(self, message: str):
+        """Handle the incoming message and send the response."""
         try:
             user = self.scope.get("user", None)
             session = self.scope.get("session", None)
