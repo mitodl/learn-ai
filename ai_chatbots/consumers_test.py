@@ -4,12 +4,10 @@ import json
 from random import randint
 
 import pytest
-from llama_cloud import MessageRole
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
-from ai_chatbots import consumers
+from ai_chatbots import SystemMessageFactory, consumers
 from ai_chatbots.chatbots import ResourceRecommendationBot
-from ai_chatbots.factories import ChatMessageFactory
 from main.factories import UserFactory
 
 
@@ -80,7 +78,7 @@ async def test_recommend_agent_receive(  # noqa: PLR0913
     model,
 ):
     """Test the receive function of the recommendation agent."""
-    response = ChatMessageFactory.create(role=MessageRole.ASSISTANT)
+    response = SystemMessageFactory.create()
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
         side_effect=[response.content.split(" ")],

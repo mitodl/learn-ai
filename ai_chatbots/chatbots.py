@@ -3,51 +3,41 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from typing import Optional
+from uuid import uuid4
 
-import pydantic
-import requests
+import posthog
 from django.conf import settings
-from django.core.cache import caches
 from django.utils.module_loading import import_string
-from llama_index.core.agent import AgentRunner
-from llama_index.core.base.llms.types import ChatMessage
-from llama_index.core.constants import DEFAULT_TEMPERATURE
-from llama_index.core.tools import FunctionTool, ToolMetadata
+from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages.ai import AIMessageChunk
+from langgraph.graph import StateGraph
+from langgraph.graph.graph import CompiledGraph
+from langgraph.prebuilt import ToolNode, tools_condition
 from openai import BadRequestError
-from pydantic import Field
 
-from ai_chatbots.api import get_agent, get_llm
-from ai_chatbots.constants import LearningResourceType, OfferedBy
-from ai_chatbots.utils import enum_zip
+from ai_chatbots import tools
+from ai_chatbots.api import AgentState, ChatMemory
+from ai_chatbots.constants import LLMClassEnum, OfferedBy
 
 log = logging.getLogger(__name__)
+
+DEFAULT_TEMPERATURE = 0.1
+CHECKPOINTER = ChatMemory().checkpointer
 
 
 class BaseChatbot(ABC):
     """
     Base AI chatbot class
-
-    Llamaindex was chosen to implement this because it provides
-    a far easier framework than native OpenAi or LiteLLM to
-    handle function calling completions.  With LiteLLM/OpenAI,
-    the first response may or may not be the result of a
-    function call, so it's necessary to check the response.
-    If it did call a function, then a second completion is needed
-    to get the final response with the function call result added
-    to the chat history.  Llamaindex handles this automatically.
-
-    For comparison see:
-    https://docs.litellm.ai/docs/completion/function_call
     """
 
-    INSTRUCTIONS = "You are a friendly chatbot, answer the user's questions"
+    INSTRUCTIONS = "Provide instructions for the LLM"
 
     # For LiteLLM tracking purposes
-    TASK_NAME = "BASECHAT_TASK"
-    CACHE_PREFIX = "base_ai_"
+    JOB_ID = "BASECHAT_JOB"
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         user_id: str,
         *,
@@ -55,95 +45,106 @@ class BaseChatbot(ABC):
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
-        """Initialize the AI chatbot"""
-        self.user_id = user_id
-        self.assistant_name = name
+        """Initialize the AI chat agent service"""
+        self.bot_name = name
         self.model = model or settings.AI_MODEL
         self.temperature = temperature or DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
-        if settings.AI_PROXY_CLASS and settings.AI_PROXY_URL:
-            self.proxy = import_string(f"ai_chatbots.proxy.{settings.AI_PROXY_CLASS}")(
-                user_id=user_id, task_id=self.TASK_NAME
-            )
+        self.user_id = user_id
+        self.config = {"configurable": {"thread_id": thread_id or uuid4().hex}}
+        self.memory = CHECKPOINTER  # retain chat history
+        if settings.AI_PROXY_CLASS:
+            self.proxy = import_string(f"ai_chat.proxy.{settings.AI_PROXY_CLASS}")()
+            self.proxy.create_proxy_user(self.user_id)
         else:
             self.proxy = None
         self.agent = None
-        self.save_history = settings.AI_CACHE_HISTORY and self.user_id
-        if self.save_history:
-            self.cache = caches[settings.AI_CACHE]
-            self.cache_timeout = settings.AI_CACHE_TIMEOUT
-            self.cache_key = f"{self.CACHE_PREFIX}{self.user_id}"
-
-    def get_or_create_chat_history_cache(self) -> None:
-        """
-        Get the user chat history from the cache and load it into the
-        llamaindex agent's chat history (agent.chat_history).
-        Create an empty cache key if it doesn't exist.
-        """
-        if self.cache_key in self.cache:
-            try:
-                for message in json.loads(self.cache.get(self.cache_key)):
-                    self.agent.chat_history.append(ChatMessage(**message))
-            except json.JSONDecodeError:
-                self.cache.set(self.cache_key, "[]", timeout=self.cache_timeout)
-        else:
-            if self.proxy:
-                self.proxy.create_proxy_user(self.user_id)
-            self.cache.set(self.cache_key, "[]", timeout=self.cache_timeout)
-
-    def save_chat_history(self) -> None:
-        """Save the agent chat history to the cache"""
-        chat_history = [
-            message.dict()
-            for message in self.agent.chat_history
-            if message.role != "tool" and message.content
-        ]
-        self.cache.set(
-            self.cache_key, json.dumps(chat_history), timeout=settings.AI_CACHE_TIMEOUT
-        )
-
-    @abstractmethod
-    def create_agent(self) -> AgentRunner:
-        """Create an AgentRunner for the relevant AI source"""
 
     def create_tools(self):
         """Create any tools required by the agent"""
         return []
 
-    def clear_chat_history(self) -> None:
-        """Clear the chat history from the cache"""
-        self.agent.chat_history.clear()
-        if self.save_history:
-            self.cache.delete(self.cache_key)
-            self.get_or_create_chat_history_cache()
+    def get_llm(self, **kwargs):
+        try:
+            llm_class = LLMClassEnum[settings.AI_PROVIDER].value
+        except KeyError:
+            raise NotImplementedError from KeyError
+        llm = llm_class(
+            model=self.model,
+            **(self.proxy.get_api_kwargs() if self.proxy else {}),
+            **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
+            **kwargs,
+        )
+        if self.temperature:
+            llm.temperature = self.temperature
+        self.llm = llm
+        return llm
+
+    def create_agent(self) -> CompiledGraph:
+        """Create a graph for the relevant LLM and tools"""
+
+        tools = self.create_tools()
+        llm = self.get_llm()
+        if tools:
+            llm = llm.bind_tools(tools)
+
+        def get_chatbot(state: AgentState) -> dict:
+            """Set up the chatbot with initial prompt"""
+            if len(state["messages"]) == 1:
+                state["messages"].insert(0, SystemMessage(self.instructions))
+            return {"messages": [llm.invoke(state["messages"])]}
+
+        graph_builder = StateGraph(AgentState)
+        graph_builder.add_node("chatbot", get_chatbot)
+        if tools:
+            graph_builder.add_node("tools", ToolNode(tools=tools))
+
+        graph_builder.add_conditional_edges(
+            "chatbot",
+            tools_condition,
+        )
+        graph_builder.add_edge("tools", "chatbot")
+        graph_builder.set_entry_point("chatbot")
+
+        return graph_builder.compile(checkpointer=self.memory)
 
     @abstractmethod
     def get_comment_metadata(self):
         """Yield markdown comments to send hidden metdata in the response"""
 
-    def get_completion(self, message: str, *, debug: bool = settings.AI_DEBUG) -> str:
+    def get_completion(
+        self, message: str, *, debug: bool = settings.AI_DEBUG
+    ) -> Generator[str, None, None]:
         """
         Send the user message to the agent and yield the response as
         it comes in.
 
         Append the response with debugging metadata and/or errors.
         """
+        full_response = ""
         if not self.agent:
             error = "Create agent before running"
             raise ValueError(error)
         try:
-            response = self.agent.stream_chat(
-                message,
+            response_generator = self.agent.stream(
+                {"messages": [{"role": "user", "content": message}]},
+                self.config,
+                stream_mode="messages",
             )
-            response_gen = response.response_gen
-            yield from response_gen
+            for chunk in response_generator:
+                if isinstance(chunk[0], AIMessageChunk):
+                    full_response += chunk[0].content
+                    yield chunk[0].content
         except BadRequestError as error:
             # Format and yield an error message inside a hidden comment
             if hasattr(error, "response"):
                 error = error.response.json()
             else:
-                error = {"error": {"message": str(error)}}
+                error = {
+                    "error": {"message": "An error has occurred, please try again"}
+                }
             if (
                 error["error"]["message"].startswith("Budget has been exceeded")
                 and not settings.AI_DEBUG
@@ -157,32 +158,23 @@ class BaseChatbot(ABC):
             log.exception("Error running AI agent")
         if debug:
             yield f"\n\n<!-- {self.get_comment_metadata()} -->\n\n"
-        if self.save_history:
-            self.save_chat_history()
+        if settings.POSTHOG_PROJECT_API_KEY:
+            hog_client = posthog.Posthog(
+                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
+            )
+            hog_client.capture(
+                self.user_id,
+                event=self.JOB_ID,
+                properties={
+                    "question": message,
+                    "answer": full_response,
+                    "metadata": self.get_comment_metadata(),
+                    "user": self.user_id,
+                },
+            )
 
 
-class FunctionCallingChatbot(BaseChatbot):
-    """Function calling chatbot, using a FunctionCallingAgent"""
-
-    TASK_NAME = "FUNCTION_CALL_TASK"
-
-    def create_agent(self) -> AgentRunner:
-        """
-        Create a function calling agent
-        """
-        llm = get_llm(self.model, self.proxy)
-        self.agent = get_agent().from_tools(
-            tools=self.create_tools(),
-            llm=llm,
-            verbose=True,
-            system_prompt=self.instructions,
-        )
-        if self.save_history:
-            self.get_or_create_chat_history_cache()
-        return self.agent
-
-
-class ResourceRecommendationBot(FunctionCallingChatbot):
+class ResourceRecommendationBot(BaseChatbot):
     """
     Chatbot that searches for learning resources in the MIT Learn catalog,
     then recommends the best results to the user based on their query.
@@ -201,7 +193,8 @@ Your job:
 are found.
 
 
-Always run the tool to answer questions, and answer only based on the function search
+Run the tool to find learning resources that the user is interested in,
+and answer only based on the function search
 results. VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
 ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
 resources.  Don't say you're going to try again.  Ask the user if they would like to
@@ -222,9 +215,9 @@ offered_by: If a user asks for resources "offered by" or "from" an institution,
 you should include this parameter based on the following
 dictionary: {OfferedBy.as_dict()}  DO NOT USE THE offered_by FILTER OTHERWISE.
 
-certificate: true if the user is interested in resources that offer certificates, false
-if the user does not want resources with a certificate offered.  Do not used this filter
-if the user does not indicate a preference.
+certification: true if the user is interested in resources that offer certificates,
+false if the user does not want resources with a certificate offered.  Do not use
+this filter if the user does not indicate a preference.
 
 free: true if the user is interested in free resources, false if the user is only
 interested in paid resources. Do not used this filter if the user does not indicate
@@ -279,157 +272,53 @@ User: "I want to learn some advanced mathematics"
 Search parameters: {{"q": "mathematics"}}
     """
 
-    class SearchToolSchema(pydantic.BaseModel):
-        """Schema for searching MIT learning resources.
-
-        Attributes:
-            q: The search query string
-            resource_type: Filter by type of resource (course, program, etc)
-            free: Filter for free resources only
-            certification: Filter for resources offering certificates
-            offered_by: Filter by institution offering the resource
-        """
-
-        q: str = Field(
-            description=(
-                "Query to find resources. Never use level terms like 'advanced' here"
-            )
-        )
-        resource_type: Optional[
-            list[enum_zip("resource_type", LearningResourceType)]
-        ] = Field(
-            default=None,
-            description="Type of resource to search for: course, program, video, etc",
-        )
-        free: Optional[bool] = Field(
-            default=None,
-            description="Whether the resource is free to access, true|false",
-        )
-        certification: Optional[bool] = Field(
-            default=None,
-            description=(
-                "Whether the resource offers a certificate upon completion, true|false"
-            ),
-        )
-        offered_by: Optional[enum_zip("offered_by", OfferedBy)] = Field(
-            default=None,
-            description="Institution that offers the resource: ocw, mitxonline, etc",
-        )
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "q": "machine learning",
-                    "resource_type": ["course"],
-                    "free": True,
-                    "certification": False,
-                    "offered_by": "MIT",
-                }
-            ]
-        }
-    }
-
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         user_id: str,
         *,
-        name: Optional[str] = "Learning Resource Search AI Assistant",
+        name: str = "MIT Open Learning Chatbot",
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
-        """Initialize the chatbot"""
+        """Initialize the AI search agent service"""
         super().__init__(
             user_id,
             name=name,
-            model=model or settings.AI_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
+            thread_id=thread_id,
         )
-        self.search_parameters = []
-        self.search_results = []
-        super().create_agent()
-
-    def search_courses(self, q: str, **kwargs) -> str:
-        """
-        Query the MIT API for learning resources, and
-        return simplified results as a JSON string
-        """
-
-        params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
-
-        valid_params = {
-            "resource_type": kwargs.get("resource_type"),
-            "free": kwargs.get("free"),
-            "offered_by": kwargs.get("offered_by"),
-            "certificate": kwargs.get("certificate"),
-        }
-        params.update({k: v for k, v in valid_params.items() if v is not None})
-        self.search_parameters.append(params)
-        try:
-            response = requests.get(
-                settings.AI_MIT_SEARCH_URL, params=params, timeout=30
-            )
-            response.raise_for_status()
-            raw_results = response.json().get("results", [])
-            # Simplify the response to only include the main properties
-            main_properties = [
-                "title",
-                "url",
-                "description",
-                "offered_by",
-                "free",
-                "certification",
-                "resource_type",
-            ]
-            simplified_results = []
-            for result in raw_results:
-                simplified_result = {k: result.get(k) for k in main_properties}
-                # Instructors and level will be in the runs data if present
-                next_date = result.get("next_start_date", None)
-                raw_runs = result.get("runs", [])
-                best_run = None
-                if next_date:
-                    runs = [run for run in raw_runs if run["start_date"] == next_date]
-                    if runs:
-                        best_run = runs[0]
-                elif raw_runs:
-                    best_run = raw_runs[-1]
-                if best_run:
-                    for attribute in ("level", "instructors"):
-                        simplified_result[attribute] = best_run.get(attribute, [])
-                simplified_results.append(simplified_result)
-            self.search_results.extend(simplified_results)
-            return json.dumps(simplified_results)
-        except requests.exceptions.RequestException as e:
-            log.exception("Error querying MIT API")
-            return json.dumps({"error": str(e)})
+        self.agent = self.create_agent()
 
     def create_tools(self):
         """Create tools required by the agent"""
-        return [self.create_search_tool()]
-
-    def create_search_tool(self) -> FunctionTool:
-        """Create the search tool for the AI agent"""
-        metadata = ToolMetadata(
-            name="search_courses",
-            description="Search for learning resources in the MIT catalog",
-            fn_schema=self.SearchToolSchema,
-        )
-        return FunctionTool.from_defaults(
-            fn=self.search_courses, tool_metadata=metadata
-        )
+        return [tools.search_courses]
 
     def get_comment_metadata(self) -> str:
         """
         Yield markdown comments to send hidden metadata in the response
         """
-        metadata = {
-            "metadata": {
-                "search_parameters": self.search_parameters,
-                "search_results": self.search_results,
-                "system_prompt": self.instructions,
-            }
-        }
+        thread_id = self.config["configurable"]["thread_id"]
+        metadata = {"thread_id": thread_id}
+        state = list(self.agent.get_state_history(self.config))
+        if state:
+            tool_messages = [
+                t
+                for t in state[0].values.get("messages", [])
+                if t.__class__ == ToolMessage
+            ]
+            if tool_messages:
+                content = json.loads(tool_messages[-1].content or {})
+                metadata = {
+                    "metadata": {
+                        "search_parameters": content.get("metadata", {}).get(
+                            "parameters", []
+                        ),
+                        "search_results": content.get("results", []),
+                        "thread_id": thread_id,
+                    }
+                }
         return json.dumps(metadata)

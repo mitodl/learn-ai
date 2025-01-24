@@ -1,49 +1,67 @@
 """AI-specific functions for ai_agents."""
 
-from typing import Optional
+from typing import Annotated, TypedDict
 
 from django.conf import settings
-from llama_index.core.agent import AgentRunner
-from llama_index.core.llms.llm import LLM
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.graph.message import add_messages
+from psycopg_pool import ConnectionPool
 
-from ai_chatbots.constants import AgentClassEnum, LLMClassEnum
-from ai_chatbots.proxies import AIProxy
+from main.utils import Singleton
 
 
-def get_llm(model_name: Optional[str] = None, proxy: Optional[AIProxy] = None) -> LLM:
+class AgentState(TypedDict):
     """
-    Get the LLM from the given model name,
-    incorporating a proxy if passed.
-
-    Args:
-        model_name: The name of the model
-        proxy: The proxy to use
-
-    Returns:
-        The LLM
-
+    Hold the state of each agent (ie messages)
     """
-    if not model_name:
-        model_name = settings.AI_MODEL
-    try:
-        llm_class = LLMClassEnum[settings.AI_PROVIDER].value
-        return llm_class(
-            model=model_name,
-            **(proxy.get_api_kwargs() if proxy else {}),
-            additional_kwargs=(proxy.get_additional_kwargs() if proxy else {}),
+
+    messages: Annotated[list, add_messages]
+
+
+class ChatMemory(metaclass=Singleton):
+    """
+    Singleton class to manage chat memory
+
+    For now, MemorySaver will be the default for temporary memory retention.
+    Chat history will be lost on server restarts.
+
+    A RedisSaver could be added later to make it somewhat less temporary:
+    https://langchain-ai.github.io/langgraph/how-tos/persistence_redis/
+
+    For production, persistent memory should be used. PostgresSaver can be
+    used for now as a test but we should create a Django ORM-friendly alternate
+    implementation before it is truly live.
+    """
+
+    def __init__(self):
+        self.checkpointer = (
+            get_postgres_saver() if settings.AI_PERSISTENT_MEMORY else MemorySaver()
         )
-    except KeyError as ke:
-        msg = f"{settings.AI_PROVIDER} not supported"
-        raise NotImplementedError(msg) from ke
-    except Exception as ex:
-        msg = f"Error instantiating LLM: {model_name}"
-        raise ValueError(msg) from ex
 
 
-def get_agent() -> AgentRunner:
-    """Get the appropriate chatbot agent for the AI provider"""
-    try:
-        return AgentClassEnum[settings.AI_PROVIDER].value
-    except KeyError as ke:
-        msg = f"{settings.AI_PROVIDER} not supported"
-        raise NotImplementedError(msg) from ke
+def persistence_db(db_name: str | None = None) -> str:
+    """
+    Return the database connection string needed by langgraph PostgresSaver.
+    """
+    db = settings.DATABASES[db_name or "default"]
+    sslmode = "disable" if db["DISABLE_SERVER_SIDE_CURSORS"] else "require"
+    return f"postgresql://{db['USER']}:{db['PASSWORD']}@{db['HOST']}:{db['PORT']}/{db['NAME']}?sslmode={sslmode}"
+
+
+def get_postgres_saver() -> PostgresSaver:
+    """
+    Return a PostgresSaver instance for persistent chat memory.
+    For local testing purposes only, we should create our
+    own version that uses the Django ORM.
+    """
+    connection_kwargs = {
+        "autocommit": True,
+        "prepare_threshold": 0,
+    }
+    pool = ConnectionPool(
+        conninfo=persistence_db(),
+        max_size=settings.AI_PERSISTENT_POOL_SIZE,
+        kwargs=connection_kwargs,
+    )
+    return PostgresSaver(pool)
