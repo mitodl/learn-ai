@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,12 +9,13 @@ from ai_chatbots.factories import HumanMessageFactory, SystemMessageFactory
 
 
 @pytest.fixture(autouse=True)
-def ai_settings(settings):
+def ai_settings(settings, mocker):
     """Assign default AI settings"""
     settings.AI_PROXY = None
     settings.AI_PROXY_URL = None
     settings.OPENAI_API_KEY = "test_key"
     os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+    mocker.patch("channels_redis.core.RedisChannelLayer", return_value=AsyncMock())
     return settings
 
 
