@@ -58,7 +58,9 @@ class BaseChatbot(ABC):
         self.config = {"configurable": {"thread_id": thread_id or uuid4().hex}}
         self.memory = CHECKPOINTER  # retain chat history
         if settings.AI_PROXY_CLASS:
-            self.proxy = import_string(f"ai_chat.proxy.{settings.AI_PROXY_CLASS}")()
+            self.proxy = import_string(
+                f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
+            )()
             self.proxy.create_proxy_user(self.user_id)
         else:
             self.proxy = None

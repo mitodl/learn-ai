@@ -49,6 +49,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
       - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
+      - UI_USERNAME=admin
+      - UI_PASSWORD=${AI_PROXY_AUTH_TOKEN}
     depends_on:
       db:
         condition: service_healthy

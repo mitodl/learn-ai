@@ -2,26 +2,23 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
 from urllib.parse import urljoin
-from uuid import uuid4
 
 import requests
 from django.conf import settings
 
+from ai_chatbots.chatbots import BaseChatbot
 from ai_chatbots.constants import AI_ANONYMOUS_USER
 
 log = logging.getLogger(__name__)
 
 
 class AIProxy(ABC):
-    """
-    Abstract base helper class for an AI proxy/gateway.
-    """
+    """Abstract base helper class for an AI proxy/gateway."""
 
-    REQUIRED_SETTINGS = ["AI_PROXY_URL", "AI_PROXY_AUTH_TOKEN", "AI_PROXY_CLASS"]
+    REQUIRED_SETTINGS = []
 
-    def __init__(self, *args):  # noqa: ARG002
+    def __init__(self):
         """Raise an error if required settings are missing."""
         missing_settings = [
             setting
@@ -33,15 +30,12 @@ class AIProxy(ABC):
             raise ValueError(message)
 
     @abstractmethod
-    def get_api_kwargs(self) -> dict:
+    def get_api_kwargs(self, **kwargs) -> dict:
         """Get the api kwargs required to connect to the proxy."""
 
     @abstractmethod
-    def get_additional_kwargs(self, user_id: str, task_id: str) -> dict:
-        """
-        Get any additional kwargs that should be sent to the proxy
-        Assumption is that it will typically need a user id and task id
-        """
+    def get_additional_kwargs(self, service: BaseChatbot) -> dict:
+        """Get any additional kwargs that should be sent to the proxy"""
 
     @abstractmethod
     def create_proxy_user(self, endpoint: str) -> None:
@@ -53,34 +47,23 @@ class LiteLLMProxy(AIProxy):
 
     REQUIRED_SETTINGS = ("AI_PROXY_URL", "AI_PROXY_AUTH_TOKEN")
 
-    def get_api_kwargs(self) -> dict:
-        """
-        Return the api kwargs required to connect to the proxy.
-        """
+    def get_api_kwargs(
+        self, base_url_key: str = "base_url", api_key_key: str = "openai_api_key"
+    ) -> dict:
         return {
-            "api_base": settings.AI_PROXY_URL,
-            "api_key": settings.AI_PROXY_AUTH_TOKEN,
+            f"{base_url_key}": settings.AI_PROXY_URL,
+            f"{api_key_key}": settings.AI_PROXY_AUTH_TOKEN,
         }
 
-    def get_additional_kwargs(
-        self, user_id: Optional[str] = None, task_id: Optional[str] = None
-    ) -> dict:
-        """
-        Return any additional kwargs that should be sent to the proxy.
-
-        Args:
-            user_id: The id of the user making a request
-            task_id: The unique id of the AI task being performed
-
-        """
+    def get_additional_kwargs(self, service: BaseChatbot) -> dict:
         return {
-            "user": user_id,
+            "user": service.user_id,
             "store": True,
             "extra_body": {
                 "metadata": {
                     "tags": [
-                        f"jobID:{uuid4()}",
-                        f"taskName:{task_id}",
+                        f"jobID:{service.JOB_ID}",
+                        f"taskName:{service.TASK_NAME}",
                     ]
                 }
             },
