@@ -8,7 +8,7 @@ import styled from "@emotion/styled"
  * @param comment the comment string
  * @returns the JSON object
  */
-export const extractJSONFromComment = (comment: string) => {
+const extractJSONFromComment = (comment: string) => {
   const jsonStr = comment.toString().match(/<!-{2}(.*)-{2}>/)?.[1] || "{}"
   try {
     return JSON.parse(jsonStr)
@@ -55,6 +55,7 @@ const HomePage: React.FC = () => {
     const contentParts = content.split("<!--")
     if (contentParts.length > 1) {
       // to do: show debug info if enabled here
+      extractJSONFromComment(contentParts[1])
     }
     return contentParts[0]
   }

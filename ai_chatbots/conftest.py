@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,8 @@ def ai_settings(settings):
     """Assign default AI settings"""
     settings.AI_PROXY = None
     settings.AI_PROXY_URL = None
+    settings.OPENAI_API_KEY = "test_key"
+    os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
     return settings
 
 
