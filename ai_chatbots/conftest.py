@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from ai_chatbots.factories import HumanMessageFactory, SystemMessageFactory
@@ -20,3 +23,26 @@ def chat_history():
         HumanMessageFactory.create(),
         SystemMessageFactory.create(),
     ]
+
+
+class MockAsyncIterator:
+    """An async iterator for testing purposes."""
+
+    def __init__(self, seq):
+        self.iter = iter(seq)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.iter)
+        except StopIteration:
+            raise StopAsyncIteration from StopIteration
+
+
+@pytest.fixture
+def search_results():
+    """Return search results for testing."""
+    with Path.open("./test_json/search_results.json") as f:
+        yield json.loads(f.read())

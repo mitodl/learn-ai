@@ -67,7 +67,7 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
                 log.info("Anon user, no session")
                 self.user_id = "Anonymous"
 
-            bot = create_chatbot(self.user_id, thread_id, serializer)
+            self.bot = create_chatbot(self.user_id, thread_id, serializer)
 
             self.channel_layer = get_channel_layer()
             self.room_name = "recommendation_bot"
@@ -101,7 +101,7 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
 
             message_text = serializer.validated_data["message"]
 
-            for chunk in bot.get_completion(message_text):
+            async for chunk in self.bot.get_completion(message_text):
                 await self.send_chunk(chunk)
         except:  # noqa: E722
             log.exception("Error in RecommendationAgentConsumer")
@@ -110,11 +110,14 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
             await self.disconnect()
 
     async def disconnect(self):
-        await self.channel_layer.group_discard(
-            f"recommendation_bot_{self.user_id}", self.channel_name
-        )
+        """Discard the group when the connection is closed."""
+        if hasattr(self, "channel_layer"):
+            await self.channel_layer.group_discard(
+                f"recommendation_bot_{self.user_id}", self.channel_name
+            )
 
     async def send_chunk(self, chunk: str, *, more_body: bool = True):
+        """send_chunk should call send_body with the chunk and more_body kwarg"""
         await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):

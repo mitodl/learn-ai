@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Annotated, Optional
+from typing import Optional
 
 import pydantic
 import requests
@@ -32,11 +32,11 @@ class SearchToolSchema(pydantic.BaseModel):
             "Query to find resources. Never use level terms like 'advanced' here"
         )
     )
-    resource_type: Optional[
-        list[Annotated[str, enum_zip("resource_type", LearningResourceType)]]
-    ] = Field(
-        default=None,
-        description="Type of resource to search for: course, program, video, etc",
+    resource_type: Optional[list[enum_zip("resource_type", LearningResourceType)]] = (
+        Field(
+            default=None,
+            description="Type of resource to search for: course, program, video, etc",
+        )
     )
     free: Optional[bool] = Field(
         default=None,
@@ -48,7 +48,7 @@ class SearchToolSchema(pydantic.BaseModel):
             "Whether the resource offers a certificate upon completion, true|false"
         ),
     )
-    offered_by: Optional[Annotated[str, enum_zip("offered_by", OfferedBy)]] = Field(
+    offered_by: Optional[list[enum_zip("resource_type", OfferedBy)]] = Field(
         default=None,
         description="Institution that offers the resource: ocw, mitxonline, etc",
     )
@@ -64,9 +64,9 @@ def search_courses(q: str, **kwargs) -> str:
     params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
 
     valid_params = {
-        "resource_type": kwargs.get("resource_type"),
+        "resource_type": [rt.name for rt in kwargs.get("resource_type", [])] or None,
         "free": kwargs.get("free"),
-        "offered_by": kwargs.get("offered_by"),
+        "offered_by": [o.name for o in kwargs.get("offered_by", [])] or None,
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})

@@ -3,15 +3,17 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from typing import Optional
 from uuid import uuid4
 
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.tools.base import BaseTool
 from langgraph.graph import StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -66,7 +68,7 @@ class BaseChatbot(ABC):
         """Create any tools required by the agent"""
         return []
 
-    def get_llm(self, **kwargs):
+    def get_llm(self, **kwargs) -> BaseChatModel:
         try:
             llm_class = LLMClassEnum[settings.AI_PROVIDER].value
         except KeyError:
@@ -111,12 +113,12 @@ class BaseChatbot(ABC):
         return graph_builder.compile(checkpointer=self.memory)
 
     @abstractmethod
-    def get_comment_metadata(self):
+    def get_comment_metadata(self) -> str:
         """Yield markdown comments to send hidden metdata in the response"""
 
-    def get_completion(
+    async def get_completion(
         self, message: str, *, debug: bool = settings.AI_DEBUG
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
         """
         Send the user message to the agent and yield the response as
         it comes in.
@@ -128,12 +130,12 @@ class BaseChatbot(ABC):
             error = "Create agent before running"
             raise ValueError(error)
         try:
-            response_generator = self.agent.stream(
+            response_generator = self.agent.astream(
                 {"messages": [{"role": "user", "content": message}]},
                 self.config,
                 stream_mode="messages",
             )
-            for chunk in response_generator:
+            async for chunk in response_generator:
                 if isinstance(chunk[0], AIMessageChunk):
                     full_response += chunk[0].content
                     yield chunk[0].content
@@ -293,7 +295,7 @@ Search parameters: {{"q": "mathematics"}}
         )
         self.agent = self.create_agent()
 
-    def create_tools(self):
+    def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
         return [tools.search_courses]
 

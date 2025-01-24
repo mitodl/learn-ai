@@ -1,30 +1,15 @@
 """Tests for AI agent services."""
 
 import json
-from pathlib import Path
 
 import pytest
 from django.conf import settings
 
 from ai_chatbots.chatbots import DEFAULT_TEMPERATURE, ResourceRecommendationBot
+from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import LLMClassEnum
 from ai_chatbots.factories import AIMessageChunkFactory
 from main.test_utils import assert_json_equal
-
-
-@pytest.fixture(autouse=True)
-def ai_settings(settings):
-    """Set the AI settings for the tests."""
-    settings.AI_CACHE = "default"
-    settings.AI_PROXY_URL = ""
-    return settings
-
-
-@pytest.fixture
-def search_results():
-    """Return search results for testing."""
-    with Path.open("./test_json/search_results.json") as f:
-        yield json.loads(f.read())
 
 
 @pytest.mark.parametrize(
@@ -89,12 +74,12 @@ def test_chatbot_tool(settings, mocker, search_results):
         "resource_type": ["course", "program"],
         "free": False,
         "certification": True,
-        "offered_by": "xpro",
+        "offered_by": ["xpro"],
         "limit": 5,
     }
     expected_results["metadata"]["parameters"] = search_parameters.copy()
     tool = chatbot.create_tools()[0]
-    results = tool.func(search_parameters.pop("q"), **search_parameters)
+    results = tool(search_parameters)
     mock_post.assert_called_once_with(
         settings.AI_MIT_SEARCH_URL,
         params={"q": "physics", **search_parameters},
@@ -105,7 +90,7 @@ def test_chatbot_tool(settings, mocker, search_results):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("debug", [True, False])
-def test_get_completion(settings, mocker, debug, search_results):
+async def test_get_completion(settings, mocker, debug, search_results):
     """Test that the RecommendationAgent get_completion method returns expected values."""
     settings.AI_DEBUG = debug
     user_msg = "I want to learn physics"
@@ -121,21 +106,25 @@ def test_get_completion(settings, mocker, debug, search_results):
         expected_return_value.append(comment_metadata)
     chatbot = ResourceRecommendationBot("anonymous", name="test agent")
     mock_stream = mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.stream",
-        return_value=iter(
-            [
-                (AIMessageChunkFactory.create(content=val),)
-                for val in expected_return_value
-            ]
+        "ai_chatbots.chatbots.CompiledGraph.astream",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(
+                    [
+                        (AIMessageChunkFactory.create(content=val),)
+                        for val in expected_return_value
+                    ]
+                )
+            )
         ),
     )
     chatbot.search_parameters = metadata["metadata"]["search_parameters"]
     chatbot.search_results = metadata["search_results"]
     chatbot.search_parameters = {"q": "physics"}
     chatbot.search_results = search_results
-    results = "".join(
-        [str(chunk) for chunk in chatbot.get_completion(user_msg, debug=debug)]
-    )
+    results = ""
+    async for chunk in chatbot.get_completion(user_msg, debug=debug):
+        results += str(chunk)
     mock_stream.assert_called_once_with(
         {"messages": [{"role": "user", "content": user_msg}]},
         chatbot.config,

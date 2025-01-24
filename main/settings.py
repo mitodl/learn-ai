@@ -572,6 +572,8 @@ AI_MIT_SEARCH_URL = get_string(
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MODEL = get_string(name="AI_MODEL", default="gpt-4o")
 AI_PROVIDER = get_string(name="AI_PROVIDER", default="openai")
+AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
+OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
@@ -585,4 +587,3 @@ AI_MAX_BUDGET = get_float(name="AI_MAX_BUDGET", default=0.05)
 AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10.0)
 AI_PERSISTENT_MEMORY = get_bool(name="AI_PERSISTENT_MEMORY", default=False)
 AI_PERSISTENT_POOL_SIZE = get_int(name="AI_PERSISTENT_POOL_SIZE", default=20)
-OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")

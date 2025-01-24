@@ -2,31 +2,16 @@
 
 import json
 from random import randint
+from unittest.mock import AsyncMock
 
 import pytest
-from llama_index.core.constants import DEFAULT_TEMPERATURE
 
-from ai_chatbots import SystemMessageFactory, consumers
+from ai_chatbots import consumers
 from ai_chatbots.chatbots import ResourceRecommendationBot
+from ai_chatbots.conftest import MockAsyncIterator
+from ai_chatbots.constants import AI_THREAD_COOKIE_KEY
+from ai_chatbots.factories import SystemMessageFactory
 from main.factories import UserFactory
-
-
-@pytest.fixture(autouse=True)
-def mock_connect(mocker):
-    """Mock the AsyncWebsocketConsumer connect function"""
-    return mocker.patch(
-        "ai_chatbots.consumers.AsyncWebsocketConsumer.connect",
-        new_callable=mocker.AsyncMock,
-    )
-
-
-@pytest.fixture(autouse=True)
-def mock_send(mocker):
-    """Mock the AsyncWebsocketConsumer connect function"""
-    return mocker.patch(
-        "ai_chatbots.consumers.AsyncWebsocketConsumer.send",
-        new_callable=mocker.AsyncMock,
-    )
 
 
 @pytest.fixture
@@ -40,20 +25,10 @@ def agent_user():
 @pytest.fixture
 def recommendation_consumer(agent_user):
     """Return a recommendation consumer."""
-    consumer = consumers.RecommendationBotWSConsumer()
-    consumer.scope = {"user": agent_user}
+    consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {"user": agent_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_channel"
     return consumer
-
-
-async def test_recommend_agent_connect(
-    recommendation_consumer, agent_user, mock_connect
-):
-    """Test the connect function of the recommendation agent."""
-    await recommendation_consumer.connect()
-
-    assert mock_connect.call_count == 1
-    assert recommendation_consumer.user_id == agent_user.username
-    assert recommendation_consumer.agent.user_id == agent_user.username
 
 
 @pytest.mark.parametrize(
@@ -67,10 +42,10 @@ async def test_recommend_agent_connect(
         ("hello", None, None, None),
     ],
 )
-async def test_recommend_agent_receive(  # noqa: PLR0913
+async def test_recommend_agent_handle(  # noqa: PLR0913
     settings,
     mocker,
-    mock_send,
+    mock_http_consumer_send,
     recommendation_consumer,
     message,
     temperature,
@@ -81,7 +56,11 @@ async def test_recommend_agent_receive(  # noqa: PLR0913
     response = SystemMessageFactory.create()
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
-        side_effect=[response.content.split(" ")],
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(list(response.content.split(" ")))
+            )
+        ),
     )
     data = {
         "message": message,
@@ -92,39 +71,67 @@ async def test_recommend_agent_receive(  # noqa: PLR0913
         data["instructions"] = instructions
     if model is not None:
         data["model"] = model
-    await recommendation_consumer.connect()
-    await recommendation_consumer.receive(json.dumps(data))
+    await recommendation_consumer.handle(json.dumps(data))
 
-    assert recommendation_consumer.agent.user_id.startswith("test_user")
-    agent_worker = recommendation_consumer.agent.agent.agent_worker
-    assert agent_worker._llm.temperature == (  # noqa: SLF001
-        temperature if temperature else DEFAULT_TEMPERATURE
+    assert recommendation_consumer.bot.user_id.startswith("test_user")
+    assert recommendation_consumer.bot.llm.temperature == (
+        temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
-    assert recommendation_consumer.agent.agent.agent_worker.prefix_messages[
-        0
-    ].content == (
-        instructions if instructions else ResourceRecommendationBot.INSTRUCTIONS
-    )
-    assert agent_worker._llm.model == (  # noqa: SLF001
+    assert recommendation_consumer.bot.llm.model_name == (
         model if model else settings.AI_MODEL
+    )
+    assert recommendation_consumer.bot.instructions == (
+        instructions if instructions else ResourceRecommendationBot.INSTRUCTIONS
     )
 
     mock_completion.assert_called_once_with(message)
-    assert mock_send.call_count == len(response.content.split(" ")) + 1
-    mock_send.assert_any_call(text_data="!endResponse")
+    assert (
+        mock_http_consumer_send.send_body.call_count
+        == len(response.content.split(" ")) + 2
+    )
+    mock_http_consumer_send.send_body.assert_any_call(
+        body=response.content.split(" ")[0].encode("utf-8"),
+        more_body=True,
+    )
+    assert mock_http_consumer_send.send_headers.call_count == 1
 
 
 @pytest.mark.parametrize("clear_history", [True, False])
-async def test_clear_history(mocker, clear_history, recommendation_consumer):
+async def test_clear_history(
+    mocker, mock_http_consumer_send, recommendation_consumer, clear_history
+):
     """Test the clear history function of the recommendation agent."""
-    mock_clear = mocker.patch(
-        "ai_chatbots.consumers.ResourceRecommendationBot.clear_chat_history"
-    )
+    recommendation_consumer.scope["cookies"] = {AI_THREAD_COOKIE_KEY: b"1234"}
     mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
     )
-    await recommendation_consumer.connect()
-    await recommendation_consumer.receive(
+    await recommendation_consumer.handle(
         json.dumps({"clear_history": clear_history, "message": "hello"})
     )
-    assert mock_clear.call_count == (1 if clear_history else 0)
+    args = mock_http_consumer_send.send_headers.call_args_list
+    assert (
+        recommendation_consumer.scope["cookies"][AI_THREAD_COOKIE_KEY]
+        in args[0][-1]["headers"][-1][1]
+    ) != clear_history
+
+
+async def test_http_request(mocker):
+    """Test the http request function of the AsyncHttpConsumer"""
+    msg = {"body": "test"}
+    mock_handle = mocker.patch(
+        "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
+    )
+    consumer = consumers.RecommendationBotHttpConsumer()
+    await consumer.http_request(msg)
+    mock_handle.assert_called_once_with(msg["body"])
+
+
+@pytest.mark.parametrize("has_layer", [True, False])
+async def test_disconnect(mocker, recommendation_consumer, has_layer):
+    """Test the disconnect function of the recommendation agent."""
+    recommendation_consumer.user_id = "Anonymous"
+    mock_layer = mocker.Mock(group_discard=AsyncMock())
+    if has_layer:
+        recommendation_consumer.channel_layer = mock_layer
+    await recommendation_consumer.disconnect()
+    assert mock_layer.group_discard.call_count == (1 if has_layer else 0)
