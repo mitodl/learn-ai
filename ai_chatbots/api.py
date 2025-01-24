@@ -4,9 +4,9 @@ from typing import Annotated, TypedDict
 
 from django.conf import settings
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.message import add_messages
-from psycopg_pool import ConnectionPool
+from psycopg_pool import AsyncConnectionPool
 
 from main.utils import Singleton
 
@@ -49,7 +49,7 @@ def persistence_db(db_name: str | None = None) -> str:
     return f"postgresql://{db['USER']}:{db['PASSWORD']}@{db['HOST']}:{db['PORT']}/{db['NAME']}?sslmode={sslmode}"
 
 
-def get_postgres_saver() -> PostgresSaver:
+def get_postgres_saver() -> AsyncPostgresSaver:
     """
     Return a PostgresSaver instance for persistent chat memory.
     For local testing purposes only, we should create our
@@ -59,9 +59,9 @@ def get_postgres_saver() -> PostgresSaver:
         "autocommit": True,
         "prepare_threshold": 0,
     }
-    pool = ConnectionPool(
+    pool = AsyncConnectionPool(
         conninfo=persistence_db(),
         max_size=settings.AI_PERSISTENT_POOL_SIZE,
         kwargs=connection_kwargs,
     )
-    return PostgresSaver(pool)
+    return AsyncPostgresSaver(pool)

@@ -8,7 +8,7 @@ from django.conf import settings
 from ai_chatbots.chatbots import DEFAULT_TEMPERATURE, ResourceRecommendationBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import LLMClassEnum
-from ai_chatbots.factories import AIMessageChunkFactory
+from ai_chatbots.factories import AIMessageChunkFactory, ToolMessageFactory
 from main.test_utils import assert_json_equal
 
 
@@ -93,6 +93,14 @@ def test_chatbot_tool(settings, mocker, search_results):
 async def test_get_completion(settings, mocker, debug, search_results):
     """Test that the ResourceRecommendationBot get_completion method returns expected values."""
     settings.AI_DEBUG = debug
+    mocker.patch(
+        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        return_value=MockAsyncIterator(
+            [
+                ToolMessageFactory.create(content="Here "),
+            ]
+        ),
+    )
     user_msg = "I want to learn physics"
     metadata = {
         "metadata": {

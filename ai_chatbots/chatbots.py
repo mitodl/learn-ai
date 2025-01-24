@@ -115,7 +115,7 @@ class BaseChatbot(ABC):
         return graph_builder.compile(checkpointer=self.memory)
 
     @abstractmethod
-    def get_comment_metadata(self) -> str:
+    async def get_comment_metadata(self) -> str:
         """Yield markdown comments to send hidden metdata in the response"""
 
     async def get_completion(
@@ -161,7 +161,7 @@ class BaseChatbot(ABC):
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
         if debug:
-            yield f"\n\n<!-- {self.get_comment_metadata()} -->\n\n"
+            yield f"\n\n<!-- {await self.get_comment_metadata()} -->\n\n"
         if settings.POSTHOG_PROJECT_API_KEY:
             hog_client = posthog.Posthog(
                 settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
@@ -172,7 +172,7 @@ class BaseChatbot(ABC):
                 properties={
                     "question": message,
                     "answer": full_response,
-                    "metadata": self.get_comment_metadata(),
+                    "metadata": await self.get_comment_metadata(),
                     "user": self.user_id,
                 },
             )
@@ -301,28 +301,38 @@ Search parameters: {{"q": "mathematics"}}
         """Create tools required by the agent"""
         return [tools.search_courses]
 
-    def get_comment_metadata(self) -> str:
+    async def get_latest_history(self) -> dict:
+        async for state in self.agent.aget_state_history(self.config):
+            if state:
+                return state
+        return None
+
+    async def get_comment_metadata(self) -> str:
         """
         Yield markdown comments to send hidden metadata in the response
         """
         thread_id = self.config["configurable"]["thread_id"]
         metadata = {"thread_id": thread_id}
-        state = list(self.agent.get_state_history(self.config))
-        if state:
-            tool_messages = [
+        metadata = {"thread_id": thread_id}
+        latest_state = await self.get_latest_history()
+        tool_messages = (
+            []
+            if not latest_state
+            else [
                 t
-                for t in state[0].values.get("messages", [])
-                if t.__class__ == ToolMessage
+                for t in latest_state.values.get("messages", [])
+                if t and t.__class__ == ToolMessage
             ]
-            if tool_messages:
-                content = json.loads(tool_messages[-1].content or {})
-                metadata = {
-                    "metadata": {
-                        "search_parameters": content.get("metadata", {}).get(
-                            "parameters", []
-                        ),
-                        "search_results": content.get("results", []),
-                        "thread_id": thread_id,
-                    }
+        )
+        if tool_messages:
+            content = json.loads(tool_messages[-1].content or {})
+            metadata = {
+                "metadata": {
+                    "search_parameters": content.get("metadata", {}).get(
+                        "parameters", []
+                    ),
+                    "search_results": content.get("results", []),
+                    "thread_id": thread_id,
                 }
+            }
         return json.dumps(metadata)
