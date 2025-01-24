@@ -1,8 +1,23 @@
 """Tests for api functions."""
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 
 from ai_chatbots import api
+
+
+@pytest.fixture(autouse=True)
+def mock_async_pg_save(mocker):
+    """Mock the AsyncPostgresSaver classes."""
+    mock_pool = mocker.patch(
+        "ai_chatbots.api.AsyncConnectionPool", return_value=AsyncMock()
+    )
+    mock_pg_saver = mocker.patch(
+        "ai_chatbots.api.AsyncPostgresSaver", return_value=AsyncMock()
+    )
+    return SimpleNamespace(pool=mock_pool, pg_saver=mock_pg_saver)
 
 
 def mock_db_settings(sslmode):
@@ -27,7 +42,7 @@ def test_chat_memory_persist(settings, persist):
     settings.AI_PERSISTENT_MEMORY = persist
     checkpoint = api.ChatMemory()
     if persist:
-        assert isinstance(checkpoint.checkpointer, api.PostgresSaver)
+        assert isinstance(checkpoint.checkpointer, AsyncMock)
     else:
         assert isinstance(checkpoint.checkpointer, api.MemorySaver)
     # Reset the singleton instance
@@ -57,18 +72,16 @@ def test_persistence_db(settings, sslmode):
 
 
 @pytest.mark.parametrize("pool_size", [10, 20])
-def test_get_postgres_saver(settings, mocker, pool_size):
-    """get_postgres_server should make expected calls and return a PostgresSaver."""
+async def test_get_postgres_saver(settings, mocker, mock_async_pg_save, pool_size):
+    """get_postgres_server should make expected calls and return a AsyncPostgresSaver."""
 
     settings.AI_PERSISTENT_POOL_SIZE = pool_size
     mock_db = "postgresql://foo:bar@localhost:5432/db"
-    mock_pool = mocker.patch("ai_chatbots.api.ConnectionPool")
-    mock_pg_saver = mocker.patch("ai_chatbots.api.PostgresSaver")
     mocker.patch("ai_chatbots.api.persistence_db", return_value=mock_db)
 
     result = api.get_postgres_saver()
 
-    mock_pool.assert_called_once_with(
+    mock_async_pg_save.pool.assert_called_once_with(
         conninfo=mock_db,
         max_size=pool_size,
         kwargs={
@@ -76,5 +89,7 @@ def test_get_postgres_saver(settings, mocker, pool_size):
             "prepare_threshold": 0,
         },
     )
-    mock_pg_saver.assert_called_once_with(mock_pool.return_value)
-    assert result == mock_pg_saver.return_value
+    mock_async_pg_save.pg_saver.assert_called_once_with(
+        mock_async_pg_save.pool.return_value
+    )
+    assert result == mock_async_pg_save.pg_saver.return_value
