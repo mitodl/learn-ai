@@ -70,6 +70,7 @@ def search_courses(q: str, **kwargs) -> str:
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
+    log.info("Searching MIT API with params: %s", params)
     try:
         response = requests.get(settings.AI_MIT_SEARCH_URL, params=params, timeout=30)
         response.raise_for_status()

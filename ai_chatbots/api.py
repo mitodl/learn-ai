@@ -1,22 +1,26 @@
 """AI-specific functions for ai_agents."""
 
-from typing import Annotated, TypedDict
+from typing import Annotated
 
 from django.conf import settings
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.message import add_messages
 from psycopg_pool import AsyncConnectionPool
+from pydantic import BaseModel
 
 from main.utils import Singleton
 
 
-class AgentState(TypedDict):
+class AgentState(BaseModel):
     """
     Hold the state of each agent (ie messages)
     """
 
     messages: Annotated[list, add_messages]
+    current_input: str = ""
+    tools_output: dict[str, str] = {}
+    final_response: str = ""
 
 
 class ChatMemory(metaclass=Singleton):

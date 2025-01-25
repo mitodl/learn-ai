@@ -11,17 +11,16 @@ import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
-from langgraph.graph import StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import create_react_agent
 from openai import BadRequestError
 
 from ai_chatbots import tools
-from ai_chatbots.api import AgentState, ChatMemory
-from ai_chatbots.constants import LLMClassEnum, OfferedBy
+from ai_chatbots.api import ChatMemory
+from ai_chatbots.constants import LLMClassEnum
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +63,7 @@ class BaseChatbot(ABC):
             self.proxy.create_proxy_user(self.user_id)
         else:
             self.proxy = None
+        self.llm = self.get_llm()
         self.agent = None
 
     def create_tools(self):
@@ -83,36 +83,23 @@ class BaseChatbot(ABC):
         )
         if self.temperature:
             llm.temperature = self.temperature
-        self.llm = llm
         return llm
 
-    def create_agent(self) -> CompiledGraph:
-        """Create a graph for the relevant LLM and tools"""
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Return a graph for the relevant LLM and tools.
 
-        tools = self.create_tools()
-        llm = self.get_llm()
-        if tools:
-            llm = llm.bind_tools(tools)
+        The default implementation uses the prebuilt create_react_agent
+        function.  Subclasses can override this method to create custom
+        graphs.
+        """
 
-        def get_chatbot(state: AgentState) -> dict:
-            """Set up the chatbot with initial prompt"""
-            if len(state["messages"]) == 1:
-                state["messages"].insert(0, SystemMessage(self.instructions))
-            return {"messages": [llm.invoke(state["messages"])]}
-
-        graph_builder = StateGraph(AgentState)
-        graph_builder.add_node("chatbot", get_chatbot)
-        if tools:
-            graph_builder.add_node("tools", ToolNode(tools=tools))
-
-        graph_builder.add_conditional_edges(
-            "chatbot",
-            tools_condition,
+        return create_react_agent(
+            self.llm,
+            tools=self.create_tools(),
+            checkpointer=self.memory,
+            state_modifier=self.instructions,
         )
-        graph_builder.add_edge("tools", "chatbot")
-        graph_builder.set_entry_point("chatbot")
-
-        return graph_builder.compile(checkpointer=self.memory)
 
     @abstractmethod
     async def get_comment_metadata(self) -> str:
@@ -186,7 +173,7 @@ class ResourceRecommendationBot(BaseChatbot):
 
     TASK_NAME = "RECOMMENDATION_TASK"
 
-    INSTRUCTIONS = f"""You are an assistant helping users find courses from a catalog
+    INSTRUCTIONS = """You are an assistant helping users find courses from a catalog
 of learning resources. Users can ask about specific topics, levels, or recommendations
 based on their interests or goals.
 
@@ -199,8 +186,12 @@ are found.
 
 Run the tool to find learning resources that the user is interested in,
 and answer only based on the function search
-results. VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
-ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
+results.
+
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
+ANSWER QUESTIONS.
+
+If no results are returned, say you could not find any relevant
 resources.  Don't say you're going to try again.  Ask the user if they would like to
 modify their preferences or ask a different question.
 
@@ -217,7 +208,16 @@ as the value for this parameter.
 
 offered_by: If a user asks for resources "offered by" or "from" an institution,
 you should include this parameter based on the following
-dictionary: {OfferedBy.as_dict()}  DO NOT USE THE offered_by FILTER OTHERWISE.
+dictionary:
+
+    mitx = "MITx"
+    ocw = "MIT OpenCourseWare"
+    bootcamps = "Bootcamps"
+    xpro = "MIT xPRO"
+    mitpe = "MIT Professional Education"
+    see = "MIT Sloan Executive Education"
+
+DON'T USE THE offered_by FILTER OTHERWISE. Combine 2+ offered_by values in 1 query.
 
 certification: true if the user is interested in resources that offer certificates,
 false if the user does not want resources with a certificate offered.  Do not use
@@ -238,8 +238,8 @@ Respond in this format:
 - If the user's intent is unclear, ask clarifying questions about users preference on
 price, certificate
 - Understand user background from the message history, like their level of education.
-- After the function executes, rerank results based on user background and recommend
-1 or 2 courses to the user
+- After the function executes, rerank results based on user background and return
+only the top 1 or 2 of the results to the user.
 - Make the title of each resource a clickable link.
 
 VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO ANSWER
@@ -260,20 +260,22 @@ Expected Output: Maybe ask whether the user wants to learn how to program, or ju
 AI in their discipline - does this person want to study machine learning? More info
 needed. Then perform a relevant search and send back the best results.
 
-And here are some recommended search parameters to apply for sample user prompts:
+Here are some recommended tool parameters to apply for sample user prompts:
 
-User: "I am interested in learning advanced AI techniques"
-Search parameters: {{"q": "AI techniques"}}
+User: "I am interested in learning advanced AI techniques for free"
+Search parameters: q="AI techniques", free=true
 
 User: "I am curious about AI applications for business"
-Search parameters: {{"q": "AI business"}}
+Search parameters: q="AI business"
 
-User: "I want free basic courses about climate change from OpenCourseware"
-Search parameters: {{"q": "climate change", "free": true, "resource_type": ["course"],
-"offered_by": "ocw"}}
+User: "I want free basic courses about biology from OpenCourseware"
+Search parameters: q="biology", resource_type=["course"], offered_by: ["ocw"]
 
-User: "I want to learn some advanced mathematics"
-Search parameters: {{"q": "mathematics"}}
+User: "I want to learn some advanced mathematics from MITx or OpenCourseware"
+Search parameters: q="mathematics", , offered_by: ["ocw", "mitx]
+
+AGAIN: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
+ANSWER QUESTIONS.
     """
 
     def __init__(  # noqa: PLR0913
@@ -295,7 +297,7 @@ Search parameters: {{"q": "mathematics"}}
             instructions=instructions,
             thread_id=thread_id,
         )
-        self.agent = self.create_agent()
+        self.agent = self.create_agent_graph()
 
     def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
@@ -312,7 +314,6 @@ Search parameters: {{"q": "mathematics"}}
         Yield markdown comments to send hidden metadata in the response
         """
         thread_id = self.config["configurable"]["thread_id"]
-        metadata = {"thread_id": thread_id}
         metadata = {"thread_id": thread_id}
         latest_state = await self.get_latest_history()
         tool_messages = (
