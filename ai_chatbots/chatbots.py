@@ -11,11 +11,13 @@ import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
+from langgraph.constants import END
+from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import create_react_agent
+from langgraph.prebuilt import ToolNode
 from openai import BadRequestError
 
 from ai_chatbots import tools
@@ -26,6 +28,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_TEMPERATURE = 0.1
 CHECKPOINTER = ChatMemory().checkpointer
+CONTINUE = "continue"
 
 
 class BaseChatbot(ABC):
@@ -63,6 +66,7 @@ class BaseChatbot(ABC):
             self.proxy.create_proxy_user(self.user_id)
         else:
             self.proxy = None
+        self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
 
@@ -83,16 +87,16 @@ class BaseChatbot(ABC):
         )
         if self.temperature:
             llm.temperature = self.temperature
+        # Bind tools to the LLM if any
+        if self.tools:
+            llm = llm.bind_tools(self.tools)
         return llm
 
     def create_agent_graph(self) -> CompiledGraph:
         """
         Return a graph for the relevant LLM and tools.
 
-        The default implementation uses the prebuilt create_react_agent
-        function.  Subclasses can override this method to create custom
-        graphs.
-        """
+        An easy way to create a graph is to use the prebuilt create_react_agent:
 
         return create_react_agent(
             self.llm,
@@ -100,6 +104,63 @@ class BaseChatbot(ABC):
             checkpointer=self.memory,
             state_modifier=self.instructions,
         )
+
+        The base implementation here accomplishes the same thing but a
+        bit more explicitly, to give a better idea of what's happening
+        and how it can be customized.
+        """
+
+        # Names of nodes in the graph
+        agent_node = "agent"
+        tools_node = "tools"
+
+        def start_agent(state: MessagesState) -> MessagesState:
+            """Call the LLM, injecting system prompt"""
+            if len(state["messages"]) == 1:
+                # New chat, so inject the system prompt
+                state["messages"].insert(0, SystemMessage(self.instructions))
+            return MessagesState(messages=[self.llm.invoke(state["messages"])])
+
+        def continue_on_tool_call(state: MessagesState) -> str:
+            """
+            Define the conditional edge that determines whether
+            to continue or not
+            """
+            messages = state["messages"]
+            last_message = messages[-1]
+            # Finish if no tool call is requested
+            if not last_message.tool_calls:
+                return END
+            # If there is, run the tool
+            else:
+                return CONTINUE
+
+        agent_graph = StateGraph(MessagesState)
+        # Add the agent node that first calls the LLM
+        agent_graph.add_node(agent_node, start_agent)
+        if self.tools:
+            # Add the tools node
+            agent_graph.add_node(tools_node, ToolNode(tools=self.tools))
+            # Add a conditional edge that determines when to run the tools.
+            # If no tool call is requested, the edge is not taken and the
+            # agent node will end its response.
+            agent_graph.add_conditional_edges(
+                agent_node,
+                continue_on_tool_call,
+                {
+                    # If tool requested then we call the tool node.
+                    CONTINUE: tools_node,
+                    # Otherwise finish.
+                    END: END,
+                },
+            )
+            # Send the tool node output back to the agent node
+            agent_graph.add_edge(tools_node, agent_node)
+        # Set the entry point to the agent node
+        agent_graph.set_entry_point(agent_node)
+
+        # compile and return the agent graph
+        return agent_graph.compile(checkpointer=self.memory)
 
     @abstractmethod
     async def get_comment_metadata(self) -> str:

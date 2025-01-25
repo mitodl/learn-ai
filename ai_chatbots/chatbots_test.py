@@ -4,6 +4,7 @@ import json
 
 import pytest
 from django.conf import settings
+from langchain_core.runnables import RunnableBinding
 
 from ai_chatbots.chatbots import DEFAULT_TEMPERATURE, ResourceRecommendationBot
 from ai_chatbots.conftest import MockAsyncIterator
@@ -13,17 +14,25 @@ from main.test_utils import assert_json_equal
 
 
 @pytest.mark.parametrize(
-    ("model", "temperature", "instructions"),
+    ("model", "temperature", "instructions", "has_tools"),
     [
-        ("gpt-3.5-turbo", 0.1, "Answer this question as best you can"),
-        ("gpt-4o", 0.3, None),
-        ("gpt-4", None, None),
-        (None, None, None),
+        ("gpt-3.5-turbo", 0.1, "Answer this question as best you can", True),
+        ("gpt-4o", 0.3, None, False),
+        ("gpt-4", None, None, True),
+        (None, None, None, False),
     ],
 )
-def test_chatbot_initialization_defaults(model, temperature, instructions):
+def test_chatbot_initialization_defaults(
+    mocker, model, temperature, instructions, has_tools
+):
     """Test the ResourceRecommendationBot class instantiation."""
     name = "My search bot"
+
+    if not has_tools:
+        mocker.patch(
+            "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+            return_value=[],
+        )
 
     chatbot = ResourceRecommendationBot(
         "user",
@@ -38,7 +47,11 @@ def test_chatbot_initialization_defaults(model, temperature, instructions):
         instructions if instructions else chatbot.instructions
     )
     worker_llm = chatbot.llm
-    assert worker_llm.__class__ == LLMClassEnum.openai.value
+    assert (
+        worker_llm.__class__ == RunnableBinding
+        if has_tools
+        else LLMClassEnum.openai.value
+    )
     assert worker_llm.model_name == (model if model else settings.AI_MODEL)
 
 
