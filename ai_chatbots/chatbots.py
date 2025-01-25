@@ -75,6 +75,12 @@ class BaseChatbot(ABC):
         return []
 
     def get_llm(self, **kwargs) -> BaseChatModel:
+        """
+        Return the LLM instance for the chatbot.
+        Determine the LLM class to use based on the AI_PROVIDER setting.
+        Set it up to use a proxy, with required proxy kwargs, if applicable.
+        Bind the LLM to any tools if they are present.
+        """
         try:
             llm_class = LLMClassEnum[settings.AI_PROVIDER].value
         except KeyError:
@@ -98,12 +104,14 @@ class BaseChatbot(ABC):
 
         An easy way to create a graph is to use the prebuilt create_react_agent:
 
-        return create_react_agent(
-            self.llm,
-            tools=self.create_tools(),
-            checkpointer=self.memory,
-            state_modifier=self.instructions,
-        )
+            from langgraph.prebuilt import create_react_agent
+
+            return create_react_agent(
+                self.llm,
+                tools=self.tools,
+                checkpointer=self.memory,
+                state_modifier=self.instructions,
+            )
 
         The base implementation here accomplishes the same thing but a
         bit more explicitly, to give a better idea of what's happening

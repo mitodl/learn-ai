@@ -9,7 +9,11 @@ from langchain_core.runnables import RunnableBinding
 from ai_chatbots.chatbots import DEFAULT_TEMPERATURE, ResourceRecommendationBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import LLMClassEnum
-from ai_chatbots.factories import AIMessageChunkFactory, ToolMessageFactory
+from ai_chatbots.factories import (
+    AIMessageChunkFactory,
+    ToolMessageFactory,
+)
+from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
 
 
@@ -154,3 +158,41 @@ async def test_get_completion(settings, mocker, debug, search_results):
     if debug:
         assert '<!-- {"metadata"' in results
     assert "".join([value.decode() for value in expected_return_value]) in results
+
+
+def test_chatbot_create_agent_graph_(mocker):
+    """Test that create_agent_graph function creates a graph with expected nodes/edges"""
+    mocker.patch(
+        "langchain_openai.ChatOpenAI.stream", return_value="Here are some results"
+    )
+    chatbot = ResourceRecommendationBot("anonymous", name="test agent", thread_id="foo")
+    agent = chatbot.create_agent_graph()
+    for node in ("agent", "tools"):
+        assert node in agent.nodes
+    graph = agent.get_graph()
+    tool = graph.nodes["tools"].data.tools_by_name["search_courses"]
+    assert tool.args_schema == SearchToolSchema
+    assert tool.func.__name__ == "search_courses"
+    edges = graph.edges
+    assert len(edges) == 4
+    tool_agent_edge = edges[1]
+    for test_condition in (
+        tool_agent_edge.source == "tools",
+        tool_agent_edge.target == "agent",
+        not tool_agent_edge.conditional,
+    ):
+        assert test_condition
+    agent_tool_edge = edges[2]
+    for test_condition in (
+        agent_tool_edge.source == "agent",
+        agent_tool_edge.target == "tools",
+        agent_tool_edge.conditional,
+    ):
+        assert test_condition
+    agent_end_edge = edges[3]
+    for test_condition in (
+        agent_end_edge.source == "agent",
+        agent_end_edge.target == "__end__",
+        agent_end_edge.conditional,
+    ):
+        assert test_condition
