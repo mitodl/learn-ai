@@ -44,11 +44,12 @@ services:
       dockerfile: Dockerfile-litellm
     ports:
       - "4000:4000"
+    env_file:
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5433/litellm
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
-      - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
     depends_on:
       db:
         condition: service_healthy

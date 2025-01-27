@@ -1,79 +1,41 @@
 import json
 import logging
+from uuid import uuid4
 
 from channels.generic.http import AsyncHttpConsumer
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.layers import get_channel_layer
 from django.utils.text import slugify
-from llama_index.core.base.llms.types import ChatMessage
 
 from ai_chatbots.chatbots import ResourceRecommendationBot
+from ai_chatbots.constants import AI_THREAD_COOKIE_KEY
 from ai_chatbots.serializers import ChatRequestSerializer
 
 log = logging.getLogger(__name__)
 
 
-def process_message(message_json, chatbot) -> str:
+def process_message(message_json) -> str:
     """
-    Validate the message, update the agent if necessary
+    Validate the message and return the serializer.
     """
     text_data_json = json.loads(message_json)
     serializer = ChatRequestSerializer(data=text_data_json)
     serializer.is_valid(raise_exception=True)
-    message_text = serializer.validated_data.pop("message", "")
-    clear_history = serializer.validated_data.pop("clear_history", False)
+    return serializer
+
+
+def create_chatbot(user_id, thread_id, serializer):
+    """Return a ResourceRecommendationBot instance"""
     temperature = serializer.validated_data.pop("temperature", None)
     instructions = serializer.validated_data.pop("instructions", None)
     model = serializer.validated_data.pop("model", None)
 
-    if clear_history:
-        chatbot.clear_chat_history()
-    if model:
-        chatbot.agent.agent_worker._llm.model = model  # noqa: SLF001
-    if temperature:
-        chatbot.agent.agent_worker._llm.temperature = temperature  # noqa: SLF001
-    if instructions:
-        chatbot.agent.agent_worker.prefix_messages = [
-            ChatMessage(content=instructions, role="system")
-        ]
-    return message_text
-
-
-class RecommendationBotWSConsumer(AsyncWebsocketConsumer):
-    """
-    Async websocket consumer for the recommendation agent.
-    """
-
-    async def connect(self):
-        """Connect to the websocket and initialize the AI agent."""
-        user = self.scope.get("user", None)
-        session = self.scope.get("session", None)
-
-        if user and user.username:
-            self.user_id = user.username
-        elif session:
-            if not session.session_key:
-                session.save()
-            self.user_id = session.session_key
-        else:
-            self.user_id = None
-
-        self.agent = ResourceRecommendationBot(self.user_id)
-        await super().connect()
-
-    async def receive(self, text_data: str) -> str:
-        """Send the message to the AI agent and return its response."""
-
-        try:
-            message_text = process_message(text_data, self.agent)
-
-            for chunk in self.agent.get_completion(message_text):
-                await self.send(text_data=chunk)
-        except:  # noqa: E722
-            log.exception("Error in RecommendationAgentConsumer")
-        finally:
-            # This is a bit hacky, but it works for now
-            await self.send(text_data="!endResponse")
+    return ResourceRecommendationBot(
+        user_id,
+        temperature=temperature,
+        instructions=instructions,
+        model=model,
+        thread_id=thread_id,
+    )
 
 
 class RecommendationBotHttpConsumer(AsyncHttpConsumer):
@@ -82,51 +44,64 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
     """
 
     async def handle(self, message: str):
-        user = self.scope.get("user", None)
-        session = self.scope.get("session", None)
-
-        if user and user.username and user.username != "AnonymousUser":
-            self.user_id = user.username
-        elif session:
-            if not session.session_key:
-                session.save()
-            self.user_id = slugify(session.session_key)[:100]
-        else:
-            log.info("Anon user, no session")
-            self.user_id = "Anonymous"
-
-        agent = ResourceRecommendationBot(self.user_id)
-
-        self.channel_layer = get_channel_layer()
-        self.room_name = "recommendation_bot"
-        self.room_group_name = f"recommendation_bot_{self.user_id}"
-        await self.channel_layer.group_add(
-            f"recommendation_bot_{self.user_id}", self.channel_name
-        )
-
-        await self.send_headers(
-            headers=[
-                (b"Cache-Control", b"no-cache"),
-                (
-                    b"Content-Type",
-                    b"text/event-stream",
-                ),
-                (
-                    b"Transfer-Encoding",
-                    b"chunked",
-                ),
-                (b"Connection", b"keep-alive"),
-            ]
-        )
-        # Headers are only sent after the first body event.
-        # Set "more_body" to tell the interface server to not
-        # finish the response yet:
-        await self.send_chunk("")
-
+        """Handle the incoming message and send the response."""
         try:
-            message_text = process_message(message, agent)
+            user = self.scope.get("user", None)
+            session = self.scope.get("session", None)
+            serializer = process_message(message)
+            clear_history = serializer.validated_data.pop("clear_history", False)
+            thread_id = self.scope["cookies"].get(AI_THREAD_COOKIE_KEY)
 
-            for chunk in agent.get_completion(message_text):
+            if clear_history or not thread_id:
+                thread_id = str(uuid4())
+
+            cookie_thread = (
+                f"{AI_THREAD_COOKIE_KEY}={thread_id}; Path=/; HttpOnly".encode()
+            )
+
+            if user and user.username and user.username != "AnonymousUser":
+                self.user_id = user.username
+            elif session:
+                if not session.session_key:
+                    session.save()
+                self.user_id = slugify(session.session_key).replace("-", "_")
+            else:
+                log.info("Anon user, no session")
+                self.user_id = "Anonymous"
+
+            self.bot = create_chatbot(self.user_id, thread_id, serializer)
+
+            self.channel_layer = get_channel_layer()
+            self.room_name = "recommendation_bot"
+            self.room_group_name = f"recommendation_bot_{self.user_id}"[:50]
+            await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+
+            await self.send_headers(
+                headers=[
+                    (b"Cache-Control", b"no-cache"),
+                    (
+                        b"Content-Type",
+                        b"text/event-stream",
+                    ),
+                    (
+                        b"Transfer-Encoding",
+                        b"chunked",
+                    ),
+                    (b"Connection", b"keep-alive"),
+                    (
+                        b"Set-Cookie",
+                        cookie_thread,
+                    ),
+                ]
+            )
+            # Headers are only sent after the first body event.
+            # Set "more_body" to tell the interface server to not
+            # finish the response yet:
+            await self.send_chunk("")
+
+            message_text = serializer.validated_data["message"]
+
+            async for chunk in self.bot.get_completion(message_text):
                 await self.send_chunk(chunk)
         except:  # noqa: E722
             log.exception("Error in RecommendationAgentConsumer")
@@ -135,12 +110,14 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
             await self.disconnect()
 
     async def disconnect(self):
-        await self.channel_layer.group_discard(
-            f"recommendation_bot_{self.user_id}", self.channel_name
-        )
+        """Discard the group when the connection is closed."""
+        if hasattr(self, "channel_layer"):
+            await self.channel_layer.group_discard(
+                self.room_group_name, self.channel_name
+            )
 
     async def send_chunk(self, chunk: str, *, more_body: bool = True):
-        log.info(chunk)
+        """send_chunk should call send_body with the chunk and more_body kwarg"""
         await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):

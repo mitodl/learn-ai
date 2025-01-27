@@ -1,8 +1,11 @@
 """Constants for the AI Chat application."""
 
-from llama_index.agent.openai import OpenAIAgent
-from llama_index.llms.openai import OpenAI
+from langchain_openai import ChatOpenAI
 from named_enum import ExtendedEnum
+
+GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
+AI_ANONYMOUS_USER = "anonymous"
+AI_THREAD_COOKIE_KEY = "ai_thread_id"
 
 
 class LLMClassEnum(ExtendedEnum):
@@ -13,20 +16,7 @@ class LLMClassEnum(ExtendedEnum):
     should be used.
     """
 
-    openai = OpenAI
-
-
-class AgentClassEnum(ExtendedEnum):
-    """
-    Enum for determining which AgentRunner to
-    use based on settings.AI_PROVIDER.
-    """
-
-    openai = OpenAIAgent
-
-
-GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
-AI_ANONYMOUS_USER = "anonymous"
+    openai = ChatOpenAI
 
 
 class LearningResourceType(ExtendedEnum):

@@ -1,23 +1,53 @@
-import pytest
-from llama_cloud import MessageRole
+import json
+import os
+from pathlib import Path
+from unittest.mock import AsyncMock
 
-from ai_chatbots.factories import ChatMessageFactory
+import pytest
+
+from ai_chatbots.factories import HumanMessageFactory, SystemMessageFactory
 
 
 @pytest.fixture(autouse=True)
-def ai_settings(settings):
+def ai_settings(settings, mocker):
     """Assign default AI settings"""
     settings.AI_PROXY = None
     settings.AI_PROXY_URL = None
+    settings.OPENAI_API_KEY = "test_key"
+    os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+    mocker.patch("channels_redis.core.RedisChannelLayer", return_value=AsyncMock())
     return settings
 
 
 @pytest.fixture
 def chat_history():
-    """Return one round trip chat history for testing."""
+    """Return a 2-round trip chat history for testing."""
     return [
-        ChatMessageFactory.create(role=MessageRole.USER),
-        ChatMessageFactory.create(role=MessageRole.ASSISTANT),
-        ChatMessageFactory.create(role=MessageRole.USER),
-        ChatMessageFactory.create(role=MessageRole.ASSISTANT),
+        HumanMessageFactory.create(),
+        SystemMessageFactory.create(),
+        HumanMessageFactory.create(),
+        SystemMessageFactory.create(),
     ]
+
+
+class MockAsyncIterator:
+    """An async iterator for testing purposes."""
+
+    def __init__(self, seq):
+        self.iter = iter(seq)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.iter)
+        except StopIteration:
+            raise StopAsyncIteration from StopIteration
+
+
+@pytest.fixture
+def search_results():
+    """Return search results for testing."""
+    with Path.open("./test_json/search_results.json") as f:
+        yield json.loads(f.read())
