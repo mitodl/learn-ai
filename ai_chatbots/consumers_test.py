@@ -133,5 +133,6 @@ async def test_disconnect(mocker, recommendation_consumer, has_layer):
     mock_layer = mocker.Mock(group_discard=AsyncMock())
     if has_layer:
         recommendation_consumer.channel_layer = mock_layer
+        recommendation_consumer.room_group_name = "test_name"
     await recommendation_consumer.disconnect()
     assert mock_layer.group_discard.call_count == (1 if has_layer else 0)

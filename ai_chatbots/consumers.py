@@ -64,7 +64,7 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
             elif session:
                 if not session.session_key:
                     session.save()
-                self.user_id = slugify(session.session_key)[:100]
+                self.user_id = slugify(session.session_key).replace("-", "_")
             else:
                 log.info("Anon user, no session")
                 self.user_id = "Anonymous"
@@ -73,10 +73,8 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
 
             self.channel_layer = get_channel_layer()
             self.room_name = "recommendation_bot"
-            self.room_group_name = f"recommendation_bot_{self.user_id}"
-            await self.channel_layer.group_add(
-                f"recommendation_bot_{self.user_id}", self.channel_name
-            )
+            self.room_group_name = f"recommendation_bot_{self.user_id}"[:50]
+            await self.channel_layer.group_add(self.room_group_name, self.channel_name)
 
             await self.send_headers(
                 headers=[
@@ -115,7 +113,7 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
         """Discard the group when the connection is closed."""
         if hasattr(self, "channel_layer"):
             await self.channel_layer.group_discard(
-                f"recommendation_bot_{self.user_id}", self.channel_name
+                self.room_group_name, self.channel_name
             )
 
     async def send_chunk(self, chunk: str, *, more_body: bool = True):
