@@ -75,8 +75,24 @@ class RecommendationBotWSConsumer(AsyncWebsocketConsumer):
             # This is a bit hacky, but it works for now
             await self.send(text_data="!endResponse")
 
+class BaseBotHttpConsumer(AsyncHttpConsumer):
+    async def http_request(self, message):
+        """
+        Receives a request and holds the connection open
+        until the client or server chooses to disconnect.
+        """
+        try:
+            await self.handle(message.get("body"))
+        finally:
+            pass
+    
+    async def send_chunk(self, chunk: str, *, more_body: bool = True):
+        log.info(chunk)
+        await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
-class RecommendationBotHttpConsumer(AsyncHttpConsumer):
+
+
+class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
     """
     Async HTTP consumer for the recommendation agent.
     """
@@ -139,16 +155,68 @@ class RecommendationBotHttpConsumer(AsyncHttpConsumer):
             f"recommendation_bot_{self.user_id}", self.channel_name
         )
 
-    async def send_chunk(self, chunk: str, *, more_body: bool = True):
-        log.info(chunk)
-        await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
-    async def http_request(self, message):
-        """
-        Receives a request and holds the connection open
-        until the client or server chooses to disconnect.
-        """
+
+
+class TutorBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the recommendation agent.
+    """
+
+    async def handle(self, message: str):
+        user = self.scope.get("user", None)
+        session = self.scope.get("session", None)
+
+        if user and user.username and user.username != "AnonymousUser":
+            self.user_id = user.username
+        elif session:
+            if not session.session_key:
+                session.save()
+            self.user_id = slugify(session.session_key)[:100]
+        else:
+            log.info("Anon user, no session")
+            self.user_id = "Anonymous"
+
+        agent = TutorBot(self.user_id)
+
+        self.channel_layer = get_channel_layer()
+        self.room_name = "tutor_bot"
+        self.room_group_name = f"tutor_bot_{self.user_id}"
+        await self.channel_layer.group_add(
+            f"utor_bot_{self.user_id}", self.channel_name
+        )
+
+        await self.send_headers(
+            headers=[
+                (b"Cache-Control", b"no-cache"),
+                (
+                    b"Content-Type",
+                    b"text/event-stream",
+                ),
+                (
+                    b"Transfer-Encoding",
+                    b"chunked",
+                ),
+                (b"Connection", b"keep-alive"),
+            ]
+        )
+        # Headers are only sent after the first body event.
+        # Set "more_body" to tell the interface server to not
+        # finish the response yet:
+        await self.send_chunk("")
+
         try:
-            await self.handle(message.get("body"))
+            message_text = process_message(message, agent)
+
+            for chunk in agent.get_completion(message_text):
+                await self.send_chunk(chunk)
+        except:  # noqa: E722
+            log.exception("Error in RecommendationAgentConsumer")
         finally:
-            pass
+            await self.send_chunk("", more_body=False)
+            await self.disconnect()
+
+    async def disconnect(self):
+        await self.channel_layer.group_discard(
+            f"tutor_bot_{self.user_id}", self.channel_name
+        )

@@ -433,3 +433,9 @@ Search parameters: {{"q": "mathematics"}}
             }
         }
         return json.dumps(metadata)
+
+class TutorChatbot():
+    """
+    Chatbot that assists with problem sets
+    """
+
