@@ -23,4 +23,9 @@ http_patterns = [
         UserMetaHttpConsumer.as_asgi(),
         name="user_meta",
     ),
+    re_path(
+        r"http/tutor_agent/",
+        consumers.TutorBotHttpConsumer.as_asgi(),
+        name="tutor_agent_sse",
+    )
 ]
