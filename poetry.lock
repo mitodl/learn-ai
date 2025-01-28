@@ -3907,6 +3907,21 @@ signals = ["blinker (>=1.4.0)"]
 signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
+name = "open_learning_ai_tutor"
+version = "0.0.0"
+description = "AI powered tutor"
+optional = false
+python-versions = "*"
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/MIT-OL-AI-Tutoring/Open_Learning_AI_Tutor.git"
+reference = "ab/more-packaging"
+resolved_reference = "1a9b12c3a873df2a43860ddf8b986c5f4ae9b920"
+
+[[package]]
 name = "openai"
 version = "1.60.2"
 description = "The official Python library for the openai API"
@@ -7014,4 +7029,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.12.6"
-content-hash = "f8729ccc5199e1f2e462b74f98d8c8b498f1e06d6758fe8431fc323d26f26a4f"
+content-hash = "95fbcde950059c34abc754e57e6c407a72b6845037fcb2ac32fad064c7436f90"

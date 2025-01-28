@@ -13,4 +13,9 @@ http_patterns = [
         consumers.SyllabusBotHttpConsumer.as_asgi(),
         name="syllabus_agent_sse",
     ),
+    re_path(
+        r"http/tutor_agent/",
+        consumers.TutorBotHttpConsumer.as_asgi(),
+        name="tutor_agent_sse",
+    )
 ]
