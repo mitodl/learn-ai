@@ -92,6 +92,7 @@ def test_get_additional_kwargs(mocker):
         "user": mock_agent.user_id,
         "store": True,
         "extra_body": {
+            "drop_params": True,
             "metadata": {
                 "tags": [
                     f"jobID:{mock_agent.JOB_ID}",

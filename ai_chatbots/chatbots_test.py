@@ -9,11 +9,14 @@ from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableBinding
+from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
     SyllabusAgentState,
     SyllabusBot,
+    TutorBot,
+    get_history
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -459,3 +462,109 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             **{},
             **{},
         )
+
+@pytest.mark.parametrize(
+    ("model", "temperature"),
+    [
+        ("gpt-3.5-turbo", 0.1),
+        ("gpt-4", None),
+        (None, None),
+    ],
+)
+async def test_tutor_bot_intitiation(
+    mocker, model, temperature
+):
+    """Test the tutor class instantiation."""
+    name = "My tutor bot"
+    problem_code = "A1P1"
+
+
+    chatbot = TutorBot(
+        "user",
+        name=name,
+        model=model,
+        temperature=temperature,
+        problem_code=problem_code
+    )
+    assert chatbot.model == (
+        model if model else settings.AI_DEFAULT_TUTOR_MODEL
+    )
+    assert chatbot.temperature == (
+        temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
+    )
+    problem, solution = get_pb_sol(problem_code)
+    assert chatbot.problem == problem
+    assert chatbot.solution == solution
+    assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
+    
+
+async def test_tutor_get_completion(
+    mocker, mock_checkpointer
+):
+    """Test that the tutor bot get_completion method returns expected values."""
+
+    json_output = {
+        "chat_history": [
+            {
+                "type": "HumanMessage",
+                "content": "what should i try next?"
+            },
+            {
+                "type": "AIMessage",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_2YfyQtpoDAaSfJo0XiYEVEI3",
+                        "function": {
+                            "arguments": "{\"message_to_student\":\"Let's start with Problem 1.1. Have you tried plotting the states' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you've tried so far.\"}",
+                            "name": "text_student"
+                        },
+                        "type": "function"
+                    }
+                ],
+                "refusal": None
+            },
+            {
+                "type": "ToolMessage",
+                "content": "Message sent",
+                "name": "text_student",
+                "tool_call_id": "call_2YfyQtpoDAaSfJo0XiYEVEI3"
+            }
+        ],
+        "intent_history": "[[\"P_HYPOTHESIS\"]]",
+        "assessment_history": [
+            {
+                "type": "HumanMessage",
+                "content": "Student: \"what should i try next?\""
+            },
+            {
+                "type": "AIMessage",
+                "content": "{\"justification\": \"The student is explicitly asking about how to solve the problem, indicating they are seeking guidance on the next steps to take.\", \"selection\": \"g\"}",
+                "refusal": None
+            }
+        ],
+        "metadata": {
+            "docs": None,
+            "rag_queries": None,
+            "A_B_test": False,
+            "tutor_model": "gpt-4o"
+        }
+    }
+
+    mocker.patch(
+        "ai_chatbots.chatbots.message_tutor",
+        return_value=json.dumps(json_output)
+    )
+    user_msg = "what should i try next?"
+    thread_id='TEST'
+    
+    chatbot = TutorBot("anonymous", mock_checkpointer, problem_code="A1P1", thread_id=thread_id)
+    
+    results = ""
+    async for chunk in chatbot.get_completion(user_msg):
+        results += str(chunk)
+    assert results == "Let's start with Problem 1.1. Have you tried plotting the states' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you've tried so far."
+
+    history = await get_history(thread_id)
+    assert history.thread_id == thread_id       
+    assert history.chat_json == json.dumps(json_output)
