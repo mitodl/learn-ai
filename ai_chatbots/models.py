@@ -17,7 +17,7 @@ class UserChatSession(TimestampedModel):
     agent = models.CharField(max_length=128, blank=True)
 
     def __str__(self):
-        return f"{self.user.global_id}-{self.thread_id}:{self.title}"
+        return f"{self.user.global_id if self.user else "anonymous"}-{self.thread_id}:{self.title}"
 
 
 class DjangoCheckpointWrite(models.Model):
@@ -64,3 +64,15 @@ class DjangoCheckpoint(models.Model):
 
     def __str__(self):
         return f"{self.thread_id}-{self.checkpoint_id}-{self.type}"
+
+
+
+class TutorBotOutput(models.Model):
+    """
+    Store  chat history and internal state for the tutor chatbot
+    """
+    thread_id = models.TextField()
+    chat_json = models.JSONField()
+
+    def __str__(self):
+        return f"{self.thread_id}"
