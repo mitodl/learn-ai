@@ -122,7 +122,7 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
         )
     )
     state: Annotated[dict, InjectedState] = Field(
-        description="The current state of the conversation"
+        description="The agent state, including course_id and collection_name params"
     )
 
 
