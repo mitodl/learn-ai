@@ -11,7 +11,7 @@ import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langgraph.constants import END
@@ -23,7 +23,7 @@ from openai import BadRequestError
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
-from ai_chatbots.api import ChatMemory
+from ai_chatbots.api import ChatMemory, get_search_tool_metadata
 from ai_chatbots.constants import LLMClassEnum
 from ai_chatbots.tools import search_content_files
 
@@ -74,10 +74,9 @@ class BaseChatbot(ABC):
         self.llm = self.get_llm()
         self.agent = None
 
-    @abstractmethod
     def create_tools(self):
         """Create any tools required by the agent"""
-        raise NotImplementedError
+        return []
 
     def get_llm(self, **kwargs) -> BaseChatModel:
         """
@@ -249,42 +248,12 @@ class BaseChatbot(ABC):
                 },
             )
 
+    @abstractmethod
     async def get_tool_metadata(self) -> str:
         """
         Yield markdown comments to send hidden metadata in the response
         """
-        thread_id = self.config["configurable"]["thread_id"]
-        latest_state = await self.get_latest_history()
-        tool_messages = (
-            []
-            if not latest_state
-            else [
-                t
-                for t in latest_state.values.get("messages", [])
-                if t and t.__class__ == ToolMessage
-            ]
-        )
-        if tool_messages:
-            msg_content = tool_messages[-1].content
-            try:
-                content = json.loads(msg_content or {})
-                metadata = {
-                    "metadata": {
-                        "search_parameters": content.get("metadata", {}).get(
-                            "parameters", []
-                        ),
-                        "search_results": content.get("results", []),
-                        "thread_id": thread_id,
-                    }
-                }
-                return json.dumps(metadata)
-            except json.JSONDecodeError:
-                log.exception("Error parsing tool metadata, not valid JSON")
-                return json.dumps(
-                    {"error": "Error parsing tool metadata", "content": msg_content}
-                )
-        else:
-            return "{}"
+        raise NotImplementedError
 
 
 class ResourceRecommendationBot(BaseChatbot):
@@ -426,6 +395,12 @@ ANSWER QUESTIONS.
         """Create tools required by the agent"""
         return [tools.search_courses]
 
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
+        thread_id = self.config["configurable"]["thread_id"]
+        latest_state = await self.get_latest_history()
+        return get_search_tool_metadata(thread_id, latest_state)
+
 
 class SyllabusAgentState(AgentState):
     """
@@ -494,3 +469,9 @@ information.
             state_schema=SyllabusAgentState,
             state_modifier=self.instructions,
         )
+
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
+        thread_id = self.config["configurable"]["thread_id"]
+        latest_state = await self.get_latest_history()
+        return get_search_tool_metadata(thread_id, latest_state)

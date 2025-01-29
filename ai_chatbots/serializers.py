@@ -24,7 +24,7 @@ class ChatRequestSerializer(serializers.Serializer):
 
 class SyllabusChatRequestSerializer(ChatRequestSerializer):
     """
-    Serializer for the syllabus chatbot
+    Serializer for requests sent to the syllabus chatbot.
     """
 
     course_id = serializers.CharField(required=True, allow_blank=False)
