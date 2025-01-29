@@ -62,8 +62,8 @@ class SyllabusAgentStateFactory(factory.Factory):
     """Factory for generating SyllabusAgentState instances."""
 
     messages = [factory.SubFactory(HumanMessageFactory)]
-    course_id = factory.Faker("uuid4")
-    collection_name = factory.Faker("word")
+    course_id = [factory.Faker("uuid4")]
+    collection_name = [factory.Faker("word")]
 
     class Meta:
         model = SyllabusAgentState

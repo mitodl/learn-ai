@@ -70,9 +70,11 @@ def syllabus_agent_state():
     """Return a syllabus agent state for testing."""
     return SyllabusAgentStateFactory(
         messages=[
+            HumanMessageFactory.create(content="prerequisites"),
+            ToolMessageFactory.create(tool_call="search_contentfiles"),
             HumanMessageFactory.create(content="main topics"),
             ToolMessageFactory.create(tool_call="search_contentfiles"),
         ],
-        course_id="MITx+6.00.1x",
-        collection_name="vector512",
+        course_id=["MITx+10.00.2x", "MITx+6.00.1x"],
+        collection_name=[None, "vector512"],
     )

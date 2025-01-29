@@ -134,8 +134,8 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
 
     url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state["course_id"]
-    collection_name = state.get("collection_name", None)
+    course_id = state["course_id"][-1]
+    collection_name = state["collection_name"][-1]
     params = {
         "q": q,
         "resource_readable_id": course_id,

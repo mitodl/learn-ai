@@ -101,8 +101,8 @@ def test_search_content_files(  # noqa: PLR0913
     expected_params = {
         "q": "main topics",
         "limit": limit,
-        "resource_readable_id": syllabus_agent_state["course_id"],
-        "collection_name": syllabus_agent_state["collection_name"],
+        "resource_readable_id": syllabus_agent_state["course_id"][-1],
+        "collection_name": syllabus_agent_state["collection_name"][-1],
     }
     results = json.loads(
         search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})

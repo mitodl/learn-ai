@@ -181,6 +181,6 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
         return {
-            "course_id": data.get("course_id"),
-            "collection_name": data.get("collection_name"),
+            "course_id": [data.get("course_id")],
+            "collection_name": [data.get("collection_name")],
         }

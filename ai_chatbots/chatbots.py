@@ -4,7 +4,8 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Optional
+from operator import add
+from typing import Annotated, Optional
 from uuid import uuid4
 
 import posthog
@@ -408,8 +409,8 @@ class SyllabusAgentState(AgentState):
     collection_name to the associated tool function.
     """
 
-    course_id: str
-    collection_name: str | None
+    course_id: Annotated[list[str], add]
+    collection_name: Annotated[list[str], add]
 
 
 class SyllabusBot(BaseChatbot):
@@ -427,7 +428,8 @@ Your job:
 answer the user's question.
 
 Always run the tool to answer questions, and answer only based on the tool
-output. VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
+output. Do not include the course id in the query parameter.
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
 ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
 information.
     """

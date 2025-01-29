@@ -172,10 +172,21 @@ async def test_syllabus_create_chatbot(
     assert chatbot.model == "gpt-3.5-turbo"
 
 
-def test_process_extra_state(syllabus_agent_state):
+@pytest.mark.parametrize(
+    "request_params",
+    [
+        {"message": "hello", "course_id": "MITx+6.00.1x"},
+        {
+            "message": "bonjour",
+            "course_id": "MITx+9.00.2x",
+            "collection_name": "vector512",
+        },
+    ],
+)
+def test_process_extra_state(request_params):
     """Test that the process_extra_state function returns the expected values."""
     consumer = consumers.SyllabusBotHttpConsumer()
-    assert consumer.process_extra_state(syllabus_agent_state) == {
-        "course_id": syllabus_agent_state.get("course_id"),
-        "collection_name": syllabus_agent_state.get("collection_name"),
+    assert consumer.process_extra_state(request_params) == {
+        "course_id": [request_params.get("course_id")],
+        "collection_name": [request_params.get("collection_name", None)],
     }

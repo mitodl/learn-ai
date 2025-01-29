@@ -49,8 +49,8 @@ def mock_latest_state_history(mocker):
                         SystemMessageFactory.create(content="You are you"),
                         HumanMessageFactory.create(content="Not a useful answer"),
                     ],
-                    course_id="mitx1.23",
-                    collection_name="vector512",
+                    course_id=["mitx1.23"],
+                    collection_name=["vector512"],
                 )
             ]
         ),
@@ -252,8 +252,8 @@ async def test_syllabus_bot_get_completion_state(mocker, mock_openai_astream):
     """Proper state should get passed along by get_completion"""
     chatbot = SyllabusBot("anonymous", name="test agent", thread_id="foo")
     extra_state = {
-        "course_id": "mitx1.23",
-        "collection_name": "vector512",
+        "course_id": ["mitx1.23"],
+        "collection_name": ["vector512"],
     }
     state = SyllabusAgentState(messages=[HumanMessage("hello")], **extra_state)
     async for _ in chatbot.get_completion("hello", extra_state=extra_state):
@@ -291,8 +291,8 @@ def test_syllabus_bot_tool(
 
     search_parameters = {
         "q": "main topics",
-        "resource_readable_id": syllabus_agent_state["course_id"],
-        "collection_name": syllabus_agent_state["collection_name"],
+        "resource_readable_id": syllabus_agent_state["course_id"][-1],
+        "collection_name": syllabus_agent_state["collection_name"][-1],
         "limit": 5,
     }
     expected_results["metadata"]["parameters"] = search_parameters
