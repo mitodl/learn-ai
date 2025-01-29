@@ -566,7 +566,12 @@ AI_MIT_SEARCH_URL = get_string(
     name="AI_MIT_SEARCH_URL",
     default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
 )
+AI_MIT_SYLLABUS_URL = get_string(
+    "AI_MIT_SYLLABUS_URL",
+    "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
+)
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
+AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
 AI_MODEL = get_string(name="AI_MODEL", default="gpt-4o")
 AI_PROVIDER = get_string(name="AI_PROVIDER", default="openai")
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
