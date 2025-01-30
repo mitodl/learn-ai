@@ -39,7 +39,6 @@ const REQUEST_OPTS: AiChatProps["requestOpts"] = {
   },
   fetchOpts: {
     credentials: "include",
-    mode: "no-cors",
   },
 }
 
