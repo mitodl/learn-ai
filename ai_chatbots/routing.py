@@ -1,4 +1,3 @@
-from django.core.asgi import get_asgi_application
 from django.urls import re_path
 
 from ai_chatbots import consumers
@@ -23,7 +22,8 @@ http_patterns = [
         name="user_meta",
     ),
     re_path(
-        r"",
-        get_asgi_application(),
+        r"http/syllabus_agent/",
+        consumers.SyllabusBotHttpConsumer.as_asgi(),
+        name="syllabus_agent_sse",
     ),
 ]

@@ -8,6 +8,16 @@ services:
       retries: 10
     ports:
       - ${PGPORT}:${PGPORT}
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
       - PGPORT=${PGPORT:-5433}
       - PGUSER=${PGUSER:-postgres}
@@ -34,6 +44,16 @@ services:
       - ${NGINX_PORT:-8002}:${NGINX_PORT:-8002}
     links:
       - web
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
       PORT: ${NGINX_PORT:-8002}
       NGINX_UWSGI_PASS: ${NGINX_UWSGI_PASS:-"web:8001"}
@@ -46,8 +66,14 @@ services:
     ports:
       - "4000:4000"
     env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
       - path: env/backend.env
       - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
         required: false
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5433/litellm}
@@ -69,6 +95,16 @@ services:
     ports:
       - ${KEYCLOAK_PORT}:${KEYCLOAK_PORT}
       - ${KEYCLOAK_SSL_PORT}:${KEYCLOAK_SSL_PORT}
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
       - KEYCLOAK_ADMIN=${KEYCLOAK_SVC_ADMIN:-admin}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_SVC_ADMIN_PASSWORD:-admin}
@@ -86,6 +122,16 @@ services:
     image: apache/apisix:latest
     depends_on:
       - keycloak
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-ol-local}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-apisix}
