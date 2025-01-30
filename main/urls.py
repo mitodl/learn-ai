@@ -22,6 +22,7 @@ from django.views.generic.base import RedirectView
 from rest_framework.routers import DefaultRouter
 
 from main.views import FeaturesViewSet, index
+from users.views import current_user
 
 # Post slugs can contain unicode characters, so a letter-matching pattern
 # like [A-Za-z] doesn't work.
@@ -41,6 +42,7 @@ features_router.register(r"_/features", FeaturesViewSet, basename="features")
 
 urlpatterns = (
     [  # noqa: RUF005
+        re_path(r"^me/", current_user, name="current-user"),
         re_path(r"^o/", include("oauth2_provider.urls", namespace="oauth2_provider")),
         re_path(r"^admin/", admin.site.urls),
         re_path(r"", include(features_router.urls)),

@@ -1,6 +1,12 @@
+import logging
+
 from channels.auth import AuthMiddlewareStack
 from django.conf import settings
 from starlette.middleware.cors import CORSMiddleware
+
+from users.middleware import ApisixChannelAuthMiddleware
+
+log = logging.getLogger(__name__)
 
 
 def cors_middleware(app):
@@ -17,6 +23,6 @@ def cors_middleware(app):
     )
 
 
-HTTP_MIDDLEWARE = [cors_middleware, AuthMiddlewareStack]
+HTTP_MIDDLEWARE = [cors_middleware, AuthMiddlewareStack, ApisixChannelAuthMiddleware]
 
 WS_MIDDLEWARE = [AuthMiddlewareStack]

@@ -1,6 +1,3 @@
-include:
-  - docker-compose.opensearch.${OPENSEARCH_CLUSTER_TYPE:-single-node}.yml
-
 services:
   web:
     build:

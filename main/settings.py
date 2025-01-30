@@ -101,11 +101,14 @@ INSTALLED_APPS = (
     "main",
     "ai_chatbots",
     "openapi",
+    "users",
 )
 
 if not get_bool("RUN_DATA_MIGRATIONS", default=False):
     MIGRATION_MODULES = {"data_fixtures": None}
 
+# Use the custom user model.
+AUTH_USER_MODEL = "users.User"
 
 # OAuth2TokenMiddleware must be before SCIMAuthCheckMiddleware
 # in order to insert request.user into the request.
@@ -115,6 +118,7 @@ MIDDLEWARE = (
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "main.middleware.apisix_user.ApisixUserMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "hijack.middleware.HijackUserMiddleware",
@@ -142,6 +146,8 @@ CORS_ALLOW_HEADERS = (
     "baggage",
     "sentry-trace",
 )
+CORS_ALLOWED_ORIGINS = get_list_of_str("CORS_ALLOWED_ORIGINS", [])
+CORS_ALLOWED_ORIGIN_REGEXES = get_list_of_str("CORS_ALLOWED_ORIGIN_REGEXES", [])
 
 SECURE_CROSS_ORIGIN_OPENER_POLICY = get_string(
     "SECURE_CROSS_ORIGIN_OPENER_POLICY",
@@ -589,3 +595,16 @@ AI_MAX_BUDGET = get_float(name="AI_MAX_BUDGET", default=0.05)
 AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10.0)
 AI_PERSISTENT_MEMORY = get_bool(name="AI_PERSISTENT_MEMORY", default=False)
 AI_PERSISTENT_POOL_SIZE = get_int(name="AI_PERSISTENT_POOL_SIZE", default=20)
+
+# APISIX middleware settings
+APISIX_USERDATA_MAP = {
+    "users_user": {
+        "email": "email",
+        "global_id": "sub",
+        "username": "preferred_username",
+        "name": "name",
+    },
+    "users_userprofile": {
+        "country_code": None,
+    },
+}
