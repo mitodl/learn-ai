@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ai_chatbots.factories import HumanMessageFactory, SystemMessageFactory
+from ai_chatbots.factories import (
+    HumanMessageFactory,
+    SyllabusAgentStateFactory,
+    SystemMessageFactory,
+    ToolMessageFactory,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -51,3 +56,25 @@ def search_results():
     """Return search results for testing."""
     with Path.open("./test_json/search_results.json") as f:
         yield json.loads(f.read())
+
+
+@pytest.fixture
+def content_chunk_results():
+    """Return content file vector chunks for testing."""
+    with Path.open("./test_json/content_file_chunks.json") as f:
+        yield json.loads(f.read())
+
+
+@pytest.fixture
+def syllabus_agent_state():
+    """Return a syllabus agent state for testing."""
+    return SyllabusAgentStateFactory(
+        messages=[
+            HumanMessageFactory.create(content="prerequisites"),
+            ToolMessageFactory.create(tool_call="search_contentfiles"),
+            HumanMessageFactory.create(content="main topics"),
+            ToolMessageFactory.create(tool_call="search_contentfiles"),
+        ],
+        course_id=["MITx+10.00.2x", "MITx+6.00.1x"],
+        collection_name=[None, "vector512"],
+    )

@@ -8,4 +8,9 @@ http_patterns = [
         consumers.RecommendationBotHttpConsumer.as_asgi(),
         name="recommendation_agent_sse",
     ),
+    re_path(
+        r"http/syllabus_agent/",
+        consumers.SyllabusBotHttpConsumer.as_asgi(),
+        name="syllabus_agent_sse",
+    ),
 ]

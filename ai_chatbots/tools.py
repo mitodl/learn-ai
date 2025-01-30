@@ -2,12 +2,13 @@
 
 import json
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 import pydantic
 import requests
 from django.conf import settings
 from langchain_core.tools import tool
+from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
@@ -101,6 +102,59 @@ def search_courses(q: str, **kwargs) -> str:
             if best_run:
                 for attribute in ("level", "instructors"):
                     simplified_result[attribute] = best_run.get(attribute, [])
+            simplified_results.append(simplified_result)
+        full_output = {
+            "results": simplified_results,
+            "metadata": {"parameters": params},
+        }
+        return json.dumps(full_output)
+    except requests.exceptions.RequestException:
+        log.exception("Error querying MIT API")
+        return json.dumps({"error": "An error occurred while searching"})
+
+
+class SearchContentFilesToolSchema(pydantic.BaseModel):
+    """Schema for searching MIT contentfiles related to a particular course."""
+
+    q: str = Field(
+        description=(
+            "Query to find course information that might answer the user's question."
+        )
+    )
+    state: Annotated[dict, InjectedState] = Field(
+        description="The agent state, including course_id and collection_name params"
+    )
+
+
+@tool(args_schema=SearchContentFilesToolSchema)
+def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
+    """
+    Query the MIT contentfile vector endpoint API, and return results as a
+    JSON string, along with metadata about the query parameters used.
+    """
+
+    url = settings.AI_MIT_SYLLABUS_URL
+    course_id = state["course_id"][-1]
+    collection_name = state["collection_name"][-1]
+    params = {
+        "q": q,
+        "resource_readable_id": course_id,
+        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
+    }
+    if collection_name:
+        params["collection_name"] = collection_name
+    log.info("Searching MIT API with params: %s", params)
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        raw_results = response.json().get("results", [])
+        # Simplify the response to only include the main properties
+        simplified_results = []
+        for result in raw_results:
+            simplified_result = {
+                "chunk_content": result.get("chunk_content"),
+                "run_title": result.get("run_title"),
+            }
             simplified_results.append(simplified_result)
         full_output = {
             "results": simplified_results,

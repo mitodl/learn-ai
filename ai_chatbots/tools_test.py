@@ -6,12 +6,12 @@ import pytest
 from pydantic_core._pydantic_core import ValidationError
 from requests import RequestException
 
-from ai_chatbots.tools import search_courses
+from ai_chatbots.tools import search_content_files, search_courses
 
 
-@pytest.fixture(autouse=True)
-def mock_get(mocker, search_results):
-    """Mock requests.get for all tests."""
+@pytest.fixture
+def mock_get_resources(mocker, search_results):
+    """Mock resource requests.get for all tests."""
     return mocker.patch(
         "ai_chatbots.tools.requests.get",
         return_value=mocker.Mock(
@@ -45,14 +45,16 @@ def mock_get(mocker, search_results):
     [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
 )
 def test_search_courses(  # noqa: PLR0913
-    settings, params, mock_get, search_results, search_url, limit
+    settings, params, mock_get_resources, search_results, search_url, limit
 ):
     """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SEARCH_URL = search_url
     settings.AI_MIT_SEARCH_LIMIT = limit
     expected_params = {"limit": limit, **params}
     results = json.loads(search_courses.invoke(params))
-    mock_get.assert_called_once_with(search_url, params=expected_params, timeout=30)
+    mock_get_resources.assert_called_once_with(
+        search_url, params=expected_params, timeout=30
+    )
     assert len(results["results"]) == len(search_results["results"])
 
 
@@ -79,3 +81,33 @@ def test_request_exception(mocker):
     mocker.patch("ai_chatbots.tools.requests.get", side_effect=RequestException)
     result = search_courses.invoke({"q": "physics"})
     assert result == '{"error": "An error occurred while searching"}'
+
+
+@pytest.mark.parametrize(
+    ("search_url", "limit"),
+    [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
+)
+def test_search_content_files(  # noqa: PLR0913
+    settings,
+    mock_get_resources,
+    syllabus_agent_state,
+    search_results,
+    search_url,
+    limit,
+):
+    """Test that the search_courses tool returns expected results w/expected params."""
+    settings.AI_MIT_SYLLABUS_URL = search_url
+    settings.AI_MIT_CONTENT_SEARCH_LIMIT = limit
+    expected_params = {
+        "q": "main topics",
+        "limit": limit,
+        "resource_readable_id": syllabus_agent_state["course_id"][-1],
+        "collection_name": syllabus_agent_state["collection_name"][-1],
+    }
+    results = json.loads(
+        search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
+    )
+    mock_get_resources.assert_called_once_with(
+        search_url, params=expected_params, timeout=30
+    )
+    assert len(results["results"]) == len(search_results["results"])

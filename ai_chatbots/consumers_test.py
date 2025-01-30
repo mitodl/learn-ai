@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from ai_chatbots import consumers
-from ai_chatbots.chatbots import ResourceRecommendationBot
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY
 from ai_chatbots.factories import SystemMessageFactory
@@ -28,6 +28,15 @@ def recommendation_consumer(agent_user):
     consumer = consumers.RecommendationBotHttpConsumer()
     consumer.scope = {"user": agent_user, "cookies": {}, "session": None}
     consumer.channel_name = "test_channel"
+    return consumer
+
+
+@pytest.fixture
+def syllabus_consumer(agent_user):
+    """Return a syllabus consumer."""
+    consumer = consumers.SyllabusBotHttpConsumer()
+    consumer.scope = {"user": agent_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_syllabus_channel"
     return consumer
 
 
@@ -84,7 +93,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
         instructions if instructions else ResourceRecommendationBot.INSTRUCTIONS
     )
 
-    mock_completion.assert_called_once_with(message)
+    mock_completion.assert_called_once_with(message, extra_state=None)
     assert (
         mock_http_consumer_send.send_body.call_count
         == len(response.content.split(" ")) + 2
@@ -136,3 +145,48 @@ async def test_disconnect(mocker, recommendation_consumer, has_layer):
         recommendation_consumer.room_group_name = "test_name"
     await recommendation_consumer.disconnect()
     assert mock_layer.group_discard.call_count == (1 if has_layer else 0)
+
+
+async def test_syllabus_create_chatbot(
+    mock_http_consumer_send, syllabus_consumer, agent_user
+):
+    """SyllabusBotHttpConsumer create_chatbot function should return syllabus bot."""
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={
+            "message": "hello",
+            "course_id": "MITx+6.00.1x",
+            "collection_name": "vector512",
+            "temperature": 0.7,
+            "instructions": "Answer this question as best you can",
+            "model": "gpt-3.5-turbo",
+        }
+    )
+    serializer.is_valid(raise_exception=True)
+    await syllabus_consumer.prepare_response(serializer)
+    mock_http_consumer_send.send_headers.assert_called_once()
+    chatbot = syllabus_consumer.create_chatbot(serializer)
+    assert isinstance(chatbot, SyllabusBot)
+    assert chatbot.user_id == agent_user.username
+    assert chatbot.temperature == 0.7
+    assert chatbot.instructions == "Answer this question as best you can"
+    assert chatbot.model == "gpt-3.5-turbo"
+
+
+@pytest.mark.parametrize(
+    "request_params",
+    [
+        {"message": "hello", "course_id": "MITx+6.00.1x"},
+        {
+            "message": "bonjour",
+            "course_id": "MITx+9.00.2x",
+            "collection_name": "vector512",
+        },
+    ],
+)
+def test_process_extra_state(request_params):
+    """Test that the process_extra_state function returns the expected values."""
+    consumer = consumers.SyllabusBotHttpConsumer()
+    assert consumer.process_extra_state(request_params) == {
+        "course_id": [request_params.get("course_id")],
+        "collection_name": [request_params.get("collection_name", None)],
+    }

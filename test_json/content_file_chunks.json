@@ -1,0 +1,261 @@
+{
+  "count": 1145,
+  "next": "https://api.pytest.edu/api/v0/vector_content_files_search/?limit=10&offset=10&q=main+topics&resource_readable_id=MITx%2B6.00.1x",
+  "previous": null,
+  "results": [
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "key": "45c5f216ce96f40144899b6bc20e1fc7",
+      "description": null,
+      "url": null,
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<sequential default_time_limit_minutes=\"0\" display_name=\"2. Core Elements of Programs (TIME: 54:14)\" due=\"2025-03-26T23:30:00Z\" exam_review_rules=\"\" format=\"Finger Exercises\" graded=\"true\" is_onboarding_exam=\"false\" is_practice_exam=\"false\" is_proctored_enabled=\"false\" is_time_limited=\"false\">\n  <vertical url_name=\"c49275e36ae54e8eba9794af9ea60c9a\"/>\n  <vertical url_name=\"86f3466af72b4a048fdaad54306b0d32\"/>\n  <vertical url_name=\"9f9084f6b5d746a5b370bf0e388c2697\"/>\n  <vertical url_name=\"6b9551edbece4ee0958f1bc66dbfb1ab\"/>\n  <vertical url_name=\"5f53323c35e74c259574cd0a91f43a81\"/>\n  <vertical url_name=\"d0309efa56df442291b753a1d8d622f3\"/>\n  <vertical url_name=\"799159540bcc4047a2938a1e751cdde4\"/>\n  <vertical url_name=\"fd65371b2cbc4261ad16fe382c476454\"/>\n  <vertical url_name=\"f25f8b4ed0be483e9fb70b5f39ad0f50\"/>\n  <vertical url_name=\"6c7fd38eca2f4c398adfdad77ae9699f\"/>\n  <vertical url_name=\"e3096921cf7949ce92e6756306bd877b\"/>\n  <vertical url_name=\"a5f6ec8e36fb4a87bec46e793890cc03\"/>\n  <vertical url_name=\"0f5d6ac8ebd24fb3a223206bf5d56e61\"/>\n  <vertical url_name=\"cdf10310af5c4a1bb862342bbec9463c\"/>\n  <vertical url_name=\"d7d6757649674d829be5baebea57adcb\"/>\n  <vertical url_name=\"3d5dcada7a24421ea947a4b85bb471c8\"/>\n  <vertical url_name=\"03dc1c8e38174306a9cfe9b752744d9e\"/>\n  <vertical url_name=\"4ace6013770547b79f3ca3c5f9ef0d2f\"/>\n  <vertical url_name=\"e5beba95ea6448e88881c0f916c4b318\"/>\n  <vertical url_name=\"57c9d4ca32ba478d9e803c8fa3a7b0b2\"/>\n</sequential>",
+      "offered_by": {
+        "code": "mitx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "name": "MITx"
+      },
+      "platform": {
+        "name": "edX",
+        "code": "edx"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "description": null,
+      "key": "2cab2fd265631bc527845acf2027686c",
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "url": null,
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<video youtube=\"1.00:LUT2T3lI-xM\" url_name=\"73cc3a6db36b41579cb31f2b9247ed77\" sub=\"\" transcripts=\"{&quot;ar&quot;: &quot;ff13db1a-2b0c-4e31-97ce-9bd924878146-ar.srt&quot;, &quot;en&quot;: &quot;ff13db1a-2b0c-4e31-97ce-9bd924878146-en.srt&quot;, &quot;es&quot;: &quot;ff13db1a-2b0c-4e31-97ce-9bd924878146-es.srt&quot;, &quot;id&quot;: &quot;ff13db1a-2b0c-4e31-97ce-9bd924878146-id.srt&quot;}\" display_name=\"Video: Plots\" download_track=\"true\" download_video=\"true\" edx_video_id=\"ff13db1a-2b0c-4e31-97ce-9bd924878146\" handout=\"/asset-v1:MITx+6.00.1x+2T2024a+type@asset+block@Lecture13.zip\" html5_sources=\"[]\" youtube_id_1_0=\"LUT2T3lI-xM\">\n  <handout src=\"/asset-v1:MITx+6.00.1x+2T2024a+type@asset+block@Lecture13.zip\"/>\n  <video_asset client_video_id=\"L13_S2.mp4\" duration=\"247.13\" image=\"video-images/605ab6a32d57428abdc760ebb88b65a2.jpeg\">\n    <encoded_video profile=\"hls\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V008200/MITX60012016-V008200.m3u8\" file_size=\"0\" bitrate=\"0\"/>\n    <encoded_video profile=\"audio_mp3\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V008200_AUD.mp3\" file_size=\"5932858\" bitrate=\"192\"/>\n    <encoded_video profile=\"mobile_low\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V008200_MB2.mp4\" file_size=\"7099733\" bitrate=\"229\"/>\n    <encoded_video profile=\"desktop_mp4\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V008200_DTH.mp4\" file_size=\"12909754\" bitrate=\"417\"/>\n    <encoded_video profile=\"youtube\" url=\"LUT2T3lI-xM\" file_size=\"0\" bitrate=\"0\"/>\n    <encoded_video profile=\"mobile_high\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V008200_MB1.mp4\" file_size=\"8009256\" bitrate=\"259\"/>\n    <transcripts>\n      <transcript language_code=\"ar\" file_format=\"srt\" provider=\"Custom\"/>\n      <transcript language_code=\"en\" file_format=\"srt\" provider=\"Custom\"/>\n      <transcript language_code=\"es\" file_format=\"srt\" provider=\"Custom\"/>\n      <transcript language_code=\"id\" file_format=\"srt\" provider=\"Custom\"/>\n    </transcripts>\n  </video_asset>\n  <transcript language=\"ar\" src=\"ff13db1a-2b0c-4e31-97ce-9bd924878146-ar.srt\"/>\n  <transcript language=\"en\" src=\"ff13db1a-2b0c-4e31-97ce-9bd924878146-en.srt\"/>\n  <transcript language=\"es\" src=\"ff13db1a-2b0c-4e31-97ce-9bd924878146-es.srt\"/>\n  <transcript language=\"id\" src=\"ff13db1a-2b0c-4e31-97ce-9bd924878146-id.srt\"/>\n</video>",
+      "offered_by": {
+        "code": "mitx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "name": "MITx"
+      },
+      "platform": {
+        "code": "edx",
+        "name": "edX"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "description": null,
+      "key": "fb9fa09c795cd17544d2e5c917db2dca",
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "url": null,
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<video youtube=\"1.00:08V2ukhKe1k\" url_name=\"99b310fa29e84c498d7430ed2acb9889\" sub=\"\" transcripts=\"{&quot;ar&quot;: &quot;9bf9b268-95ab-423f-ae63-6dd63d33461b-ar.srt&quot;, &quot;en&quot;: &quot;9bf9b268-95ab-423f-ae63-6dd63d33461b-en.srt&quot;, &quot;es&quot;: &quot;9bf9b268-95ab-423f-ae63-6dd63d33461b-es.srt&quot;, &quot;id&quot;: &quot;9bf9b268-95ab-423f-ae63-6dd63d33461b-id.srt&quot;}\" display_name=\"Video: Hierarchies\" download_track=\"true\" download_video=\"true\" edx_video_id=\"9bf9b268-95ab-423f-ae63-6dd63d33461b\" handout=\"/asset-v1:MITx+6.00.1x+2T2024a+type@asset+block@Lecture9.zip\" html5_sources=\"[]\" youtube_id_1_0=\"08V2ukhKe1k\">\n  <handout src=\"/asset-v1:MITx+6.00.1x+2T2024a+type@asset+block@Lecture9.zip\"/>\n  <video_asset client_video_id=\"L9_S6.mp4\" duration=\"952.3\" image=\"video-images/09624645a8f24353824267bdc64dc8c7.jpeg\">\n    <encoded_video profile=\"hls\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V005800/MITX60012016-V005800.m3u8\" file_size=\"0\" bitrate=\"0\"/>\n    <encoded_video profile=\"audio_mp3\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V005800_AUD.mp3\" file_size=\"22857070\" bitrate=\"192\"/>\n    <encoded_video profile=\"mobile_low\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V005800_MB2.mp4\" file_size=\"25161877\" bitrate=\"211\"/>\n    <encoded_video profile=\"desktop_mp4\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V005800_DTH.mp4\" file_size=\"43259231\" bitrate=\"363\"/>\n    <encoded_video profile=\"youtube\" url=\"08V2ukhKe1k\" file_size=\"0\" bitrate=\"0\"/>\n    <encoded_video profile=\"mobile_high\" url=\"https://d2f1egay8yehza.cloudfront.net/MITX60012016-V005800_MB1.mp4\" file_size=\"28514877\" bitrate=\"239\"/>\n    <transcripts>\n      <transcript language_code=\"ar\" file_format=\"srt\" provider=\"Custom\"/>\n      <transcript language_code=\"en\" file_format=\"srt\" provider=\"Custom\"/>\n      <transcript language_code=\"es\" file_format=\"srt\" provider=\"Custom\"/>\n      <transcript language_code=\"id\" file_format=\"srt\" provider=\"Custom\"/>\n    </transcripts>\n  </video_asset>\n  <transcript language=\"ar\" src=\"9bf9b268-95ab-423f-ae63-6dd63d33461b-ar.srt\"/>\n  <transcript language=\"en\" src=\"9bf9b268-95ab-423f-ae63-6dd63d33461b-en.srt\"/>\n  <transcript language=\"es\" src=\"9bf9b268-95ab-423f-ae63-6dd63d33461b-es.srt\"/>\n  <transcript language=\"id\" src=\"9bf9b268-95ab-423f-ae63-6dd63d33461b-id.srt\"/>\n</video>",
+      "offered_by": {
+        "code": "mitx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "name": "MITx"
+      },
+      "platform": {
+        "name": "edX",
+        "code": "edx"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "description": null,
+      "key": "d5dab5756147a6466f96284a68df85b8",
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "url": null,
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<chapter display_name=\"Final Exam\" highlights=\"[&quot;A timed exam (8 hour limit) covering everything in the course&quot;, &quot;No discussion of exam questions&quot;]\" start=\"2025-03-21T14:00:00Z\">\n  <sequential url_name=\"e9a828de4ff0414b8f074471b86a3d0e\"/>\n  <sequential url_name=\"6e4e7d4ed4c3494eb87bd9a8b977ccaa\"/>\n  <sequential url_name=\"871e1c4e3592436f872b5de1d795834a\"/>\n  <sequential url_name=\"45b20f6d7dd44e489ea9ca962b749703\"/>\n</chapter>",
+      "offered_by": {
+        "name": "MITx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "code": "mitx"
+      },
+      "platform": {
+        "name": "edX",
+        "code": "edx"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "key": "b758b29c16ec1b960dab2ce1d1ce11cb",
+      "description": null,
+      "url": null,
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<chapter display_name=\"Midterm Exam\" highlights=\"[&quot;Timed exam (8 hour limit) covering Units 1, 2, 3&quot;, &quot;No discussion of exam questions&quot;]\" start=\"2025-02-21T14:00:00Z\">\n  <sequential url_name=\"d9b927dc9f2745728bf327af3cd62cc9\"/>\n  <sequential url_name=\"bb284b9c4ff04091951f77b50e3b72f4\"/>\n  <sequential url_name=\"f1865a523cf644e9a0b28c0badd52166\"/>\n  <sequential url_name=\"46d0ba681c1f4bf3852f0ac2d8a01b91\"/>\n</chapter>",
+      "offered_by": {
+        "code": "mitx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "name": "MITx"
+      },
+      "platform": {
+        "name": "edX",
+        "code": "edx"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "description": null,
+      "key": "85bacaceea71349e274d75fb5fad4d35",
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "url": null,
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<chapter display_name=\"Unit 1: Python Basics\" highlights=\"[&quot;Learning the basic building blocks of programming&quot;, &quot;Getting lots of practice with concepts between each video&quot;, &quot;Stress-relief exercises built-in to the problem set to help you achieve that \\&quot;aha\\&quot; moment when you get programmer's block: participate in a collaborative drawing or help the 6.00.1x community build a problem set word cloud&quot;]\">\n  <sequential url_name=\"221a4c17dba341d6a970a0d80343253c\"/>\n  <sequential url_name=\"35f82f6c3ecb4e9e913dc279a9b73a9f\"/>\n  <sequential url_name=\"ca19e125470846f2a36ad1225410e39a\"/>\n  <sequential url_name=\"738a887b3b88422da9cf2662adbe9ed8\"/>\n</chapter>",
+      "offered_by": {
+        "name": "MITx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "code": "mitx"
+      },
+      "platform": {
+        "code": "edx",
+        "name": "edX"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "key": "68bfd349613381a381e11780335ea5c3",
+      "description": null,
+      "url": null,
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "content_feature_type": [],
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "file_extension": ".xml",
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<vertical discussion_enabled=\"true\" display_name=\"Exercises 1\" group_access=\"{}\">\n  <problem url_name=\"fc46ccde939e441f88c853e107a8c4d1\"/>\n  <discussion url_name=\"1110de9b56e345349906f733e613a357\" xblock-family=\"xblock.v1\" display_name=\"Exercises 1\" discussion_category=\"Lecture 1\" discussion_target=\"Exercises 1\"/>\n</vertical>",
+      "offered_by": {
+        "name": "MITx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "code": "mitx"
+      },
+      "platform": {
+        "code": "edx",
+        "name": "edX"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "key": "5aec2ed1d28db525161e626da6ed1212",
+      "description": null,
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "url": null,
+      "file_extension": ".srt",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "... So now that we've had the idea of creating a recipe as a generic idea. We know a little bit about what's inside the machine. What we need to do is put those two things together. We want to now go from a description of a process to a specific set of statements that we can store in the machine so that that interpreter, that evaluator, can then run those operations to use the primitives inside the machine to do the work for us. As we said, the programming language is going to provide us with a set of primitive operations. And the next step is to start talking about how do we put them together. To do that, we use something that we call an expression. And the expressions in a language are simply more complex but legal combinations of primitives that the programming language will recognize. And we're going to start building those up. So you're finally getting to the stage, after all of this high level discussion, of getting to the place where we're going to begin to get the computer to do something. One of the things we're going to talk about though is that any legal expression in a programming language, any computation, has associated with it a value. That value is the meaning of the expression. And that's going to be important, in part because if we know we want to get to a particular computation, we want to understand how do we get to that value, well how do we back out of that the sequence of steps, the expressions that are going to compute it for us. So let's look at how we put this together. Every programming language could be thought of as consisting of a set of primitives, a means of combination, a way of putting those primitives together to create new expressions, and a means of abstraction, a way of taking some complex expression and treating it as it's a primitive. To talk about this in a programming language, I'm going to give you an analogy to a natural language like English. In English, what are the primitive constructs? They're words, lots of them, some of them more common than others. In a programming language, we also have primitive constructs. These are the atoms on which we're going to build things. And in a programming language those are typically numbers, strings, or just sequences of characters, and simple operations, the things that were provided to us by the manufacturer-- addition, subtraction, comparison. Given those primitives, we want to put them together. When we put them together, we have to think about two different parts. This is taking you back to an English class, because we have both the syntax and the semantics. The syntax is that parsing of a sentence to know, is this a legal sentence or not. And some combinations of expressions are legal. Some are not. For example in English, cat dog or boy is not syntactically valid. It does not make sense. There is no verb in there. On the other hand, cat hugs boy is syntactically valid. It is a noun, a verb, a noun. That's something that makes sense. The same thing's going to happen in programming languages. Some combinations of primitives are not legal. They're not syntactically valid. For example this expression right here, the first part-- we're going to come to this in a second-- is a string. It's a sequence of characters enclosed in double quotes followed by a number. It's not a legal expression. On the other hand, as we'll see in a second, this is a syntactically valid expression. It consists of a number, an operator, and a number. So we're going to talk about how do we put together legal expressions. What is the syntax of those, both in terms of simple combinations like this and how we do it when we get to more complex aspects of the language? Associated with every expression that is syntactically valid is potentially a meaning, the semantics. What does this expression evaluate to? And here we're going to separate out both static semantics and full semantics. Static semantics tells us which syntactically valid strings actually have a meaning. In English, in bad English, the sentence I are hungry is not actually meaningful. It's syntactically valid, meaning it's put together properly. It's in this case a pronoun, a verb, and then an adjective. A perfectly legal combination, but semantically it doesn't make sense. Same thing happens in a programming language. The first expression, 3.2 times 5, is syntactically valid. The second one, 3 plus the string hi, is syntactically valid. It is a primitive, an operator, and a primitive, but semantically it doesn't make sense. I can't add a number and a string together. So we have to distinguish things that are not statically semantically valid because they're not going to be expressions we want to try and assign a meaning to. Once we have both syntactically correct and static semantically correct expressions, we want to then know what's the meaning associated with them. And I'm going to start building this up. Semantics then is the meaning associated with that syntactically correct string of symbols with no semantic errors. Even here there can be some wonderful nuances. In English, we can have a sentence that's both statically semantically correct and syntactically correct, but can have multiple meanings. Flying planes can be dangerous. Does that mean if I'm flying that it's dangerous? Does it mean if they come out of the air and crash on you they're dangerous? There are multiple interpretations to it. Or from an old joke, this reading lamp hasn't uttered a word since I bought it, obviously playing on the word reading lamp in a different way-- different meanings associated with it. In a programming language, there's both good news and bad news. The good news is any syntactically correct and static semantically correct expression in a programming language will only have one meaning. But the challenge is it might not be the meaning you intended. And that's where bugs are going to show up. And we're going to come to that as we go through the term. But these pieces now are how we're going to talk about the language. What's the syntax of putting things together, and what's the semantics, the meanings associated with them? With those three things in mind, you can ask what could go wrong. And these are also things we're going to see in the course. First of all I could have a syntactic error. I've not written down a legal expression. These are common and easily caught. And in fact most good programming languages or the environments that interpret them will catch those directly. As you'll see as we go along, and I'm sure I'm going to make some mistakes as I do some work here, Python will catch those right away. So you won't try and do anything with them. Once you've got something that's syntactically correct, what about static semantic errors, things where things are in the right order but they don't make sense? Some languages are very strict about catching these. They'll actually check before you ever run a sequence of operations to make sure there are no static semantic errors. Other languages-- and Python is one of them-- will do it on the fly. As you're going through a sequence of instructions, when it comes to one that is not statically semantically correct, it will stop. That's good news, but it can lead to some unpredictable behavior. And we're going to see that as we go along. The bigger problem is one where there are no semantic errors, but you get a different meaning than what you actually intended. These are the bugs that are challenging and are going to be difficult to find, but you need to find. Now what are some of the consequences? The program could crash, simply stop running. Even worse the program could run forever or until you get really tired and stop the machine because it's not coming back with an answer. And even worse yet, the program gives you an answer, but it's different than what you had expected, and you're going to use that to now do incorrect conclusions based on that error in computation. So what we're going to do now is start talking about Python. And our goal is to learn the syntax and the semantics of this particular programming language, and then to use that to learn how we can translate our recipes for solving a problem into a form that can go into the computer so it can run through that very mechanical sequence of steps to compute things that we want to do. And finally as we do all of this, we're going to start seeing patterns of computation. We're going to build up computational modes of thought, different styles of solving problems, because those styles are going to be common and can be easily reused when we see a new problem that fits into the same category. ",
+      "offered_by": {
+        "name": "MITx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "code": "mitx"
+      },
+      "platform": {
+        "name": "edX",
+        "code": "edx"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "description": null,
+      "key": "a0f426416c379019686043996be76bad",
+      "url": null,
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "file_extension": ".xml",
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<vertical discussion_enabled=\"true\" display_name=\"Exercise 1\">\n  <problem url_name=\"f007e46003df4732b5815f2949846776\"/>\n  <discussion url_name=\"2e185c3b28cf4929be18d6f9382a61d2\" xblock-family=\"xblock.v1\" display_name=\"Exercise 1\" discussion_category=\"Lecture 5\" discussion_target=\"Exercise 1\"/>\n</vertical>",
+      "offered_by": {
+        "code": "mitx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "name": "MITx"
+      },
+      "platform": {
+        "name": "edX",
+        "code": "edx"
+      }
+    },
+    {
+      "course_number": ["MITx+6.00.1x"],
+      "description": null,
+      "key": "37e687da1afa351c0fff1034ade55211",
+      "resource_point_id": "3c77d1af-8a99-58ea-bc3a-67691b5c6ca6",
+      "url": null,
+      "content_feature_type": [],
+      "resource_readable_id": "MITx+6.00.1x",
+      "run_title": "Introduction to Computer Science and Programming Using Python",
+      "content_type": "file",
+      "file_extension": ".xml",
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:MITx+6.00.1x+1T2025",
+      "file_type": null,
+      "chunk_content": "<vertical discussion_enabled=\"true\" display_name=\"Video: Decomposition and Abstraction\">\n  <video url_name=\"9dc4c11c46274b87964c7534b449d50a\"/>\n  <discussion url_name=\"79dd12370ce84577adc0dca9c34c3e95\" xblock-family=\"xblock.v1\" display_name=\"Video: Decomposition and Abstraction\" discussion_category=\"Lecture 4\" discussion_target=\"Video: Decomposition and Abstraction\"/>\n</vertical>",
+      "offered_by": {
+        "code": "mitx",
+        "channel_url": "https://pytest.edu/c/unit/mitx/",
+        "name": "MITx"
+      },
+      "platform": {
+        "code": "edx",
+        "name": "edX"
+      }
+    }
+  ],
+  "metadata": {
+    "aggregations": [],
+    "suggest": []
+  }
+}

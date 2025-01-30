@@ -4,25 +4,29 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Optional
+from operator import add
+from typing import Annotated, Optional
 from uuid import uuid4
 
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langgraph.constants import END
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import ToolNode, create_react_agent
+from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
+from typing_extensions import TypedDict
 
 from ai_chatbots import tools
-from ai_chatbots.api import ChatMemory
+from ai_chatbots.api import ChatMemory, get_search_tool_metadata
 from ai_chatbots.constants import LLMClassEnum
+from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +43,7 @@ class BaseChatbot(ABC):
     INSTRUCTIONS = "Provide instructions for the LLM"
 
     # For LiteLLM tracking purposes
+    TASK_NAME = "BASE_TASK"
     JOB_ID = "BASECHAT_JOB"
 
     def __init__(  # noqa: PLR0913
@@ -170,12 +175,19 @@ class BaseChatbot(ABC):
         # compile and return the agent graph
         return agent_graph.compile(checkpointer=self.memory)
 
-    @abstractmethod
-    async def get_comment_metadata(self) -> str:
-        """Yield markdown comments to send hidden metdata in the response"""
+    async def get_latest_history(self) -> dict:
+        """Get the most recent state history"""
+        async for state in self.agent.aget_state_history(self.config):
+            if state:
+                return state
+        return None
 
     async def get_completion(
-        self, message: str, *, debug: bool = settings.AI_DEBUG
+        self,
+        message: str,
+        *,
+        extra_state: Optional[TypedDict] = None,
+        debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
         Send the user message to the agent and yield the response as
@@ -188,8 +200,12 @@ class BaseChatbot(ABC):
             error = "Create agent before running"
             raise ValueError(error)
         try:
+            state = {
+                "messages": [HumanMessage(message)],
+                **(extra_state or {}),
+            }
             response_generator = self.agent.astream(
-                {"messages": [{"role": "user", "content": message}]},
+                state,
                 self.config,
                 stream_mode="messages",
             )
@@ -217,7 +233,7 @@ class BaseChatbot(ABC):
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
         if debug:
-            yield f"\n\n<!-- {await self.get_comment_metadata()} -->\n\n"
+            yield f"\n\n<!-- {await self.get_tool_metadata()} -->\n\n"
         if settings.POSTHOG_PROJECT_API_KEY:
             hog_client = posthog.Posthog(
                 settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
@@ -228,10 +244,17 @@ class BaseChatbot(ABC):
                 properties={
                     "question": message,
                     "answer": full_response,
-                    "metadata": await self.get_comment_metadata(),
+                    "metadata": await self.get_tool_metadata(),
                     "user": self.user_id,
                 },
             )
+
+    @abstractmethod
+    async def get_tool_metadata(self) -> str:
+        """
+        Yield markdown comments to send hidden metadata in the response
+        """
+        raise NotImplementedError
 
 
 class ResourceRecommendationBot(BaseChatbot):
@@ -241,6 +264,7 @@ class ResourceRecommendationBot(BaseChatbot):
     """
 
     TASK_NAME = "RECOMMENDATION_TASK"
+    JOB_ID = "RECOMMENDATION_JOB"
 
     INSTRUCTIONS = """You are an assistant helping users find courses from a catalog
 of learning resources. Users can ask about specific topics, levels, or recommendations
@@ -372,37 +396,84 @@ ANSWER QUESTIONS.
         """Create tools required by the agent"""
         return [tools.search_courses]
 
-    async def get_latest_history(self) -> dict:
-        async for state in self.agent.aget_state_history(self.config):
-            if state:
-                return state
-        return None
-
-    async def get_comment_metadata(self) -> str:
-        """
-        Yield markdown comments to send hidden metadata in the response
-        """
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
         thread_id = self.config["configurable"]["thread_id"]
-        metadata = {"thread_id": thread_id}
         latest_state = await self.get_latest_history()
-        tool_messages = (
-            []
-            if not latest_state
-            else [
-                t
-                for t in latest_state.values.get("messages", [])
-                if t and t.__class__ == ToolMessage
-            ]
+        return get_search_tool_metadata(thread_id, latest_state)
+
+
+class SyllabusAgentState(AgentState):
+    """
+    State for the syllabus bot. Passes course_id and
+    collection_name to the associated tool function.
+    """
+
+    course_id: Annotated[list[str], add]
+    collection_name: Annotated[list[str], add]
+
+
+class SyllabusBot(BaseChatbot):
+    """Service class for the AI syllabus agent"""
+
+    TASK_NAME = "SYLLABUS_TASK"
+    JOB_ID = "SYLLABUS_JOB"
+
+    INSTRUCTIONS = """You are an assistant helping users answer questions related
+to a syllabus.
+
+Your job:
+1. Use the available function to gather relevant information about the user's question.
+2. Provide a clear, user-friendly summary of the information retrieved by the tool to
+answer the user's question.
+
+Always run the tool to answer questions, and answer only based on the tool
+output. Do not include the course id in the query parameter.
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
+ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
+information.
+    """
+
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        *,
+        name: str = "MIT Open Learning Syllabus Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            model=model or settings.AI_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
         )
-        if tool_messages:
-            content = json.loads(tool_messages[-1].content or {})
-            metadata = {
-                "metadata": {
-                    "search_parameters": content.get("metadata", {}).get(
-                        "parameters", []
-                    ),
-                    "search_results": content.get("results", []),
-                    "thread_id": thread_id,
-                }
-            }
-        return json.dumps(metadata)
+        self.agent = self.create_agent_graph()
+
+    def create_tools(self):
+        """Create tools required by the agent"""
+        return [search_content_files]
+
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Generate a standard react agent graph for the syllabus agent.
+        Use the custom SyllabusAgentState to pass course_id and collection_name
+        to the associated tool function.
+        """
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.memory,
+            state_schema=SyllabusAgentState,
+            state_modifier=self.instructions,
+        )
+
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
+        thread_id = self.config["configurable"]["thread_id"]
+        latest_state = await self.get_latest_history()
+        return get_search_tool_metadata(thread_id, latest_state)
