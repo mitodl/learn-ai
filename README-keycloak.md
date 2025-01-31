@@ -1,6 +1,6 @@
 # Keycloak Integration
 
-The Compose file includes a Keycloak instance that you can use for authentication instead of spinning up a separate one or using one of the deployed instances. It's not enabled by default, but you can run it if you prefer not to run your own Keycloak instance.
+The Compose file includes a Keycloak instance that you can use for authentication instead of spinning up a separate one or using one of the deployed instances. (It's enabled by default but running it won't prevent you from using a separate instance.)
 
 ## Default Settings
 
@@ -55,4 +55,4 @@ If you'd rather use a separate Keycloak instance, ensure these settings are pres
 
   The client secret for the OIDC client. No default - you will need to get this from the Keycloak admin, even if you're using the pack-in Keycloak instance.
 
-> If you're using a Keycloak instance also hosted within a Docker container on the same machine you're running the AI chatbots, you'll need to make sure it can be seen from within the `apigateway` container. This will _require_ some work on your part - generally, stuff within Composer environments can't see things outside of their own environment. There's an example of this in the `docker-compose.services.yml` file if your Keycloak instance uses a Compose environment.
+> If you're using a Keycloak instance also hosted within a Docker container on the same machine you're running the AI chatbots, you'll need to make sure it can be seen from within the `apigateway` container. This will _require_ some work on your part - generally, stuff within Composer environments can't see things outside of their own environment. There's an example of this in the `docker-compose.services.yml` file if your Keycloak instance uses a Compose environment, as we use it so that the Keycloak OIDC URLs all match externally and internally.
