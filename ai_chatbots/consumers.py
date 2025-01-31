@@ -55,7 +55,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         )
 
         if user and user.username and user.username != "AnonymousUser":
-            self.user_id = user.username
+            self.user_id = user.username.replace("-", "_")
         elif session:
             if not session.session_key:
                 session.save()

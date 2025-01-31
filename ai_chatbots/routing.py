@@ -21,9 +21,4 @@ http_patterns = [
         UserMetaHttpConsumer.as_asgi(),
         name="user_meta",
     ),
-    re_path(
-        r"http/syllabus_agent/",
-        consumers.SyllabusBotHttpConsumer.as_asgi(),
-        name="syllabus_agent_sse",
-    ),
 ]

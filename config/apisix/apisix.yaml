@@ -106,6 +106,6 @@ routes:
           set:
             Referrer-Policy: "origin"
     uris:
-      - "/admin/*"
+      - "/admin/login/*"
       - "/http/login/"
 #END

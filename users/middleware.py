@@ -59,12 +59,12 @@ class ApisixChannelAuthMiddleware:
         x_userinfo = self.decode_scope_header(scope, "x-userinfo")
 
         if not x_userinfo:
-            log.info("get_user_from_apisix_headers: No x-userinfo header found")
+            log.debug("get_user_from_apisix_headers: No x-userinfo header found")
             from django.contrib.auth.models import AnonymousUser
 
             return AnonymousUser
 
-        log.info("decoded x_userinfo: %s", x_userinfo)
+        log.debug("decoded x_userinfo: %s", x_userinfo)
 
         preferred_username = x_userinfo.get("preferred_username", "")
         email = x_userinfo.get("email", "")
@@ -79,6 +79,7 @@ class ApisixChannelAuthMiddleware:
                 "email": email,
                 "name": name,
                 "global_id": sub,
+                "is_active": True,
             }
         )
 
@@ -112,7 +113,14 @@ class ApisixChannelAuthMiddleware:
 
         user = await self.get_user_from_apisix_headers(scope)
 
-        log.info("ApisixAuthMiddleware: Got user %s", user)
-        scope["user"] = user
+        log.debug("ApisixChannelAuthMiddleware: Got user %s", user)
+
+        if user.is_anonymous or not user.is_active:
+            log.debug("ApisixChannelAuthMiddleware: User is not active or is anonymous")
+            from django.contrib.auth.models import AnonymousUser
+
+            scope["user"] = AnonymousUser
+        else:
+            scope["user"] = user
 
         return await self.app(scope, receive, send)

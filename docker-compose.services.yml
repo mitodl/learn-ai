@@ -140,7 +140,7 @@ services:
       - KEYCLOAK_SCOPES=${KEYCLOAK_SCOPES:-openid profile email}
       - APISIX_PORT=${APISIX_PORT:-8005}
       - APISIX_SESSION_SECRET_KEY=${APISIX_SESSION_SECRET_KEY:-something_at_least_16_characters}
-      - APISIX_LOGOUT_URL=${APISIX_LOGOUT_URL:-http://ai.open.odl.local:8005/}
+      - APISIX_LOGOUT_URL=${APISIX_LOGOUT_URL:-http://ai.open.odl.local:8003/}
       - NGINX_PORT=${NGINX_PORT:-8002}
     ports:
       - ${APISIX_PORT}:${APISIX_PORT}

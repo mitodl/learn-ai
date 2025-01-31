@@ -12,6 +12,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id",
+            "global_id",
             "username",
             "email",
             "name",
@@ -21,6 +22,7 @@ class UserSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "global_id",
             "username",
             "email",
             "name",
