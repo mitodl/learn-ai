@@ -14,7 +14,7 @@ from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
-from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer
+from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer, TutorChatRequestSerializer
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -306,4 +306,32 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         return {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
+        }
+
+
+class TutorBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the tutor bot.
+    """
+
+    serializer_class = TutorChatRequestSerializer
+
+    def create_chatbot(self, serializer: TutorChatRequestSerializer):
+        """Return a SyllabusBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        instructions = serializer.validated_data.pop("instructions", None)
+        model = serializer.validated_data.pop("model", None)
+
+        return TutorBot(
+            self.user_id,
+            temperature=temperature,
+            instructions=instructions,
+            model=model,
+            thread_id=self.thread_id,
+        )
+
+    def process_extra_state(self, data: dict) -> dict:
+        """Process extra state parameters if any"""
+        return {
+            "problem_code": [data.get("problem_code")]
         }
