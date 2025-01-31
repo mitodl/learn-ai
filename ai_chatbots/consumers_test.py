@@ -3,6 +3,7 @@
 import json
 from random import randint
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
@@ -18,7 +19,8 @@ from main.factories import UserFactory
 def agent_user():
     """Return a user for the agent."""
     return UserFactory.build(
-        username=f"test_user_{randint(1, 1000)}"  # noqa: S311
+        username=f"test_user_{randint(1, 1000)}",  # noqa: S311
+        global_id=f"test_user_{uuid4()!s}",
     )
 
 
@@ -166,7 +168,7 @@ async def test_syllabus_create_chatbot(
     mock_http_consumer_send.send_headers.assert_called_once()
     chatbot = syllabus_consumer.create_chatbot(serializer)
     assert isinstance(chatbot, SyllabusBot)
-    assert chatbot.user_id == agent_user.username
+    assert chatbot.user_id == agent_user.global_id.replace("-", "_")
     assert chatbot.temperature == 0.7
     assert chatbot.instructions == "Answer this question as best you can"
     assert chatbot.model == "gpt-3.5-turbo"
