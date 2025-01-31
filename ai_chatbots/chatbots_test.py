@@ -85,14 +85,18 @@ def test_recommendation_bot_initialization_defaults(
         temperature=temperature,
         instructions=instructions,
     )
-    assert chatbot.model == (model if model else settings.AI_MODEL)
+    assert chatbot.model == (
+        model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
+    )
     assert chatbot.temperature == (temperature if temperature else DEFAULT_TEMPERATURE)
     assert chatbot.instructions == (
         instructions if instructions else chatbot.instructions
     )
     worker_llm = chatbot.llm
     assert worker_llm.__class__ == RunnableBinding if has_tools else ChatLiteLLM
-    assert worker_llm.model == (model if model else settings.AI_MODEL)
+    assert worker_llm.model == (
+        model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
+    )
 
 
 @pytest.mark.django_db
@@ -244,8 +248,10 @@ async def test_syllabus_bot_create_agent_graph_(mocker):
     )
 
 
-async def test_syllabus_bot_get_completion_state(mocker, mock_openai_astream):
+@pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+async def test_syllabus_bot_get_completion_state(mock_openai_astream, default_model):
     """Proper state should get passed along by get_completion"""
+    settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
     chatbot = SyllabusBot("anonymous", name="test agent", thread_id="foo")
     extra_state = {
         "course_id": ["mitx1.23"],
@@ -258,6 +264,7 @@ async def test_syllabus_bot_get_completion_state(mocker, mock_openai_astream):
             chatbot.config,
             stream_mode="messages",
         )
+    assert chatbot.llm.model == default_model
 
 
 @pytest.mark.django_db

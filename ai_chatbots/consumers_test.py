@@ -89,7 +89,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
     assert recommendation_consumer.bot.llm.model == (
-        model if model else settings.AI_MODEL
+        model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
     assert recommendation_consumer.bot.instructions == (
         instructions if instructions else ResourceRecommendationBot.INSTRUCTIONS

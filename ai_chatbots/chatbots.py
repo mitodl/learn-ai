@@ -58,7 +58,7 @@ class BaseChatbot(ABC):
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
-        self.model = model or settings.AI_MODEL
+        self.model = model or settings.AI_DEFAULT_MODEL
         self.temperature = temperature or DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
         self.user_id = user_id
@@ -93,7 +93,7 @@ class BaseChatbot(ABC):
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
         )
-        if self.temperature:
+        if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
             llm.temperature = self.temperature
         # Bind tools to the LLM if any
         if self.tools:
@@ -213,7 +213,7 @@ class BaseChatbot(ABC):
         except BadRequestError as error:
             # Format and yield an error message inside a hidden comment
             if hasattr(error, "response"):
-                error = error.response.content
+                error = error.response.json()
             else:
                 error = {
                     "error": {"message": "An error has occurred, please try again"}
@@ -382,7 +382,7 @@ ANSWER QUESTIONS.
         super().__init__(
             user_id,
             name=name,
-            model=model,
+            model=model or settings.AI_DEFAULT_RECOMMENDATION_MODEL,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -413,6 +413,7 @@ class SyllabusAgentState(AgentState):
 class SyllabusBot(BaseChatbot):
     """Service class for the AI syllabus agent"""
 
+    DEFAULT_MODEL = settings.AI_DEFAULT_SYLLABUS_MODEL
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
 
@@ -444,7 +445,7 @@ information.
         super().__init__(
             user_id,
             name=name,
-            model=model or settings.AI_MODEL,
+            model=model or settings.AI_DEFAULT_SYLLABUS_MODEL,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
