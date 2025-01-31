@@ -11,6 +11,7 @@ from uuid import uuid4
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
+from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
@@ -25,7 +26,6 @@ from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import ChatMemory, get_search_tool_metadata
-from ai_chatbots.constants import LLMClassEnum
 from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
@@ -69,8 +69,10 @@ class BaseChatbot(ABC):
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
             self.proxy.create_proxy_user(self.user_id)
+            self.model_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
             self.proxy = None
+            self.model_prefix = ""
         self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
@@ -82,16 +84,11 @@ class BaseChatbot(ABC):
     def get_llm(self, **kwargs) -> BaseChatModel:
         """
         Return the LLM instance for the chatbot.
-        Determine the LLM class to use based on the AI_PROVIDER setting.
         Set it up to use a proxy, with required proxy kwargs, if applicable.
         Bind the LLM to any tools if they are present.
         """
-        try:
-            llm_class = LLMClassEnum[settings.AI_PROVIDER].value
-        except KeyError:
-            raise NotImplementedError from KeyError
-        llm = llm_class(
-            model=self.model,
+        llm = ChatLiteLLM(
+            model=f"{self.model_prefix}{self.model}",
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
@@ -216,7 +213,7 @@ class BaseChatbot(ABC):
         except BadRequestError as error:
             # Format and yield an error message inside a hidden comment
             if hasattr(error, "response"):
-                error = error.response.json()
+                error = error.response.content
             else:
                 error = {
                     "error": {"message": "An error has occurred, please try again"}

@@ -54,6 +54,7 @@ social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "^0.45.1"
 ulid-py = "^0.2.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
+langchain-community = "^0.3.16"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

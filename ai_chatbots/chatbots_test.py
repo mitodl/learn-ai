@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from django.conf import settings
+from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableBinding
 
@@ -15,7 +16,6 @@ from ai_chatbots.chatbots import (
     SyllabusBot,
 )
 from ai_chatbots.conftest import MockAsyncIterator
-from ai_chatbots.constants import LLMClassEnum
 from ai_chatbots.factories import (
     AIMessageChunkFactory,
     HumanMessageFactory,
@@ -91,12 +91,8 @@ def test_recommendation_bot_initialization_defaults(
         instructions if instructions else chatbot.instructions
     )
     worker_llm = chatbot.llm
-    assert (
-        worker_llm.__class__ == RunnableBinding
-        if has_tools
-        else LLMClassEnum.openai.value
-    )
-    assert worker_llm.model_name == (model if model else settings.AI_MODEL)
+    assert worker_llm.__class__ == RunnableBinding if has_tools else ChatLiteLLM
+    assert worker_llm.model == (model if model else settings.AI_MODEL)
 
 
 @pytest.mark.django_db
