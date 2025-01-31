@@ -18,6 +18,9 @@ class AIProxy(ABC):
 
     REQUIRED_SETTINGS = []
 
+    # if the proxy model needs to be prefixed, set this here
+    PROXY_MODEL_PREFIX = ""
+
     def __init__(self):
         """Raise an error if required settings are missing."""
         missing_settings = [
@@ -46,16 +49,34 @@ class LiteLLMProxy(AIProxy):
     """Helper class for the Lite LLM proxy."""
 
     REQUIRED_SETTINGS = ("AI_PROXY_URL", "AI_PROXY_AUTH_TOKEN")
+    PROXY_MODEL_PREFIX = "litellm_proxy/"
 
     def get_api_kwargs(
-        self, base_url_key: str = "base_url", api_key_key: str = "openai_api_key"
+        self, base_url_key: str = "api_base", api_key_key: str = "openai_api_key"
     ) -> dict:
+        """
+        Get the required API kwargs to connect to the Lite LLM proxy.
+        When using the ChatLiteLLM class, these kwargs should be
+        "api_base" and "openai_api_key".
+
+        Args:
+            base_url_key (str): The key to pass in the proxy API URL.
+            api_key_key (str): The key to pass in the proxy authentication token.
+
+        Returns:
+            dict: The proxy API kwargs.
+        """
+
         return {
             f"{base_url_key}": settings.AI_PROXY_URL,
             f"{api_key_key}": settings.AI_PROXY_AUTH_TOKEN,
         }
 
     def get_additional_kwargs(self, service: BaseChatbot) -> dict:
+        """
+        Get additional  kwargs to send to the Lite LLM proxy, such
+        as user_id and job/task identification.
+        """
         return {
             "user": service.user_id,
             "store": True,

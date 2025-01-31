@@ -11,6 +11,7 @@ from uuid import uuid4
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
+from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
@@ -25,7 +26,6 @@ from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import ChatMemory, get_search_tool_metadata
-from ai_chatbots.constants import LLMClassEnum
 from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class BaseChatbot(ABC):
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
-        self.model = model or settings.AI_MODEL
+        self.model = model or settings.AI_DEFAULT_MODEL
         self.temperature = temperature or DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
         self.user_id = user_id
@@ -69,8 +69,10 @@ class BaseChatbot(ABC):
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
             self.proxy.create_proxy_user(self.user_id)
+            self.model_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
             self.proxy = None
+            self.model_prefix = ""
         self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
@@ -82,21 +84,16 @@ class BaseChatbot(ABC):
     def get_llm(self, **kwargs) -> BaseChatModel:
         """
         Return the LLM instance for the chatbot.
-        Determine the LLM class to use based on the AI_PROVIDER setting.
         Set it up to use a proxy, with required proxy kwargs, if applicable.
         Bind the LLM to any tools if they are present.
         """
-        try:
-            llm_class = LLMClassEnum[settings.AI_PROVIDER].value
-        except KeyError:
-            raise NotImplementedError from KeyError
-        llm = llm_class(
-            model=self.model,
+        llm = ChatLiteLLM(
+            model=f"{self.model_prefix}{self.model}",
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
         )
-        if self.temperature:
+        if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
             llm.temperature = self.temperature
         # Bind tools to the LLM if any
         if self.tools:
@@ -385,7 +382,7 @@ ANSWER QUESTIONS.
         super().__init__(
             user_id,
             name=name,
-            model=model,
+            model=model or settings.AI_DEFAULT_RECOMMENDATION_MODEL,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -416,6 +413,7 @@ class SyllabusAgentState(AgentState):
 class SyllabusBot(BaseChatbot):
     """Service class for the AI syllabus agent"""
 
+    DEFAULT_MODEL = settings.AI_DEFAULT_SYLLABUS_MODEL
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
 
@@ -447,7 +445,7 @@ information.
         super().__init__(
             user_id,
             name=name,
-            model=model or settings.AI_MODEL,
+            model=model or settings.AI_DEFAULT_SYLLABUS_MODEL,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
