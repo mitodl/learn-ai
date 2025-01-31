@@ -7,14 +7,25 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - 5433:5433
+      - ${PGPORT}:${PGPORT}
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
-      - PGPORT=5433
-      - PGUSER=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - PGPORT=${PGPORT:-5433}
+      - PGUSER=${PGUSER:-postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql
+      - ./config/postgres:/docker-entrypoint-initdb.d
 
   redis:
     image: redis:7.4.2
@@ -30,12 +41,22 @@ services:
     build:
       context: ./nginx
     ports:
-      - "8002:8002"
+      - ${NGINX_PORT:-8002}:${NGINX_PORT:-8002}
     links:
       - web
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
-      PORT: 8002
-      NGINX_UWSGI_PASS: "web:8001"
+      PORT: ${NGINX_PORT:-8002}
+      NGINX_UWSGI_PASS: ${NGINX_UWSGI_PASS:-"web:8001"}
     volumes:
       - ./config:/etc/nginx/templates
 
@@ -45,11 +66,20 @@ services:
     ports:
       - "4000:4000"
     env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
       - path: env/backend.env
       - path: env/backend.local.env
         required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5433/litellm
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5433/litellm}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
+      - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
     depends_on:
       db:
         condition: service_healthy
@@ -58,8 +88,70 @@ services:
     volumes:
       - ./config:/app
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    depends_on:
+      - db
+    ports:
+      - ${KEYCLOAK_PORT}:${KEYCLOAK_PORT}
+      - ${KEYCLOAK_SSL_PORT}:${KEYCLOAK_SSL_PORT}
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
+    environment:
+      - KEYCLOAK_ADMIN=${KEYCLOAK_SVC_ADMIN:-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_SVC_ADMIN_PASSWORD:-admin}
+    networks:
+      default:
+        aliases:
+          - ${KEYCLOAK_SVC_HOSTNAME:-kc.ol.local}
+    command: start --verbose --features scripts --import-realm --hostname=${KEYCLOAK_SVC_HOSTNAME:-kc.ol.local} --hostname-strict=false --hostname-debug=true --https-port=${KEYCLOAK_SSL_PORT} --https-certificate-file=/etc/x509/https/tls.crt --https-certificate-key-file=/etc/x509/https/tls.key --http-enabled=true --http-port=${KEYCLOAK_PORT} --config-keystore=/etc/keycloak-store --config-keystore-password=${KEYCLOAK_SVC_KEYSTORE_PASSWORD} --db=postgres --db-url-database=keycloak --db-url-host=db --db-schema=public --db-password=${POSTGRES_PASSWORD:-postgres} --db-username=postgres --db-url-port=${PGPORT:-5433}
+    volumes:
+      - keycloak-store:/etc/keycloak-store
+      - ./config/keycloak/tls:/etc/x509/https
+      - ./config/keycloak/realms:/opt/keycloak/data/import
+
+  apigateway:
+    image: apache/apisix:latest
+    depends_on:
+      - keycloak
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
+    environment:
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-ol-local}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-apisix}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-https://kc.ol.local:8006/realms/ol-local/.well-known/openid-configuration}
+      - KEYCLOAK_SCOPES=${KEYCLOAK_SCOPES:-openid profile email}
+      - APISIX_PORT=${APISIX_PORT:-8005}
+      - APISIX_SESSION_SECRET_KEY=${APISIX_SESSION_SECRET_KEY:-something_at_least_16_characters}
+      - APISIX_LOGOUT_URL=${APISIX_LOGOUT_URL:-http://ai.open.odl.local:8003/}
+      - NGINX_PORT=${NGINX_PORT:-8002}
+    ports:
+      - ${APISIX_PORT}:${APISIX_PORT}
+    volumes:
+      - ./config/apisix/config.yaml:/usr/local/apisix/conf/config.yaml
+      - ./config/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml
+      - ./config/apisix/debug.yaml:/usr/local/apisix/conf/debug.yaml
+
 volumes:
   pgdata:
   # note: these are here instead of docker-compose.apps.yml because `extends` doesn't pull them in
   django_media:
   yarn-cache:
+  keycloak-store:

@@ -2,8 +2,11 @@
 Factory for Users
 """
 
+from uuid import uuid4
+
 import ulid
-from django.contrib.auth.models import Group, User
+from django.conf import settings
+from django.contrib.auth.models import Group
 from factory import LazyFunction, SubFactory
 from factory.django import DjangoModelFactory
 from factory.fuzzy import FuzzyText
@@ -14,12 +17,13 @@ class UserFactory(DjangoModelFactory):
     """Factory for Users"""
 
     username = LazyFunction(lambda: ulid.new().str)
+    global_id = LazyFunction(lambda: str(uuid4()))
     email = FuzzyText(suffix="@example.com")
-    first_name = FuzzyText()
-    last_name = FuzzyText()
+    name = FuzzyText()
+    is_active = True
 
     class Meta:
-        model = User
+        model = settings.AUTH_USER_MODEL
         skip_postgeneration_save = True
 
 

@@ -1,5 +1,10 @@
 include:
-  - docker-compose.services.yml
+  - path: docker-compose.services.yml
+    env_file:
+      - env/shared.env
+      - env/shared.local.env
+      - env/backend.env
+      - env/backend.local.env
 
 services:
   web:
@@ -7,6 +12,9 @@ services:
       file: docker-compose.apps.yml
       service: web
     env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
       - path: env/backend.env
       - path: env/backend.local.env
         required: false
@@ -19,6 +27,9 @@ services:
       file: docker-compose.apps.yml
       service: celery
     env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
       - path: env/backend.env
       - path: env/backend.local.env
         required: false
