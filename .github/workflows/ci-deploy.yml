@@ -1,0 +1,55 @@
+name: CI Deploy
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: # manual trigger
+jobs:
+  on_success:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: "^22"
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build
+        run: yarn build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_UE_API_BASE_URL: ${{ vars.API_BASE_CI}}
+      - name: Write commit SHA to file
+        run: echo $GITHUB_SHA > out/hash.txt
+
+      - name: Upload frontend build to s3
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks --delete
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_NAME_CI }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_CI }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_CI }}
+          SOURCE_DIR: "out/"
+          DEST_DIR: "frontend"
+
+      - name: Purge Fastly cache
+        uses: jcoene/fastly-purge-action@master
+        with:
+          api_key: "${{ secrets.FASTLY_API_KEY_CI }}"
+          service_id: "${{ secrets.FASTLY_SERVICE_ID_CI }}"
+  on_failure:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - run: echo 'The trigger workflow failed.'
