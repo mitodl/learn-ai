@@ -10,7 +10,6 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableBinding
 
 from ai_chatbots.chatbots import (
-    DEFAULT_TEMPERATURE,
     ResourceRecommendationBot,
     SyllabusAgentState,
     SyllabusBot,
@@ -89,7 +88,9 @@ def test_recommendation_bot_initialization_defaults(
     assert chatbot.model == (
         model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
-    assert chatbot.temperature == (temperature if temperature else DEFAULT_TEMPERATURE)
+    assert chatbot.temperature == (
+        temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
+    )
     assert chatbot.instructions == (
         instructions if instructions else chatbot.instructions
     )

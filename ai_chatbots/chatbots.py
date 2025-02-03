@@ -29,9 +29,7 @@ from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TEMPERATURE = 0.1
 CHECKPOINTER = ChatMemory().checkpointer
-CONTINUE = "continue"
 
 
 class BaseChatbot(ABC):
@@ -58,7 +56,7 @@ class BaseChatbot(ABC):
         """Initialize the AI chat agent service"""
         self.bot_name = name
         self.model = model or settings.AI_DEFAULT_MODEL
-        self.temperature = temperature or DEFAULT_TEMPERATURE
+        self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
         self.user_id = user_id
         self.config = {"configurable": {"thread_id": thread_id or uuid4().hex}}
