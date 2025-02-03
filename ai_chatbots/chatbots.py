@@ -16,10 +16,9 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
-from langgraph.constants import END
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode, create_react_agent
+from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
 from typing_extensions import TypedDict
@@ -93,6 +92,7 @@ class BaseChatbot(ABC):
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
         )
+        # Set the temperature if it's supported by the model
         if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
             llm.temperature = self.temperature
         # Bind tools to the LLM if any
@@ -124,46 +124,23 @@ class BaseChatbot(ABC):
         agent_node = "agent"
         tools_node = "tools"
 
-        def start_agent(state: MessagesState) -> MessagesState:
+        def tool_calling_llm(state: MessagesState) -> MessagesState:
             """Call the LLM, injecting system prompt"""
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
                 state["messages"].insert(0, SystemMessage(self.instructions))
             return MessagesState(messages=[self.llm.invoke(state["messages"])])
 
-        def continue_on_tool_call(state: MessagesState) -> str:
-            """
-            Define the conditional edge that determines whether
-            to continue or not
-            """
-            messages = state["messages"]
-            last_message = messages[-1]
-            # Finish if no tool call is requested
-            if not last_message.tool_calls:
-                return END
-            # If there is, run the tool
-            else:
-                return CONTINUE
-
         agent_graph = StateGraph(MessagesState)
         # Add the agent node that first calls the LLM
-        agent_graph.add_node(agent_node, start_agent)
+        agent_graph.add_node(agent_node, tool_calling_llm)
         if self.tools:
             # Add the tools node
             agent_graph.add_node(tools_node, ToolNode(tools=self.tools))
             # Add a conditional edge that determines when to run the tools.
             # If no tool call is requested, the edge is not taken and the
             # agent node will end its response.
-            agent_graph.add_conditional_edges(
-                agent_node,
-                continue_on_tool_call,
-                {
-                    # If tool requested then we call the tool node.
-                    CONTINUE: tools_node,
-                    # Otherwise finish.
-                    END: END,
-                },
-            )
+            agent_graph.add_conditional_edges(agent_node, tools_condition)
             # Send the tool node output back to the agent node
             agent_graph.add_edge(tools_node, agent_node)
         # Set the entry point to the agent node
@@ -413,7 +390,6 @@ class SyllabusAgentState(AgentState):
 class SyllabusBot(BaseChatbot):
     """Service class for the AI syllabus agent"""
 
-    DEFAULT_MODEL = settings.AI_DEFAULT_SYLLABUS_MODEL
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
 
