@@ -68,10 +68,10 @@ class BaseChatbot(ABC):
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
             self.proxy.create_proxy_user(self.user_id)
-            self.model_prefix = self.proxy.PROXY_MODEL_PREFIX
+            self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
             self.proxy = None
-            self.model_prefix = ""
+            self.proxy_prefix = ""
         self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
@@ -87,7 +87,7 @@ class BaseChatbot(ABC):
         Bind the LLM to any tools if they are present.
         """
         llm = ChatLiteLLM(
-            model=f"{self.model_prefix}{self.model}",
+            model=f"{self.proxy_prefix}{self.model}",
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,

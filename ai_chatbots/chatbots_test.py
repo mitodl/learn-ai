@@ -22,6 +22,7 @@ from ai_chatbots.factories import (
     SystemMessageFactory,
     ToolMessageFactory,
 )
+from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
 
@@ -411,3 +412,36 @@ async def test_get_tool_metadata_error(mocker):
     assert metadata == json.dumps(
         {"error": "Error parsing tool metadata", "content": "Could not connect to api"}
     )
+
+
+@pytest.mark.parametrize("use_proxy", [True, False])
+def test_proxy_settings(settings, mocker, use_proxy):
+    """Test that the proxy settings are set correctly"""
+    mock_create_proxy_user = mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
+    )
+    mock_llm = mocker.patch("ai_chatbots.chatbots.ChatLiteLLM")
+    settings.AI_PROXY_CLASS = "LiteLLMProxy" if use_proxy else None
+    settings.AI_PROXY_URL = "http://proxy.url"
+    settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
+    model_name = "openai/o9-turbo"
+    settings.AI_DEFAULT_RECOMMENDATION_MODEL = model_name
+    chatbot = ResourceRecommendationBot("user1")
+    if use_proxy:
+        mock_create_proxy_user.assert_called_once_with("user1")
+        assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
+        assert isinstance(chatbot.proxy, LiteLLMProxy)
+        mock_llm.assert_called_once_with(
+            model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
+            **chatbot.proxy.get_api_kwargs(),
+            **chatbot.proxy.get_additional_kwargs(chatbot),
+        )
+    else:
+        mock_create_proxy_user.assert_not_called()
+        assert chatbot.proxy_prefix == ""
+        assert chatbot.proxy is None
+        mock_llm.assert_called_once_with(
+            model=model_name,
+            **{},
+            **{},
+        )
