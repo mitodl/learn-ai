@@ -432,6 +432,7 @@ class TutorBot(BaseChatbot):
             thread_id=thread_id,
         )
         self.problem, self.solution = get_pb_sol(problem_code)
+        print(self.model)
         self.agent = self.create_agent_graph()
     
     async def get_tool_metadata(self) -> str:
@@ -439,5 +440,5 @@ class TutorBot(BaseChatbot):
         return None
     
     def create_agent_graph(self) -> CompiledGraph:
-        tutor  = GraphTutor(self.llm, self.problem, self.solution)
+        tutor  = GraphTutor(self.llm, self.problem, self.solution, self.model, [], [], [])
         return tutor.app

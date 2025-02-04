@@ -10,6 +10,7 @@ from django.conf import settings
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
+from e2b_code_interpreter import Sandbox
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
 from ai_chatbots.utils import enum_zip
@@ -224,3 +225,11 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     except requests.exceptions.RequestException:
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
+
+
+
+
+@tool
+def r_code_interpreter(code:str):
+    """A R code interpreter. Use this tool to execute R code. Input should be a valid R command. If you want to see the output of a value, you should print it out with `print(...)`"""
+    return True
