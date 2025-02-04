@@ -9,7 +9,7 @@ from channels.layers import get_channel_layer
 from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, TutorBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
@@ -275,6 +275,8 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
+        problem_code = serializer.validated_data.pop("problem_code", None)
+
 
         return TutorBot(
             self.user_id,
@@ -282,10 +284,6 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            problem_code = problem_code
         )
 
-    def process_extra_state(self, data: dict) -> dict:
-        """Process extra state parameters if any"""
-        return {
-            "problem_code": [data.get("problem_code")]
-        }
