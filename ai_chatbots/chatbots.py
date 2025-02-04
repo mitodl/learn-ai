@@ -23,6 +23,8 @@ from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
 from typing_extensions import TypedDict
+from open_learning_ai_tutor.Tutor import GraphTutor
+from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
@@ -403,3 +405,39 @@ information.
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+
+
+class TutorBot(BaseChatbot):
+    """
+    Chatbot that assists with problem sets
+    """
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        *,
+        name: str = "MIT Open Learning Tutor Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
+        problem_code: Optional[str] = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            model=model or settings.AI_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
+        )
+        self.problem, self.solution = get_pb_sol(problem_code)
+        self.agent = self.create_agent_graph()
+    
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
+        return None
+    
+    def create_agent_graph(self) -> CompiledGraph:
+        tutor  = GraphTutor(self.llm, self.problem, self.solution)
+        return tutor.app
