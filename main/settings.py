@@ -556,12 +556,13 @@ KEYCLOAK_REALM = get_string("KEYCLOAK_REALM", False)  # noqa: FBT003
 KEYCLOAK_ADMIN_URL = get_string("KEYCLOAK_ADMIN_URL", False)  # noqa: FBT003
 KEYCLOAK_ADMIN_SECURE = get_bool("KEYCLOAK_ADMIN_SECURE", True)  # noqa: FBT003
 
-
+# Channel settings
+REDIS_DOMAIN = get_string("REDIS_DOMAIN", "redis")
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("redis", 6379)],
+            "hosts": [(REDIS_DOMAIN, 6379)],
         },
     },
 }
