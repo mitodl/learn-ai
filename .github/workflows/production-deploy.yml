@@ -8,6 +8,9 @@ on:
 jobs:
   on_success:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-demo
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
