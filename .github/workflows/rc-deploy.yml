@@ -1,18 +1,4 @@
 name: RC Deploy
-permissions:
-  contents: read
-  metadata: read
-  pull_requests: read
-  issues: read
-  deployments: write
-  checks: read
-  actions: write
-  secrets: read
-  security_events: read
-  vulnerability_alerts: read
-  organization_secrets: read
-  packages: read
-  self: write
 on:
   workflow_run:
     workflows: [CI]
