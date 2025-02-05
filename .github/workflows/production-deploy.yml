@@ -57,7 +57,7 @@ jobs:
           DEST_DIR: "frontend"
 
       - name: Purge Fastly cache
-        uses: jcoene/fastly-purge-action@master
+        uses: jcoene/fastly-purge-action@5beee4b3c93691dc5c0c0f1275f958d227ee53ea
         with:
           api_key: "${{ secrets.FASTLY_API_KEY_PROD }}"
           service_id: "${{ secrets.FASTLY_SERVICE_ID_PROD }}"
