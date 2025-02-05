@@ -5,23 +5,23 @@ from unittest.mock import AsyncMock
 
 import pytest
 from django.conf import settings
+from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableBinding
 
 from ai_chatbots.chatbots import (
-    DEFAULT_TEMPERATURE,
     ResourceRecommendationBot,
     SyllabusAgentState,
     SyllabusBot,
 )
 from ai_chatbots.conftest import MockAsyncIterator
-from ai_chatbots.constants import LLMClassEnum
 from ai_chatbots.factories import (
     AIMessageChunkFactory,
     HumanMessageFactory,
     SystemMessageFactory,
     ToolMessageFactory,
 )
+from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
 
@@ -85,18 +85,20 @@ def test_recommendation_bot_initialization_defaults(
         temperature=temperature,
         instructions=instructions,
     )
-    assert chatbot.model == (model if model else settings.AI_MODEL)
-    assert chatbot.temperature == (temperature if temperature else DEFAULT_TEMPERATURE)
+    assert chatbot.model == (
+        model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
+    )
+    assert chatbot.temperature == (
+        temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
+    )
     assert chatbot.instructions == (
         instructions if instructions else chatbot.instructions
     )
     worker_llm = chatbot.llm
-    assert (
-        worker_llm.__class__ == RunnableBinding
-        if has_tools
-        else LLMClassEnum.openai.value
+    assert worker_llm.__class__ == RunnableBinding if has_tools else ChatLiteLLM
+    assert worker_llm.model == (
+        model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
-    assert worker_llm.model_name == (model if model else settings.AI_MODEL)
 
 
 @pytest.mark.django_db
@@ -248,8 +250,10 @@ async def test_syllabus_bot_create_agent_graph_(mocker):
     )
 
 
-async def test_syllabus_bot_get_completion_state(mocker, mock_openai_astream):
+@pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+async def test_syllabus_bot_get_completion_state(mock_openai_astream, default_model):
     """Proper state should get passed along by get_completion"""
+    settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
     chatbot = SyllabusBot("anonymous", name="test agent", thread_id="foo")
     extra_state = {
         "course_id": ["mitx1.23"],
@@ -262,6 +266,7 @@ async def test_syllabus_bot_get_completion_state(mocker, mock_openai_astream):
             chatbot.config,
             stream_mode="messages",
         )
+    assert chatbot.llm.model == default_model
 
 
 @pytest.mark.django_db
@@ -408,3 +413,36 @@ async def test_get_tool_metadata_error(mocker):
     assert metadata == json.dumps(
         {"error": "Error parsing tool metadata", "content": "Could not connect to api"}
     )
+
+
+@pytest.mark.parametrize("use_proxy", [True, False])
+def test_proxy_settings(settings, mocker, use_proxy):
+    """Test that the proxy settings are set correctly"""
+    mock_create_proxy_user = mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
+    )
+    mock_llm = mocker.patch("ai_chatbots.chatbots.ChatLiteLLM")
+    settings.AI_PROXY_CLASS = "LiteLLMProxy" if use_proxy else None
+    settings.AI_PROXY_URL = "http://proxy.url"
+    settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
+    model_name = "openai/o9-turbo"
+    settings.AI_DEFAULT_RECOMMENDATION_MODEL = model_name
+    chatbot = ResourceRecommendationBot("user1")
+    if use_proxy:
+        mock_create_proxy_user.assert_called_once_with("user1")
+        assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
+        assert isinstance(chatbot.proxy, LiteLLMProxy)
+        mock_llm.assert_called_once_with(
+            model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
+            **chatbot.proxy.get_api_kwargs(),
+            **chatbot.proxy.get_additional_kwargs(chatbot),
+        )
+    else:
+        mock_create_proxy_user.assert_not_called()
+        assert chatbot.proxy_prefix == ""
+        assert chatbot.proxy is None
+        mock_llm.assert_called_once_with(
+            model=model_name,
+            **{},
+            **{},
+        )
