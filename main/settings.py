@@ -557,12 +557,19 @@ KEYCLOAK_ADMIN_URL = get_string("KEYCLOAK_ADMIN_URL", False)  # noqa: FBT003
 KEYCLOAK_ADMIN_SECURE = get_bool("KEYCLOAK_ADMIN_SECURE", True)  # noqa: FBT003
 
 # Channel settings
-REDIS_DOMAIN = get_string("REDIS_DOMAIN", "redis")
+REDIS_DOMAIN = get_string("REDIS_DOMAIN", "redis://redis:6379/0")
+REDIS_SSL_CERT_REQS = get_string("REDIS_SSL_CERT_REQS", None)
+REDIS_HOST_PARAMS = {"ssl_cert_reqs": REDIS_SSL_CERT_REQS} if REDIS_SSL_CERT_REQS else {}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(REDIS_DOMAIN, 6379)],
+            "hosts":[
+                {
+                    "address": REDIS_DOMAIN, 
+                    **REDIS_HOST_PARAMS
+                }
+            ]
         },
     },
 }
