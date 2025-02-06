@@ -232,4 +232,10 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
 @tool
 def r_code_interpreter(code:str):
     """A R code interpreter. Use this tool to execute R code. Input should be a valid R command. If you want to see the output of a value, you should print it out with `print(...)`"""
-    return True
+    return "this is R code"
+
+
+@tool
+def text_student(nessage_to_student: str):
+    """A tool to send a message to your student. This tool is the only way for you to communicate with your student. The input should be your message. After the message is sent, you will wait for the student's next message."""
+    return nessage_to_student
