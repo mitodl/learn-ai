@@ -28,7 +28,8 @@ from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
-from ai_chatbots.tools import search_content_files
+from ai_chatbots.tools import search_content_files, r_code_interpreter, text_student
+
 
 log = logging.getLogger(__name__)
 
@@ -432,13 +433,72 @@ class TutorBot(BaseChatbot):
             thread_id=thread_id,
         )
         self.problem, self.solution = get_pb_sol(problem_code)
-        print(self.model)
-        self.agent = self.create_agent_graph()
+        self.human_messages=[]
+        self.tutor_messages= ["Hello! Can you walk me through your solution?"]
+        self.agent = GraphTutor(self.llm, pb=self.problem, sol=self.solution, model=self.model, tools=[r_code_interpreter,text_student])
     
     async def get_tool_metadata(self) -> str:
-        """Return the metadata for the search tool"""
+        """Return the metadata for the  tool"""
         return None
     
-    def create_agent_graph(self) -> CompiledGraph:
-        tutor  = GraphTutor(self.llm, self.problem, self.solution, self.model, [], [], [])
-        return tutor.app
+    async def get_completion(
+        self,
+        message: str,
+        *,
+        extra_state: Optional[TypedDict] = None,
+        debug: bool = settings.AI_DEBUG,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Send the user message to the agent and yield the response as
+        it comes in.
+
+        Append the response with debugging metadata and/or errors.
+        """
+        full_response = ""
+        if not self.agent:
+            error = "Create agent before running"
+            raise ValueError(error)
+        try:
+            output  = self.agent.get_response(self.human_messages + [message], self.tutor_messages)
+
+            self.human_messages.append(message)
+            self.tutor_messages.append(output[0])
+            print(self.human_messages)
+            print(self.tutor_messages)
+            yield output[0]
+        except BadRequestError as error:
+            # Format and yield an error message inside a hidden comment
+            if hasattr(error, "response"):
+                error = error.response.json()
+            else:
+                error = {
+                    "error": {"message": "An error has occurred, please try again"}
+                }
+            if (
+                error["error"]["message"].startswith("Budget has been exceeded")
+                and not settings.AI_DEBUG
+            ):  # Friendlier message for end user
+                error["error"]["message"] = (
+                    "You have exceeded your AI usage limit. Please try again later."
+                )
+            yield f"<!-- {json.dumps(error)} -->".encode()
+        except Exception:
+            yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
+            log.exception("Error running AI agent")
+        if debug:
+            yield f"\n\n<!-- {await self.get_tool_metadata()} -->\n\n"
+        if settings.POSTHOG_PROJECT_API_KEY:
+            hog_client = posthog.Posthog(
+                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
+            )
+            hog_client.capture(
+                self.user_id,
+                event=self.JOB_ID,
+                properties={
+                    "question": message,
+                    "answer": full_response,
+                    "metadata": await self.get_tool_metadata(),
+                    "user": self.user_id,
+                },
+            )
+
