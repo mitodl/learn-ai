@@ -76,7 +76,7 @@ services:
       - path: .env
         required: false
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5433/litellm}
+      - DATABASE_URL=${LITELLM_DATABASE_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${PGPORT}/litellm}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
       - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
