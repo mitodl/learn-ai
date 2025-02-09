@@ -21,6 +21,14 @@ class ChatRequestSerializer(serializers.Serializer):
     )
     thread_id = serializers.CharField(required=False, allow_blank=True)
 
+    def validate_instructions(self, value):
+        """Ensure that the user has permission"""
+        user = self.context.get("user")
+        if not user or not user.is_staff or not user.is_superuser:
+            err_msg = "You do not have permission to adjust the instructions."
+            raise serializers.ValidationError(err_msg)
+        return value
+
 
 class SyllabusChatRequestSerializer(ChatRequestSerializer):
     """

@@ -30,8 +30,6 @@ from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TEMPERATURE = 0.1
-
 
 class BaseChatbot(ABC):
     """
