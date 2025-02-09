@@ -8,3 +8,4 @@ DJANGO_PERMISSION_ERROR_TYPES = (
     status.HTTP_401_UNAUTHORIZED,
     status.HTTP_403_FORBIDDEN,
 )
+VALID_HTTP_METHODS = ["get", "post", "patch", "delete"]

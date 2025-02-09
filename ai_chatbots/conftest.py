@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from asgiref.sync import sync_to_async
 
 from ai_chatbots.factories import (
     HumanMessageFactory,
@@ -11,6 +12,19 @@ from ai_chatbots.factories import (
     SystemMessageFactory,
     ToolMessageFactory,
 )
+from main.factories import UserFactory
+
+
+@pytest.fixture
+async def async_user():
+    """Return a user for the agent."""
+    return await sync_to_async(UserFactory.create)()
+
+
+@pytest.fixture
+def sync_user():
+    """Return a user for the agent."""
+    return UserFactory.create()
 
 
 @pytest.fixture(autouse=True)

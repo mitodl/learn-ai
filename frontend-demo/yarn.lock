@@ -4524,7 +4524,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-mdx@npm:^3.0.0":
+"eslint-plugin-mdx@npm:^3.1.5":
   version: 3.1.5
   resolution: "eslint-plugin-mdx@npm:3.1.5"
   dependencies:
@@ -4588,7 +4588,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-styled-components-a11y@npm:^2.1.35":
+"eslint-plugin-styled-components-a11y@npm:^2.2.0":
   version: 2.2.0
   resolution: "eslint-plugin-styled-components-a11y@npm:2.2.0"
   dependencies:
@@ -9994,10 +9994,10 @@ __metadata:
     eslint-import-resolver-typescript: "npm:^3.6.1"
     eslint-plugin-import: "npm:^2.29.1"
     eslint-plugin-jest: "npm:^28.6.0"
-    eslint-plugin-mdx: "npm:^3.0.0"
+    eslint-plugin-mdx: "npm:^3.1.5"
     eslint-plugin-react: "npm:^7.34.3"
     eslint-plugin-react-hooks: "npm:^4.6.2"
-    eslint-plugin-styled-components-a11y: "npm:^2.1.35"
+    eslint-plugin-styled-components-a11y: "npm:^2.2.0"
     eslint-plugin-testing-library: "npm:^6.2.0"
     jest: "npm:^29.7.0"
     jest-environment-jsdom: "npm:^29.5.0"

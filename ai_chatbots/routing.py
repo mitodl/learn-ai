@@ -1,3 +1,5 @@
+"""Routing for the ai_chatbots app."""
+
 from django.urls import re_path
 
 from ai_chatbots import consumers

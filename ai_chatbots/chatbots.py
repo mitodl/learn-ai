@@ -16,6 +16,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
@@ -24,12 +25,12 @@ from openai import BadRequestError
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
-from ai_chatbots.api import ChatMemory, get_search_tool_metadata
+from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
 
-CHECKPOINTER = ChatMemory().checkpointer
+DEFAULT_TEMPERATURE = 0.1
 
 
 class BaseChatbot(ABC):
@@ -46,6 +47,7 @@ class BaseChatbot(ABC):
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
+        checkpointer: BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning Chatbot",
         model: Optional[str] = None,
@@ -59,8 +61,9 @@ class BaseChatbot(ABC):
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = instructions or self.INSTRUCTIONS
         self.user_id = user_id
-        self.config = {"configurable": {"thread_id": thread_id or uuid4().hex}}
-        self.memory = CHECKPOINTER  # retain chat history
+        self.thread_id = thread_id or uuid4().hex
+        self.config = {"configurable": {"thread_id": self.thread_id}}
+        self.checkpointer = checkpointer
         if settings.AI_PROXY_CLASS:
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
@@ -109,7 +112,7 @@ class BaseChatbot(ABC):
             return create_react_agent(
                 self.llm,
                 tools=self.tools,
-                checkpointer=self.memory,
+                checkpointer=self.checkpointer,
                 state_modifier=self.instructions,
             )
 
@@ -145,7 +148,7 @@ class BaseChatbot(ABC):
         agent_graph.set_entry_point(agent_node)
 
         # compile and return the agent graph
-        return agent_graph.compile(checkpointer=self.memory)
+        return agent_graph.compile(checkpointer=self.checkpointer)
 
     async def get_latest_history(self) -> dict:
         """Get the most recent state history"""
@@ -295,6 +298,7 @@ ANSWER QUESTIONS.
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
+        checkpointer: Optional[BaseCheckpointSaver] = None,
         *,
         name: str = "MIT Open Learning Chatbot",
         model: Optional[str] = None,
@@ -306,6 +310,7 @@ ANSWER QUESTIONS.
         super().__init__(
             user_id,
             name=name,
+            checkpointer=checkpointer,
             model=model or settings.AI_DEFAULT_RECOMMENDATION_MODEL,
             temperature=temperature,
             instructions=instructions,
@@ -358,6 +363,7 @@ information.
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
+        checkpointer: BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning Syllabus Chatbot",
         model: Optional[str] = None,
@@ -368,6 +374,7 @@ information.
         super().__init__(
             user_id,
             name=name,
+            checkpointer=checkpointer,
             model=model or settings.AI_DEFAULT_SYLLABUS_MODEL,
             temperature=temperature,
             instructions=instructions,
@@ -388,7 +395,7 @@ information.
         return create_react_agent(
             self.llm,
             tools=self.tools,
-            checkpointer=self.memory,
+            checkpointer=self.checkpointer,
             state_schema=SyllabusAgentState,
             state_modifier=self.instructions,
         )

@@ -1,7 +1,11 @@
 """Test factory classes for ai_chatbots tests"""
 
+from random import randint
+from uuid import uuid4
+
 import factory
-from factory.fuzzy import FuzzyChoice
+from factory.django import DjangoModelFactory
+from factory.fuzzy import FuzzyChoice, FuzzyText
 from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
@@ -9,8 +13,127 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.messages.ai import AIMessageChunk
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-from ai_chatbots.chatbots import SyllabusAgentState
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusAgentState
+from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChatSession
+from main.factories import UserFactory
+
+
+def generate_user_metadata() -> dict:
+    """Generate metadata for a user message."""
+    return {
+        "step": randint(-1, 100),  # noqa: S311
+        "writes": {
+            "__start__": {
+                "messages": [
+                    {
+                        "kwargs": {
+                            "type": "human",
+                            "content": FuzzyText().fuzz(),
+                        }
+                    }
+                ]
+            }
+        },
+    }
+
+
+def generate_agent_metadata() -> dict:
+    """Generate metadata for an agent message."""
+    return {
+        "step": randint(-1, 100),  # noqa: S311
+        "writes": {
+            "agent": {
+                "messages": [
+                    {
+                        "kwargs": {
+                            "type": "ai",
+                            "content": FuzzyText().fuzz(),
+                        }
+                    }
+                ]
+            }
+        },
+    }
+
+
+def generate_tool_metadata() -> dict:
+    """Generate metadata for a tool message."""
+    return {
+        "step": randint(-1, 100),  # noqa: S311
+        "writes": {
+            "tools": {
+                "messages": [
+                    {
+                        "kwargs": {
+                            "name": "search_courses",
+                            "type": "tool",
+                            "content": FuzzyText().fuzz(),
+                        }
+                    }
+                ]
+            }
+        },
+    }
+
+
+def generate_sample_checkpoint_data() -> dict:
+    """Generate sample checkpoint data."""
+    return {
+        "v": 1,
+        "ts": "2025-02-09T15:09:06.378971+00:00",
+        "id": uuid4(),
+        "channel_values": {
+            "messages": [
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "SystemMessage"],
+                    "kwargs": {
+                        "content": "Answer questions",
+                        "type": "system",
+                        "id": "0788c616-da2c-4d08-8f92-52aefb94d474",
+                    },
+                },
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "HumanMessage"],
+                    "kwargs": {
+                        "content": "Tell me about ocean currents",
+                        "type": "human",
+                        "id": "d6231cfe-2e7c-4f93-8797-559f9addfcdd",
+                    },
+                },
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "AIMessage"],
+                    "kwargs": {
+                        "content": "Ocean currents are.....",
+                        "type": "ai",
+                        "id": "run-a9af5489-2a49-4bc9-b5d9-22c43bd5f23f",
+                        "tool_calls": [],
+                        "invalid_tool_calls": [],
+                    },
+                },
+            ],
+            "agent": "agent",
+        },
+        "channel_versions": {
+            "__start__": 2,
+            "messages": 3,
+            "start:agent": 3,
+            "agent": 3,
+        },
+        "versions_seen": {
+            "__input__": {},
+            "__start__": {"__start__": 1},
+            "agent": {"start:agent": 2},
+        },
+        "pending_sends": [],
+    }
 
 
 class BaseMessageFactory(factory.Factory):
@@ -67,3 +190,60 @@ class SyllabusAgentStateFactory(factory.Factory):
 
     class Meta:
         model = SyllabusAgentState
+
+
+class UserChatSessionFactory(DjangoModelFactory):
+    """Factory for generating UserChatSession instances."""
+
+    user = factory.SubFactory(UserFactory)
+    thread_id = factory.Faker("uuid4")
+    title = factory.Faker("sentence")
+    agent = FuzzyChoice(
+        [ResourceRecommendationBot.__name__, SyllabusAgentState.__name__]
+    )
+
+    class Meta:
+        model = UserChatSession
+
+
+class CheckpointFactory(DjangoModelFactory):
+    """Factory for Langgraph checkpoints"""
+
+    session = factory.SubFactory(UserChatSessionFactory)
+    thread_id = uuid4().hex
+    checkpoint_ns = FuzzyText()
+    checkpoint_id = FuzzyText()
+    parent_checkpoint_id = FuzzyText()
+    checkpoint = JsonPlusSerializer().dumps_typed(generate_sample_checkpoint_data())[1]
+    metadata = FuzzyChoice(
+        [generate_user_metadata(), generate_agent_metadata(), generate_tool_metadata()]
+    )
+    type = "msgpack"
+
+    class Meta:
+        model = DjangoCheckpoint
+
+    class Params:
+        is_human = factory.Trait(metadata=generate_user_metadata())
+        is_agent = factory.Trait(metadata=generate_agent_metadata())
+        is_tool = factory.Trait(metadata=generate_tool_metadata())
+
+
+class CheckpointWriteFactory(DjangoModelFactory):
+    """Factory for Langgraph checkpoint writes"""
+
+    session = factory.SubFactory(UserChatSessionFactory)
+    thread_id = uuid4().hex
+    checkpoint_ns = FuzzyText()
+    checkpoint_id = FuzzyText()
+    task_id = FuzzyText()
+    idx = randint(0, 100)  # noqa: S311
+    channel = FuzzyText()
+    type = "msgpack"
+    blob = JsonPlusSerializer().dumps_typed(
+        ("msgpack", generate_sample_checkpoint_data())
+    )[1]
+    task_path = FuzzyText()
+
+    class Meta:
+        model = DjangoCheckpointWrite

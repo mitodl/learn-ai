@@ -70,3 +70,121 @@ def postprocess_x_enum_descriptions(result, generator, request, public):  # noqa
             ]
 
     return result
+
+
+def add_channels_routes(result, generator, request, public):  # noqa: ARG001
+    """
+    Append ai_chatbots AsyncHttpConsumer endpoints to the OpenAPI schema.
+    """
+    paths = result["paths"]
+    paths["/http/recommendation_agent/"] = {
+        "post": {
+            "operationId": "RecommendationAgentV0",
+            "description": "Recommendation agent endpoint via AsyncHttpConsumer",
+            "tags": ["Channels"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "The user's message to the AI",
+                                },
+                                "model": {
+                                    "type": "string",
+                                    "description": "The LLM model to use",
+                                },
+                                "temperature": {
+                                    "type": "number",
+                                    "format": "float",
+                                    "description": "The LLM temperature to use",
+                                },
+                                "instructions": {
+                                    "type": "string",
+                                    "description": "System prompt (admins only)",
+                                },
+                                "clear_history": {
+                                    "type": "boolean",
+                                    "description": "Whether to clear chat history",
+                                },
+                                "thread_id": {
+                                    "type": "string",
+                                    "description": "The thread id to use",
+                                },
+                            },
+                            "required": ["message"],
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": {
+                    "description": "Recommendation Agent stream",
+                    "content": {"text/event-stream": {"schema": {"type": "string"}}},
+                }
+            },
+        }
+    }
+    paths["/http/syllabus_agent/"] = {
+        "post": {
+            "operationId": "SyllabusAgentV0",
+            "description": "Syllabus agent endpoint via AsyncHttpConsumer",
+            "tags": ["Channels"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "The user's message to the AI",
+                                },
+                                "course_id": {
+                                    "type": "string",
+                                    "description": "The course id",
+                                },
+                                "collection_name": {
+                                    "type": "string",
+                                    "description": "Vector embedding collection name",
+                                },
+                                "model": {
+                                    "type": "string",
+                                    "description": "The LLM model to use",
+                                },
+                                "temperature": {
+                                    "type": "number",
+                                    "format": "float",
+                                    "description": "The LLM temperature to use",
+                                },
+                                "instructions": {
+                                    "type": "string",
+                                    "description": "System prompt (admins only)",
+                                },
+                                "clear_history": {
+                                    "type": "boolean",
+                                    "description": "Whether to clear chat history",
+                                },
+                                "thread_id": {
+                                    "type": "string",
+                                    "description": "The thread id to use",
+                                },
+                            },
+                            "required": ["message", "course_id"],
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": {
+                    "description": "Recommendation Agent stream",
+                    "content": {"text/event-stream": {"schema": {"type": "string"}}},
+                }
+            },
+        }
+    }
+    return result

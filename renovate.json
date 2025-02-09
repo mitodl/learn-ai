@@ -3,7 +3,7 @@
   "extends": ["local>mitodl/.github:renovate-config"],
   "packageRules": [
     {
-      "matchFileNames": ["frontends/learn_ai/package.json"],
+      "matchFileNames": ["frontend-demo/learn_ai/package.json"],
       "matchUpdateTypes": ["major"],
       "enabled": false
     },

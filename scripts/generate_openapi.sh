@@ -23,5 +23,5 @@ docker run --rm -v "${PWD}:/local" -w /local openapitools/openapi-generator-cli:
 
 # We expect pre-commit to exit with a non-zero status since it is reformatting
 # the generated code.
-git ls-files frontends/api/src/generated | xargs pre-commit run --files ||
+git ls-files frontend-demo/api/src/generated | xargs pre-commit run --files ||
 	echo "OpenAPI generation complete."

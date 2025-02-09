@@ -2,6 +2,7 @@
 
 import json
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from django.conf import settings
@@ -14,6 +15,7 @@ from ai_chatbots.chatbots import (
     SyllabusAgentState,
     SyllabusBot,
 )
+from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.factories import (
     AIMessageChunkFactory,
@@ -25,6 +27,8 @@ from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
 
+pytestmark = pytest.mark.django_db
+
 
 @pytest.fixture(autouse=True)
 def mock_openai_astream(mocker):
@@ -32,6 +36,14 @@ def mock_openai_astream(mocker):
     return mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.astream",
         return_value="Here are some results",
+    )
+
+
+@pytest.fixture
+async def mock_checkpointer(mocker):
+    """Mock the checkpointer"""
+    return await AsyncDjangoSaver.create_with_session(
+        uuid4(), "test message", "test_bot"
     )
 
 
@@ -66,7 +78,7 @@ def mock_latest_state_history(mocker):
         (None, None, None, False),
     ],
 )
-def test_recommendation_bot_initialization_defaults(
+async def test_recommendation_bot_initialization_defaults(
     mocker, model, temperature, instructions, has_tools
 ):
     """Test the ResourceRecommendationBot class instantiation."""
@@ -101,8 +113,7 @@ def test_recommendation_bot_initialization_defaults(
     )
 
 
-@pytest.mark.django_db
-def test_recommendation_bot_tool(settings, mocker, search_results):
+async def test_recommendation_bot_tool(settings, mocker, search_results):
     """The ResourceRecommendationBot tool should be created and function correctly."""
     settings.AI_MIT_SEARCH_LIMIT = 5
     retained_attributes = [
@@ -127,7 +138,7 @@ def test_recommendation_bot_tool(settings, mocker, search_results):
         "ai_chatbots.tools.requests.get",
         return_value=mocker.Mock(json=mocker.Mock(return_value=search_results)),
     )
-    chatbot = ResourceRecommendationBot("anonymous", name="test agent")
+    chatbot = ResourceRecommendationBot("anonymous")
     search_parameters = {
         "q": "physics",
         "resource_type": ["course", "program"],
@@ -147,9 +158,10 @@ def test_recommendation_bot_tool(settings, mocker, search_results):
     assert_json_equal(json.loads(results), expected_results)
 
 
-@pytest.mark.django_db
 @pytest.mark.parametrize("debug", [True, False])
-async def test_get_completion(settings, mocker, debug, search_results):
+async def test_get_completion(
+    settings, mocker, mock_checkpointer, debug, search_results
+):
     """Test that the ResourceRecommendationBot get_completion method returns expected values."""
     settings.AI_DEBUG = debug
     mocker.patch(
@@ -171,7 +183,7 @@ async def test_get_completion(settings, mocker, debug, search_results):
     expected_return_value = [b"Here ", b"are ", b"some ", b"results"]
     if debug:
         expected_return_value.append(comment_metadata)
-    chatbot = ResourceRecommendationBot("anonymous", name="test agent")
+    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
     mock_stream = mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.astream",
         return_value=mocker.Mock(
@@ -202,9 +214,9 @@ async def test_get_completion(settings, mocker, debug, search_results):
     assert "".join([value.decode() for value in expected_return_value]) in results
 
 
-def test_recommendation_bot_create_agent_graph_(mocker):
+async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
-    chatbot = ResourceRecommendationBot("anonymous", name="test agent", thread_id="foo")
+    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer, thread_id="foo")
     agent = chatbot.create_agent_graph()
     for node in ("agent", "tools"):
         assert node in agent.nodes
@@ -237,24 +249,26 @@ def test_recommendation_bot_create_agent_graph_(mocker):
         assert test_condition
 
 
-async def test_syllabus_bot_create_agent_graph_(mocker):
+async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = SyllabusBot("anonymous", name="test agent", thread_id="foo")
+    chatbot = SyllabusBot("anonymous", mock_checkpointer, thread_id="foo")
     mock_create_agent.assert_called_once_with(
         chatbot.llm,
         tools=chatbot.tools,
-        checkpointer=chatbot.memory,
+        checkpointer=chatbot.checkpointer,
         state_schema=SyllabusAgentState,
         state_modifier=chatbot.instructions,
     )
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
-async def test_syllabus_bot_get_completion_state(mock_openai_astream, default_model):
+async def test_syllabus_bot_get_completion_state(
+    mock_checkpointer, mock_openai_astream, default_model
+):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
-    chatbot = SyllabusBot("anonymous", name="test agent", thread_id="foo")
+    chatbot = SyllabusBot("anonymous", mock_checkpointer, thread_id="foo")
     extra_state = {
         "course_id": ["mitx1.23"],
         "collection_name": ["vector512"],
@@ -269,9 +283,8 @@ async def test_syllabus_bot_get_completion_state(mock_openai_astream, default_mo
     assert chatbot.llm.model == default_model
 
 
-@pytest.mark.django_db
-def test_syllabus_bot_tool(
-    settings, mocker, syllabus_agent_state, content_chunk_results
+async def test_syllabus_bot_tool(
+    settings, mocker, mock_checkpointer, syllabus_agent_state, content_chunk_results
 ):
     """The SyllabusBot tool should call the correct tool"""
     settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
@@ -292,7 +305,7 @@ def test_syllabus_bot_tool(
         "ai_chatbots.tools.requests.get",
         return_value=mocker.Mock(json=mocker.Mock(return_value=content_chunk_results)),
     )
-    chatbot = SyllabusBot("anonymous", name="test agent")
+    chatbot = SyllabusBot("anonymous", mock_checkpointer)
 
     search_parameters = {
         "q": "main topics",
@@ -311,9 +324,9 @@ def test_syllabus_bot_tool(
     assert_json_equal(json.loads(results), expected_results)
 
 
-async def test_get_tool_metadata(mocker):
+async def test_get_tool_metadata(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected metadata"""
-    chatbot = ResourceRecommendationBot("anonymous", name="test agent")
+    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
     mock_tool_content = {
         "metadata": {
             "parameters": {
@@ -366,9 +379,9 @@ async def test_get_tool_metadata(mocker):
     )
 
 
-async def test_get_tool_metadata_none(mocker):
+async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns an empty dict JSON string"""
-    chatbot = SyllabusBot("anonymous", name="test agent")
+    chatbot = SyllabusBot("anonymous", mock_checkpointer)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
         return_value=MockAsyncIterator(
@@ -387,9 +400,9 @@ async def test_get_tool_metadata_none(mocker):
     assert metadata == "{}"
 
 
-async def test_get_tool_metadata_error(mocker):
+async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected error response"""
-    chatbot = SyllabusBot("anonymous", name="test agent")
+    chatbot = SyllabusBot("anonymous", mock_checkpointer)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
         return_value=MockAsyncIterator(
@@ -416,7 +429,7 @@ async def test_get_tool_metadata_error(mocker):
 
 
 @pytest.mark.parametrize("use_proxy", [True, False])
-def test_proxy_settings(settings, mocker, use_proxy):
+async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     """Test that the proxy settings are set correctly"""
     mock_create_proxy_user = mocker.patch(
         "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
@@ -427,7 +440,7 @@ def test_proxy_settings(settings, mocker, use_proxy):
     settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
     model_name = "openai/o9-turbo"
     settings.AI_DEFAULT_RECOMMENDATION_MODEL = model_name
-    chatbot = ResourceRecommendationBot("user1")
+    chatbot = ResourceRecommendationBot("user1", mock_checkpointer)
     if use_proxy:
         mock_create_proxy_user.assert_called_once_with("user1")
         assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX

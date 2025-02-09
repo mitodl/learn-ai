@@ -3,7 +3,7 @@ Django settings specific to DRF Spectacular
 """
 
 open_spectacular_settings = {
-    "TITLE": "MIT Learn API",
+    "TITLE": "Learn AI API",
     "DESCRIPTION": "MIT public API",
     "VERSION": "0.0.1",
     "SERVE_INCLUDE_SCHEMA": False,
@@ -13,6 +13,7 @@ open_spectacular_settings = {
     "AUTHENTICATION_WHITELIST": [],
     "SCHEMA_PATH_PREFIX": "/api/v[0-9]",
     "POSTPROCESSING_HOOKS": [
+        "openapi.hooks.add_channels_routes",
         "drf_spectacular.hooks.postprocess_schema_enums",
         "openapi.hooks.postprocess_x_enum_descriptions",
     ],
