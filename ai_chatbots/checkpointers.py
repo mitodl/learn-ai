@@ -78,7 +78,7 @@ def _parse_checkpoint_data(
             "checkpoint_id": checkpoint_id,
         }
     }
-    checkpoint = serde.loads_typed((data.type, data.checkpoint))
+    checkpoint = serde.loads(json.dumps(data.checkpoint))
     metadata = data.metadata
     parent_checkpoint_id = data.parent_checkpoint_id
     parent_config = (
@@ -170,11 +170,12 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         checkpoint_id = checkpoint["id"]
         parent_checkpoint_id = config["configurable"].get("checkpoint_id")
 
-        type_, checkpoint_data = self.serde.dumps_typed(checkpoint)
+        type_, _ = self.serde.dumps_typed(checkpoint)
+        serialized_checkpoint = json.loads(self.serde.dumps(checkpoint))
         serialized_metadata = json.loads(self.serde.dumps(metadata))
 
         data = {
-            "checkpoint": checkpoint_data,
+            "checkpoint": serialized_checkpoint,
             "type": type_,
             "metadata": serialized_metadata,
             "parent_checkpoint_id": parent_checkpoint_id

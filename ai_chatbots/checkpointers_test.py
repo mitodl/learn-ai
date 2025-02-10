@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.base import CheckpointTuple
 
 from ai_chatbots.checkpointers import AsyncDjangoSaver
@@ -126,7 +127,8 @@ async def test_aget_tuple():
             "checkpoint_ns": sample_checkpoint.checkpoint_ns,
         }
     }
-    assert (await AsyncDjangoSaver().aget_tuple(config)) == CheckpointTuple(
+    cp_tuple = await AsyncDjangoSaver().aget_tuple(config)
+    assert cp_tuple == CheckpointTuple(
         config={
             "configurable": {
                 "thread_id": ANY,
@@ -136,57 +138,24 @@ async def test_aget_tuple():
         },
         checkpoint={
             "v": 1,
-            "ts": "2025-02-09T15:09:06.378971+00:00",
             "id": ANY,
-            "channel_values": {
-                "messages": [
-                    {
-                        "lc": 1,
-                        "type": "constructor",
-                        "id": ["langchain", "schema", "messages", "SystemMessage"],
-                        "kwargs": {
-                            "content": "Answer questions",
-                            "type": "system",
-                            "id": "0788c616-da2c-4d08-8f92-52aefb94d474",
-                        },
-                    },
-                    {
-                        "lc": 1,
-                        "type": "constructor",
-                        "id": ["langchain", "schema", "messages", "HumanMessage"],
-                        "kwargs": {
-                            "content": "Tell me about ocean currents",
-                            "type": "human",
-                            "id": "d6231cfe-2e7c-4f93-8797-559f9addfcdd",
-                        },
-                    },
-                    {
-                        "lc": 1,
-                        "type": "constructor",
-                        "id": ["langchain", "schema", "messages", "AIMessage"],
-                        "kwargs": {
-                            "content": "Ocean currents are.....",
-                            "type": "ai",
-                            "id": "run-a9af5489-2a49-4bc9-b5d9-22c43bd5f23f",
-                            "tool_calls": [],
-                            "invalid_tool_calls": [],
-                        },
-                    },
-                ],
-                "agent": "agent",
-            },
-            "channel_versions": {
-                "__start__": 2,
-                "messages": 3,
-                "start:agent": 3,
-                "agent": 3,
-            },
+            "ts": ANY,
+            "pending_sends": [],
             "versions_seen": {
+                "agent": {"start:agent": 2},
                 "__input__": {},
                 "__start__": {"__start__": 1},
-                "agent": {"start:agent": 2},
             },
-            "pending_sends": [],
+            "channel_values": {
+                "agent": "agent",
+                "messages": [ANY, ANY, ANY],
+            },
+            "channel_versions": {
+                "agent": 3,
+                "messages": 3,
+                "__start__": 2,
+                "start:agent": 3,
+            },
         },
         metadata=sample_checkpoint.metadata,
         parent_config={
@@ -198,6 +167,14 @@ async def test_aget_tuple():
         },
         pending_writes=[],
     )
+
+    tuple_messages = cp_tuple.checkpoint["channel_values"]["messages"]
+    assert tuple_messages[0].content == "Answer questions"
+    assert isinstance(tuple_messages[0], SystemMessage)
+    assert tuple_messages[1].content == "Tell me about ocean currents"
+    assert isinstance(tuple_messages[1], HumanMessage)
+    assert tuple_messages[2].content == "Ocean currents are....."
+    assert isinstance(tuple_messages[2], AIMessage)
 
 
 async def test_alist():

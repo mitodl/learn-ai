@@ -97,7 +97,7 @@ class Migration(migrations.Migration):
                 ("checkpoint_id", models.TextField()),
                 ("parent_checkpoint_id", models.TextField(blank=True, null=True)),
                 ("type", models.TextField(blank=True, null=True)),
-                ("checkpoint", models.BinaryField()),
+                ("checkpoint", models.JSONField()),
                 ("metadata", models.JSONField()),
                 (
                     "session",

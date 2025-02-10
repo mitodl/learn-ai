@@ -83,7 +83,7 @@ def generate_sample_checkpoint_data() -> dict:
     return {
         "v": 1,
         "ts": "2025-02-09T15:09:06.378971+00:00",
-        "id": uuid4(),
+        "id": uuid4().hex,
         "channel_values": {
             "messages": [
                 {
@@ -214,7 +214,7 @@ class CheckpointFactory(DjangoModelFactory):
     checkpoint_ns = FuzzyText()
     checkpoint_id = FuzzyText()
     parent_checkpoint_id = FuzzyText()
-    checkpoint = JsonPlusSerializer().dumps_typed(generate_sample_checkpoint_data())[1]
+    checkpoint = generate_sample_checkpoint_data()
     metadata = FuzzyChoice(
         [generate_user_metadata(), generate_agent_metadata(), generate_tool_metadata()]
     )

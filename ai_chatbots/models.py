@@ -56,7 +56,7 @@ class DjangoCheckpoint(models.Model):
     checkpoint_id = models.TextField()
     parent_checkpoint_id = models.TextField(blank=True, null=True)  # noqa: DJ001
     type = models.TextField(blank=True, null=True)  # noqa: DJ001
-    checkpoint = models.BinaryField()
+    checkpoint = models.JSONField()
     metadata = models.JSONField()
 
     class Meta:
