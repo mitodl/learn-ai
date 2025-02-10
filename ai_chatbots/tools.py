@@ -26,32 +26,92 @@ class SearchToolSchema(pydantic.BaseModel):
         free: Filter for free resources only
         certification: Filter for resources offering certificates
         offered_by: Filter by institution offering the resource
+
+    Here are some recommended tool parameters to apply for sample user prompts:
+
+    User: "I am interested in learning advanced AI techniques for free"
+    Search parameters: q="AI techniques", free=true
+
+    User: "I am curious about AI applications for business"
+    Search parameters: q="AI business"
+
+    User: "I want free basic courses about biology from OpenCourseware"
+    Search parameters: q="biology", resource_type=["course"], offered_by: ["ocw"]
+
+    User: "I want to learn some advanced mathematics from MITx or OpenCourseware"
+    Search parameters: q="mathematics", , offered_by: ["ocw", "mitx]
+
     """
 
     q: str = Field(
         description=(
-            "Query to find resources. Never use level terms like 'advanced' here"
+            """The area of interest requested by the user.  NEVER INCLUDE WORDS SUCH AS
+            "advanced" or "introductory" IN THIS PARAMETER! If the user asks for
+            introductory, intermediate, or advanced courses, do not include that in the
+            search query, but examine the search results to determine which most closely
+            match the user's desired education level and/or their educational background
+            (if either is provided) and choose those results to return to the user.  If
+            the user asks what other courses are taught by a particular instructor,
+            search the catalog for courses taught by that  instructor using the
+            instructor's name as the value for this parameter.
+            """
         )
     )
     resource_type: Optional[list[enum_zip("resource_type", LearningResourceType)]] = (
         Field(
             default=None,
-            description="Type of resource to search for: course, program, video, etc",
+            description=(
+                """
+                Type of resource to search for: course, program, video, etc.
+                If the user mentions courses, programs, videos, or podcasts in
+                particular, filter the search by this parameter.  DO NOT USE THE
+                resource_typeFILTER OTHERWISE. You MUST combine multiple resource types
+                in one request like this: "resource_type=course&resource_type=program".
+                Do not attempt more than one query peruser message. If the user asks for
+                podcasts, filter by both "podcast" and "podcast_episode".
+                """
+            ),
         )
     )
     free: Optional[bool] = Field(
         default=None,
-        description="Whether the resource is free to access, true|false",
+        description=(
+            """
+            Whether the resource is free to access, true|false.
+            true if the user is interested in free resources, false if the user is only
+            interested in paid resources. Do not used this filter if the user does not
+            indicate a preference.
+            """
+        ),
     )
     certification: Optional[bool] = Field(
         default=None,
         description=(
-            "Whether the resource offers a certificate upon completion, true|false"
+            """
+            Whether the resource offers a certificate upon completion, true|false.
+            true if the user is interested in resources that offer certificates,
+            false if the user does not want resources with a certificate offered.
+            Do not use this filter if the user does not indicate a preference.
+            """
         ),
     )
     offered_by: Optional[list[enum_zip("resource_type", OfferedBy)]] = Field(
         default=None,
-        description="Institution that offers the resource: ocw, mitxonline, etc",
+        description="""
+            If a user asks for resources "offered by" or "from" an institution,
+            you should include this parameter based on the following
+            dictionary:
+
+                mitx = "MITx"
+                ocw = "MIT OpenCourseWare"
+                bootcamps = "Bootcamps"
+                xpro = "MIT xPRO"
+                mitpe = "MIT Professional Education"
+                see = "MIT Sloan Executive Education"
+
+            DON'T USE THE offered_by FILTER OTHERWISE.
+            Combine 2+ offered_by values in 1 query.
+            """,
     )
 
 
