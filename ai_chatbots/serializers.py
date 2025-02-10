@@ -24,7 +24,7 @@ class ChatRequestSerializer(serializers.Serializer):
     def validate_instructions(self, value):
         """Ensure that the user has permission"""
         user = self.context.get("user")
-        if not user or not user.is_staff or not user.is_superuser:
+        if not user or (not user.is_staff and not user.is_superuser):
             err_msg = "You do not have permission to adjust the instructions."
             raise serializers.ValidationError(err_msg)
         return value

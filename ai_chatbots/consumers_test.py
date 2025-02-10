@@ -59,6 +59,8 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
 ):
     """Test the receive function of the recommendation agent."""
     response = SystemMessageFactory.create()
+    user = recommendation_consumer.scope["user"]
+    user.is_superuser = True
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
         return_value=mocker.Mock(
@@ -179,7 +181,6 @@ async def test_syllabus_create_chatbot(
             "course_id": "MITx+6.00.1x",
             "collection_name": "vector512",
             "temperature": 0.7,
-            "instructions": "Answer this question as best you can",
             "model": "gpt-3.5-turbo",
         }
     )
@@ -190,7 +191,6 @@ async def test_syllabus_create_chatbot(
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.user_id == async_user.global_id
     assert chatbot.temperature == 0.7
-    assert chatbot.instructions == "Answer this question as best you can"
     assert chatbot.model == "gpt-3.5-turbo"
 
 

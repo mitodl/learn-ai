@@ -39,7 +39,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         Validate the message and return the serializer.
         """
         text_data_json = json.loads(message_json)
-        serializer = serializer_class(data=text_data_json)
+        serializer = serializer_class(
+            data=text_data_json, context={"user": self.scope.get("user", None)}
+        )
         serializer.is_valid(raise_exception=True)
         return serializer
 
