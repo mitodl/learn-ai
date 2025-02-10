@@ -435,7 +435,8 @@ class TutorBot(BaseChatbot):
         self.problem, self.solution = get_pb_sol(problem_code)
         self.human_messages=[]
         self.tutor_messages= ["Hello! Can you walk me through your solution?"]
-        self.agent = GraphTutor(self.llm, pb=self.problem, sol=self.solution, model=self.model, tools=[r_code_interpreter,text_student])
+        self.tutor = GraphTutor(self.llm, pb=self.problem, sol=self.solution, model=self.model, tools=[r_code_interpreter,text_student], memory=self.memory)
+        self.agent = self.tutor.app
     
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
@@ -459,13 +460,21 @@ class TutorBot(BaseChatbot):
             error = "Create agent before running"
             raise ValueError(error)
         try:
-            output  = self.agent.get_response(self.human_messages + [message], self.tutor_messages)
-
+            
             self.human_messages.append(message)
-            self.tutor_messages.append(output[0])
-            print(self.human_messages)
-            print(self.tutor_messages)
-            yield output[0]
+            latest_state = await self.get_latest_history()
+            print(latest_state.messages)
+            prompt = self.tutor.intermediary.get_prompt(self.problem ,self.solution ,self.human_messages,self.tutor_messages)
+            state = {
+                "messages": prompt[0],
+            }
+            await self.agent.ainvoke(
+                state,
+                self.config
+            )            
+
+            yield self.tutor.final_response
+        
         except BadRequestError as error:
             # Format and yield an error message inside a hidden comment
             if hasattr(error, "response"):
