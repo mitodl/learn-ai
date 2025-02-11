@@ -7,7 +7,7 @@ from uuid import uuid4
 import ulid
 from django.conf import settings
 from django.contrib.auth.models import Group
-from factory import LazyFunction, SubFactory
+from factory import LazyFunction, Sequence, SubFactory
 from factory.django import DjangoModelFactory
 from factory.fuzzy import FuzzyText
 from social_django.models import UserSocialAuth
@@ -16,9 +16,9 @@ from social_django.models import UserSocialAuth
 class UserFactory(DjangoModelFactory):
     """Factory for Users"""
 
-    username = LazyFunction(lambda: ulid.new().str)
+    username = Sequence(lambda n: f"{ulid.new().str}{n:03d}")
     global_id = LazyFunction(lambda: str(uuid4()))
-    email = FuzzyText(suffix="@example.com")
+    email = Sequence(lambda n: f"{n:03d}_{ulid.new().str}@example.com")
     name = FuzzyText()
     is_active = True
 

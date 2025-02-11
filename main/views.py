@@ -4,6 +4,7 @@ Base utility views. Handles errors and feature list views.
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
@@ -53,3 +54,12 @@ class FeaturesViewSet(ViewSet):
 def index(request, **kwargs):  # noqa: ARG001
     """Render a default page"""
     return Response()
+
+
+class DefaultPagination(LimitOffsetPagination):
+    """
+    Pagination class for viewsets which gets default_limit and max_limit from settings
+    """
+
+    default_limit = 10
+    max_limit = 100

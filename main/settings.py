@@ -28,6 +28,7 @@ from main.envs import (
     get_string,
 )
 from main.sentry import init_sentry
+from openapi.settings_spectacular import open_spectacular_settings
 
 VERSION = "0.26.0"
 
@@ -99,9 +100,9 @@ INSTALLED_APPS = (
     "channels",
     # Put our apps after this point
     "main",
-    "ai_chatbots",
     "openapi",
     "users",
+    "ai_chatbots",
 )
 
 if not get_bool("RUN_DATA_MIGRATIONS", default=False):
@@ -559,18 +560,13 @@ KEYCLOAK_ADMIN_SECURE = get_bool("KEYCLOAK_ADMIN_SECURE", True)  # noqa: FBT003
 # Channel settings
 REDIS_DOMAIN = get_string("REDIS_DOMAIN", "redis://redis:6379/0")
 REDIS_SSL_CERT_REQS = get_string("REDIS_SSL_CERT_REQS", None)
-REDIS_HOST_PARAMS = {"ssl_cert_reqs": REDIS_SSL_CERT_REQS} if REDIS_SSL_CERT_REQS else {}
+REDIS_HOST_PARAMS = (
+    {"ssl_cert_reqs": REDIS_SSL_CERT_REQS} if REDIS_SSL_CERT_REQS else {}
+)
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts":[
-                {
-                    "address": REDIS_DOMAIN, 
-                    **REDIS_HOST_PARAMS
-                }
-            ]
-        },
+        "CONFIG": {"hosts": [{"address": REDIS_DOMAIN, **REDIS_HOST_PARAMS}]},
     },
 }
 
@@ -604,8 +600,6 @@ AI_RPM_LIMIT = get_int(name="AI_RPM_LIMIT", default=10)
 AI_BUDGET_DURATION = get_string(name="AI_BUDGET_DURATION", default="60m")
 AI_MAX_BUDGET = get_float(name="AI_MAX_BUDGET", default=0.05)
 AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10.0)
-AI_PERSISTENT_MEMORY = get_bool(name="AI_PERSISTENT_MEMORY", default=False)
-AI_PERSISTENT_POOL_SIZE = get_int(name="AI_PERSISTENT_POOL_SIZE", default=20)
 AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
     name="AI_UNSUPPORTED_TEMP_MODELS", default=["openai/o3-mini"]
 )
@@ -622,3 +616,5 @@ APISIX_USERDATA_MAP = {
         "country_code": None,
     },
 }
+
+SPECTACULAR_SETTINGS = open_spectacular_settings

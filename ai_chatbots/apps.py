@@ -1,4 +1,4 @@
-"""learning_resources app config"""
+"""ai_chatbots app config"""
 
 from django.apps import AppConfig
 

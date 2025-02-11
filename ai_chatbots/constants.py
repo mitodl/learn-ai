@@ -5,6 +5,7 @@ from named_enum import ExtendedEnum
 GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
 AI_ANONYMOUS_USER = "anonymous"
 AI_THREAD_COOKIE_KEY = "ai_thread_id"
+AI_THREADS_ANONYMOUS_COOKIE_KEY = "ai_threads_anonymous"
 
 
 class LearningResourceType(ExtendedEnum):

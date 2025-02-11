@@ -45,10 +45,12 @@ urlpatterns = (
         re_path(r"^me/", current_user, name="current-user"),
         re_path(r"^o/", include("oauth2_provider.urls", namespace="oauth2_provider")),
         re_path(r"^admin/", admin.site.urls),
+        re_path(r"", include("ai_chatbots.urls")),
         re_path(r"", include(features_router.urls)),
         re_path(r"^app", RedirectView.as_view(url=settings.APP_BASE_URL)),
         # Hijack
         re_path(r"^hijack/", include("hijack.urls", namespace="hijack")),
+        re_path(r"", include("openapi.urls")),
         re_path(r"^$", index, name="learn-ai-index"),
     ]
     + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

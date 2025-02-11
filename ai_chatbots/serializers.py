@@ -2,6 +2,8 @@
 
 from rest_framework import serializers
 
+from ai_chatbots.models import DjangoCheckpoint, UserChatSession
+
 
 class ChatRequestSerializer(serializers.Serializer):
     """Serializer for chatbot requests"""
@@ -17,6 +19,15 @@ class ChatRequestSerializer(serializers.Serializer):
     clear_history = serializers.BooleanField(
         default=False,
     )
+    thread_id = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_instructions(self, value):
+        """Ensure that the user has permission"""
+        user = self.context.get("user")
+        if not user or (not user.is_staff and not user.is_superuser):
+            err_msg = "You do not have permission to adjust the instructions."
+            raise serializers.ValidationError(err_msg)
+        return value
 
 
 class SyllabusChatRequestSerializer(ChatRequestSerializer):
@@ -28,3 +39,52 @@ class SyllabusChatRequestSerializer(ChatRequestSerializer):
     collection_name = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
+
+
+class UserChatSessionSerializer(serializers.ModelSerializer):
+    """Serializer for user chat sessions"""
+
+    class Meta:
+        model = UserChatSession
+        fields = (
+            "thread_id",
+            "title",
+            "user",
+            "created_on",
+            "updated_on",
+        )
+        read_only_fields = ("created_on", "updated_on", "thread_id", "user")
+
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for chat messages.  This serializer is used to return just the message,
+    content and role, and is intended to backfill chat history in a frontend UI.
+    """
+
+    role = serializers.CharField()
+    content = serializers.CharField()
+
+    def to_representation(self, instance):
+        """Return just the message content and role"""
+        role = "agent" if instance.metadata.get("writes", {}).get("agent") else "human"
+        return {
+            "checkpoint_id": instance.checkpoint_id,
+            "step": instance.metadata.get("step"),
+            "role": role,
+            "content": instance.metadata.get("writes", {})
+            .get("agent", {})
+            .get("messages", [{}])[0]
+            .get("kwargs", {})
+            .get("content")
+            if role == "agent"
+            else instance.metadata.get("writes", {})
+            .get("__start__", {})
+            .get("messages", [{}])[0]
+            .get("kwargs", {})
+            .get("content"),
+        }
+
+    class Meta:
+        model = DjangoCheckpoint
+        fields = ["checkpoint_id", "role", "content"]
