@@ -1,14 +1,15 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Tuple
 from uuid import uuid4
 
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
-
+from rest_framework.exceptions import ValidationError
+from rest_framework.status import HTTP_200_OK
 from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
@@ -26,6 +27,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
     ROOM_NAME = None
 
     serializer_class = ChatRequestSerializer
+    headers_sent = False
 
     @abstractmethod
     def create_chatbot(self, serializer):
@@ -40,7 +42,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         """
         text_data_json = json.loads(message_json)
         serializer = serializer_class(
-            data=text_data_json, context={"user": self.scope.get("user", None)}
+            data=text_data_json,
+            context={"user": self.scope.get("user", None)}
         )
         serializer.is_valid(raise_exception=True)
         return serializer
@@ -104,7 +107,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             ]
         return current_thread_id, cookies
 
-    async def prepare_response(self, serializer) -> ChatRequestSerializer:
+    async def prepare_response(self, serializer: ChatRequestSerializer) -> Tuple[str, list[str]]:
         """Prepare the response"""
         user = self.scope.get("user", None)
         session = self.scope.get("session", None)
@@ -131,9 +134,21 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         self.room_name = self.ROOM_NAME
         self.room_group_name = f"{self.ROOM_NAME}_{self.user_id.replace('-', '_')}"[:90]
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        return current_thread_id, cookies
 
-        await self.send_headers(
-            headers=[
+
+    def process_extra_state(self, data: dict) -> dict:  # noqa: ARG002
+        """Process extra state if any"""
+        return None
+
+    async def start_response(
+        self,
+            thread_id: Optional[str] = None,
+            status: Optional[int] = HTTP_200_OK,
+            cookies: Optional[list[str]] = None
+    ):
+        headers = (
+            [
                 (b"Cache-Control", b"no-cache"),
                 (
                     b"Content-Type",
@@ -144,46 +159,77 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
                     b"chunked",
                 ),
                 (b"Connection", b"keep-alive"),
-                *[(b"Set-Cookie", cookie_thread.encode()) for cookie_thread in cookies],
+            ]
+            if status == HTTP_200_OK
+            else [
+                (b"Cache-Control", b"no-cache"),
+                (
+                    b"Content-Type",
+                    b"application/json",
+                ),
+                (b"Connection", b"close"),
             ]
         )
-        # Headers are only sent after the first body event.
-        # Set "more_body" to tell the interface server to not
-        # finish the response yet:
-        await self.send_chunk("")
-        return serializer
 
-    def process_extra_state(self, data: dict) -> dict:  # noqa: ARG002
-        """Process extra state if any"""
-        return None
+        if thread_id and cookies:
+            headers.extend(
+                [(b"Set-Cookie", cookie_thread.encode()) for cookie_thread in cookies]
+            )
+
+        await self.send_headers(status=status, headers=headers)
+        self.headers_sent = True
+        # Headers are only sent after the first body event.
+        await self.send_chunk("")
+
+    async def send_error_response(self, status: int, error: Exception, cookies: list[str]):
+        """
+        Send the appropriate error response. Send error status code if the
+        headers have not yet been sent; otherwise it is too late.
+        """
+        log.exception("Error in consumer handle")
+        error_msg = {"error": {"message": str(error)}}
+        if not self.headers_sent:
+            await self.start_response(status=status, cookies=cookies)
+            await self.send_chunk(json.dumps(error_msg))
+        else:
+            error_msg = json.dumps(error_msg)
+            await self.send_chunk(f"<!-- {error_msg} -->")
 
     async def handle(self, message: str):
         """Handle the incoming message and send the response."""
+        cookies = None
         try:
             serializer = self.process_message(message, self.serializer_class)
-            await self.prepare_response(serializer)
+            thread_id, cookies = await self.prepare_response(serializer)
             message_text = serializer.validated_data["message"]
             checkpointer = await AsyncDjangoSaver.create_with_session(
-                thread_id=self.thread_id,
+                thread_id=thread_id,
                 message=message_text,
                 user=self.scope.get("user", None),
                 agent=self.ROOM_NAME,
             )
             self.bot = self.create_chatbot(serializer, checkpointer)
             extra_state = self.process_extra_state(serializer.validated_data)
+            # Start to send the response, including the headers
+            await self.start_response(thread_id=thread_id, status=200, cookies=cookies)
+            # Stream an LLM
             async for chunk in self.bot.get_completion(
                 message_text, extra_state=extra_state
             ):
                 await self.send_chunk(chunk)
-        except:  # noqa: E722
-            log.exception("Error in consumer handle")
+        except (ValidationError, json.JSONDecodeError) as err:
+            log.exception("Bad request")
+            await self.send_error_response(400, err, cookies)
+        except Exception as err:
+            log.exception("An error occured in consumer handle")
+            await self.send_error_response(500, err, cookies)
         finally:
             await self.send_chunk("", more_body=False)
             await self.disconnect()
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
-        if hasattr(self, "channel_layer"):
+        if hasattr(self, "channel_layer") and hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(
                 self.room_group_name, self.channel_name
             )

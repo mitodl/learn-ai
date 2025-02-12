@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser
+from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers
 from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
@@ -79,11 +80,11 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
     if model is not None:
         data["model"] = model
     await recommendation_consumer.handle(json.dumps(data))
-
     assert (
         recommendation_consumer.bot.user_id
         == recommendation_consumer.scope["user"].global_id
     )
+    mock_http_consumer_send.send_headers.assert_called_once()
     assert recommendation_consumer.bot.llm.temperature == (
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
@@ -145,6 +146,7 @@ async def test_clear_history(  # noqa: PLR0913
         ) == clear_history
     else:
         # anon thread_ids should have been cleared from cookie
+        cookie_args = str(args[0][-1]["headers"][-2][1])
         assert cookie_args == f"{bot_cookie}=; Path=/; HttpOnly"
 
 
@@ -186,7 +188,6 @@ async def test_syllabus_create_chatbot(
     )
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
-    mock_http_consumer_send.send_headers.assert_called_once()
     chatbot = syllabus_consumer.create_chatbot(serializer, mocker.Mock())
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.user_id == async_user.global_id
@@ -345,3 +346,74 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
         title=payload["message"],
         agent=SyllabusBot.__name__,
     ).aexists()
+
+
+@pytest.mark.parametrize(
+    ("error_class", "expected_status", "headers_sent"),
+    [
+        (ValidationError, 400, True),
+        (json.JSONDecodeError, 400, False),
+        (Exception, 500, True),
+        (ValueError, 500, False),
+    ],
+)
+async def test_handle_errors(
+    mocker, syllabus_consumer, error_class, expected_status, headers_sent
+):
+    """Test that the handle function sends the correct error response."""
+    mock_send = mocker.patch(
+        "ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock
+    )
+
+    # Raise an error in the right place depending on headers_sent
+    error_message = "Major malfunction"
+    error = (
+        error_class(error_message, doc="doc", pos=0)
+        if error_class == json.JSONDecodeError
+        else error_class(error_message)
+    )
+    if headers_sent:
+        mocker.patch(
+            "ai_chatbots.consumers.SyllabusBot.get_completion",
+            side_effect=error,
+        )
+    else:
+        mocker.patch(
+            "ai_chatbots.consumers.SyllabusBotHttpConsumer.create_chatbot",
+            side_effect=error,
+        )
+
+    expected_msg = json.dumps({"error": {"message": str(error)}})
+
+    await syllabus_consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
+    # If error occurs after headers are sent, the status will be 200, that ship has sailed
+    if headers_sent:
+        mock_send.assert_any_call(
+            {
+                "type": "http.response.body",
+                "body": f"<!-- {expected_msg} -->".encode(),
+                "more_body": True,
+            }
+        )
+    else:
+        mock_send.assert_any_call(
+            {
+                "type": "http.response.start",
+                "status": expected_status,
+                "headers": [
+                    (b"Cache-Control", b"no-cache"),
+                    (
+                        b"Content-Type",
+                        b"application/json",
+                    ),
+                    (b"Connection", b"close"),
+                ],
+            }
+        )
+        mock_send.assert_any_call(
+            {
+                "type": "http.response.body",
+                "body": expected_msg.encode(),
+                "more_body": True,
+            }
+        )
