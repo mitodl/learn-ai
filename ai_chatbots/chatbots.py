@@ -128,7 +128,13 @@ class BaseChatbot(ABC):
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
                 state["messages"].insert(0, SystemMessage(self.instructions))
-            return MessagesState(messages=[self.llm.invoke(state["messages"])])
+            return MessagesState(
+                messages=[
+                    self.llm.invoke(
+                        state["messages"], **self.proxy.get_additional_kwargs(None)
+                    )
+                ]
+            )
 
         agent_graph = StateGraph(MessagesState)
         # Add the agent node that first calls the LLM

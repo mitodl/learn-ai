@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 
 import requests
 from django.conf import settings
+from portkey_ai import PORTKEY_GATEWAY_URL, createHeaders
 
 from ai_chatbots.chatbots import BaseChatbot
 from ai_chatbots.constants import AI_ANONYMOUS_USER
@@ -132,3 +133,47 @@ class LiteLLMProxy(AIProxy):
                     self.create_proxy_user(user_id=user_id, endpoint="update")
                 else:
                     log.exception("Error creating/updating proxy customer account")
+
+
+class PortkeyProxy(AIProxy):
+    """Helper class for the Portkey proxy."""
+
+    REQUIRED_SETTINGS = ("AI_PORTKEY_API_KEY", "AI_PORTKEY_VIRTUAL_KEY_OPENAI")
+    PROXY_MODEL_PREFIX = ""
+
+    def get_api_kwargs(
+        self, base_url_key: str = "api_base", api_key_key: str = "api_key"
+    ) -> dict:
+        """
+        Get the required API kwargs to connect to the Lite LLM proxy.
+        When using the ChatLiteLLM class, these kwargs should be
+        "api_base" and "openai_api_key".
+
+        Args:
+            base_url_key (str): The key to pass in the proxy API URL.
+            api_key_key (str): The key to pass in the proxy authentication token.
+
+        Returns:
+            dict: The proxy API kwargs.
+        """
+
+        return {
+            f"{base_url_key}": PORTKEY_GATEWAY_URL,
+            f"{api_key_key}": "dummy_value",  # has to be sent, but not used
+        }
+
+    def get_additional_kwargs(self, service: BaseChatbot) -> dict:  # noqa: ARG002
+        """
+        Get additional  kwargs to send to the Lite LLM proxy, such
+        as user_id and job/task identification.
+        """
+        portkey_headers = createHeaders(
+            api_key=settings.AI_PORTKEY_API_KEY,
+            virtual_key=settings.AI_PORTKEY_VIRTUAL_KEY_OPENAI,
+        )
+        return {
+            "headers": portkey_headers,
+        }
+
+    def create_proxy_user(self, endpoint: str) -> None:
+        """Do not use, not necessary"""

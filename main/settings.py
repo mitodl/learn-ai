@@ -582,7 +582,7 @@ AI_MIT_SYLLABUS_URL = get_string(
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
-AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o")
+AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="gpt-4o-mini")
 AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
 )
@@ -594,6 +594,8 @@ OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
 AI_PROXY_URL = get_string(name="AI_PROXY_URL", default="")
 AI_PROXY_AUTH_TOKEN = get_string(name="AI_PROXY_AUTH_TOKEN", default="")
+AI_PORTKEY_API_KEY = get_string("AI_PORTKEY_API_KEY", default="")
+AI_PORTKEY_VIRTUAL_KEY_OPENAI = get_string("AI_PORTKEY_VIRTUAL_KEY_OPENAI", default="")
 AI_MAX_PARALLEL_REQUESTS = get_int(name="AI_MAX_PARALLEL_REQUESTS", default=10)
 AI_TPM_LIMIT = get_int(name="AI_TPM_LIMIT", default=5000)
 AI_RPM_LIMIT = get_int(name="AI_RPM_LIMIT", default=10)
