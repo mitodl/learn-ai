@@ -216,6 +216,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             async for chunk in self.bot.get_completion(
                 message_text, extra_state=extra_state
             ):
+                print(chunk)
                 await self.send_chunk(chunk)
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
@@ -315,8 +316,10 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
     """
 
     serializer_class = TutorChatRequestSerializer
+    ROOM_NAME = TutorBot.__name__
 
-    def create_chatbot(self, serializer: TutorChatRequestSerializer):
+
+    def create_chatbot(self, serializer: TutorChatRequestSerializer, checkpointer: BaseCheckpointSaver,):
         """Return a SyllabusBot instance"""
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
@@ -326,6 +329,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
 
         return TutorBot(
             self.user_id,
+            checkpointer,
             temperature=temperature,
             instructions=instructions,
             model=model,
