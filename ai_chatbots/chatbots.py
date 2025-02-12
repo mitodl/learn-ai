@@ -24,6 +24,7 @@ from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
 from typing_extensions import TypedDict
 from open_learning_ai_tutor.Tutor import GraphTutor
+from open_learning_ai_tutor.Intermediary import GraphIntermediary
 from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots import tools
@@ -416,6 +417,7 @@ class TutorBot(BaseChatbot):
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
+        checkpointer: Optional[BaseCheckpointSaver] = None,
         *,
         name: str = "MIT Open Learning Tutor Chatbot",
         model: Optional[str] = None,
@@ -427,15 +429,26 @@ class TutorBot(BaseChatbot):
         super().__init__(
             user_id,
             name=name,
-            model=model or settings.AI_MODEL,
+            checkpointer= checkpointer,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            model=model or settings.AI_DEFAULT_TUTOR_MODEL,
+
         )
         self.problem, self.solution = get_pb_sol(problem_code)
         self.human_messages=[]
         self.tutor_messages= ["Hello! Can you walk me through your solution?"]
-        self.tutor = GraphTutor(self.llm, pb=self.problem, sol=self.solution, model=self.model, tools=[r_code_interpreter,text_student], memory=self.memory)
+        self.intermediary = GraphIntermediary(settings.AI_DEFAULT_TUTOR_MODEL)
+        self.tutor = GraphTutor(
+            self.llm, 
+            pb=self.problem, 
+            sol=self.solution, 
+            model=self.model, 
+            tools=[r_code_interpreter,text_student], 
+            intermediary=self.intermediary, 
+            #memory=self.checkpointer
+        )
         self.agent = self.tutor.app
     
     async def get_tool_metadata(self) -> str:
@@ -462,18 +475,17 @@ class TutorBot(BaseChatbot):
         try:
             
             self.human_messages.append(message)
-            latest_state = await self.get_latest_history()
-            print(latest_state.messages)
-            prompt = self.tutor.intermediary.get_prompt(self.problem ,self.solution ,self.human_messages,self.tutor_messages)
-            state = {
-                "messages": prompt[0],
-            }
-            await self.agent.ainvoke(
-                state,
-                self.config
-            )            
+            print("hihi1")            
 
-            yield self.tutor.final_response
+            prompt= self.intermediary.get_prompt(self.problem,self.solution)
+            print(prompt)
+            print("hihi12")            
+
+            final_state = self.tutor.get_response2()
+
+            print("RESPONSE")            
+            print(final_state)
+            yield final_state[0]
         
         except BadRequestError as error:
             # Format and yield an error message inside a hidden comment
