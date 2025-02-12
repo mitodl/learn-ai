@@ -55,6 +55,9 @@ ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langchain-community = "^0.3.16"
 psycopg = "^3.2.4"
+portkey-ai = "^1.10.2"
+faker = "^25.2.0"
+guardrails-ai = "^0.6.2"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

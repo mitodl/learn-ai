@@ -80,6 +80,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
       - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
+      - AI_MAX_BUDGET=${AI_MAX_BUDGET}
+      - AI_MAX_BUDGET_DURATION=${AI_MAX_BUDGET_DURATION}
     depends_on:
       db:
         condition: service_healthy
