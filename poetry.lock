@@ -1500,20 +1500,19 @@ python-ipware = ">=2.0.3"
 
 [[package]]
 name = "django-oauth-toolkit"
-version = "2.4.0"
+version = "3.0.1"
 description = "OAuth2 Provider for Django"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "django_oauth_toolkit-2.4.0-py3-none-any.whl", hash = "sha256:4931d6bf64b6aee32a42f989f218769d1876f3daa53c6bf883d8ab793fb302ee"},
-    {file = "django_oauth_toolkit-2.4.0.tar.gz", hash = "sha256:8975eaf697413a8d54208ee068bc5ad6d1ed76f1df84e4882fbb25e7e6966e1b"},
+    {file = "django_oauth_toolkit-3.0.1-py3-none-any.whl", hash = "sha256:3ef00b062a284f2031b0732b32dc899e3bbf0eac221bbb1cffcb50b8932e55ed"},
+    {file = "django_oauth_toolkit-3.0.1.tar.gz", hash = "sha256:7200e4a9fb229b145a6d808cbf0423b6d69a87f68557437733eec3c0cf71db02"},
 ]
 
 [package.dependencies]
-django = ">=3.2,<4.0.0 || >4.0.0"
-jwcrypto = ">=0.8.0"
-oauthlib = ">=3.1.0"
-pytz = ">=2024.1"
+django = ">=4.2"
+jwcrypto = ">=1.5.0"
+oauthlib = ">=3.2.2"
 requests = ">=2.13.0"
 
 [[package]]
@@ -4899,17 +4898,6 @@ mysql = ["mysql-connector-python"]
 postgresql = ["psycopg2"]
 
 [[package]]
-name = "pytz"
-version = "2024.2"
-description = "World timezone definitions, modern and historical"
-optional = false
-python-versions = "*"
-files = [
-    {file = "pytz-2024.2-py2.py3-none-any.whl", hash = "sha256:31c7c1817eb7fae7ca4b8c7ee50c72f93aa2dd863de768e1ef4245d426aa0725"},
-    {file = "pytz-2024.2.tar.gz", hash = "sha256:2aa355083c50a0f93fa581709deac0c9ad65cca8a9e9beac660adcbd493c798a"},
-]
-
-[[package]]
 name = "pywin32"
 version = "308"
 description = "Python for Window Extensions"
@@ -7092,4 +7080,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.12.6"
-content-hash = "bbe8b6869f09bd30bc3859eebb5def593a30b08c5bb9d351b5faa97bdbd0acea"
+content-hash = "6a931fe8a6e17d89cecf9b15be959de2ddc59b3bb5c3a85a4035680fded998fd"
