@@ -42,7 +42,6 @@ litellm = "^1.53.5"
 markdown2 = "^2.5.2"
 named-enum = "^1.4.0"
 posthog = "^3.5.0"
-psycopg2 = "^2.9.6"
 psycopg-pool = "^3.2.4"
 pygithub = "^2.0.0"
 redis = "^5.0.0"
@@ -54,7 +53,9 @@ social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "^0.45.1"
 ulid-py = "^0.2.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
-open-learning-ai-tutor = {git = "https://github.com/MIT-OL-AI-Tutoring/Open_Learning_AI_Tutor.git", rev = "ab/fix-tool-calls"}
+langchain-community = "^0.3.16"
+psycopg = "^3.2.4"
+open-learning-ai-tutor = {git = "https://github.com/MIT-OL-AI-Tutoring/Open_Learning_AI_Tutor.git", rev = "ab/fixes-for-learn-ai-integration"}
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"
