@@ -13,7 +13,7 @@ from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -23,9 +23,12 @@ from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
 from typing_extensions import TypedDict
-from open_learning_ai_tutor.Tutor import GraphTutor
-from open_learning_ai_tutor.Intermediary import GraphIntermediary
+from open_learning_ai_tutor.Tutor import GraphTutor2
+from open_learning_ai_tutor.Intermediary import GraphIntermediary2
 from open_learning_ai_tutor.problems import get_pb_sol
+from open_learning_ai_tutor.Assessor import GraphAssessor2
+from langchain_openai import ChatOpenAI
+from open_learning_ai_tutor.StratL import message_tutor, convert_StratL_input_to_json
 
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
@@ -429,27 +432,20 @@ class TutorBot(BaseChatbot):
         super().__init__(
             user_id,
             name=name,
-            checkpointer= checkpointer,
+            checkpointer= None,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
 
         )
+       # self.llm=ChatOpenAI(model=settings.AI_DEFAULT_TUTOR_MODEL, temperature=0.0, top_p=0.1, max_tokens=300)
         self.problem, self.solution = get_pb_sol(problem_code)
-        self.human_messages=[]
-        self.tutor_messages= ["Hello! Can you walk me through your solution?"]
-        self.intermediary = GraphIntermediary(settings.AI_DEFAULT_TUTOR_MODEL)
-        self.tutor = GraphTutor(
-            self.llm, 
-            pb=self.problem, 
-            sol=self.solution, 
-            model=self.model, 
-            tools=[r_code_interpreter,text_student], 
-            intermediary=self.intermediary, 
-            #memory=self.checkpointer
-        )
-        self.agent = self.tutor.app
+        self.chat_history = [
+            AIMessage(content='', additional_kwargs={'tool_calls': [{'id': '0', 'function': {'arguments': '{"message_to_student":"Hi! Do you need any help?"}', 'name': 'text_student'}, 'type': 'function'}], 'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_72ed7ab54c', 'finish_reason': 'tool_calls', 'logprobs': None}, id='0', tool_calls=[{'name': 'text_student', 'args': {'message_to_student': "Hi! Do you need any help?"}, 'id': '0', 'type': 'tool_call'}]), 
+            ToolMessage(content="Message sent", name='text_student', id='0', tool_call_id='0')
+        ]
+
     
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
@@ -462,64 +458,6 @@ class TutorBot(BaseChatbot):
         extra_state: Optional[TypedDict] = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
-        """
-        Send the user message to the agent and yield the response as
-        it comes in.
-
-        Append the response with debugging metadata and/or errors.
-        """
-        full_response = ""
-        if not self.agent:
-            error = "Create agent before running"
-            raise ValueError(error)
-        try:
-            
-            self.human_messages.append(message)
-            print("hihi1")            
-
-            prompt= self.intermediary.get_prompt(self.problem,self.solution)
-            print(prompt)
-            print("hihi12")            
-
-            final_state = self.tutor.get_response2()
-
-            print("RESPONSE")            
-            print(final_state)
-            yield final_state[0]
         
-        except BadRequestError as error:
-            # Format and yield an error message inside a hidden comment
-            if hasattr(error, "response"):
-                error = error.response.json()
-            else:
-                error = {
-                    "error": {"message": "An error has occurred, please try again"}
-                }
-            if (
-                error["error"]["message"].startswith("Budget has been exceeded")
-                and not settings.AI_DEBUG
-            ):  # Friendlier message for end user
-                error["error"]["message"] = (
-                    "You have exceeded your AI usage limit. Please try again later."
-                )
-            yield f"<!-- {json.dumps(error)} -->".encode()
-        except Exception:
-            yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
-            log.exception("Error running AI agent")
-        if debug:
-            yield f"\n\n<!-- {await self.get_tool_metadata()} -->\n\n"
-        if settings.POSTHOG_PROJECT_API_KEY:
-            hog_client = posthog.Posthog(
-                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
-            )
-            hog_client.capture(
-                self.user_id,
-                event=self.JOB_ID,
-                properties={
-                    "question": message,
-                    "answer": full_response,
-                    "metadata": await self.get_tool_metadata(),
-                    "user": self.user_id,
-                },
-            )
-
+        json_output = message_tutor(*convert_StratL_input_to_json(self.problem, self.solution, self.llm, [HumanMessage(content=message)], [], [], [], []),tools=[r_code_interpreter,text_student])
+        yield json_output
