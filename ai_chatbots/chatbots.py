@@ -22,18 +22,18 @@ from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
+from langchain_openai import ChatOpenAI
 from typing_extensions import TypedDict
 from open_learning_ai_tutor.Tutor import GraphTutor2
 from open_learning_ai_tutor.Intermediary import GraphIntermediary2
 from open_learning_ai_tutor.problems import get_pb_sol
 from open_learning_ai_tutor.Assessor import GraphAssessor2
-from langchain_openai import ChatOpenAI
-from open_learning_ai_tutor.StratL import message_tutor, convert_StratL_input_to_json
+from open_learning_ai_tutor.StratL import message_tutor, convert_StratL_input_to_json, process_StratL_json_output
+from open_learning_ai_tutor.tools import tutor_tools
 
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
-from ai_chatbots.tools import search_content_files, r_code_interpreter, text_student
-
+from ai_chatbots.tools import search_content_files
 
 log = logging.getLogger(__name__)
 
@@ -420,7 +420,7 @@ class TutorBot(BaseChatbot):
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
-        checkpointer: Optional[BaseCheckpointSaver] = None,
+        checkpointer: Optional[BaseCheckpointSaver] = BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning Tutor Chatbot",
         model: Optional[str] = None,
@@ -429,22 +429,22 @@ class TutorBot(BaseChatbot):
         thread_id: Optional[str] = None,
         problem_code: Optional[str] = None,
     ):
+        print("THREAD ID")
+
+        print(thread_id)
         super().__init__(
             user_id,
             name=name,
-            checkpointer= None,
+            checkpointer=checkpointer,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
 
         )
-       # self.llm=ChatOpenAI(model=settings.AI_DEFAULT_TUTOR_MODEL, temperature=0.0, top_p=0.1, max_tokens=300)
+        self.llm = ChatOpenAI(model=settings.AI_DEFAULT_TUTOR_MODEL, temperature=settings.AI_DEFAULT_TEMPERATURE)
         self.problem, self.solution = get_pb_sol(problem_code)
-        self.chat_history = [
-            AIMessage(content='', additional_kwargs={'tool_calls': [{'id': '0', 'function': {'arguments': '{"message_to_student":"Hi! Do you need any help?"}', 'name': 'text_student'}, 'type': 'function'}], 'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_72ed7ab54c', 'finish_reason': 'tool_calls', 'logprobs': None}, id='0', tool_calls=[{'name': 'text_student', 'args': {'message_to_student': "Hi! Do you need any help?"}, 'id': '0', 'type': 'tool_call'}]), 
-            ToolMessage(content="Message sent", name='text_student', id='0', tool_call_id='0')
-        ]
+        self.chat_history = []
 
     
     async def get_tool_metadata(self) -> str:
@@ -459,5 +459,11 @@ class TutorBot(BaseChatbot):
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         
-        json_output = message_tutor(*convert_StratL_input_to_json(self.problem, self.solution, self.llm, [HumanMessage(content=message)], [], [], [], []),tools=[r_code_interpreter,text_student])
-        yield json_output
+        self.chat_history = self.chat_history + [HumanMessage(content=message)]
+        json_output = message_tutor(*convert_StratL_input_to_json(self.problem, self.solution, self.llm, [HumanMessage(content=message)], self.chat_history, [], [], []),tools=tutor_tools)
+        prossessed = process_StratL_json_output(json_output)
+        response =""
+        for index, msg in enumerate(prossessed[0]):
+            if isinstance(msg, ToolMessage) and msg.name == 'text_student':
+                response = prossessed[0][index-1].tool_calls[0]['args']['message_to_student']
+        yield response
