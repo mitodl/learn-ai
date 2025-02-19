@@ -4507,7 +4507,7 @@ tiktoken = "*"
 type = "git"
 url = "https://github.com/MIT-OL-AI-Tutoring/Open_Learning_AI_Tutor.git"
 reference = "ab/fixes-for-learn-ai-integration"
-resolved_reference = "246de9c836dc988c01c0a609411f61e4b324dc3c"
+resolved_reference = "4f959c327256e80b1c555ad0bba0e892dbe9862b"
 
 [[package]]
 name = "openai"

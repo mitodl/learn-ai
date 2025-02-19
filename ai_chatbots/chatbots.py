@@ -7,6 +7,8 @@ from collections.abc import AsyncGenerator
 from operator import add
 from typing import Annotated, Optional
 from uuid import uuid4
+from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 import posthog
 from django.conf import settings
@@ -30,7 +32,7 @@ from open_learning_ai_tutor.problems import get_pb_sol
 from open_learning_ai_tutor.Assessor import GraphAssessor2
 from open_learning_ai_tutor.StratL import message_tutor, convert_StratL_input_to_json, process_StratL_json_output
 from open_learning_ai_tutor.tools import tutor_tools
-
+from ai_chatbots.models import TutorBotOutput
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.tools import search_content_files
@@ -411,7 +413,14 @@ information.
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
 
+@database_sync_to_async
+def create_tutorbot_output(thread_id, chat_json):
+    return TutorBotOutput.objects.create(thread_id=thread_id, chat_json=chat_json)
 
+@database_sync_to_async
+def get_history(thread_id):
+    return TutorBotOutput.objects.filter(thread_id=thread_id).last()
+        
 
 class TutorBot(BaseChatbot):
     """
@@ -429,9 +438,6 @@ class TutorBot(BaseChatbot):
         thread_id: Optional[str] = None,
         problem_code: Optional[str] = None,
     ):
-        print("THREAD ID")
-
-        print(thread_id)
         super().__init__(
             user_id,
             name=name,
@@ -444,13 +450,11 @@ class TutorBot(BaseChatbot):
         )
         self.llm = ChatOpenAI(model=settings.AI_DEFAULT_TUTOR_MODEL, temperature=settings.AI_DEFAULT_TEMPERATURE)
         self.problem, self.solution = get_pb_sol(problem_code)
-        self.chat_history = []
-
     
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
         return None
-    
+        
     async def get_completion(
         self,
         message: str,
@@ -459,11 +463,33 @@ class TutorBot(BaseChatbot):
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         
+        history = await get_history(self.thread_id)
+
+        if history:
+            self.chat_history, self.intent_history, self.assessment_history, _ = process_StratL_json_output(history.chat_json)
+        else:
+            self.chat_history = []
+            self.intent_history = []
+            self.assessment_history = []
+
         self.chat_history = self.chat_history + [HumanMessage(content=message)]
-        json_output = message_tutor(*convert_StratL_input_to_json(self.problem, self.solution, self.llm, [HumanMessage(content=message)], self.chat_history, [], [], []),tools=tutor_tools)
+        json_output = message_tutor(*convert_StratL_input_to_json(
+            self.problem, 
+            self.solution, 
+            self.llm, 
+            [HumanMessage(content=message)], 
+            self.chat_history, 
+            self.assessment_history, 
+            self.intent_history, []),
+            tools=tutor_tools
+        )
+        
+        await create_tutorbot_output(self.thread_id, json_output)
+
         prossessed = process_StratL_json_output(json_output)
         response =""
         for index, msg in enumerate(prossessed[0]):
             if isinstance(msg, ToolMessage) and msg.name == 'text_student':
                 response = prossessed[0][index-1].tool_calls[0]['args']['message_to_student']
         yield response
+
