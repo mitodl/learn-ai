@@ -36,6 +36,13 @@ def syllabus_consumer(async_user):
     consumer.channel_name = "test_syllabus_channel"
     return consumer
 
+@pytest.fixture
+def tutor_consumer(async_user):
+    """Return a tutor consumer."""
+    consumer = consumers.TutorBotHttpConsumer()
+    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_tutor_channel"
+    return consumer
 
 @pytest.mark.parametrize(
     ("message", "temperature", "instructions", "model"),
@@ -417,3 +424,41 @@ async def test_handle_errors(
                 "more_body": True,
             }
         )
+
+async def test_tutor_agent_handle(  
+    mocker,
+    mock_http_consumer_send,
+    tutor_consumer,
+):
+    """Test the receive function of the recommendation agent."""
+    response = SystemMessageFactory.create()
+    user = tutor_consumer.scope["user"]
+    user.is_superuser = True
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.TutorBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(list(response.content.split(" ")))
+            )
+        ),
+    )
+    message = "What should i try next?"
+    data = {
+        "message": message,
+        "problem_code": "A1P1"
+    }
+   
+    await tutor_consumer.handle(json.dumps(data))
+
+    mock_http_consumer_send.send_headers.assert_called_once()
+   
+    mock_completion.assert_called_once_with(message, extra_state=None)
+    assert (
+        mock_http_consumer_send.send_body.call_count
+        == len(response.content.split(" ")) + 2
+    )
+    mock_http_consumer_send.send_body.assert_any_call(
+        body=response.content.split(" ")[0].encode("utf-8"),
+        more_body=True,
+    )
+    assert mock_http_consumer_send.send_headers.call_count == 1
