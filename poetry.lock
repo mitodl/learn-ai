@@ -160,13 +160,13 @@ files = [
 
 [[package]]
 name = "anthropic"
-version = "0.45.2"
+version = "0.46.0"
 description = "The official Python library for the anthropic API"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "anthropic-0.45.2-py3-none-any.whl", hash = "sha256:ecd746f7274451dfcb7e1180571ead624c7e1195d1d46cb7c70143d2aedb4d35"},
-    {file = "anthropic-0.45.2.tar.gz", hash = "sha256:32a18b9ecd12c91b2be4cae6ca2ab46a06937b5aa01b21308d97a6d29794fb5e"},
+    {file = "anthropic-0.46.0-py3-none-any.whl", hash = "sha256:1445ec9be78d2de7ea51b4d5acd3574e414aea97ef903d0ecbb57bec806aaa49"},
+    {file = "anthropic-0.46.0.tar.gz", hash = "sha256:eac3d43271d02321a57c3ca68aca84c3d58873e8e72d1433288adee2d46b745b"},
 ]
 
 [package.dependencies]
@@ -3518,13 +3518,13 @@ zookeeper = ["kazoo (>=2.8.0)"]
 
 [[package]]
 name = "kubernetes"
-version = "32.0.0"
+version = "32.0.1"
 description = "Kubernetes python client"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "kubernetes-32.0.0-py2.py3-none-any.whl", hash = "sha256:60fd8c29e8e43d9c553ca4811895a687426717deba9c0a66fb2dcc3f5ef96692"},
-    {file = "kubernetes-32.0.0.tar.gz", hash = "sha256:319fa840345a482001ac5d6062222daeb66ec4d1bcb3087402aed685adf0aecb"},
+    {file = "kubernetes-32.0.1-py2.py3-none-any.whl", hash = "sha256:35282ab8493b938b08ab5526c7ce66588232df00ef5e1dbe88a419107dc10998"},
+    {file = "kubernetes-32.0.1.tar.gz", hash = "sha256:42f43d49abd437ada79a79a16bd48a604d3471a117a8347e87db693f2ba0ba28"},
 ]
 
 [package.dependencies]
@@ -4507,7 +4507,7 @@ tiktoken = "*"
 type = "git"
 url = "https://github.com/MIT-OL-AI-Tutoring/Open_Learning_AI_Tutor.git"
 reference = "ab/fixes-for-learn-ai-integration"
-resolved_reference = "4f959c327256e80b1c555ad0bba0e892dbe9862b"
+resolved_reference = "dfeee1794b8351ffb999c6a1e8c96ef6d64ae9b3"
 
 [[package]]
 name = "openai"

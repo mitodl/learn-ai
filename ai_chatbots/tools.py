@@ -10,7 +10,6 @@ from django.conf import settings
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
-from e2b_code_interpreter import Sandbox
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
 from ai_chatbots.utils import enum_zip

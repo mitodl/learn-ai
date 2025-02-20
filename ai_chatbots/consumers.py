@@ -62,8 +62,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         """
         latest_cookie_key = f"{self.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
-
         threads_ids_str = self.scope["cookies"].get(anon_cookie_key) or ""
+
         thread_ids = [tid for tid in (threads_ids_str).split(",") if tid]
 
         if thread_ids:
@@ -216,7 +216,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             async for chunk in self.bot.get_completion(
                 message_text, extra_state=extra_state
             ):
-                print(chunk)
                 await self.send_chunk(chunk)
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")

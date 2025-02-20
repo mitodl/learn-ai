@@ -15,7 +15,7 @@ from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -26,12 +26,10 @@ from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
 from langchain_openai import ChatOpenAI
 from typing_extensions import TypedDict
-from open_learning_ai_tutor.Tutor import GraphTutor2
-from open_learning_ai_tutor.Intermediary import GraphIntermediary2
 from open_learning_ai_tutor.problems import get_pb_sol
-from open_learning_ai_tutor.Assessor import GraphAssessor2
-from open_learning_ai_tutor.StratL import message_tutor, convert_StratL_input_to_json, process_StratL_json_output
+from open_learning_ai_tutor.StratL import message_tutor, process_StratL_json_output
 from open_learning_ai_tutor.tools import tutor_tools
+from open_learning_ai_tutor.utils import  messages_to_json, json_to_messages
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
@@ -466,30 +464,35 @@ class TutorBot(BaseChatbot):
         history = await get_history(self.thread_id)
 
         if history:
-            self.chat_history, self.intent_history, self.assessment_history, _ = process_StratL_json_output(history.chat_json)
+            json_history = json.loads(history.chat_json)
+            self.chat_history = json_to_messages(json_history.get('chat_history', []))+[HumanMessage(content=message)]
+            self.intent_history =  json_history.get('intent_history', [])
+            self.assessment_history =  json_history.get('assessment_history', [])
         else:
-            self.chat_history = []
+            self.chat_history = [HumanMessage(content=message)]
             self.intent_history = []
             self.assessment_history = []
 
-        self.chat_history = self.chat_history + [HumanMessage(content=message)]
-        json_output = message_tutor(*convert_StratL_input_to_json(
+        self.chat_history = self.chat_history 
+
+        json_output = message_tutor(
             self.problem, 
             self.solution, 
             self.llm, 
-            [HumanMessage(content=message)], 
-            self.chat_history, 
+            messages_to_json([HumanMessage(content=message)]), 
+            messages_to_json(self.chat_history), 
             self.assessment_history, 
-            self.intent_history, []),
+            self.intent_history, 
+            '{}',
             tools=tutor_tools
         )
-        
+
         await create_tutorbot_output(self.thread_id, json_output)
 
         prossessed = process_StratL_json_output(json_output)
-        response =""
-        for index, msg in enumerate(prossessed[0]):
-            if isinstance(msg, ToolMessage) and msg.name == 'text_student':
+        response = ""
+        for index, msg in json_output.get('chat_history', []):
+            if msg.get("type", "") == "ToolMessage" and msg.get("name", "") == 'text_student':
                 response = prossessed[0][index-1].tool_calls[0]['args']['message_to_student']
         yield response
 
