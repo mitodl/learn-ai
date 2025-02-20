@@ -494,37 +494,7 @@ class TutorBot(BaseChatbot):
 
             yield response
 
-        except BadRequestError as error:
-            # Format and yield an error message inside a hidden comment
-            if hasattr(error, "response"):
-                error = error.response.json()
-            else:
-                error = {
-                    "error": {"message": "An error has occurred, please try again"}
-                }
-            if (
-                error["error"]["message"].startswith("Budget has been exceeded")
-                and not settings.AI_DEBUG
-            ):  # Friendlier message for end user
-                error["error"]["message"] = (
-                    "You have exceeded your AI usage limit. Please try again later."
-                )
-            yield f"<!-- {json.dumps(error)} -->".encode()
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
-        if settings.POSTHOG_PROJECT_API_KEY:
-            hog_client = posthog.Posthog(
-                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
-            )
-            hog_client.capture(
-                self.user_id,
-                event=self.JOB_ID,
-                properties={
-                    "question": message,
-                    "answer": response,
-                    "metadata": prossessed,
-                    "user": self.user_id,
-                },
-            )
 
