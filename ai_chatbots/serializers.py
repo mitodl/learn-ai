@@ -41,6 +41,7 @@ class SyllabusChatRequestSerializer(ChatRequestSerializer):
     )
 
 
+
 class UserChatSessionSerializer(serializers.ModelSerializer):
     """Serializer for user chat sessions"""
 
@@ -88,3 +89,10 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = DjangoCheckpoint
         fields = ["checkpoint_id", "role", "content"]
+
+class TutorChatRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the tutor chatbot.
+    """
+
+    problem_code = serializers.CharField(required=True, allow_blank=False)
