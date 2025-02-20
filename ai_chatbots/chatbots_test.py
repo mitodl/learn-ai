@@ -9,11 +9,13 @@ from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableBinding
+from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
     SyllabusAgentState,
     SyllabusBot,
+    TutorBot
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -459,3 +461,38 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             **{},
             **{},
         )
+
+@pytest.mark.parametrize(
+    ("model", "temperature"),
+    [
+        ("gpt-3.5-turbo", 0.1),
+        ("gpt-4", None),
+        (None, None),
+    ],
+)
+async def test_tutor_bot_intitiation(
+    mocker, model, temperature
+):
+    """Test the tutor class instantiation."""
+    name = "My tutor bot"
+    problem_code = "A1P1"
+
+
+    chatbot = TutorBot(
+        "user",
+        name=name,
+        model=model,
+        temperature=temperature,
+        problem_code=problem_code
+    )
+    assert chatbot.model == (
+        model if model else settings.AI_DEFAULT_TUTOR_MODEL
+    )
+    assert chatbot.temperature == (
+        temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
+    )
+    problem, solution = get_pb_sol(problem_code)
+    assert chatbot.problem == problem
+    assert chatbot.solution == solution
+    assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
+    

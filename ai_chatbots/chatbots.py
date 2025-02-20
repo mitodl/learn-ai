@@ -29,7 +29,7 @@ from typing_extensions import TypedDict
 from open_learning_ai_tutor.problems import get_pb_sol
 from open_learning_ai_tutor.StratL import message_tutor, process_StratL_json_output
 from open_learning_ai_tutor.tools import tutor_tools
-from open_learning_ai_tutor.utils import  messages_to_json, json_to_messages
+from open_learning_ai_tutor.utils import  messages_to_json, json_to_messages, intent_list_to_json
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
@@ -432,7 +432,6 @@ class TutorBot(BaseChatbot):
         name: str = "MIT Open Learning Tutor Chatbot",
         model: Optional[str] = None,
         temperature: Optional[float] = None,
-        instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
         problem_code: Optional[str] = None,
     ):
@@ -441,10 +440,8 @@ class TutorBot(BaseChatbot):
             name=name,
             checkpointer=checkpointer,
             temperature=temperature,
-            instructions=instructions,
             thread_id=thread_id,
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
-
         )
         self.llm = ChatOpenAI(model=settings.AI_DEFAULT_TUTOR_MODEL, temperature=settings.AI_DEFAULT_TEMPERATURE)
         self.problem, self.solution = get_pb_sol(problem_code)
@@ -470,29 +467,64 @@ class TutorBot(BaseChatbot):
             self.assessment_history =  json_history.get('assessment_history', [])
         else:
             self.chat_history = [HumanMessage(content=message)]
-            self.intent_history = []
-            self.assessment_history = []
+            self.intent_history = '[]'
+            self.assessment_history = ''
 
-        self.chat_history = self.chat_history 
-
-        json_output = message_tutor(
-            self.problem, 
-            self.solution, 
-            self.llm, 
-            messages_to_json([HumanMessage(content=message)]), 
-            messages_to_json(self.chat_history), 
-            self.assessment_history, 
-            self.intent_history, 
-            '{}',
-            tools=tutor_tools
-        )
-
-        await create_tutorbot_output(self.thread_id, json_output)
-
-        prossessed = process_StratL_json_output(json_output)
         response = ""
-        for index, msg in json_output.get('chat_history', []):
-            if msg.get("type", "") == "ToolMessage" and msg.get("name", "") == 'text_student':
-                response = prossessed[0][index-1].tool_calls[0]['args']['message_to_student']
-        yield response
+
+        try:
+            json_output = message_tutor(
+                self.problem, 
+                self.solution, 
+                self.llm, 
+                messages_to_json([HumanMessage(content=message)]), 
+                messages_to_json(self.chat_history), 
+                self.assessment_history, 
+                self.intent_history, 
+                '{}',
+                tools=tutor_tools
+            )
+
+            await create_tutorbot_output(self.thread_id, json_output)
+            prossessed = process_StratL_json_output(json_output)
+            response = "An error has occurred, please try again"
+            for index, msg in enumerate(prossessed[0]):
+                if isinstance(msg, ToolMessage) and msg.name == 'text_student':
+                    response = prossessed[0][index-1].tool_calls[0]['args']['message_to_student']
+
+            yield response
+
+        except BadRequestError as error:
+            # Format and yield an error message inside a hidden comment
+            if hasattr(error, "response"):
+                error = error.response.json()
+            else:
+                error = {
+                    "error": {"message": "An error has occurred, please try again"}
+                }
+            if (
+                error["error"]["message"].startswith("Budget has been exceeded")
+                and not settings.AI_DEBUG
+            ):  # Friendlier message for end user
+                error["error"]["message"] = (
+                    "You have exceeded your AI usage limit. Please try again later."
+                )
+            yield f"<!-- {json.dumps(error)} -->".encode()
+        except Exception:
+            yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
+            log.exception("Error running AI agent")
+        if settings.POSTHOG_PROJECT_API_KEY:
+            hog_client = posthog.Posthog(
+                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
+            )
+            hog_client.capture(
+                self.user_id,
+                event=self.JOB_ID,
+                properties={
+                    "question": message,
+                    "answer": response,
+                    "metadata": prossessed,
+                    "user": self.user_id,
+                },
+            )
 
