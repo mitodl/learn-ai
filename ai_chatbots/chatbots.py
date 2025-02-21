@@ -452,7 +452,7 @@ class TutorBot(BaseChatbot):
         """
         llm = ChatOpenAI(
             model=f"{self.proxy_prefix}{self.model}",
-            **(self.proxy.get_api_kwargs() if self.proxy else {}),
+            **(self.proxy.get_api_kwargs(base_url_key="base_url", api_key_key="openai_api_key") if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
         )

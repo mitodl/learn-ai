@@ -81,6 +81,7 @@ class LiteLLMProxy(AIProxy):
             "user": service.user_id,
             "store": True,
             "extra_body": {
+                "drop_params": True,
                 "metadata": {
                     "tags": [
                         f"jobID:{service.JOB_ID}",
