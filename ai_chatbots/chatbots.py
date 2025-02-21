@@ -403,3 +403,101 @@ information.
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+
+class VideoGPTAgentState(AgentState):
+    """
+    State for the syllabus bot. Passes xblock_video_id and yt_video_id
+    to the associated tool function.
+    """
+
+    xblock_video_id: Annotated[list[str], add]
+    yt_video_id: Annotated[list[str], add]
+
+
+class VideoGPTBot(BaseChatbot):
+    """Service class for the AI video chat summary agent"""
+
+    TASK_NAME = "VIDEO_GPT_TASK"
+    JOB_ID = "VIDEO_GPT_JOB"
+
+    INSTRUCTIONS = """You are an assistant helping generate the summary along with
+    timestamps of important concept from a transcript.
+
+Your job is either:
+1. Use the available function to get the transcript.
+2. Provide a summary of the transcript and include the timestamps of the key points in
+the transcript. Don't specify that the summary is generated from transcript.
+3. The summary should be divided into multiple paragraphs each with its own heading in
+bold and linkable timestamp at the end of each paragraph.
+4. Answer the user's question based on the generated summary only and not the internet.
+
+Always run the tool to get the transcript, and generate the summary with timestamps
+of important concepts only based on the tool output. Do not include the xblock video id
+in the query parameter.
+
+OR
+1. Use the available function to get the transcript.
+2. Provide the flashcards from the transcripts in form of question, answer and
+explanation of the each flash card with timestamp as clickable link.
+
+
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE GENERATED SUMMARY TO
+ANSWER QUESTIONS. If no results are returned, say you could not find any relevant
+information.
+
+Respond in this format:
+- A summary paragraph including the timestamps of important concepts.
+- Make each timestamp a clickable link.
+
+
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
+generate the summary. If no results are returned, say you could not find any relevant
+information.
+"""
+
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning VideoGPT Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            checkpointer=checkpointer,
+            model=model or settings.AI_DEFAULT_VIDEO_GPT_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
+        )
+        self.agent = self.create_agent_graph()
+
+    def create_tools(self):
+        """Create tools required for the agent"""
+        return [tools.get_video_transcript]
+
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Generate a standard react agent graph for the video gpt agent.
+        Use the custom VideoGPTAgentState to pass xblock_video_id and yt_video_id
+        to the associated tool function.
+        """
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.checkpointer,
+            state_schema=VideoGPTAgentState,
+            state_modifier=self.instructions,
+        )
+
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
+        thread_id = self.config["configurable"]["thread_id"]
+        latest_state = await self.get_latest_history()
+        return get_search_tool_metadata(thread_id, latest_state)

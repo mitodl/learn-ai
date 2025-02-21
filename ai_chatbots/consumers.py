@@ -10,11 +10,15 @@ from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
-from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer
+from ai_chatbots.serializers import (
+    ChatRequestSerializer,
+    SyllabusChatRequestSerializer,
+    VideoGPTRequestSerializer,
+)
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -306,4 +310,39 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         return {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
+        }
+
+
+class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the video GPT bot.
+    """
+
+    serializer_class = VideoGPTRequestSerializer
+    ROOM_NAME = VideoGPTBot.__name__
+
+    def create_chatbot(
+        self,
+        serializer: VideoGPTRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a VideoGPTBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        instructions = serializer.validated_data.pop("instructions", None)
+        model = serializer.validated_data.pop("model", None)
+
+        return VideoGPTBot(
+            self.user_id,
+            checkpointer=checkpointer,
+            temperature=temperature,
+            instructions=instructions,
+            model=model,
+            thread_id=self.thread_id,
+        )
+
+    def process_extra_state(self, data: dict) -> dict:
+        """Process extra state parameters if any"""
+        return {
+            "xblock_video_id": [data.get("xblock_video_id")],
+            "yt_video_id": [data.get("yt_video_id")],
         }

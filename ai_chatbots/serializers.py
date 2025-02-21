@@ -41,6 +41,45 @@ class SyllabusChatRequestSerializer(ChatRequestSerializer):
     )
 
 
+class VideoGPTRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the video GPT chatbot.
+    """
+
+    message = serializers.CharField(
+        required=False,
+        allow_blank=False,
+    )
+    operation = serializers.CharField(
+        required=False,
+        allow_blank=False,
+    )
+    xblock_video_id = serializers.CharField(required=True, allow_blank=False)
+    yt_video_id = serializers.CharField(required=False, allow_blank=False)
+
+    def validate(self, validated_data):
+        """Ensure that the operation is handled properly"""
+        operation = validated_data.get("operation", None)
+
+        # If an operation is specified, we have the following assumptions:
+        # 1. We are not expecting a message key in the request.
+        # 2. We are expecting that this is always going to be the first request from a
+        # session.
+        # 3. As a first requet, We need to clear the history of the chatbot.
+        if operation:
+            validated_data["clear_history"] = True
+            if operation == "summary":
+                validated_data["message"] = (
+                    "Generate the summary of the video transcript."
+                )
+            elif operation == "flashcards":
+                validated_data["message"] = (
+                    "Generate the flashcards from the transcripts"
+                )
+
+        return super().validate(validated_data)
+
+
 class UserChatSessionSerializer(serializers.ModelSerializer):
     """Serializer for user chat sessions"""
 
