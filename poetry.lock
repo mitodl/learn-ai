@@ -6309,13 +6309,13 @@ files = [
 
 [[package]]
 name = "ulid-py"
-version = "0.2.0"
+version = "1.1.0"
 description = "Universally Unique Lexicographically Sortable Identifier"
 optional = false
 python-versions = "*"
 files = [
-    {file = "ulid-py-0.2.0.tar.gz", hash = "sha256:46976401cb0eee9134446c6d92899627c74945c0e46f16ca295a8c9c434507fd"},
-    {file = "ulid_py-0.2.0-py2.py3-none-any.whl", hash = "sha256:06f6de6a83c24f3b0af0528beff500b65b48c0101b208cfeba2133115788334a"},
+    {file = "ulid-py-1.1.0.tar.gz", hash = "sha256:dc6884be91558df077c3011b9fb0c87d1097cb8fc6534b11f310161afd5738f0"},
+    {file = "ulid_py-1.1.0-py2.py3-none-any.whl", hash = "sha256:b56a0f809ef90d6020b21b89a87a48edc7c03aea80e5ed5174172e82d76e3987"},
 ]
 
 [[package]]
@@ -7092,4 +7092,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.12.6"
-content-hash = "bbe8b6869f09bd30bc3859eebb5def593a30b08c5bb9d351b5faa97bdbd0acea"
+content-hash = "53c1630903462640a1636d557f980b9f1fffa6029df4d74309ad336ea3257d81"
