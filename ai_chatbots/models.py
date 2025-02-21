@@ -68,6 +68,9 @@ class DjangoCheckpoint(models.Model):
 
 
 class TutorBotOutput(models.Model):
+    """
+    Store  chat history and internal state for the tutor chatbot
+    """
     thread_id = models.TextField()
     chat_json = models.JSONField()
 

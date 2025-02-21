@@ -443,9 +443,25 @@ class TutorBot(BaseChatbot):
             thread_id=thread_id,
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
         )
-        self.llm = ChatOpenAI(model=settings.AI_DEFAULT_TUTOR_MODEL, temperature=settings.AI_DEFAULT_TEMPERATURE)
         self.problem, self.solution = get_pb_sol(problem_code)
     
+    def get_llm(self, **kwargs) -> BaseChatModel:
+        """
+        Return the LLM instance for the chatbot.
+        Set it up to use a proxy, with required proxy kwargs, if applicable.
+        """
+        llm = ChatOpenAI(
+            model=f"{self.proxy_prefix}{self.model}",
+            **(self.proxy.get_api_kwargs() if self.proxy else {}),
+            **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
+            **kwargs,
+        )
+        # Set the temperature if it's supported by the model
+        if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
+            llm.temperature = self.temperature
+        return llm
+
+
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
         return None
@@ -457,7 +473,8 @@ class TutorBot(BaseChatbot):
         extra_state: Optional[TypedDict] = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
-        
+        """Call message_tutor with the user query and return the response"""
+
         history = await get_history(self.thread_id)
 
         if history:

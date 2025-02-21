@@ -319,7 +319,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
 
 
     def create_chatbot(self, serializer: TutorChatRequestSerializer, checkpointer: BaseCheckpointSaver,):
-        """Return a SyllabusBot instance"""
+        """Return a TutorBot instance"""
         temperature = serializer.validated_data.pop("temperature", None)
         model = serializer.validated_data.pop("model", None)
         problem_code = serializer.validated_data.pop("problem_code", None)
