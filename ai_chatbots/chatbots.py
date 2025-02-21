@@ -444,7 +444,8 @@ explanation of the each flash card with timestamp as clickable link.
 
 VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE GENERATED SUMMARY TO
 ANSWER QUESTIONS. If no results are returned, say you could not find any relevant
-information.
+information. Don't say you're going to try again. Ask the user if they would like to
+modify their preferences or ask a different question.
 
 Respond in this format:
 - A summary paragraph including the timestamps of important concepts.
