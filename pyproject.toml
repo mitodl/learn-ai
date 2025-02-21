@@ -51,7 +51,7 @@ sentry-sdk = "^2.13.0"
 social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "^0.45.1"
-ulid-py = "^0.2.0"
+ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langchain-community = "^0.3.16"
 psycopg = "^3.2.4"
