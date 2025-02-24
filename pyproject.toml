@@ -16,7 +16,7 @@ channels = {version = "^4.2.0"}
 channels-redis = "^4.2.1"
 dj-database-url = "^2.0.0"
 dj-static = "^0.0.6"
-Django = "4.2.18"
+Django = "4.2.19"
 django-anymail = {extras = ["mailgun"], version = "^12.0"}
 django-bitfield = "^2.2.0"
 django-cache-memoize = "^0.2.0"
@@ -46,11 +46,11 @@ psycopg-pool = "^3.2.4"
 pygithub = "^2.0.0"
 redis = "^5.0.0"
 requests = "^2.31.0"
-ruff = "0.9.3"
+ruff = "0.9.7"
 sentry-sdk = "^2.13.0"
 social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
-starlette = "^0.45.1"
+starlette = "^0.46.0"
 ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langchain-community = "^0.3.16"
