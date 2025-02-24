@@ -164,6 +164,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedChatMessageList'
           description: ''
+  /api/v0/tutor_problem/:
+    get:
+      operationId: tutor_problem_retrieve
+      description: Return a sample tutor problem and solution.
+      parameters:
+      - in: path
+        name: problem_code
+        schema:
+          type: string
+        description: problem_code of the problem
+        required: true
+      tags:
+      - tutor_problem
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemAndSolutionResponse'
+          description: ''
+        '404':
+          description: Missing problem code
   /http/recommendation_agent/:
     post:
       operationId: RecommendationAgentV0
@@ -324,6 +346,16 @@ components:
         title:
           type: string
           maxLength: 255
+    ProblemAndSolutionResponse:
+      type: object
+      properties:
+        problem:
+          type: string
+        solution:
+          type: string
+      required:
+      - problem
+      - solution
     UserChatSession:
       type: object
       description: Serializer for user chat sessions
