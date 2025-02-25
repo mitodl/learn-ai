@@ -18,7 +18,7 @@
     "@emotion/cache": "^11.13.5",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
-    "@mitodl/smoot-design": "^3.0.0",
+    "@mitodl/smoot-design": "^1.2.1",
     "@mui/material": "^6.1.8",
     "@mui/material-nextjs": "^6.1.8",
     "@remixicon/react": "^4.2.0",

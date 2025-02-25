@@ -13,7 +13,7 @@ guardrails:
   - guardrail_name: "aporia-pre-guard"
     litellm_params:
       guardrail: aporia  # supported values: "aporia", "lakera"
-      mode: "pre_call"
+      mode: "during_call"
       api_key: os.environ/APORIA_API_KEY
       api_base: os.environ/APORIA_API_URL
   - guardrail_name: "aporia-post-guard"

@@ -128,7 +128,7 @@ class BaseChatbot(ABC):
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
                 state["messages"].insert(0, SystemMessage(self.instructions))
-            return MessagesState(messages=[self.llm.invoke(state["messages"])])
+            return MessagesState(messages=[self.llm.invoke(state["messages"],guardrails=["aporia-pre-guard", "aporia-post-guard"],)])
 
         agent_graph = StateGraph(MessagesState)
         # Add the agent node that first calls the LLM
@@ -239,58 +239,7 @@ class ResourceRecommendationBot(BaseChatbot):
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
 
-    INSTRUCTIONS = """You are an assistant helping users find courses from a catalog
-of learning resources. Users can ask about specific topics, levels, or recommendations
-based on their interests or goals.  Do not answer questions that are not related to
-educational resources at MIT.
-
-Your job:
-1. Understand the user's intent AND BACKGROUND based on their message.
-2. Use the available function to gather information or recommend courses.
-3. Provide a clear, user-friendly explanation of your recommendations if search results
-are found.
-
-
-Run the tool to find learning resources that the user is interested in,
-and answer only based on the function search
-results.
-
-VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
-ANSWER QUESTIONS.
-
-If no results are returned, say you could not find any relevant
-resources.  Don't say you're going to try again.  Ask the user if they would like to
-modify their preferences or ask a different question.
-
-Respond in this format:
-- If the user's intent is unclear, ask clarifying questions about users preference on
-price, certificate
-- Understand user background from the message history, like their level of education.
-- After the function executes, rerank results based on user background and return
-only the top 1 or 2 of the results to the user.
-- Make the title of each resource a clickable link.
-
-VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO ANSWER
-QUESTIONS.
-
-Here are some sample user prompts, each with a guide on how to respond to them:
-
-Prompt: “I\'d like to learn some advanced mathematics that I may not have had exposure
-to before, as a physics major.”
-Expected Response: Ask some follow-ups about particular interests (e.g., set theory,
-analysis, topology. Maybe ask whether you are more interested in applied math or theory.
-Then perform the search based on those interests and send the most relevant results back
-based on the user's answers.
-
-Prompt: “As someone with a non-science background, what courses can I take that will
-prepare me for the AI future.”
-Expected Output: Maybe ask whether the user wants to learn how to program, or just use
-AI in their discipline - does this person want to study machine learning? More info
-needed. Then perform a relevant search and send back the best results.
-
-
-AGAIN: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
-ANSWER QUESTIONS.
+    INSTRUCTIONS = """Answer questions as best you can
     """
 
     def __init__(  # noqa: PLR0913

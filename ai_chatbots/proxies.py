@@ -81,13 +81,15 @@ class LiteLLMProxy(AIProxy):
         return {
             "user": service.user_id,
             "store": True,
+            "guardrails": ["aporia-post-guard"],
             "extra_body": {
                 "metadata": {
                     "tags": [
                         f"jobID:{service.JOB_ID}",
                         f"taskName:{service.TASK_NAME}",
                     ]
-                }
+                },
+                "guardrails": ["aporia-post-guard"],
             },
         }
 
