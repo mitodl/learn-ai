@@ -50,14 +50,13 @@ ruff = "0.9.7"
 sentry-sdk = "^2.13.0"
 social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
-starlette = "^0.46.0"ndency ulid-py to v1 (#30))
+starlette = "^0.46.0"
 ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langchain-community = "^0.3.16"
 psycopg = "^3.2.4"
-portkey-ai = "^1.10.2"
-faker = "^25.2.0"
-guardrails-ai = "^0.6.2"
+portkey-ai = "^1.10.4"
+faker = "^36.1.1"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

@@ -582,7 +582,7 @@ AI_MIT_SYLLABUS_URL = get_string(
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
-AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="gpt-4o-mini")
+AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o")
 AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
 )
