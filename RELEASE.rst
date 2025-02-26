@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.2.0
+Version 0.2.0 (Released February 26, 2025)
 -------------
 
 - Update dependency starlette to ^0.46.0 (#66)
@@ -12,7 +12,7 @@ Version 0.2.0
 - Update dependency eslint-config-next to v15.1.7 (#61)
 - Update dependency Django to v4.2.19 (#60)
 
-Version 0.1.0
+Version 0.1.0 (Released February 21, 2025)
 -------------
 
 - Zero the version
