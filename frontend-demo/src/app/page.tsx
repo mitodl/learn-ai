@@ -42,7 +42,7 @@ const REQUEST_OPTS: AiChatProps["requestOpts"] = {
   },
 }
 
-const StyledChat = styled(AiChat)({
+const Container = styled.div({
   height: "calc(80vh - 72px)",
   marginTop: "16px",
 })
@@ -61,12 +61,14 @@ const HomePage: React.FC = () => {
   }
 
   return (
-    <StyledChat
-      initialMessages={INITIAL_MESSAGES}
-      requestOpts={REQUEST_OPTS}
-      conversationStarters={STARTERS}
-      parseContent={parseContent}
-    />
+    <Container>
+      <AiChat
+        initialMessages={INITIAL_MESSAGES}
+        requestOpts={REQUEST_OPTS}
+        conversationStarters={STARTERS}
+        parseContent={parseContent}
+      />
+    </Container>
   )
 }
 
