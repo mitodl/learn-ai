@@ -60,35 +60,35 @@ services:
     volumes:
       - ./config:/etc/nginx/templates
 
-  litellm:
-    build:
-      dockerfile: Dockerfile-litellm
-    ports:
-      - "4000:4000"
-    env_file:
-      - path: env/shared.env
-      - path: env/shared.local.env
-        required: false
-      - path: env/backend.env
-      - path: env/backend.local.env
-        required: false
-      # DEPRECATED: legacy .env file at the repo root
-      - path: .env
-        required: false
-    environment:
-      - DATABASE_URL=${LITELLM_DATABASE_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${PGPORT}/litellm}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
-      - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
-      - AI_MAX_BUDGET=${AI_MAX_BUDGET}
-      - AI_MAX_BUDGET_DURATION=${AI_MAX_BUDGET_DURATION}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./config:/app
+  # litellm:
+  #   build:
+  #     dockerfile: Dockerfile-litellm
+  #   ports:
+  #     - "4000:4000"
+  #   env_file:
+  #     - path: env/shared.env
+  #     - path: env/shared.local.env
+  #       required: false
+  #     - path: env/backend.env
+  #     - path: env/backend.local.env
+  #       required: false
+  #     # DEPRECATED: legacy .env file at the repo root
+  #     - path: .env
+  #       required: false
+  #   environment:
+  #     - DATABASE_URL=${LITELLM_DATABASE_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${PGPORT}/litellm}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - LITELLM_MASTER_KEY=${AI_PROXY_AUTH_TOKEN}
+  #     - LITELLM_SALT_KEY=${AI_PROXY_AUTH_TOKEN}
+  #     - AI_MAX_BUDGET=${AI_MAX_BUDGET}
+  #     - AI_MAX_BUDGET_DURATION=${AI_MAX_BUDGET_DURATION}
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./config:/app
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest

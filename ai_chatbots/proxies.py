@@ -179,3 +179,45 @@ class PortkeyProxy(AIProxy):
 
     def create_proxy_user(self, endpoint: str) -> None:
         """Do not use, not necessary"""
+
+
+class TensorZeroProxy(AIProxy):
+    """Helper class for the Portkey proxy."""
+
+    REQUIRED_SETTINGS = ()
+    PROXY_MODEL_PREFIX = ""
+
+    def get_api_kwargs(
+        self,
+        base_url_key: str = "base_url",
+        api_key_key: str = "api_key",  # noqa: ARG002
+    ) -> dict:
+        """
+        Get the required API kwargs to connect to the Lite LLM proxy.
+        When using the ChatLiteLLM class, these kwargs should be
+        "api_base" and "openai_api_key".
+
+        Args:
+            base_url_key (str): The key to pass in the proxy API URL.
+            api_key_key (str): The key to pass in the proxy authentication token.
+
+        Returns:
+            dict: The proxy API kwargs.
+        """
+
+        return {
+            f"{base_url_key}": settings.AI_PROXY_URL,
+        }
+
+    def get_additional_kwargs(self, service: BaseChatbot) -> dict:
+        """
+        Get additional  kwargs to send to the Lite LLM proxy, such
+        as user_id and job/task identification.
+        """
+        model_name = service.model.replace("/", "::")
+        return {
+            "model": f"tensorzero::default::{model_name}",
+        }
+
+    def create_proxy_user(self, endpoint: str) -> None:
+        """Do not use, not necessary"""

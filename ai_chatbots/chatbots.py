@@ -11,11 +11,11 @@ from uuid import uuid4
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
-from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
@@ -85,8 +85,7 @@ class BaseChatbot(ABC):
         Set it up to use a proxy, with required proxy kwargs, if applicable.
         Bind the LLM to any tools if they are present.
         """
-        llm = ChatLiteLLM(
-            model=f"{self.proxy_prefix}{self.model}",
+        llm = ChatOpenAI(
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
@@ -125,10 +124,14 @@ class BaseChatbot(ABC):
 
         def tool_calling_llm(state: MessagesState) -> MessagesState:
             """Call the LLM, injecting system prompt"""
+            model_name = self.model.replace("/", "::")
+            model_name = (f"tensorzero::default::{model_name}",)
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
                 state["messages"].insert(0, SystemMessage(self.instructions))
-            return MessagesState(messages=[self.llm.invoke(state["messages"],guardrails=["aporia-pre-guard", "aporia-post-guard"],)])
+            return MessagesState(
+                messages=[self.llm.invoke(state["messages"], model=model_name)]
+            )
 
         agent_graph = StateGraph(MessagesState)
         # Add the agent node that first calls the LLM
