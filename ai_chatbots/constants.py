@@ -1,5 +1,8 @@
 """Constants for the AI Chat application."""
 
+import dataclasses
+import datetime
+from typing import Optional
 from named_enum import ExtendedEnum
 
 GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
@@ -35,3 +38,11 @@ class OfferedBy(ExtendedEnum):
     xpro = "MIT xPRO"
     mitpe = "MIT Professional Education"
     see = "MIT Sloan Executive Education"
+
+
+@dataclasses.dataclass
+class ChatbotCookie:
+    cookie_name: str
+    cookie_value: str
+    path: str = "/"
+    expires: Optional[datetime.datetime] = None

@@ -1,3 +1,4 @@
+from datetime import timedelta
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -12,9 +13,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
 from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, TutorBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
-from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
+from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY, ChatbotCookie
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer, TutorChatRequestSerializer
+from main.utils import now_in_utc
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -54,37 +56,53 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         *,
         clear_history: Optional[bool] = False,
         thread_id: Optional[str] = None,
+        cookie_suffix: Optional[str] = None
     ) -> tuple[str, list[str]]:
         """
         Extract and update separate cookie values for logged in vs anonymous users.
         Each chatbot should have its own thread_id cookies.
         Assign a new thread_id if clear_history is True or no thread_id is found.
         """
-        latest_cookie_key = f"{self.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
-        anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+        if not cookie_suffix:
+            cookie_suffix = ""
+        latest_cookie_key = f"{self.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}{cookie_suffix}"
+        anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}{cookie_suffix}"
         threads_ids_str = self.scope["cookies"].get(anon_cookie_key) or ""
 
         thread_ids = [tid for tid in (threads_ids_str).split(",") if tid]
 
-        if thread_ids:
+        now = now_in_utc().isoformat()
+
+        if thread_ids and self.scope["cookies"].get(anon_cookie_key, {}).get("expires", now) > now:
             # Anonymous users may have multiple thread ids, ordered by most recent last.
-            current_thread_id = thread_ids[-1] if thread_ids else None
-        else:
-            # Logged in users have a single thread id (except after first login).
+            current_thread_id = thread_ids[-1] or ""
+        elif self.scope["cookies"].get(latest_cookie_key, {}).get("expires", now) > now:
             current_thread_id = self.scope["cookies"].get(latest_cookie_key) or ""
 
         if (
             thread_id
-            and user
-            and not user.is_anonymous
-            and await UserChatSession.objects.filter(
-                user=user, thread_id=thread_id
-            ).aexists()
+            and (
+                # New chat thread
+                not await UserChatSession.objects.filter(thread_id=thread_id).aexists() or (
+                    # Existing chat thread belonging to same user
+                    user
+                    and not user.is_anonymous
+                    and (
+                        await UserChatSession.objects.filter(user=user, thread_id=thread_id).aexists()
+                    )
+                
+            ) or (
+                # Existing chat thread, no assigned user, user is anonymous
+                user.is_anonymous 
+                and  await UserChatSession.objects.filter(user=None, thread_id=thread_id).aexists
+            ))
         ):
             current_thread_id = thread_id
 
         if clear_history or not current_thread_id:
             current_thread_id = uuid4().hex
+
+        expire_time = (now_in_utc() + timedelta(minutes=1)).isoformat()
 
         if not user.is_anonymous:
             if thread_ids:
@@ -93,8 +111,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
                     user_id=None, thread_id__in=thread_ids
                 ).aupdate(user=user)
             cookies = [
-                f"{latest_cookie_key}={current_thread_id}; Path=/; HttpOnly",
-                f"{anon_cookie_key}=; Path=/; HttpOnly",
+                ChatbotCookie(
+                    cookie_name=latest_cookie_key, cookie_value=current_thread_id, expires=expire_time
+                ),
+                ChatbotCookie(
+                    cookie_name=anon_cookie_key, cookie_value="", expires=expire_time
+                )
             ]
         else:
             # Append current thread_id to cookie for anonymous users
@@ -102,20 +124,34 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
                 thread_ids.append(current_thread_id)
             thread_ids_str = f"{','.join(thread_ids)}," if thread_ids else ""
             cookies = [
-                f"{latest_cookie_key}=; Path=/; HttpOnly",
-                f"{anon_cookie_key}={thread_ids_str}; Path=/; HttpOnly",
+                ChatbotCookie(
+                    cookie_name=latest_cookie_key, cookie_value="", expires=expire_time
+                ),
+                ChatbotCookie(
+                    cookie_name=anon_cookie_key, cookie_value=thread_ids_str, expires=expire_time
+                )                
             ]
         return current_thread_id, cookies
 
-    async def prepare_response(self, serializer: ChatRequestSerializer) -> Tuple[str, list[str]]:
+    async def prepare_response(
+            self, 
+            serializer: ChatRequestSerializer,
+            cookie_suffix_field: Optional[str] = None
+    ) -> Tuple[str, list[str]]:
         """Prepare the response"""
         user = self.scope.get("user", None)
         session = self.scope.get("session", None)
+
+        if cookie_suffix_field:
+            cookie_suffix = f"_{serializer.validated_data.pop(cookie_suffix_field, '')}",
+        else:
+            cookie_suffix = ""
 
         current_thread_id, cookies = await self.assign_thread_cookies(
             user,
             clear_history=serializer.validated_data.pop("clear_history", False),
             thread_id=serializer.validated_data.pop("thread_id", None),
+            cookie_suffix=cookie_suffix
         )
 
         self.thread_id = current_thread_id
@@ -173,7 +209,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
 
         if thread_id and cookies:
             headers.extend(
-                [(b"Set-Cookie", cookie_thread.encode()) for cookie_thread in cookies]
+                [(b"Set-Cookie", f"{cookie.cookie_name}={cookie.cookie_value};Path={cookie.cookie_path};Expires={cookie.expires};") for cookie in cookies]
             )
 
         await self.send_headers(status=status, headers=headers)
@@ -307,6 +343,15 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
         }
+
+    def prepare_response(
+            self, 
+            serializer: ChatRequestSerializer,
+            cookie_suffix_field: Optional[str] = None
+    ) -> Tuple[str, list[str]]:
+        """Set the course id as the cookie suffix field"""
+        suffix_field = cookie_suffix_field or "course_id"
+        return super().prepare_response(serializer, cookie_suffix_field=suffix_field)
 
 
 class TutorBotHttpConsumer(BaseBotHttpConsumer):

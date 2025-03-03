@@ -17,6 +17,7 @@ import os
 import platform
 from urllib.parse import urljoin
 
+from celery.schedules import crontab
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
@@ -513,6 +514,13 @@ HIJACK_LOGOUT_REDIRECT_URL = "/admin/auth/user"
 ANONYMOUS_USER_NAME = None
 
 REQUESTS_TIMEOUT = get_int("REQUESTS_TIMEOUT", 30)
+
+CELERY_BEAT_SCHEDULE = {
+    "delete_stale_chat_sessions": {
+        "task": "ai_chatbots.tasks.dlete_stale_sessions",
+        "schedule": crontab(minute=0, hour=0),  # 3:00am EST
+    },
+}
 
 
 if DEBUG:
