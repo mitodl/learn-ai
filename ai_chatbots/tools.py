@@ -186,6 +186,20 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
     )
 
 
+class VideoGPTToolSchema(pydantic.BaseModel):
+    """Schema for searching MIT contentfiles related to a particular course."""
+
+    q: str = Field(
+        description=(
+            "Query to find transcript information that might answer the user's\
+                question."
+        )
+    )
+    state: Annotated[dict, InjectedState] = Field(
+        description="The agent state, including course_id and collection_name params"
+    )
+
+
 @tool(args_schema=SearchContentFilesToolSchema)
 def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
@@ -224,3 +238,41 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     except requests.exceptions.RequestException:
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
+
+
+@tool(args_schema=VideoGPTToolSchema)
+def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) -> str:
+    """
+    Query the MIT video transcript API, and return results as a JSON string.
+    """
+
+    url = settings.AI_MIT_VIDEO_METADATA_URL
+
+    xblock_video_id = state["xblock_video_id"][-1]
+    yt_video_id = state["yt_video_id"][-1]  # noqa: F841
+    params = {
+        "q": q,
+        "edx_block_id": xblock_video_id,
+        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
+    }
+
+    log.info("Searching MIT API with params: %s", params)
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        raw_results = response.json().get("results", [])
+        # Simplify the response to only include the main properties
+        simplified_results = []
+        for result in raw_results:
+            simplified_result = {
+                "chunk_content": result.get("chunk_content"),
+            }
+            simplified_results.append(simplified_result)
+        full_output = {
+            "results": simplified_result,
+            "metadata": {"parameters": params},
+        }
+        return json.dumps(full_output)
+    except requests.exceptions.RequestException:
+        log.exception("Error querying MIT API for transcripts")
+        return json.dumps({"error": "An error occurred while getting the transcript"})

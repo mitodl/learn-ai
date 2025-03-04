@@ -41,6 +41,13 @@ class SyllabusChatRequestSerializer(ChatRequestSerializer):
     )
 
 
+class VideoGPTRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the video GPT chatbot.
+    """
+
+    xblock_video_id = serializers.CharField(required=True, allow_blank=False)
+    yt_video_id = serializers.CharField(required=False, allow_blank=False)
 
 class UserChatSessionSerializer(serializers.ModelSerializer):
     """Serializer for user chat sessions"""
