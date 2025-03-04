@@ -1,6 +1,21 @@
 Release Notes
 =============
 
+Version 0.2.1
+-------------
+
+- Add tutor bot frontend
+- Update dependency starlette to v0.46.0 (#79)
+- Update dependency next to v15.2.0 (#78)
+- Update dependency langgraph to ^0.3.0 (#77)
+- Update dependency eslint-config-next to v15.2.0 (#76)
+- Update codecov/codecov-action action to v5.4.0 (#75)
+- Update dependency ruff to v0.9.9 (#74)
+- Tutor bot backend
+- Fix chat UI height (#73)
+- Update dependency faker to v36
+- Update dependency @mitodl/smoot-design to v3
+
 Version 0.2.0 (Released February 26, 2025)
 -------------
 
