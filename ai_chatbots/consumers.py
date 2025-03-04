@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Optional
 from uuid import uuid4
 
 from channels.generic.http import AsyncHttpConsumer
@@ -10,11 +10,12 @@ from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, TutorBot
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, TutorBot, VideoGPTBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
-from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer, TutorChatRequestSerializer
+from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer, TutorChatRequestSerializer, VideoGPTRequestSerializer
+
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -42,8 +43,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         """
         text_data_json = json.loads(message_json)
         serializer = serializer_class(
-            data=text_data_json,
-            context={"user": self.scope.get("user", None)}
+            data=text_data_json, context={"user": self.scope.get("user", None)}
         )
         serializer.is_valid(raise_exception=True)
         return serializer
@@ -107,7 +107,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             ]
         return current_thread_id, cookies
 
-    async def prepare_response(self, serializer: ChatRequestSerializer) -> Tuple[str, list[str]]:
+    async def prepare_response(
+        self, serializer: ChatRequestSerializer
+    ) -> tuple[str, list[str]]:
         """Prepare the response"""
         user = self.scope.get("user", None)
         session = self.scope.get("session", None)
@@ -136,16 +138,15 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         return current_thread_id, cookies
 
-
     def process_extra_state(self, data: dict) -> dict:  # noqa: ARG002
         """Process extra state if any"""
         return None
 
     async def start_response(
         self,
-            thread_id: Optional[str] = None,
-            status: Optional[int] = HTTP_200_OK,
-            cookies: Optional[list[str]] = None
+        thread_id: Optional[str] = None,
+        status: Optional[int] = HTTP_200_OK,
+        cookies: Optional[list[str]] = None,
     ):
         headers = (
             [
@@ -181,7 +182,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         # Headers are only sent after the first body event.
         await self.send_chunk("")
 
-    async def send_error_response(self, status: int, error: Exception, cookies: list[str]):
+    async def send_error_response(
+        self, status: int, error: Exception, cookies: list[str]
+    ):
         """
         Send the appropriate error response. Send error status code if the
         headers have not yet been sent; otherwise it is too late.
@@ -334,3 +337,37 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             problem_code = problem_code
         )
 
+
+class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the video GPT bot.
+    """
+
+    serializer_class = VideoGPTRequestSerializer
+    ROOM_NAME = VideoGPTBot.__name__
+
+    def create_chatbot(
+        self,
+        serializer: VideoGPTRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a VideoGPTBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        instructions = serializer.validated_data.pop("instructions", None)
+        model = serializer.validated_data.pop("model", None)
+
+        return VideoGPTBot(
+            self.user_id,
+            checkpointer,
+            temperature=temperature,
+            instructions=instructions,
+            model=model,
+            thread_id=self.thread_id,
+        )
+
+    def process_extra_state(self, data: dict) -> dict:
+        """Process extra state parameters if any"""
+        return {
+            "xblock_video_id": [data.get("xblock_video_id")],
+            "yt_video_id": [data.get("yt_video_id")],
+        }
