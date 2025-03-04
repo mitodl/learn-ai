@@ -7,13 +7,15 @@ from collections.abc import AsyncGenerator
 from operator import add
 from typing import Annotated, Optional
 from uuid import uuid4
+from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -22,8 +24,13 @@ from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from openai import BadRequestError
+from langchain_openai import ChatOpenAI
 from typing_extensions import TypedDict
-
+from open_learning_ai_tutor.problems import get_pb_sol
+from open_learning_ai_tutor.StratL import message_tutor, process_StratL_json_output
+from open_learning_ai_tutor.tools import tutor_tools
+from open_learning_ai_tutor.utils import  messages_to_json, json_to_messages, intent_list_to_json
+from ai_chatbots.models import TutorBotOutput
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.tools import search_content_files
@@ -403,3 +410,108 @@ information.
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+@database_sync_to_async
+def create_tutorbot_output(thread_id, chat_json):
+    return TutorBotOutput.objects.create(thread_id=thread_id, chat_json=chat_json)
+
+@database_sync_to_async
+def get_history(thread_id):
+    return TutorBotOutput.objects.filter(thread_id=thread_id).last()
+        
+
+class TutorBot(BaseChatbot):
+    """
+    Chatbot that assists with problem sets
+    """
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        checkpointer: Optional[BaseCheckpointSaver] = BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Tutor Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        thread_id: Optional[str] = None,
+        problem_code: Optional[str] = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            checkpointer=checkpointer,
+            temperature=temperature,
+            thread_id=thread_id,
+            model=model or settings.AI_DEFAULT_TUTOR_MODEL,
+        )
+        self.problem, self.solution = get_pb_sol(problem_code)
+    
+    def get_llm(self, **kwargs) -> BaseChatModel:
+        """
+        Return the LLM instance for the chatbot.
+        Set it up to use a proxy, with required proxy kwargs, if applicable.
+        """
+        llm = ChatOpenAI(
+            model=f"{self.proxy_prefix}{self.model}",
+            **(self.proxy.get_api_kwargs(base_url_key="base_url", api_key_key="openai_api_key") if self.proxy else {}),
+            **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
+            **kwargs,
+        )
+        # Set the temperature if it's supported by the model
+        if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
+            llm.temperature = self.temperature
+        return llm
+
+
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the  tool"""
+        return None
+        
+    async def get_completion(
+        self,
+        message: str,
+        *,
+        extra_state: Optional[TypedDict] = None,
+        debug: bool = settings.AI_DEBUG,
+    ) -> AsyncGenerator[str, None]:
+        """Call message_tutor with the user query and return the response"""
+
+        history = await get_history(self.thread_id)
+
+        if history:
+            json_history = json.loads(history.chat_json)
+            self.chat_history = json_to_messages(json_history.get('chat_history', []))+[HumanMessage(content=message)]
+            self.intent_history =  json_history.get('intent_history', [])
+            self.assessment_history =  json_history.get('assessment_history', [])
+        else:
+            self.chat_history = [HumanMessage(content=message)]
+            self.intent_history = '[]'
+            self.assessment_history = ''
+
+        response = ""
+
+        try:
+            json_output = message_tutor(
+                self.problem, 
+                self.solution, 
+                self.llm, 
+                messages_to_json([HumanMessage(content=message)]), 
+                messages_to_json(self.chat_history), 
+                self.assessment_history, 
+                self.intent_history, 
+                {"assessor_client": self.llm},
+                tools=tutor_tools
+            )
+
+            await create_tutorbot_output(self.thread_id, json_output)
+            prossessed = process_StratL_json_output(json_output)
+            response = "An error has occurred, please try again"
+            for index, msg in enumerate(prossessed[0]):
+                if isinstance(msg, ToolMessage) and msg.name == 'text_student':
+                    response = prossessed[0][index-1].tool_calls[0]['args']['message_to_student']
+
+            yield response
+
+        except Exception:
+            yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
+            log.exception("Error running AI agent")
+

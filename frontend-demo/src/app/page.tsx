@@ -2,21 +2,7 @@
 import React from "react"
 import { AiChat, AiChatProps } from "@mitodl/smoot-design/ai"
 import styled from "@emotion/styled"
-
-/**
- * Extracts a JSON object from a comment string
- * @param comment the comment string
- * @returns the JSON object
- */
-const extractJSONFromComment = (comment: string) => {
-  const jsonStr = comment.toString().match(/<!-{2}(.*)-{2}>/)?.[1] || "{}"
-  try {
-    return JSON.parse(jsonStr)
-  } catch (e) {
-    console.error("error parsing JSON from comment", comment, e)
-    return {}
-  }
-}
+import { extractJSONFromComment } from "./utils"
 
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
   {
@@ -42,7 +28,7 @@ const REQUEST_OPTS: AiChatProps["requestOpts"] = {
   },
 }
 
-const StyledChat = styled(AiChat)({
+const Container = styled.div({
   height: "calc(80vh - 72px)",
   marginTop: "16px",
 })
@@ -61,12 +47,14 @@ const HomePage: React.FC = () => {
   }
 
   return (
-    <StyledChat
-      initialMessages={INITIAL_MESSAGES}
-      requestOpts={REQUEST_OPTS}
-      conversationStarters={STARTERS}
-      parseContent={parseContent}
-    />
+    <Container>
+      <AiChat
+        initialMessages={INITIAL_MESSAGES}
+        requestOpts={REQUEST_OPTS}
+        conversationStarters={STARTERS}
+        parseContent={parseContent}
+      />
+    </Container>
   )
 }
 

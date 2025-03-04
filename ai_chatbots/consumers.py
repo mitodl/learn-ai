@@ -10,11 +10,11 @@ from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, TutorBot
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
-from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer
+from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer, TutorChatRequestSerializer
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -62,8 +62,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         """
         latest_cookie_key = f"{self.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
-
         threads_ids_str = self.scope["cookies"].get(anon_cookie_key) or ""
+
         thread_ids = [tid for tid in (threads_ids_str).split(",") if tid]
 
         if thread_ids:
@@ -307,3 +307,30 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
         }
+
+
+class TutorBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the tutor bot.
+    """
+
+    serializer_class = TutorChatRequestSerializer
+    ROOM_NAME = TutorBot.__name__
+
+
+    def create_chatbot(self, serializer: TutorChatRequestSerializer, checkpointer: BaseCheckpointSaver,):
+        """Return a TutorBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        model = serializer.validated_data.pop("model", None)
+        problem_code = serializer.validated_data.pop("problem_code", None)
+
+
+        return TutorBot(
+            self.user_id,
+            checkpointer,
+            temperature=temperature,
+            model=model,
+            thread_id=self.thread_id,
+            problem_code = problem_code
+        )
+

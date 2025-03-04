@@ -30,7 +30,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 log = logging.getLogger()
 
@@ -587,6 +587,7 @@ AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
 )
 AI_DEFAULT_SYLLABUS_MODEL = get_string("AI_DEFAULT_SYLLABUS_MODEL", AI_DEFAULT_MODEL)
+AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "gpt-4o")
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 

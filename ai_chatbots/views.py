@@ -2,9 +2,17 @@
 
 from django.db.models import QuerySet
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import mixins, viewsets
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
+from open_learning_ai_tutor.problems import get_pb_sol
+from rest_framework import mixins, serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from ai_chatbots.models import DjangoCheckpoint, UserChatSession
 from ai_chatbots.permissions import IsThreadOwner
@@ -80,3 +88,51 @@ class ChatMessageViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             .extra(where=[self.message_filter])  # noqa: S610 - just a hardcoded filter
             .order_by("metadata__step")
         )
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="problem_code",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description="problem_code of the problem",
+        )
+    ],
+    responses={
+        200: inline_serializer(
+            name="ProblemAndSolutionResponse",
+            fields={
+                "problem": serializers.CharField(),
+                "solution": serializers.CharField(),
+            },
+        ),
+        404: OpenApiResponse(description="Missing problem code"),
+    },
+)
+class TutorProblemView(APIView):
+    """
+    endpoint that returns the content of a sample tutor problem
+    """
+
+    permission_classes = ()
+    http_method_names = ["get"]
+
+    def get(self, request):
+        """
+        Return a sample tutor problem and solution.
+        """
+        problem_code = request.GET.get("problem_code")
+        try:
+            problem, solution = get_pb_sol(problem_code)
+
+            return Response(
+                {
+                    "problem": problem,
+                    "solution": solution,
+                }
+            )
+        except KeyError:
+            return Response(
+                {"error": f"Problem code {problem_code} not found."}, status=404
+            )
