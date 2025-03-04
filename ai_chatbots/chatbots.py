@@ -33,7 +33,7 @@ from open_learning_ai_tutor.utils import  messages_to_json, json_to_messages, in
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
-from ai_chatbots.tools import search_content_files
+from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
 
 log = logging.getLogger(__name__)
 
@@ -515,3 +515,79 @@ class TutorBot(BaseChatbot):
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
 
+
+class VideoGPTAgentState(AgentState):
+    """
+    State for the video GPT bot. Passes xblock_video_id and yt_video_id
+    to the associated tool function.
+    """
+
+    xblock_video_id: Annotated[list[str], add]
+    yt_video_id: Annotated[list[str], add]
+
+
+class VideoGPTBot(BaseChatbot):
+    """Service class for the AI video chat agent"""
+
+    TASK_NAME = "VIDEO_GPT_TASK"
+    JOB_ID = "VIDEO_GPT_JOB"
+
+    INSTRUCTIONS = """You are an assistant helping users answer questions related
+to a video transcript.
+Your job:
+1. Use the available function to gather relevant information about the user's question.
+2. Provide a clear, user-friendly summary of the information retrieved by the tool to
+answer the user's question.
+3. Do not specify the answer is from a transcript, instead say it's from video.
+Always run the tool to answer questions, and answer only based on the tool
+output. Do not include the xblock video id in the query parameter.
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
+ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
+information.
+"""
+
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning VideoGPT Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            checkpointer=checkpointer,
+            model=model or settings.AI_DEFAULT_VIDEO_GPT_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
+        )
+        self.agent = self.create_agent_graph()
+
+    def create_tools(self):
+        """Create tools required for the agent"""
+        return [get_video_transcript_chunk]
+
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Generate a standard react agent graph for the video gpt agent.
+        Use the custom VideoGPTAgentState to pass xblock_video_id and yt_video_id
+        to the associated tool function.
+        """
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.checkpointer,
+            state_schema=VideoGPTAgentState,
+            state_modifier=self.instructions,
+        )
+
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the search tool"""
+        thread_id = self.config["configurable"]["thread_id"]
+        latest_state = await self.get_latest_history()
+        return get_search_tool_metadata(thread_id, latest_state)

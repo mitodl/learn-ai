@@ -580,14 +580,21 @@ AI_MIT_SYLLABUS_URL = get_string(
     "AI_MIT_SYLLABUS_URL",
     "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
 )
+AI_MIT_VIDEO_METADATA_URL = get_string(
+    "AI_MIT_VIDEO_METADATA_URL",
+    "https://api.rc.learn.mit.edu/api/v0/vector_content_files_search/",
+)
+
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
+AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o")
 AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
 )
 AI_DEFAULT_SYLLABUS_MODEL = get_string("AI_DEFAULT_SYLLABUS_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "gpt-4o")
+AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 
