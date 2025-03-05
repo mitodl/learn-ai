@@ -13,12 +13,10 @@ class UserChatSession(TimestampedModel):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True
     )
-    dj_session_key = models.CharField(
-        max_length=512, blank=True, db_index=True, default=""
-    )
-    title = models.CharField(max_length=255, blank=True, default="")
-    agent = models.CharField(max_length=128, blank=True, db_index=True, default="")
-    object_id = models.CharField(max_length=256, blank=True, db_index=True, default="")
+    dj_session_key = models.CharField(max_length=512, blank=True, db_index=True)
+    title = models.CharField(max_length=255, blank=True)
+    agent = models.CharField(max_length=128, blank=True, db_index=True)
+    object_id = models.CharField(max_length=256, blank=True, db_index=True)
 
     def __str__(self):
         return f"{self.user.global_id or self.dj_session_key}-{self.thread_id}"

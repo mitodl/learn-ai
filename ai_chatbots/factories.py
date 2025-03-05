@@ -201,8 +201,6 @@ class UserChatSessionFactory(DjangoModelFactory):
     agent = FuzzyChoice(
         [ResourceRecommendationBot.__name__, SyllabusAgentState.__name__]
     )
-    dj_session_id = factory.Faker("uuid4")
-    object_id = factory.Faker("uuid4")
 
     class Meta:
         model = UserChatSession

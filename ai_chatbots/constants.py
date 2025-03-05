@@ -52,5 +52,7 @@ class ChatbotCookie:
         """
         Represent the cookie as a string
         """
-        expire_str = f"Expires={self.expires.isoformat()}" if self.expires else ""
+        expire_str = (
+            f"Expires={self.expires.isoformat()}" if self.expires is not None else ""
+        )
         return f"{self.name}={self.value};Path={self.path};{expire_str}"

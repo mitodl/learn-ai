@@ -81,6 +81,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
 
         current_thread_id = None
+        anon_cookie = False
         if clear_history:
             # Create a new random thread id
             current_thread_id = uuid4().hex
@@ -106,7 +107,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
                     user.is_anonymous
                     and await UserChatSession.objects.filter(
                         user=None, thread_id=thread_id, dj_session_key=self.session_key
-                    ).aexists
+                    ).aexists()
                 )
             )
         ):

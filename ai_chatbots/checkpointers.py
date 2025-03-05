@@ -118,8 +118,8 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         message: str,
         agent: str,
         user: Optional[USER_MODEL] = None,
-        dj_session_key: Optional[str] = None,
-        object_id: Optional[str] = None,
+        dj_session_key: Optional[str] = "",
+        object_id: Optional[str] = "",
     ):
         """
         Initialize the DjangoSaver and create a UserChatSession if applicable.
@@ -150,7 +150,7 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
             and not user.is_anonymous
         ):
             chat_session.user = user
-            chat_session.dj_session_key = None
+            chat_session.dj_session_key = ""
             await chat_session.asave()
         self.session = chat_session
         if chat_session.user is None and user and not user.is_anonymous:
