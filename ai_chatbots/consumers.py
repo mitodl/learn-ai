@@ -7,6 +7,8 @@ from uuid import uuid4
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.db.models import Q
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
@@ -25,6 +27,7 @@ from ai_chatbots.serializers import (
     SyllabusChatRequestSerializer,
     TutorChatRequestSerializer,
 )
+from main.utils import decode_value
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -111,11 +114,15 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         else:
             # Use cookie thread id if any, check anon cookie first
             anon_cookie = True
-            current_thread_id = self.scope["cookies"].get(anon_cookie_key) or ""
+            current_thread_id = decode_value(
+                self.scope["cookies"].get(anon_cookie_key) or ""
+            )
             if not current_thread_id:
                 # no anon cookie thread id, check authenticated cookie
                 anon_cookie = False
-                current_thread_id = self.scope["cookies"].get(latest_cookie_key) or ""
+                current_thread_id = decode_value(
+                    self.scope["cookies"].get(latest_cookie_key) or ""
+                )
             if current_thread_id and "|" in current_thread_id:
                 # Object-specific thread, ensure it's the same object
                 current_thread_id, cookie_object_id = current_thread_id.split("|")
@@ -149,7 +156,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             current_thread_id = uuid4().hex
 
         # Incorporate object id into cookie value if present
-        cookie_value = f"{current_thread_id}{f'|{object_id}' if object_id else ''}"
+        cookie_value = urlsafe_base64_encode(
+            force_bytes(f"{current_thread_id}{f'|{object_id}' if object_id else ''}")
+        )
         # assign the cookie values
         cookies = [
             ChatbotCookie(
