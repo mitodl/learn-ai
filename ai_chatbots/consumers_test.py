@@ -48,7 +48,7 @@ def tutor_consumer(async_user):
 
 @pytest.fixture
 def video_gpt_consumer(async_user):
-    """Return a syllabus consumer."""
+    """Return a video gpt consumer."""
     consumer = consumers.VideoGPTBotHttpConsumer()
     consumer.scope = {"user": async_user, "cookies": {}, "session": None}
     consumer.channel_name = "test_video_gpt_channel"
