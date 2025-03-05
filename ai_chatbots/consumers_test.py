@@ -10,7 +10,7 @@ from django.contrib.auth.models import AnonymousUser
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot
+from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
@@ -36,6 +36,7 @@ def syllabus_consumer(async_user):
     consumer.channel_name = "test_syllabus_channel"
     return consumer
 
+
 @pytest.fixture
 def tutor_consumer(async_user):
     """Return a tutor consumer."""
@@ -43,6 +44,16 @@ def tutor_consumer(async_user):
     consumer.scope = {"user": async_user, "cookies": {}, "session": None}
     consumer.channel_name = "test_tutor_channel"
     return consumer
+
+
+@pytest.fixture
+def video_gpt_consumer(async_user):
+    """Return a video gpt consumer."""
+    consumer = consumers.VideoGPTBotHttpConsumer()
+    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_video_gpt_channel"
+    return consumer
+
 
 @pytest.mark.parametrize(
     ("message", "temperature", "instructions", "model"),
@@ -425,7 +436,8 @@ async def test_handle_errors(
             }
         )
 
-async def test_tutor_agent_handle(  
+
+async def test_tutor_agent_handle(
     mocker,
     mock_http_consumer_send,
     tutor_consumer,
@@ -443,15 +455,12 @@ async def test_tutor_agent_handle(
         ),
     )
     message = "What should i try next?"
-    data = {
-        "message": message,
-        "problem_code": "A1P1"
-    }
-   
+    data = {"message": message, "problem_code": "A1P1"}
+
     await tutor_consumer.handle(json.dumps(data))
 
     mock_http_consumer_send.send_headers.assert_called_once()
-   
+
     mock_completion.assert_called_once_with(message, extra_state=None)
     assert (
         mock_http_consumer_send.send_body.call_count
@@ -462,3 +471,54 @@ async def test_tutor_agent_handle(
         more_body=True,
     )
     assert mock_http_consumer_send.send_headers.call_count == 1
+
+
+async def test_video_gpt_create_chatbot(
+    mocker, mock_http_consumer_send, video_gpt_consumer, async_user
+):
+    """VideoGPTBotHttpConsumer create_chatbot function should return VideoGPTBot."""
+    serializer = consumers.VideoGPTRequestSerializer(
+        data={
+            "message": "What is this video about?",
+            "transcript_asset_id": "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
+            "temperature": 0.7,
+            "model": "gpt-3.5-turbo",
+        }
+    )
+    serializer.is_valid(raise_exception=True)
+    await video_gpt_consumer.prepare_response(serializer)
+    chatbot = video_gpt_consumer.create_chatbot(serializer, mocker.Mock())
+    assert isinstance(chatbot, VideoGPTBot)
+    assert chatbot.user_id == async_user.global_id
+    assert chatbot.temperature == 0.7
+    assert chatbot.model == "gpt-3.5-turbo"
+
+
+async def test_video_agent_consumer_handle(
+    mocker, mock_http_consumer_send, video_gpt_consumer
+):
+    """Test the handle function of the video gpt consumer."""
+    response = SystemMessageFactory.create().content.split(" ")
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.VideoGPTBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
+        ),
+    )
+    payload = {
+        "message": "what is this video about?",
+        "transcript_asset_id": "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
+    }
+    await video_gpt_consumer.handle(json.dumps(payload))
+    mock_completion.assert_called_once_with(
+        payload["message"],
+        extra_state={
+            "transcript_asset_id": [payload["transcript_asset_id"]],
+        },
+    )
+    assert await UserChatSession.objects.filter(
+        thread_id=video_gpt_consumer.thread_id,
+        user=video_gpt_consumer.scope["user"],
+        title=payload["message"],
+        agent=VideoGPTBot.__name__,
+    ).aexists()

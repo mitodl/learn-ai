@@ -11,6 +11,7 @@ from ai_chatbots.factories import (
     SyllabusAgentStateFactory,
     SystemMessageFactory,
     ToolMessageFactory,
+    VideoGPTAgentStateFactory,
 )
 from main.factories import UserFactory
 
@@ -80,6 +81,13 @@ def content_chunk_results():
 
 
 @pytest.fixture
+def video_transcript_content_chunk_results():
+    """Return content file vector chunks for testing video GPT."""
+    with Path.open("./test_json/video_transcript_chunks.json") as f:
+        yield json.loads(f.read())
+
+
+@pytest.fixture
 def syllabus_agent_state():
     """Return a syllabus agent state for testing."""
     return SyllabusAgentStateFactory(
@@ -91,4 +99,20 @@ def syllabus_agent_state():
         ],
         course_id=["MITx+10.00.2x", "MITx+6.00.1x"],
         collection_name=[None, "vector512"],
+    )
+
+
+@pytest.fixture
+def video_gpt_agent_state():
+    """Return a video gpt agent state for testing."""
+    return VideoGPTAgentStateFactory(
+        messages=[
+            HumanMessageFactory.create(content="What is this video about?"),
+            ToolMessageFactory.create(tool_call="get_video_transcript_chunk"),
+            HumanMessageFactory.create(content="What topic does the video discuss?"),
+            ToolMessageFactory.create(tool_call="get_video_transcript_chunk"),
+        ],
+        transcript_asset_id=[
+            "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
+        ],
     )
