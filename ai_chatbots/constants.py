@@ -47,3 +47,10 @@ class ChatbotCookie:
     value: str
     path: str = "/"
     expires: Optional[datetime.datetime] = None
+
+    def __str__(self) -> str:
+        """
+        Represent the cookie as a string
+        """
+        expire_str = f"Expires={self.expires.isoformat()}" if self.expires else ""
+        return f"{self.name}={self.value};Path={self.path};{expire_str}"
