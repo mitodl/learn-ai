@@ -21,7 +21,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from open_learning_ai_tutor.problems import get_pb_sol
 from open_learning_ai_tutor.StratL import message_tutor, process_StratL_json_output
@@ -31,6 +31,7 @@ from open_learning_ai_tutor.utils import (
     messages_to_json,
 )
 from openai import BadRequestError
+from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
@@ -168,7 +169,7 @@ class BaseChatbot(ABC):
         self,
         message: str,
         *,
-        extra_state: Optional[dict] = None,
+        extra_state: Optional[TypedDict] = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
@@ -353,7 +354,7 @@ class SyllabusBot(BaseChatbot):
     JOB_ID = "SYLLABUS_JOB"
 
     INSTRUCTIONS = """You are an assistant helping users answer questions related
-to a syllabus for the course {course_id}.
+to a syllabus.
 
 Your job:
 1. Use the available function to gather relevant information about the user's question.
@@ -399,28 +400,13 @@ information.
         Use the custom SyllabusAgentState to pass course_id and collection_name
         to the associated tool function.
         """
-        # Names of nodes in the graph
-        agent_node = "agent"
-        tools_node = "tools"
-
-        def tool_calling_llm(state: SyllabusAgentState) -> MessagesState:
-            """Call the LLM, injecting system prompt"""
-            if len(state["messages"]) == 1:
-                # New chat, so inject the system prompt
-                instructions = self.instructions.format(course_id=state["course_id"])
-                state["messages"].insert(0, SystemMessage(instructions))
-            return MessagesState(messages=[self.llm.invoke(state["messages"])])
-
-        agent_graph = StateGraph(SyllabusAgentState)
-        agent_graph.add_node(agent_node, tool_calling_llm)
-        if self.tools:
-            agent_graph.add_node(tools_node, ToolNode(tools=self.tools))
-            agent_graph.add_conditional_edges(agent_node, tools_condition)
-            agent_graph.add_edge(tools_node, agent_node)
-        agent_graph.set_entry_point(agent_node)
-
-        # compile and return the agent graph
-        return agent_graph.compile(checkpointer=self.checkpointer)
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.checkpointer,
+            state_schema=SyllabusAgentState,
+            state_modifier=self.instructions,
+        )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -495,7 +481,7 @@ class TutorBot(BaseChatbot):
         self,
         message: str,
         *,
-        extra_state: Optional[dict] = None,  # noqa: ARG002
+        extra_state: Optional[TypedDict] = None,  # noqa: ARG002
         debug: bool = settings.AI_DEBUG,  # noqa: ARG002
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
