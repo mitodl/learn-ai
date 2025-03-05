@@ -517,7 +517,7 @@ REQUESTS_TIMEOUT = get_int("REQUESTS_TIMEOUT", 30)
 
 CELERY_BEAT_SCHEDULE = {
     "delete_stale_chat_sessions": {
-        "task": "ai_chatbots.tasks.dlete_stale_sessions",
+        "task": "ai_chatbots.tasks.delete_stale_sessions",
         "schedule": crontab(minute=0, hour=0),  # 3:00am EST
     },
 }
