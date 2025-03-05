@@ -1,0 +1,135 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "course_number": ["course-v1:xPRO+LASERxE3"],
+      "key": "5ec61359204ae2880ee474ac9ff3904d",
+      "resource_point_id": "c25984a4-31b2-5bb4-b5e1-8e1051662dfb",
+      "file_extension": ".srt",
+      "resource_readable_id": "course-v1:xPRO+LASERxE3",
+      "run_title": "Leading Teams",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 0,
+      "run_readable_id": "course-v1:xPRO+LASERxE3+R15",
+      "chunk_content": "PROFESSOR: Now you've learned a lot about xTeams. Again, xTeams are a form of team that bring together both work on internal team process as well as external activity across a teams boundaries. XTeams engage in sense making, ambassadorship, and task coordination and go through explore, exploit, and export. So going back to the questions I raised earlier in the session, how do you make an old staid bureaucratic organization work in an exponentially-changing world? Part of the answer to that is that you create an infrastructure of innovation by having multiple xTeams in your organization that not only connect to one another, but also connect to the larger ecosystem that you need to connect to in order to be successful in this exponentially-changing world. How do you motivate Gen Ys? Think about it? Put Gen Ys and Gen Zs on xTeams. Create them throughout your organization because some of the folks who are spending eight hours a day working on their computers-- they want to do more. XTeams can engage them. XTeams can help them feel as if they're part of the larger organization. They can see more about strategy and how the organization is doing. I recently created a set of xTeams at a pharmaceutical company that was trying to innovate. And what they found was that young people felt more connected to the organization and more knowledgeable about what were competitors doing? What were some of the things that they could do to combat those challenges? So get people activated and motivated by putting them on teams that have clear tasks that you in higher levels of leadership can engage them in. It also gives you more data on what's going out in the external world, but you don't have to even find that information. You can send other people out to get it. How do you create distributed leadership across organizations? Create xTeams that are linking to other parts of the ecosystem, to other organizations. How do you move your organization from bureaucratic, hierarchical, formalized states to more agile, nimble, fluid learning organizations? Again, use xTeams as vehicles for change. Have people in your organization learn and think about where is it that you can go, how can you change, and let them start the process. In short, xTeams are a vehicle for distributed leadership or leadership at every level so that you can move your organization forward. XTeams are outwardly focused, strategically linked to what's going on up and down the organization. They combine innovation and execution. And they are an infrastructure of innovation. So think now about what have",
+      "edx_block_id": "block-v1:xPRO+LASERxE3+R15+type@static+block@b6c4db79-dcad-422a-8bb7-9551ffbfaed4-en",
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://rc.learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "id": 16407213,
+      "run_id": 6573,
+      "run_slug": null,
+      "departments": [],
+      "semester": null,
+      "year": null,
+      "topics": [
+        {
+          "id": 685,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://rc.learn.mit.edu/c/topic/business-management/"
+        },
+        {
+          "id": 687,
+          "name": "Organizations & Leadership",
+          "icon": "RiBriefcase3Line",
+          "parent": 685,
+          "channel_url": "https://rc.learn.mit.edu/c/topic/organizations-leadership/"
+        },
+        {
+          "id": 698,
+          "name": "Management",
+          "icon": "RiBriefcase3Line",
+          "parent": 685,
+          "channel_url": "https://rc.learn.mit.edu/c/topic/management/"
+        }
+      ],
+      "uid": null,
+      "title": null,
+      "description": null,
+      "url": null,
+      "content_title": "",
+      "content_author": null,
+      "content_language": null,
+      "image_src": null,
+      "resource_id": "14744",
+      "file_type": null
+    },
+    {
+      "course_number": ["course-v1:xPRO+LASERxE3"],
+      "key": "5ec61359204ae2880ee474ac9ff3904d",
+      "resource_point_id": "c25984a4-31b2-5bb4-b5e1-8e1051662dfb",
+      "file_extension": ".srt",
+      "resource_readable_id": "course-v1:xPRO+LASERxE3",
+      "run_title": "Leading Teams",
+      "content_type": "file",
+      "content_feature_type": [],
+      "chunk_number": 1,
+      "run_readable_id": "course-v1:xPRO+LASERxE3+R15",
+      "chunk_content": "every level so that you can move your organization forward. XTeams are outwardly focused, strategically linked to what's going on up and down the organization. They combine innovation and execution. And they are an infrastructure of innovation. So think now about what have you learned about xTeams and how can you take these ideas back to your teams and your organization.",
+      "edx_block_id": "block-v1:xPRO+LASERxE3+R15+type@static+block@b6c4db79-dcad-422a-8bb7-9551ffbfaed4-en",
+      "offered_by": {
+        "code": "xpro",
+        "name": "MIT xPRO",
+        "channel_url": "https://rc.learn.mit.edu/c/unit/xpro/"
+      },
+      "platform": {
+        "code": "xpro",
+        "name": "MIT xPRO"
+      },
+      "id": 16407213,
+      "run_id": 6573,
+      "run_slug": null,
+      "departments": [],
+      "semester": null,
+      "year": null,
+      "topics": [
+        {
+          "id": 685,
+          "name": "Business & Management",
+          "icon": "RiBriefcase3Line",
+          "parent": null,
+          "channel_url": "https://rc.learn.mit.edu/c/topic/business-management/"
+        },
+        {
+          "id": 687,
+          "name": "Organizations & Leadership",
+          "icon": "RiBriefcase3Line",
+          "parent": 685,
+          "channel_url": "https://rc.learn.mit.edu/c/topic/organizations-leadership/"
+        },
+        {
+          "id": 698,
+          "name": "Management",
+          "icon": "RiBriefcase3Line",
+          "parent": 685,
+          "channel_url": "https://rc.learn.mit.edu/c/topic/management/"
+        }
+      ],
+      "uid": null,
+      "title": null,
+      "description": null,
+      "url": null,
+      "content_title": "",
+      "content_author": null,
+      "content_language": null,
+      "image_src": null,
+      "resource_id": "14744",
+      "file_type": null
+    }
+  ],
+  "metadata": {
+    "aggregations": [],
+    "suggest": []
+  }
+}

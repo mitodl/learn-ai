@@ -16,7 +16,9 @@ from ai_chatbots.chatbots import (
     SyllabusAgentState,
     SyllabusBot,
     TutorBot,
-    get_history
+    VideoGPTAgentState,
+    VideoGPTBot,
+    get_history,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -463,6 +465,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             **{},
         )
 
+
 @pytest.mark.parametrize(
     ("model", "temperature"),
     [
@@ -471,24 +474,19 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         (None, None),
     ],
 )
-async def test_tutor_bot_intitiation(
-    mocker, model, temperature
-):
+async def test_tutor_bot_intitiation(mocker, model, temperature):
     """Test the tutor class instantiation."""
     name = "My tutor bot"
     problem_code = "A1P1"
-
 
     chatbot = TutorBot(
         "user",
         name=name,
         model=model,
         temperature=temperature,
-        problem_code=problem_code
+        problem_code=problem_code,
     )
-    assert chatbot.model == (
-        model if model else settings.AI_DEFAULT_TUTOR_MODEL
-    )
+    assert chatbot.model == (model if model else settings.AI_DEFAULT_TUTOR_MODEL)
     assert chatbot.temperature == (
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
@@ -496,19 +494,14 @@ async def test_tutor_bot_intitiation(
     assert chatbot.problem == problem
     assert chatbot.solution == solution
     assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
-    
 
-async def test_tutor_get_completion(
-    mocker, mock_checkpointer
-):
+
+async def test_tutor_get_completion(mocker, mock_checkpointer):
     """Test that the tutor bot get_completion method returns expected values."""
 
     json_output = {
         "chat_history": [
-            {
-                "type": "HumanMessage",
-                "content": "what should i try next?"
-            },
+            {"type": "HumanMessage", "content": "what should i try next?"},
             {
                 "type": "AIMessage",
                 "content": "",
@@ -516,55 +509,142 @@ async def test_tutor_get_completion(
                     {
                         "id": "call_2YfyQtpoDAaSfJo0XiYEVEI3",
                         "function": {
-                            "arguments": "{\"message_to_student\":\"Let's start with Problem 1.1. Have you tried plotting the states' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you've tried so far.\"}",
-                            "name": "text_student"
+                            "arguments": '{"message_to_student":"Let\'s start with Problem 1.1. Have you tried plotting the states\' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you\'ve tried so far."}',
+                            "name": "text_student",
                         },
-                        "type": "function"
+                        "type": "function",
                     }
                 ],
-                "refusal": None
+                "refusal": None,
             },
             {
                 "type": "ToolMessage",
                 "content": "Message sent",
                 "name": "text_student",
-                "tool_call_id": "call_2YfyQtpoDAaSfJo0XiYEVEI3"
-            }
-        ],
-        "intent_history": "[[\"P_HYPOTHESIS\"]]",
-        "assessment_history": [
-            {
-                "type": "HumanMessage",
-                "content": "Student: \"what should i try next?\""
+                "tool_call_id": "call_2YfyQtpoDAaSfJo0XiYEVEI3",
             },
+        ],
+        "intent_history": '[["P_HYPOTHESIS"]]',
+        "assessment_history": [
+            {"type": "HumanMessage", "content": 'Student: "what should i try next?"'},
             {
                 "type": "AIMessage",
-                "content": "{\"justification\": \"The student is explicitly asking about how to solve the problem, indicating they are seeking guidance on the next steps to take.\", \"selection\": \"g\"}",
-                "refusal": None
-            }
+                "content": '{"justification": "The student is explicitly asking about how to solve the problem, indicating they are seeking guidance on the next steps to take.", "selection": "g"}',
+                "refusal": None,
+            },
         ],
         "metadata": {
             "docs": None,
             "rag_queries": None,
             "A_B_test": False,
-            "tutor_model": "gpt-4o"
-        }
+            "tutor_model": "gpt-4o",
+        },
     }
 
     mocker.patch(
-        "ai_chatbots.chatbots.message_tutor",
-        return_value=json.dumps(json_output)
+        "ai_chatbots.chatbots.message_tutor", return_value=json.dumps(json_output)
     )
     user_msg = "what should i try next?"
-    thread_id='TEST'
-    
-    chatbot = TutorBot("anonymous", mock_checkpointer, problem_code="A1P1", thread_id=thread_id)
-    
+    thread_id = "TEST"
+
+    chatbot = TutorBot(
+        "anonymous", mock_checkpointer, problem_code="A1P1", thread_id=thread_id
+    )
+
     results = ""
     async for chunk in chatbot.get_completion(user_msg):
         results += str(chunk)
-    assert results == "Let's start with Problem 1.1. Have you tried plotting the states' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you've tried so far."
+    assert (
+        results
+        == "Let's start with Problem 1.1. Have you tried plotting the states' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you've tried so far."
+    )
 
     history = await get_history(thread_id)
-    assert history.thread_id == thread_id       
+    assert history.thread_id == thread_id
     assert history.chat_json == json.dumps(json_output)
+
+
+async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
+    """Test that create_agent_graph function calls create_react_agent with expected arguments"""
+    mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
+    mock_create_agent.assert_called_once_with(
+        chatbot.llm,
+        tools=chatbot.tools,
+        checkpointer=chatbot.checkpointer,
+        state_schema=VideoGPTAgentState,
+        state_modifier=chatbot.instructions,
+    )
+
+
+@pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+async def test_video_gpt_bot_get_completion_state(
+    mock_checkpointer, mock_openai_astream, default_model
+):
+    """Proper state should get passed along by get_completion"""
+    settings.AI_DEFAULT_VIDEO_GPT_MODEL = default_model
+    chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
+    extra_state = {
+        "transcript_asset_id": [
+            "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
+        ]
+    }
+    state = VideoGPTAgentState(
+        messages=[HumanMessage("What is this video about?")], **extra_state
+    )
+    async for _ in chatbot.get_completion(
+        "What is this video about?", extra_state=extra_state
+    ):
+        mock_openai_astream.assert_called_once_with(
+            state,
+            chatbot.config,
+            stream_mode="messages",
+        )
+    assert chatbot.llm.model == default_model
+
+
+async def test_video_gpt_bot_tool(
+    settings,
+    mocker,
+    mock_checkpointer,
+    video_gpt_agent_state,
+    video_transcript_content_chunk_results,
+):
+    """The VideoGPTBot should call the correct tool"""
+    settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 2
+    retained_attributes = [
+        "chunk_content",
+    ]
+    raw_results = video_transcript_content_chunk_results.get("results")
+    expected_results = {
+        "results": [
+            {key: resource.get(key) for key in retained_attributes}
+            for resource in raw_results
+        ],
+        "metadata": {},
+    }
+
+    mock_post = mocker.patch(
+        "ai_chatbots.tools.requests.get",
+        return_value=mocker.Mock(
+            json=mocker.Mock(return_value=video_transcript_content_chunk_results)
+        ),
+    )
+    chatbot = VideoGPTBot("anonymous", mock_checkpointer)
+
+    search_parameters = {
+        "q": "What is this video about?",
+        "edx_block_id": video_gpt_agent_state["transcript_asset_id"][-1],
+        "limit": 2,
+    }
+    expected_results["metadata"]["parameters"] = search_parameters
+    tool = chatbot.create_tools()[0]
+    results = tool.invoke(
+        {"q": "What is this video about?", "state": video_gpt_agent_state}
+    )
+    mock_post.assert_called_once_with(
+        settings.AI_MIT_VIDEO_METADATA_URL,
+        params=search_parameters,
+        timeout=30,
+    )
+    assert_json_equal(json.loads(results), expected_results)

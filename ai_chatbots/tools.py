@@ -248,12 +248,11 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
 
     url = settings.AI_MIT_VIDEO_METADATA_URL
 
-    xblock_video_id = state["xblock_video_id"][-1]
-    yt_video_id = state["yt_video_id"][-1]  # noqa: F841
+    edx_block_id = state["transcript_asset_id"][-1]
     params = {
         "q": q,
-        "edx_block_id": xblock_video_id,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
+        "edx_block_id": edx_block_id,
+        "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
     }
 
     log.info("Searching MIT API with params: %s", params)
@@ -269,9 +268,10 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
             }
             simplified_results.append(simplified_result)
         full_output = {
-            "results": simplified_result,
+            "results": simplified_results,
             "metadata": {"parameters": params},
         }
+
         return json.dumps(full_output)
     except requests.exceptions.RequestException:
         log.exception("Error querying MIT API for transcripts")

@@ -15,7 +15,11 @@ from langchain_core.messages import (
 from langchain_core.messages.ai import AIMessageChunk
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusAgentState
+from ai_chatbots.chatbots import (
+    ResourceRecommendationBot,
+    SyllabusAgentState,
+    VideoGPTAgentState,
+)
 from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChatSession
 from main.factories import UserFactory
 
@@ -190,6 +194,16 @@ class SyllabusAgentStateFactory(factory.Factory):
 
     class Meta:
         model = SyllabusAgentState
+
+
+class VideoGPTAgentStateFactory(factory.Factory):
+    """Factory for generating VideoGPTAgentState instances."""
+
+    messages = [factory.SubFactory(HumanMessageFactory)]
+    transcript_asset_id = [factory.Faker("uuid4")]
+
+    class Meta:
+        model = VideoGPTAgentState
 
 
 class UserChatSessionFactory(DjangoModelFactory):

@@ -46,8 +46,8 @@ class VideoGPTRequestSerializer(ChatRequestSerializer):
     Serializer for requests sent to the video GPT chatbot.
     """
 
-    xblock_video_id = serializers.CharField(required=True, allow_blank=False)
-    yt_video_id = serializers.CharField(required=False, allow_blank=False)
+    transcript_asset_id = serializers.CharField(required=True, allow_blank=False)
+
 
 class UserChatSessionSerializer(serializers.ModelSerializer):
     """Serializer for user chat sessions"""
@@ -96,6 +96,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = DjangoCheckpoint
         fields = ["checkpoint_id", "role", "content"]
+
 
 class TutorChatRequestSerializer(ChatRequestSerializer):
     """

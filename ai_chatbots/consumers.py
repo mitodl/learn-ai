@@ -10,12 +10,22 @@ from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, TutorBot, VideoGPTBot
+
+from ai_chatbots.chatbots import (
+    ResourceRecommendationBot,
+    SyllabusBot,
+    TutorBot,
+    VideoGPTBot,
+)
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
-from ai_chatbots.serializers import ChatRequestSerializer, SyllabusChatRequestSerializer, TutorChatRequestSerializer, VideoGPTRequestSerializer
-
+from ai_chatbots.serializers import (
+    ChatRequestSerializer,
+    SyllabusChatRequestSerializer,
+    TutorChatRequestSerializer,
+    VideoGPTRequestSerializer,
+)
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -320,13 +330,15 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = TutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
 
-
-    def create_chatbot(self, serializer: TutorChatRequestSerializer, checkpointer: BaseCheckpointSaver,):
+    def create_chatbot(
+        self,
+        serializer: TutorChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
         """Return a TutorBot instance"""
         temperature = serializer.validated_data.pop("temperature", None)
         model = serializer.validated_data.pop("model", None)
         problem_code = serializer.validated_data.pop("problem_code", None)
-
 
         return TutorBot(
             self.user_id,
@@ -334,7 +346,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             temperature=temperature,
             model=model,
             thread_id=self.thread_id,
-            problem_code = problem_code
+            problem_code=problem_code,
         )
 
 
@@ -368,6 +380,5 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
         return {
-            "xblock_video_id": [data.get("xblock_video_id")],
-            "yt_video_id": [data.get("yt_video_id")],
+            "transcript_asset_id": [data.get("transcript_asset_id")],
         }
