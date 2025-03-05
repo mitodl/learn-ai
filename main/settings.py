@@ -598,7 +598,9 @@ AI_DEFAULT_SYLLABUS_MODEL = get_string("AI_DEFAULT_SYLLABUS_MODEL", AI_DEFAULT_M
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "gpt-4o")
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
-AI_THREAD_EXPIRATION_HOURS = get_int(name="AI_THREAD_EXPIRATION_HOURS", default=24)
+AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
+    name="AI_CHATBOTS_SESSION_EXPIRY_DAYS", default=30
+)
 
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
