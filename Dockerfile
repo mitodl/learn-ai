@@ -56,6 +56,21 @@ ARG GIT_REF
 RUN mkdir -p /src/static
 RUN echo $GIT_REF >> /src/static/hash.txt
 
+# Run collectstatic
+ENV DATABASE_URL="postgres://postgres:postgres@localhost:5433/postgres"
+ENV MITOL_SECURE_SSL_REDIRECT="False"
+ENV MITOL_DB_DISABLE_SSL="True"
+ENV MITOL_FEATURES_DEFAULT="True"
+ENV CELERY_TASK_ALWAYS_EAGER="True"
+ENV CELERY_BROKER_URL="redis://localhost:6379/4"
+ENV CELERY_RESULT_BACKEND="redis://localhost:6379/4"
+ENV MITOL_APP_BASE_URL="http://localhost:8002/"
+ENV MAILGUN_KEY="fake_mailgun_key"
+ENV MAILGUN_SENDER_DOMAIN="other.fake.site"
+ENV MITOL_COOKIE_DOMAIN="localhost"
+ENV MITOL_COOKIE_NAME="cookie_monster"
+RUN python3 manage.py collectstatic --noinput --clear
+
 RUN apt-get clean && apt-get purge
 
 USER mitodl
