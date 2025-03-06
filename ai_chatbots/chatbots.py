@@ -38,6 +38,7 @@ from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
 
+
 log = logging.getLogger(__name__)
 
 
@@ -206,7 +207,7 @@ class BaseChatbot(ABC):
                 }
             if (
                 error["error"]["message"].startswith("Budget has been exceeded")
-                and not settings.AI_DEBUG
+                and not debug
             ):  # Friendlier message for end user
                 error["error"]["message"] = (
                     "You have exceeded your AI usage limit. Please try again later."
@@ -361,7 +362,7 @@ Your job:
 2. Provide a clear, user-friendly summary of the information retrieved by the tool to
 answer the user's question.
 
-Always run the tool to answer questions, and answer only based on the tool
+Always use the tool results to answer questions, and answer only based on the tool
 output. Do not include the course id in the query parameter.
 VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
 ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
@@ -493,6 +494,7 @@ class TutorBot(BaseChatbot):
             self.chat_history = json_to_messages(  # noqa: RUF005
                 json_history.get("chat_history", [])
             ) + [HumanMessage(content=message)]
+
             self.intent_history = json_history.get("intent_history", [])
             self.assessment_history = json_history.get("assessment_history", [])
         else:
@@ -553,7 +555,7 @@ Your job:
 2. Provide a clear, user-friendly summary of the information retrieved by the tool to
 answer the user's question.
 3. Do not specify the answer is from a transcript, instead say it's from video.
-Always run the tool to answer questions, and answer only based on the tool
+Always use the tool results to answer questions, and answer only based on the tool
 output. Do not include the xblock video id in the query parameter.
 VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
 ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant

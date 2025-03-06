@@ -13,11 +13,13 @@ class UserChatSession(TimestampedModel):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True
     )
+    dj_session_key = models.CharField(max_length=512, blank=True, db_index=True)
     title = models.CharField(max_length=255, blank=True)
-    agent = models.CharField(max_length=128, blank=True)
+    agent = models.CharField(max_length=128, blank=True, db_index=True)
+    object_id = models.CharField(max_length=256, blank=True, db_index=True)
 
     def __str__(self):
-        return f"{self.user.global_id if self.user else "anonymous"}-{self.thread_id}:{self.title}"
+        return f"{self.user.global_id or self.dj_session_key}-{self.thread_id}"
 
 
 class DjangoCheckpointWrite(models.Model):
@@ -61,16 +63,25 @@ class DjangoCheckpoint(models.Model):
 
     class Meta:
         unique_together = (("thread_id", "checkpoint_ns", "checkpoint_id"),)
+        indexes = [
+            # Composite index for queries that use all three fields
+            models.Index(
+                fields=["thread_id", "checkpoint_ns", "checkpoint_id"],
+                name="checkpoint_lookup_idx",
+            ),
+            # Individual index for thread_id queries
+            models.Index(fields=["thread_id"], name="thread_lookup_idx"),
+        ]
 
     def __str__(self):
         return f"{self.thread_id}-{self.checkpoint_id}-{self.type}"
-
 
 
 class TutorBotOutput(models.Model):
     """
     Store  chat history and internal state for the tutor chatbot
     """
+
     thread_id = models.TextField()
     chat_json = models.JSONField()
 

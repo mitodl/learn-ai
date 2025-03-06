@@ -18,6 +18,7 @@ import platform
 from urllib.parse import urljoin
 
 import dj_database_url
+from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 
 from main.envs import (
@@ -514,6 +515,13 @@ ANONYMOUS_USER_NAME = None
 
 REQUESTS_TIMEOUT = get_int("REQUESTS_TIMEOUT", 30)
 
+CELERY_BEAT_SCHEDULE = {
+    "delete_stale_chat_sessions": {
+        "task": "ai_chatbots.tasks.delete_stale_sessions",
+        "schedule": crontab(minute=0, hour=4),
+    },
+}
+
 
 if DEBUG:
     # allow for all IPs to be routable, including localhost, for testing
@@ -597,6 +605,12 @@ AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
+AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
+    name="AI_CHATBOTS_SESSION_EXPIRY_DAYS", default=10
+)
+AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
+    name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24*60*60*7
+)
 
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
