@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.2.2
+-------------
+
+- run collectstatic within the docker build
+- put the static file in /static instead, and make sure the directory exists
+- should go to staticfiles instead
+- generate the git hash file based on a build arg and put it in /src/static/hash.txt
+- feat: Add Video GPT (#56)
+
 Version 0.2.1 (Released March 06, 2025)
 -------------
 
