@@ -10,6 +10,8 @@ from itertools import islice
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.cache import cache_page
 
 log = logging.getLogger(__name__)
@@ -228,3 +230,14 @@ def get_user_from_apisix_headers(request):
         user.refresh_from_db()
 
     return user
+
+
+def decode_value(encoded_value: str) -> str:
+    """Decode a base64-encoded value with proper padding."""
+    PAD_AMT = 4
+    if not encoded_value:
+        return ""
+    padding = PAD_AMT - (len(encoded_value) % PAD_AMT)
+    if padding != PAD_AMT:
+        encoded_value += "=" * padding
+    return force_str(urlsafe_base64_decode(encoded_value))

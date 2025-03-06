@@ -4,9 +4,13 @@ import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+from django.conf import settings
+
 import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers
@@ -53,6 +57,7 @@ def video_gpt_consumer(async_user):
     consumer.scope = {"user": async_user, "cookies": {}, "session": None}
     consumer.channel_name = "test_video_gpt_channel"
     return consumer
+
 
 
 @pytest.mark.parametrize(
@@ -144,7 +149,7 @@ async def test_clear_history(  # noqa: PLR0913
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
     )
     bot_cookie = f"{recommendation_consumer.ROOM_NAME}_{cookie_name}"
-    latest_thread_id = f"1234{',' if is_anon else ''}"
+    latest_thread_id = urlsafe_base64_encode(force_bytes("1234"))
     recommendation_consumer.scope["cookies"] = {bot_cookie: latest_thread_id}
     recommendation_consumer.scope["user"] = AnonymousUser() if is_anon else async_user
     await recommendation_consumer.handle(
@@ -158,14 +163,11 @@ async def test_clear_history(  # noqa: PLR0913
     elif is_anon:
         # old thread id should be present in the cookie, but not last in the list
         cookie_args = str(args[0][-1]["headers"][-1][1])
-        assert (
-            latest_thread_id in cookie_args
-            and f"{latest_thread_id};" not in cookie_args
-        ) == clear_history
+        assert (latest_thread_id in cookie_args) != clear_history
     else:
         # anon thread_ids should have been cleared from cookie
         cookie_args = str(args[0][-1]["headers"][-2][1])
-        assert cookie_args == f"{bot_cookie}=; Path=/; HttpOnly"
+        assert cookie_args == f"{bot_cookie}=;Path=/;"
 
 
 async def test_http_request(mocker):
@@ -238,8 +240,8 @@ def test_process_extra_state(request_params):
     [
         ("1234", "", False),  # User is authenticated
         ("1234", "", True),  # User recently logged out
-        ("", "4567,8910", False),  # User just authenticated
-        ("", "4567,9876", True),  # User is anonymous
+        ("", "4567", False),  # User just authenticated
+        ("", "4567", True),  # User is anonymous
         ("", "", True),  # Anonymous user 1st message
         ("", "", False),  # Authenticated user 1st message
     ],
@@ -254,9 +256,12 @@ async def test_assign_thread_cookie(
     )
     user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
 
+    encoded_user_cookie = urlsafe_base64_encode(force_bytes(user_cookie))
+    encoded_anon_cookie = urlsafe_base64_encode(force_bytes(anon_cookie))
+
     syllabus_consumer.scope["cookies"] = {
-        user_cookie_name: user_cookie,
-        anon_cookie_name: anon_cookie,
+        user_cookie_name: encoded_user_cookie,
+        anon_cookie_name: encoded_anon_cookie,
     }
 
     user = AnonymousUser() if is_anon else async_user
@@ -282,12 +287,13 @@ async def test_assign_thread_cookie(
 
     thread_id, cookies = await syllabus_consumer.assign_thread_cookies(user)
 
+    encoded_thread_id = urlsafe_base64_encode(force_bytes(thread_id))
     if anon_cookie:  # User is or just was anonymous
-        assert thread_id == anon_cookie.split(",")[-1]
+        assert thread_id == anon_cookie
         if not is_anon:  # User just authenticated, associate older sessions with user
             # Clear out anon cookie thread ids and set current thread id to auth user cookie
-            assert cookies[1] == f"{anon_cookie_name}=; Path=/; HttpOnly"
-            assert cookies[0] == f"{user_cookie_name}={thread_id}; Path=/; HttpOnly"
+            assert str(cookies[1]) == f"{anon_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            assert str(cookies[0]) == f"{user_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
             for thread in anon_cookie.split(","):
                 # All anon thread ids should now be associated with user
                 assert await UserChatSession.objects.filter(
@@ -300,40 +306,64 @@ async def test_assign_thread_cookie(
                 )
                 assert session.user is None
         # Current thread id should be in the correct cookie depending on user auth status
-        assert thread_id in cookies[(1 if is_anon else 0)]
+        assert encoded_thread_id in str(cookies[(1 if is_anon else 0)])
     else:  # User is either not anonymous or has no anon cookies
         assert (thread_id == user_cookie) is (user_cookie != "")
         if (
             is_anon
         ):  # User must have logged out, so current thread id should be in anon cookie
-            assert cookies[1] == f"{anon_cookie_name}={thread_id},; Path=/; HttpOnly"
-            assert cookies[0] == f"{user_cookie_name}=; Path=/; HttpOnly"
+            assert str(cookies[1]) == f"{anon_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            assert str(cookies[0]) == f"{user_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
 
 
 @pytest.mark.parametrize(
-    ("is_anon", "is_authorized"), [(True, False), (False, True), (False, False)]
+    ("is_anon", "is_authorized", "same_key"),
+    [
+        (True, False, True),
+        (True, False, False),
+        (False, True, True),
+        (False, True, False),
+        (False, False, False),
+    ],
 )
 async def test_assign_thread_cookie_passed_thread(
-    syllabus_consumer, async_user, is_anon, is_authorized
+    syllabus_consumer, async_user, is_anon, is_authorized, same_key
 ):
     """
     The thread_id in the request should override any cookies for an authorized user.
     """
     original_thread_id = uuid4().hex
+    encoded_original_id = urlsafe_base64_encode(force_bytes(original_thread_id))
     requested_thread_id = uuid4().hex
+    encoded_requested_id = urlsafe_base64_encode(force_bytes(requested_thread_id))
+    session_key = "abc123"
+
     user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
     syllabus_consumer.scope["cookies"] = {
-        user_cookie_name: original_thread_id,
+        user_cookie_name: encoded_original_id,
     }
+    syllabus_consumer.session_key = session_key if same_key else "other_key"
+
     user = AnonymousUser() if is_anon else async_user
     await sync_to_async(UserChatSessionFactory.create)(
-        thread_id=requested_thread_id, user=(async_user if is_authorized else None)
+        thread_id=requested_thread_id,
+        user=(async_user if is_authorized else None),
+        dj_session_key=session_key,
     )
-    cookies = await syllabus_consumer.assign_thread_cookies(
+    assigned_thread_id, cookies = await syllabus_consumer.assign_thread_cookies(
         thread_id=requested_thread_id, user=user
     )
-    assert (requested_thread_id in cookies[0]) is (is_authorized and not is_anon)
-    assert (original_thread_id in cookies[0]) is (not is_authorized)
+    if is_anon and same_key:
+        assert await UserChatSession.objects.filter(
+            user=None, thread_id=requested_thread_id, dj_session_key=session_key
+        ).aexists()
+    assert assigned_thread_id == (
+        requested_thread_id
+        if is_authorized or (is_anon and same_key)
+        else original_thread_id
+    )
+    assert (encoded_requested_id == cookies[0].value) is (is_authorized and not is_anon)
+    assert (encoded_requested_id == cookies[1].value) is (is_anon and same_key)
 
 
 async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consumer):

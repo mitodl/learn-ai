@@ -112,12 +112,14 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
     json_serializer = JsonPlusSerializer()
 
     @classmethod
-    async def create_with_session(
+    async def create_with_session(  # noqa: PLR0913
         cls,
         thread_id: str,
         message: str,
         agent: str,
         user: Optional[USER_MODEL] = None,
+        dj_session_key: Optional[str] = "",
+        object_id: Optional[str] = "",
     ):
         """
         Initialize the DjangoSaver and create a UserChatSession if applicable.
@@ -126,21 +128,35 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         if not (thread_id and message and agent):
             msg = "thread_id, message, and agent are required"
             raise ValueError(msg)
-        session, _ = await UserChatSession.objects.select_related(
+        chat_session, created = await UserChatSession.objects.select_related(
             "user"
         ).aget_or_create(
             thread_id=thread_id,
             defaults={
                 "user": user if user and not user.is_anonymous else None,
+                "dj_session_key": dj_session_key
+                if (not user or user.is_anonymous)
+                else "",
                 "title": message[:255],
                 "agent": agent,
+                "object_id": object_id or "",
             },
         )
-        self.session = session
-        if session.user is None and user and not user.is_anonymous:
+        if (
+            chat_session
+            and not created
+            and not chat_session.user
+            and user
+            and not user.is_anonymous
+        ):
+            chat_session.user = user
+            chat_session.dj_session_key = ""
+            await chat_session.asave()
+        self.session = chat_session
+        if chat_session.user is None and user and not user.is_anonymous:
             # Thread was created when user was not logged in.
-            session.user = user
-            await session.asave()
+            chat_session.user = user
+            await chat_session.asave()
         return self
 
     async def aput(

@@ -1,11 +1,17 @@
+from datetime import timedelta
 import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 from uuid import uuid4
 
+from django.conf import settings
+
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
+from django.db.models import Q
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
@@ -18,7 +24,11 @@ from ai_chatbots.chatbots import (
     VideoGPTBot,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
-from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
+from ai_chatbots.constants import (
+    AI_THREAD_COOKIE_KEY,
+    AI_THREADS_ANONYMOUS_COOKIE_KEY,
+    ChatbotCookie,
+)
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     ChatRequestSerializer,
@@ -26,6 +36,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
+from main.utils import decode_value, now_in_utc
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -39,6 +50,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
 
     serializer_class = ChatRequestSerializer
     headers_sent = False
+    session_key = ""
 
     @abstractmethod
     def create_chatbot(self, serializer):
@@ -64,70 +76,114 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         *,
         clear_history: Optional[bool] = False,
         thread_id: Optional[str] = None,
+        object_id: Optional[str] = None,
     ) -> tuple[str, list[str]]:
         """
         Extract and update separate cookie values for logged in vs anonymous users.
         Each chatbot should have its own thread_id cookies.
+        Each course/video/object-specific chatbot should have its own thread id.
         Assign a new thread_id if clear_history is True or no thread_id is found.
         """
+        if not object_id:
+            object_id = ""
         latest_cookie_key = f"{self.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
-        threads_ids_str = self.scope["cookies"].get(anon_cookie_key) or ""
 
-        thread_ids = [tid for tid in (threads_ids_str).split(",") if tid]
-
-        if thread_ids:
-            # Anonymous users may have multiple thread ids, ordered by most recent last.
-            current_thread_id = thread_ids[-1] if thread_ids else None
-        else:
-            # Logged in users have a single thread id (except after first login).
-            current_thread_id = self.scope["cookies"].get(latest_cookie_key) or ""
-
-        if (
+        current_thread_id = None
+        anon_cookie = False
+        if clear_history:
+            # Create a new random thread id
+            current_thread_id = uuid4().hex
+        elif (
+            # If an explicit thread_id is passed in the serializer,
+            # use it if not related to another user
             thread_id
-            and user
-            and not user.is_anonymous
-            and await UserChatSession.objects.filter(
-                user=user, thread_id=thread_id
-            ).aexists()
+            and (
+                # is a new thread?
+                not await UserChatSession.objects.filter(thread_id=thread_id).aexists()
+                or (
+                    # existing thread belonging to same user?
+                    user
+                    and not user.is_anonymous
+                    and (
+                        await UserChatSession.objects.filter(
+                            user=user, thread_id=thread_id
+                        ).aexists()
+                    )
+                )
+                or (
+                    # existing chat thread, anon user, same session key
+                    user.is_anonymous
+                    and await UserChatSession.objects.filter(
+                        user=None, thread_id=thread_id, dj_session_key=self.session_key
+                    ).aexists()
+                )
+            )
         ):
             current_thread_id = thread_id
-
-        if clear_history or not current_thread_id:
+        else:
+            # Use cookie thread id if any, check anon cookie first
+            anon_cookie = True
+            current_thread_id = decode_value(
+                self.scope["cookies"].get(anon_cookie_key) or ""
+            )
+            if not current_thread_id:
+                # no anon cookie thread id, check authenticated cookie
+                anon_cookie = False
+                current_thread_id = decode_value(
+                    self.scope["cookies"].get(latest_cookie_key) or ""
+                )
+            if current_thread_id and "|" in current_thread_id:
+                # Object-specific thread, ensure it's the same object
+                current_thread_id, cookie_object_id = current_thread_id.split("|")
+                if object_id and object_id != cookie_object_id:
+                    current_thread_id = None
+        if user and not user.is_anonymous and anon_cookie:
+            # Anon user has logged in, so associate any existing anon threads
+            # with the same session key
+            await UserChatSession.objects.filter(
+                user_id=None, dj_session_key=self.session_key
+            ).aupdate(user=user)
+        if not current_thread_id:
+            # Still no thread id, so create a new one
             current_thread_id = uuid4().hex
 
-        if not user.is_anonymous:
-            if thread_ids:
-                # Assign old thread ids to this user
-                await UserChatSession.objects.filter(
-                    user_id=None, thread_id__in=thread_ids
-                ).aupdate(user=user)
-            cookies = [
-                f"{latest_cookie_key}={current_thread_id}; Path=/; HttpOnly",
-                f"{anon_cookie_key}=; Path=/; HttpOnly",
-            ]
-        else:
-            # Append current thread_id to cookie for anonymous users
-            if current_thread_id and current_thread_id not in thread_ids:
-                thread_ids.append(current_thread_id)
-            thread_ids_str = f"{','.join(thread_ids)}," if thread_ids else ""
-            cookies = [
-                f"{latest_cookie_key}=; Path=/; HttpOnly",
-                f"{anon_cookie_key}={thread_ids_str}; Path=/; HttpOnly",
-            ]
+        # Incorporate object id into cookie value if present
+        cookie_value = urlsafe_base64_encode(
+            force_bytes(f"{current_thread_id}{f'|{object_id}' if object_id else ''}")
+        )
+        # assign the cookie values
+        max_age = settings.AI_CHATBOTS_COOKIE_MAX_AGE
+        cookies = [
+            ChatbotCookie(
+                name=latest_cookie_key,
+                value=("" if user.is_anonymous else cookie_value),
+                max_age=max_age,
+            ),
+            ChatbotCookie(
+                name=anon_cookie_key, 
+                value=(cookie_value if user.is_anonymous else ""),
+                max_age=max_age
+            ),
+        ]
         return current_thread_id, cookies
 
     async def prepare_response(
-        self, serializer: ChatRequestSerializer
+        self, serializer: ChatRequestSerializer, object_id_field: Optional[str] = None
     ) -> tuple[str, list[str]]:
-        """Prepare the response"""
+        """Prepare consumer for the API response"""
         user = self.scope.get("user", None)
         session = self.scope.get("session", None)
+        if object_id_field:
+            object_id = f"{serializer.validated_data.get(object_id_field, '')}"
+        else:
+            object_id = ""
 
         current_thread_id, cookies = await self.assign_thread_cookies(
             user,
             clear_history=serializer.validated_data.pop("clear_history", False),
             thread_id=serializer.validated_data.pop("thread_id", None),
+            object_id=object_id,
         )
 
         self.thread_id = current_thread_id
@@ -137,6 +193,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         elif session:
             if not session.session_key:
                 session.save()
+            self.session_key = session.session_key
             self.user_id = slugify(session.session_key)
         else:
             log.info("Anon user, no session")
@@ -184,7 +241,13 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
 
         if thread_id and cookies:
             headers.extend(
-                [(b"Set-Cookie", cookie_thread.encode()) for cookie_thread in cookies]
+                [
+                    (
+                        b"Set-Cookie",
+                        str(cookie).encode(),
+                    )
+                    for cookie in cookies
+                ]
             )
 
         await self.send_headers(status=status, headers=headers)
@@ -208,6 +271,21 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             error_msg = json.dumps(error_msg)
             await self.send_chunk(f"<!-- {error_msg} -->")
 
+    async def create_checkpointer(
+        self,
+        thread_id: str,
+        message: str,
+        serializer: ChatRequestSerializer,  # noqa: ARG002
+    ):
+        """Create a checkpointer instance"""
+        return await AsyncDjangoSaver.create_with_session(
+            thread_id=thread_id,
+            message=message,
+            user=self.scope.get("user", None),
+            dj_session_key=self.session_key,
+            agent=self.ROOM_NAME,
+        )
+
     async def handle(self, message: str):
         """Handle the incoming message and send the response."""
         cookies = None
@@ -215,11 +293,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
             serializer = self.process_message(message, self.serializer_class)
             thread_id, cookies = await self.prepare_response(serializer)
             message_text = serializer.validated_data["message"]
-            checkpointer = await AsyncDjangoSaver.create_with_session(
-                thread_id=thread_id,
-                message=message_text,
-                user=self.scope.get("user", None),
-                agent=self.ROOM_NAME,
+            checkpointer = await self.create_checkpointer(
+                thread_id, message_text, serializer
             )
             self.bot = self.create_chatbot(serializer, checkpointer)
             extra_state = self.process_extra_state(serializer.validated_data)
@@ -321,6 +396,28 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             "collection_name": [data.get("collection_name")],
         }
 
+    def prepare_response(
+        self,
+        serializer: SyllabusChatRequestSerializer,
+        object_id_field: Optional[str] = None,
+    ) -> tuple[str, list[str]]:
+        """Set the course id as the default object id field"""
+        object_id_field = object_id_field or "course_id"
+        return super().prepare_response(serializer, object_id_field=object_id_field)
+
+    async def create_checkpointer(
+        self, thread_id: str, message: str, serializer: SyllabusChatRequestSerializer
+    ):
+        """Create a checkpointer instance"""
+        return await AsyncDjangoSaver.create_with_session(
+            thread_id=thread_id,
+            message=message,
+            user=self.scope.get("user", None),
+            dj_session_key=self.session_key,
+            agent=self.ROOM_NAME,
+            object_id=serializer.validated_data.get("course_id"),
+        )
+
 
 class TutorBotHttpConsumer(BaseBotHttpConsumer):
     """
@@ -349,6 +446,27 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             problem_code=problem_code,
         )
 
+    def prepare_response(
+        self,
+        serializer: TutorChatRequestSerializer,
+        object_id_field: Optional[str] = None,
+    ) -> tuple[str, list[str]]:
+        """Set the problem code as the default object id field"""
+        object_id_field = object_id_field or "problem_code"
+        return super().prepare_response(serializer, object_id_field=object_id_field)
+
+    async def create_checkpointer(
+        self, thread_id: str, message: str, serializer: TutorChatRequestSerializer
+    ):
+        """Create a checkpointer instance"""
+        return await AsyncDjangoSaver.create_with_session(
+            thread_id=thread_id,
+            message=message,
+            user=self.scope.get("user", None),
+            dj_session_key=self.session_key,
+            agent=self.ROOM_NAME,
+            object_id=serializer.validated_data.get("problem_code"),
+        )
 
 class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
     """
@@ -382,3 +500,25 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
         return {
             "transcript_asset_id": [data.get("transcript_asset_id")],
         }
+
+    def prepare_response(
+        self,
+        serializer: VideoGPTRequestSerializer,
+        object_id_field: Optional[str] = None,
+    ) -> tuple[str, list[str]]:
+        """Set the problem code as the default object id field"""
+        object_id_field = object_id_field or "transcript_asset_id"
+        return super().prepare_response(serializer, object_id_field=object_id_field)
+
+    async def create_checkpointer(
+        self, thread_id: str, message: str, serializer: VideoGPTRequestSerializer
+    ):
+        """Create a checkpointer instance"""
+        return await AsyncDjangoSaver.create_with_session(
+            thread_id=thread_id,
+            message=message,
+            user=self.scope.get("user", None),
+            dj_session_key=self.session_key,
+            agent=self.ROOM_NAME,
+            object_id=serializer.validated_data.get("transcript_asset_id"),
+        )
