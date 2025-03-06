@@ -54,8 +54,8 @@ ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langchain-community = "^0.3.16"
 psycopg = "^3.2.4"
-open-learning-ai-tutor = "0.0.2"
 starlette = "0.46.0"
+open-learning-ai-tutor = {git = "https://github.com/mitodl/open-learning-ai-tutor.git", rev = "ab/remove-unused-code"}
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"
