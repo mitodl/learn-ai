@@ -16,6 +16,11 @@ http_patterns = [
         consumers.SyllabusBotHttpConsumer.as_asgi(),
         name="syllabus_agent_sse",
     ),
+    re_path(
+        r"http/video_gpt_agent/",
+        consumers.VideoGPTBotHttpConsumer.as_asgi(),
+        name="video_gpt_agent_sse",
+    ),
     # This gets two routes - user_meta doesn't require auth (in the APISIX settings)
     # and login does.
     re_path(
