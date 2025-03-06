@@ -582,7 +582,7 @@ AI_MIT_SYLLABUS_URL = get_string(
 )
 AI_MIT_VIDEO_METADATA_URL = get_string(
     "AI_MIT_VIDEO_METADATA_URL",
-    "https://api.rc.learn.mit.edu/api/v0/vector_content_files_search/",
+    "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
 )
 
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)

@@ -187,7 +187,7 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
 
 
 class VideoGPTToolSchema(pydantic.BaseModel):
-    """Schema for searching MIT contentfiles related to a particular course."""
+    """Schema for searching MIT contentfiles for to a particular video transcript."""
 
     q: str = Field(
         description=(
@@ -196,7 +196,7 @@ class VideoGPTToolSchema(pydantic.BaseModel):
         )
     )
     state: Annotated[dict, InjectedState] = Field(
-        description="The agent state, including course_id and collection_name params"
+        description="The agent state, including video transcript block id"
     )
 
 
