@@ -4707,7 +4707,7 @@ tiktoken = "*"
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor.git"
 reference = "ab/remove-unused-code"
-resolved_reference = "c31d2656ab078f31c5228dbe4513eb08da4fd1b6"
+resolved_reference = "b6e8447f335f5066c676393b714d3ff740743822"
 
 [[package]]
 name = "openai"
