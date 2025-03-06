@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.2.1
+Version 0.2.1 (Released March 06, 2025)
 -------------
 
 - Add tutor bot frontend
