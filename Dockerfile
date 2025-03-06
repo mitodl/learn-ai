@@ -48,8 +48,7 @@ RUN poetry install
 
 # Generate commit hash file
 ARG GIT_REF
-RUN mkdir -p /src/static
-RUN echo $GIT_REF >> /src/static/hash.txt
+RUN echo $GIT_REF >> /src/staticfiles/hash.txt
 
 # Add project
 USER root
