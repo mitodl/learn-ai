@@ -46,6 +46,10 @@ WORKDIR /src
 RUN python3 -m venv $VIRTUAL_ENV
 RUN poetry install
 
+# Generate commit hash file
+ARG GIT_REF
+RUN echo $GIT_REF >> /src/staticfiles/hash.txt
+
 # Add project
 USER root
 COPY . /src
