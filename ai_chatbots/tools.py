@@ -246,12 +246,12 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
     Query the MIT video transcript API, and return results as a JSON string.
     """
 
-    url = settings.AI_MIT_VIDEO_METADATA_URL
+    url = settings.AI_MIT_VIDEO_TRANSCRIPT_URL
 
-    edx_block_id = state["transcript_asset_id"][-1]
+    transcript_asset_id = state["transcript_asset_id"][-1]
     params = {
         "q": q,
-        "edx_block_id": edx_block_id,
+        "edx_module_id": transcript_asset_id,
         "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
     }
 
