@@ -1,6 +1,18 @@
 Release Notes
 =============
 
+Version 0.2.2
+-------------
+
+- Make sentry work for asgi endpoints too (#89)
+- fix(deps): update dependency django to v4.2.20 [security] (#90)
+- Better cookie management (#84)
+- run collectstatic within the docker build
+- put the static file in /static instead, and make sure the directory exists
+- should go to staticfiles instead
+- generate the git hash file based on a build arg and put it in /src/static/hash.txt
+- feat: Add Video GPT (#56)
+
 Version 0.2.1 (Released March 06, 2025)
 -------------
 
