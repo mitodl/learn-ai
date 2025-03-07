@@ -588,8 +588,8 @@ AI_MIT_SYLLABUS_URL = get_string(
     "AI_MIT_SYLLABUS_URL",
     "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
 )
-AI_MIT_VIDEO_METADATA_URL = get_string(
-    "AI_MIT_VIDEO_METADATA_URL",
+AI_MIT_VIDEO_TRANSCRIPT_URL = get_string(
+    "AI_MIT_VIDEO_TRANSCRIPT_URL",
     "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
 )
 
@@ -609,7 +609,7 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
     name="AI_CHATBOTS_SESSION_EXPIRY_DAYS", default=10
 )
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
-    name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24*60*60*7
+    name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
 
 # AI proxy settings (aka LiteLLM)

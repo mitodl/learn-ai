@@ -586,7 +586,7 @@ async def test_video_gpt_bot_get_completion_state(
     chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
     extra_state = {
         "transcript_asset_id": [
-            "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
+            "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
         ]
     }
     state = VideoGPTAgentState(
@@ -634,7 +634,7 @@ async def test_video_gpt_bot_tool(
 
     search_parameters = {
         "q": "What is this video about?",
-        "edx_block_id": video_gpt_agent_state["transcript_asset_id"][-1],
+        "edx_module_id": video_gpt_agent_state["transcript_asset_id"][-1],
         "limit": 2,
     }
     expected_results["metadata"]["parameters"] = search_parameters
@@ -643,7 +643,7 @@ async def test_video_gpt_bot_tool(
         {"q": "What is this video about?", "state": video_gpt_agent_state}
     )
     mock_post.assert_called_once_with(
-        settings.AI_MIT_VIDEO_METADATA_URL,
+        settings.AI_MIT_VIDEO_TRANSCRIPT_URL,
         params=search_parameters,
         timeout=30,
     )

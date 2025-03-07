@@ -113,6 +113,6 @@ def video_gpt_agent_state():
             ToolMessageFactory.create(tool_call="get_video_transcript_chunk"),
         ],
         transcript_asset_id=[
-            "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
+            "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
         ],
     )

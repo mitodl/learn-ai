@@ -4,10 +4,9 @@ import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from django.conf import settings
-
 import pytest
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -57,7 +56,6 @@ def video_gpt_consumer(async_user):
     consumer.scope = {"user": async_user, "cookies": {}, "session": None}
     consumer.channel_name = "test_video_gpt_channel"
     return consumer
-
 
 
 @pytest.mark.parametrize(
@@ -292,8 +290,14 @@ async def test_assign_thread_cookie(
         assert thread_id == anon_cookie
         if not is_anon:  # User just authenticated, associate older sessions with user
             # Clear out anon cookie thread ids and set current thread id to auth user cookie
-            assert str(cookies[1]) == f"{anon_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
-            assert str(cookies[0]) == f"{user_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            assert (
+                str(cookies[1])
+                == f"{anon_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            )
+            assert (
+                str(cookies[0])
+                == f"{user_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            )
             for thread in anon_cookie.split(","):
                 # All anon thread ids should now be associated with user
                 assert await UserChatSession.objects.filter(
@@ -312,8 +316,14 @@ async def test_assign_thread_cookie(
         if (
             is_anon
         ):  # User must have logged out, so current thread id should be in anon cookie
-            assert str(cookies[1]) == f"{anon_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
-            assert str(cookies[0]) == f"{user_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            assert (
+                str(cookies[1])
+                == f"{anon_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            )
+            assert (
+                str(cookies[0])
+                == f"{user_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+            )
 
 
 @pytest.mark.parametrize(
@@ -510,7 +520,7 @@ async def test_video_gpt_create_chatbot(
     serializer = consumers.VideoGPTRequestSerializer(
         data={
             "message": "What is this video about?",
-            "transcript_asset_id": "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
+            "transcript_asset_id": "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
             "temperature": 0.7,
             "model": "gpt-3.5-turbo",
         }
@@ -537,7 +547,7 @@ async def test_video_agent_consumer_handle(
     )
     payload = {
         "message": "what is this video about?",
-        "transcript_asset_id": "block-v1:xPRO+LASERxE3+R15+type@static+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
+        "transcript_asset_id": "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
     }
     await video_gpt_consumer.handle(json.dumps(payload))
     mock_completion.assert_called_once_with(
