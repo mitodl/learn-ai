@@ -8,6 +8,7 @@ import django
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.urls import re_path
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 
 from main.middleware.configs import HTTP_MIDDLEWARE
 from main.middleware.util import apply_middleware
@@ -33,3 +34,5 @@ application = ProtocolTypeRouter(
         ),
     }
 )
+
+application = SentryAsgiMiddleware(application)
