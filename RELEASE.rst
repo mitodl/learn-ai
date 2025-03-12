@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.3.0
+Version 0.3.0 (Released March 12, 2025)
 -------------
 
 - fix(deps): update dependency starlette to v0.46.1 (#98)
