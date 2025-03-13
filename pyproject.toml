@@ -55,7 +55,7 @@ uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langchain-community = "^0.3.16"
 psycopg = "^3.2.4"
 starlette = "0.46.0"
-open-learning-ai-tutor = {git = "https://github.com/mitodl/open-learning-ai-tutor.git", rev = "ab/tutor-rewrite-assessor"}
+open-learning-ai-tutor = {git = "https://github.com/mitodl/open-learning-ai-tutor.git", rev = "508fafa9190d8325803dd2d678c3fc5c7dac8a72"}
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

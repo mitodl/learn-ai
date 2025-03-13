@@ -4125,8 +4125,8 @@ langgraph = "*"
 [package.source]
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor.git"
-reference = "ab/tutor-rewrite-assessor"
-resolved_reference = "ccf058bdbf64df152824c441a0e86fc806be2ecc"
+reference = "508fafa9190d8325803dd2d678c3fc5c7dac8a72"
+resolved_reference = "508fafa9190d8325803dd2d678c3fc5c7dac8a72"
 
 [[package]]
 name = "openai"
@@ -7301,4 +7301,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.12.6"
-content-hash = "bc467565a2fd1c85d6ac42ba58bcc8b2da8998c7bff7706be2b3516b8ccea35f"
+content-hash = "cf0a314eaa7e8ce81747d466975bea0c93c2efa5e994f84cc7021dfecdbc218c"
