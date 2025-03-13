@@ -1722,13 +1722,13 @@ typing-extensions = ">=4.1.0"
 
 [[package]]
 name = "e2b-code-interpreter"
-version = "1.0.5"
+version = "1.1.0"
 description = "E2B Code Interpreter - Stateful code execution"
 optional = false
-python-versions = "<4.0,>=3.8"
+python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b_code_interpreter-1.0.5-py3-none-any.whl", hash = "sha256:4c7814e9eabba58097bf5e4019d327b3a82fab0813eafca4311b29ca6ea0639d"},
-    {file = "e2b_code_interpreter-1.0.5.tar.gz", hash = "sha256:e7f70b039e6a70f8e592f90f806d696dc1056919414daabeb89e86c9b650a987"},
+    {file = "e2b_code_interpreter-1.1.0-py3-none-any.whl", hash = "sha256:292f8ddbb820475d5ffb1f3f2e67a42001a921d1c8fef40bd97a7f16f13adc64"},
+    {file = "e2b_code_interpreter-1.1.0.tar.gz", hash = "sha256:4554eb002f9489965c2e7dd7fc967e62128db69b18dbb64975d4abbc0572e3ed"},
 ]
 
 [package.dependencies]
@@ -4125,8 +4125,8 @@ langgraph = "*"
 [package.source]
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor.git"
-reference = "508fafa9190d8325803dd2d678c3fc5c7dac8a72"
-resolved_reference = "508fafa9190d8325803dd2d678c3fc5c7dac8a72"
+reference = "dab2ab5580bbcd285376989514297e36dc93b4d9"
+resolved_reference = "dab2ab5580bbcd285376989514297e36dc93b4d9"
 
 [[package]]
 name = "openai"
@@ -7301,4 +7301,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.12.6"
-content-hash = "cf0a314eaa7e8ce81747d466975bea0c93c2efa5e994f84cc7021dfecdbc218c"
+content-hash = "3e26eda66f32f336cce17c240d134d4c33b115a8f8fcdb71350cee39a51ac6fb"
