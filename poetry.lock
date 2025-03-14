@@ -3206,26 +3206,23 @@ zookeeper = ["kazoo (>=2.8.0)"]
 
 [[package]]
 name = "langchain"
-version = "0.3.19"
+version = "0.3.20"
 description = "Building applications with LLMs through composability"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "langchain-0.3.19-py3-none-any.whl", hash = "sha256:1e16d97db9106640b7de4c69f8f5ed22eeda56b45b9241279e83f111640eff16"},
-    {file = "langchain-0.3.19.tar.gz", hash = "sha256:b96f8a445f01d15d522129ffe77cc89c8468dbd65830d153a676de8f6b899e7b"},
+    {file = "langchain-0.3.20-py3-none-any.whl", hash = "sha256:273287f8e61ffdf7e811cf8799e6a71e9381325b8625fd6618900faba79cfdd0"},
+    {file = "langchain-0.3.20.tar.gz", hash = "sha256:edcc3241703e1f6557ef5a5c35cd56f9ccc25ff12e38b4829c66d94971737a93"},
 ]
 
 [package.dependencies]
-aiohttp = ">=3.8.3,<4.0.0"
-langchain-core = ">=0.3.35,<1.0.0"
+langchain-core = ">=0.3.41,<1.0.0"
 langchain-text-splitters = ">=0.3.6,<1.0.0"
 langsmith = ">=0.1.17,<0.4"
-numpy = {version = ">=1.26.2,<3", markers = "python_version >= \"3.12\""}
 pydantic = ">=2.7.4,<3.0.0"
 PyYAML = ">=5.3"
 requests = ">=2,<3"
 SQLAlchemy = ">=1.4,<3"
-tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<10"
 
 [package.extras]
 anthropic = ["langchain-anthropic"]
@@ -3246,18 +3243,18 @@ xai = ["langchain-xai"]
 
 [[package]]
 name = "langchain-anthropic"
-version = "0.3.8"
+version = "0.3.10"
 description = "An integration package connecting AnthropicMessages and LangChain"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "langchain_anthropic-0.3.8-py3-none-any.whl", hash = "sha256:05a70f51500d3c4e0f3e463730e193a25b6244e06b3bda3d7b2ec21d83d081ae"},
-    {file = "langchain_anthropic-0.3.8.tar.gz", hash = "sha256:1932977b8105744739ffdcb39861b041b73ae93846d0896a775fcea9a29e4b2b"},
+    {file = "langchain_anthropic-0.3.10-py3-none-any.whl", hash = "sha256:f4aa8ec03b1f5bcfbb73d2db516bddf009bc457e524f1ee8d651c1fe7338603f"},
+    {file = "langchain_anthropic-0.3.10.tar.gz", hash = "sha256:b4364434393476bf076c8326a51261a55d4e4cfefda01b8adf53533e8ebd8ec5"},
 ]
 
 [package.dependencies]
-anthropic = ">=0.47.0,<1"
-langchain-core = ">=0.3.39,<1.0.0"
+anthropic = ">=0.49.0,<1"
+langchain-core = ">=0.3.45,<1.0.0"
 pydantic = ">=2.7.4,<3.0.0"
 
 [[package]]
@@ -3287,13 +3284,13 @@ tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<10"
 
 [[package]]
 name = "langchain-core"
-version = "0.3.40"
+version = "0.3.45"
 description = "Building applications with LLMs through composability"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "langchain_core-0.3.40-py3-none-any.whl", hash = "sha256:9f31358741f10a13db8531e8288b8a5ae91904018c5c2e6f739d6645a98fca03"},
-    {file = "langchain_core-0.3.40.tar.gz", hash = "sha256:893a238b38491967c804662c1ec7c3e6ebaf223d1125331249c3cf3862ff2746"},
+    {file = "langchain_core-0.3.45-py3-none-any.whl", hash = "sha256:fe560d644c102c3f5dcfb44eb5295e26d22deab259fdd084f6b1b55a0350b77c"},
+    {file = "langchain_core-0.3.45.tar.gz", hash = "sha256:a39b8446495d1ea97311aa726478c0a13ef1d77cb7644350bad6d9d3c0141a0c"},
 ]
 
 [package.dependencies]
@@ -3322,17 +3319,17 @@ langchain-core = ">=0.3.28,<0.4.0"
 
 [[package]]
 name = "langchain-openai"
-version = "0.3.7"
+version = "0.3.8"
 description = "An integration package connecting OpenAI and LangChain"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "langchain_openai-0.3.7-py3-none-any.whl", hash = "sha256:0aefc7bdf8e7398d41e09c4313cace816df6438f2aa93d34f79523487310f0da"},
-    {file = "langchain_openai-0.3.7.tar.gz", hash = "sha256:b8b51a3aaa1cc3bda060651ea41145f7728219e8a7150b5404fb1e8446de9cef"},
+    {file = "langchain_openai-0.3.8-py3-none-any.whl", hash = "sha256:9004dc8ef853aece0d8f0feca7753dc97f710fa3e53874c8db66466520436dbb"},
+    {file = "langchain_openai-0.3.8.tar.gz", hash = "sha256:4d73727eda8102d1d07a2ca036278fccab0bb5e0abf353cec9c3973eb72550ec"},
 ]
 
 [package.dependencies]
-langchain-core = ">=0.3.39,<1.0.0"
+langchain-core = ">=0.3.42,<1.0.0"
 openai = ">=1.58.1,<2.0.0"
 tiktoken = ">=0.7,<1"
 
@@ -3369,13 +3366,13 @@ requests = ">=2,<3"
 
 [[package]]
 name = "langgraph"
-version = "0.3.2"
+version = "0.3.10"
 description = "Building stateful, multi-actor applications with LLMs"
 optional = false
 python-versions = "<4.0,>=3.9.0"
 files = [
-    {file = "langgraph-0.3.2-py3-none-any.whl", hash = "sha256:1e17f85e225bf4fc5f0f70bce89d8bc5d1536b7993e39e2e47baa1b1a17a439c"},
-    {file = "langgraph-0.3.2.tar.gz", hash = "sha256:4712c11a9355e5d15126e15a166807a1d6275d72cf74fd2303609ffc2505e7a8"},
+    {file = "langgraph-0.3.10-py3-none-any.whl", hash = "sha256:60cd9bbc16843cc6a9de33012d0a12e93ce1a69b90b568ea49971b92a293be7f"},
+    {file = "langgraph-0.3.10.tar.gz", hash = "sha256:0b6275b00037b6261e7c94469eb4555b22b224babe0ad56d3770b5878fc4afd0"},
 ]
 
 [package.dependencies]
@@ -4104,29 +4101,29 @@ signals = ["blinker (>=1.4.0)"]
 signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
-name = "open_learning_ai_tutor"
-version = "0.0.2"
+name = "open-learning-ai-tutor"
+version = "0.0.3"
 description = "AI powered tutor"
 optional = false
-python-versions = "*"
+python-versions = "^3.12"
 files = []
 develop = false
 
 [package.dependencies]
-e2b-code-interpreter = "*"
-langchain = "*"
-langchain-anthropic = "*"
-langchain-core = "*"
-langchain-experimental = "*"
-langchain-openai = "*"
-langchain-together = "*"
-langgraph = "*"
+e2b-code-interpreter = "^1.1.0"
+langchain = "^0.3.20"
+langchain-anthropic = "^0.3.10"
+langchain-core = "^0.3.45"
+langchain-experimental = "^0.3.4"
+langchain-openai = "^0.3.8"
+langchain-together = "^0.3.0"
+langgraph = "^0.3.10"
 
 [package.source]
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor.git"
-reference = "dab2ab5580bbcd285376989514297e36dc93b4d9"
-resolved_reference = "dab2ab5580bbcd285376989514297e36dc93b4d9"
+reference = "ab/automated-tests"
+resolved_reference = "50821ffb9de6575180fca7e8c62c980e2bc0cf17"
 
 [[package]]
 name = "openai"
@@ -7301,4 +7298,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.12.6"
-content-hash = "3e26eda66f32f336cce17c240d134d4c33b115a8f8fcdb71350cee39a51ac6fb"
+content-hash = "4286e1310d33bee66bdf71f2905576f110f916e373392093c854aeb66e3a96f9"
