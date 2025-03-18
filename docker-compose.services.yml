@@ -84,9 +84,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["--port", "4000", "--config", "/app/config.yml"]
+    command: ["--port", "4000", "--config", "/app/litellm_config.yml"]
     volumes:
-      - ./config/litellm_config.yml:/app/config.yml
+      - ./config/litellm_config.yml:/app/litellm_config.yml
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
