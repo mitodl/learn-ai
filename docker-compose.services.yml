@@ -61,8 +61,7 @@ services:
       - ./config:/etc/nginx/templates
 
   litellm:
-    build:
-      dockerfile: Dockerfile-litellm
+    image: ghcr.io/berriai/litellm:main-stable
     ports:
       - "4000:4000"
     env_file:
@@ -85,8 +84,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    command: ["--port", "4000", "--config", "/app/litellm_config.yml"]
     volumes:
-      - ./config:/app
+      - ./config/litellm_config.yml:/app/litellm_config.yml
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest

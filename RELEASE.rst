@@ -1,6 +1,24 @@
 Release Notes
 =============
 
+Version 0.3.0 (Released March 12, 2025)
+-------------
+
+- fix(deps): update dependency starlette to v0.46.1 (#98)
+- fix(deps): update dependency ruff to v0.9.10 (#97)
+- fix(deps): update dependency next to v15.2.1 (#96)
+- fix(deps): update dependency axios to v1.8.2 [security] (#95)
+- chore(deps): update dependency eslint-config-next to v15.2.1 (#94)
+- refactor:! edx_block_id to edx_module_id and better setting name (#91)
+- Make sentry work for asgi endpoints too (#89)
+- fix(deps): update dependency django to v4.2.20 [security] (#90)
+- Better cookie management (#84)
+- run collectstatic within the docker build
+- put the static file in /static instead, and make sure the directory exists
+- should go to staticfiles instead
+- generate the git hash file based on a build arg and put it in /src/static/hash.txt
+- feat: Add Video GPT (#56)
+
 Version 0.2.1 (Released March 06, 2025)
 -------------
 
