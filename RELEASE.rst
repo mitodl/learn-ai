@@ -1,6 +1,20 @@
 Release Notes
 =============
 
+Version 0.3.1
+-------------
+
+- adding debug toolbar urls
+- Fixing typo in API_BASE_URL
+- Updated poetry.lock file
+- standardizing config filename
+- fixing compose for litellm
+- fix(deps): update dependency ruff to v0.11.0 (#104)
+- fix(deps): update dependency next to v15.2.2 (#103)
+- chore(deps): update dependency eslint-config-next to v15.2.2 (#102)
+- Add OpenTelemetry Config
+- fix(deps): update python docker tag to v3.13.2 (#10)
+
 Version 0.3.0 (Released March 12, 2025)
 -------------
 
