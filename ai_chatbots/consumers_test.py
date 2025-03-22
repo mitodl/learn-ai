@@ -486,6 +486,10 @@ async def test_tutor_agent_handle(
     response = SystemMessageFactory.create()
     user = tutor_consumer.scope["user"]
     user.is_superuser = True
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        return_value=("problem_xml", "problem_set_xml"),
+    )
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.TutorBot.get_completion",
         return_value=mocker.Mock(
@@ -495,7 +499,11 @@ async def test_tutor_agent_handle(
         ),
     )
     message = "What should i try next?"
-    data = {"message": message, "problem_code": "A1P1"}
+    data = {
+        "message": message,
+        "edx_module_id": "block1",
+        "block_siblings": ["block1", "block2"],
+    }
 
     await tutor_consumer.handle(json.dumps(data))
 
