@@ -103,4 +103,7 @@ class TutorChatRequestSerializer(ChatRequestSerializer):
     Serializer for requests sent to the tutor chatbot.
     """
 
-    problem_code = serializers.CharField(required=True, allow_blank=False)
+    edx_module_id = serializers.CharField(required=True, allow_blank=False)
+    block_siblings = serializers.ListField(
+        child=serializers.CharField(), required=True, allow_empty=False
+    )

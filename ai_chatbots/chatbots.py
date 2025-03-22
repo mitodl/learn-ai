@@ -9,6 +9,7 @@ from typing import Annotated, Optional
 from uuid import uuid4
 
 import posthog
+import requests
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
@@ -23,7 +24,6 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from open_learning_ai_tutor.problems import get_pb_sol
 from open_learning_ai_tutor.StratL import message_tutor, process_StratL_json_output
 from open_learning_ai_tutor.tools import tutor_tools
 from open_learning_ai_tutor.utils import (
@@ -37,7 +37,6 @@ from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
-
 
 log = logging.getLogger(__name__)
 
@@ -440,7 +439,8 @@ class TutorBot(BaseChatbot):
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         thread_id: Optional[str] = None,
-        problem_code: Optional[str] = None,
+        block_siblings: Optional[list[str]] = None,
+        edx_module_id: Optional[str] = None,
     ):
         super().__init__(
             user_id,
@@ -450,7 +450,10 @@ class TutorBot(BaseChatbot):
             thread_id=thread_id,
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
         )
-        self.problem, self.solution = get_pb_sol(problem_code)
+
+        self.problem, self.problem_set = get_problem_from_edx_block(
+            edx_module_id, block_siblings
+        )
 
     def get_llm(self, **kwargs) -> BaseChatModel:
         """
@@ -507,7 +510,7 @@ class TutorBot(BaseChatbot):
         try:
             json_output = message_tutor(
                 self.problem,
-                self.solution,
+                self.problem_set,
                 self.llm,
                 messages_to_json([HumanMessage(content=message)]),
                 messages_to_json(self.chat_history),
@@ -531,6 +534,55 @@ class TutorBot(BaseChatbot):
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
+
+
+def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
+    """
+    Make an call to the learn contentfiles api to get the problem xml and problem
+    set xml using the block id
+
+    Args:
+        edx_module_id: The edx_module_id of the problem
+        block_siblings: The edx_module_id of block siblings of the problem, including
+            the problem itself
+
+    Returns:
+        problem: The problem xml
+        problem_set: The problem set xml
+    """
+
+    api_url = settings.AI_MIT_CONTENTFILE_URL
+    params = {"edx_module_id": block_siblings}
+    response = requests.get(api_url, params=params, timeout=10)
+
+    response = response.json()
+
+    problem = get_matching_content(response, edx_module_id)
+
+    problem_set = ""
+
+    for sibling_module_id in block_siblings:
+        problem_set += get_matching_content(response, sibling_module_id)
+    return problem, problem_set
+
+
+def get_matching_content(api_results: json, edx_module_id: str):
+    """
+    Get the matching content from the api results
+
+    Args:
+        api_results: The api results
+        edx_module_id: The edx_module_id of a specific contentfile
+
+    Returns:
+        The content of the contentfile
+    """
+
+    for result in api_results["results"]:
+        if result["edx_module_id"] == edx_module_id:
+            return result["content"]
+
+    return ""
 
 
 class VideoGPTAgentState(AgentState):

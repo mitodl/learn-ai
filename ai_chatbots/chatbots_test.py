@@ -9,7 +9,6 @@ from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableBinding
-from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
@@ -19,6 +18,7 @@ from ai_chatbots.chatbots import (
     VideoGPTAgentState,
     VideoGPTBot,
     get_history,
+    get_problem_from_edx_block,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -477,22 +477,26 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
 async def test_tutor_bot_intitiation(mocker, model, temperature):
     """Test the tutor class instantiation."""
     name = "My tutor bot"
-    problem_code = "A1P1"
-
+    edx_module_id = "block1"
+    block_siblings = ["block1", "block2"]
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        return_value=("problem_xml", "problem_set_xml"),
+    )
     chatbot = TutorBot(
         "user",
         name=name,
         model=model,
         temperature=temperature,
-        problem_code=problem_code,
+        edx_module_id=edx_module_id,
+        block_siblings=block_siblings,
     )
     assert chatbot.model == (model if model else settings.AI_DEFAULT_TUTOR_MODEL)
     assert chatbot.temperature == (
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
-    problem, solution = get_pb_sol(problem_code)
-    assert chatbot.problem == problem
-    assert chatbot.solution == solution
+    assert chatbot.problem == "problem_xml"
+    assert chatbot.problem_set == "problem_set_xml"
     assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
 
 
@@ -540,7 +544,10 @@ async def test_tutor_get_completion(mocker, mock_checkpointer):
             "tutor_model": "gpt-4o",
         },
     }
-
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        return_value=("problem_xml", "problem_set_xml"),
+    )
     mocker.patch(
         "ai_chatbots.chatbots.message_tutor", return_value=json.dumps(json_output)
     )
@@ -548,7 +555,11 @@ async def test_tutor_get_completion(mocker, mock_checkpointer):
     thread_id = "TEST"
 
     chatbot = TutorBot(
-        "anonymous", mock_checkpointer, problem_code="A1P1", thread_id=thread_id
+        "anonymous",
+        mock_checkpointer,
+        edx_module_id="block1",
+        block_siblings=["block1", "block2"],
+        thread_id=thread_id,
     )
 
     results = ""
@@ -575,6 +586,36 @@ async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
         state_schema=VideoGPTAgentState,
         state_modifier=chatbot.instructions,
     )
+
+
+def test_get_problem_from_edx_block(mocker):
+    """Test that the get_problem_from_edx_block function returns the expected problem and problem set"""
+    edx_module_id = "block1"
+    block_siblings = ["block1", "block2"]
+
+    contentfile_api_results = {
+        "results": [
+            {
+                "edx_module_id": "block1",
+                "content": "<problem>problem 1</problem>",
+            },
+            {
+                "edx_module_id": "block2",
+                "content": "<problem>problem 2</problem>",
+            },
+        ]
+    }
+
+    mocker.patch(
+        "ai_chatbots.tools.requests.get",
+        return_value=mocker.Mock(
+            json=mocker.Mock(return_value=contentfile_api_results)
+        ),
+    )
+
+    problem, problem_set = get_problem_from_edx_block(edx_module_id, block_siblings)
+    assert problem == "<problem>problem 1</problem>"
+    assert problem_set == "<problem>problem 1</problem><problem>problem 2</problem>"
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])

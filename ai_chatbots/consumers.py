@@ -1,15 +1,12 @@
-from datetime import timedelta
 import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 from uuid import uuid4
 
-from django.conf import settings
-
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
-from django.db.models import Q
+from django.conf import settings
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.text import slugify
@@ -36,7 +33,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
-from main.utils import decode_value, now_in_utc
+from main.utils import decode_value
 from users.models import User
 
 log = logging.getLogger(__name__)
@@ -161,9 +158,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
                 max_age=max_age,
             ),
             ChatbotCookie(
-                name=anon_cookie_key, 
+                name=anon_cookie_key,
                 value=(cookie_value if user.is_anonymous else ""),
-                max_age=max_age
+                max_age=max_age,
             ),
         ]
         return current_thread_id, cookies
@@ -435,7 +432,8 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
         """Return a TutorBot instance"""
         temperature = serializer.validated_data.pop("temperature", None)
         model = serializer.validated_data.pop("model", None)
-        problem_code = serializer.validated_data.pop("problem_code", None)
+        block_siblings = serializer.validated_data.pop("block_siblings", None)
+        edx_module_id = serializer.validated_data.pop("edx_module_id", None)
 
         return TutorBot(
             self.user_id,
@@ -443,7 +441,8 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             temperature=temperature,
             model=model,
             thread_id=self.thread_id,
-            problem_code=problem_code,
+            block_siblings=block_siblings,
+            edx_module_id=edx_module_id,
         )
 
     def prepare_response(
@@ -451,8 +450,8 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
         serializer: TutorChatRequestSerializer,
         object_id_field: Optional[str] = None,
     ) -> tuple[str, list[str]]:
-        """Set the problem code as the default object id field"""
-        object_id_field = object_id_field or "problem_code"
+        """Set the edx_module_id as the default object id field"""
+        object_id_field = object_id_field or "edx_module_id"
         return super().prepare_response(serializer, object_id_field=object_id_field)
 
     async def create_checkpointer(
@@ -465,8 +464,9 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             user=self.scope.get("user", None),
             dj_session_key=self.session_key,
             agent=self.ROOM_NAME,
-            object_id=serializer.validated_data.get("problem_code"),
+            object_id=serializer.validated_data.get("edx_module_id"),
         )
+
 
 class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
     """
