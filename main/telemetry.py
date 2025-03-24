@@ -56,6 +56,7 @@ def configure_opentelemetry() -> Optional[TracerProvider]:
         otlp_exporter = OTLPSpanExporter(
             endpoint=otlp_endpoint,
             headers=headers,
+            insecure=getattr(settings, "OPENTELEMETRY_INSECURE", True),
         )
         
         tracer_provider.add_span_processor(
