@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+Version 0.3.2
+-------------
+
+- use edx module ids to find the problem
+- Update main/settings.py
+- Add OTEL insecure flag
+- fix(deps): update dependency next to v15.2.3 [security] (#110)
+
 Version 0.3.1 (Released March 26, 2025)
 -------------
 
