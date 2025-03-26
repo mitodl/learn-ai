@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.3.1
+Version 0.3.1 (Released March 26, 2025)
 -------------
 
 - adding debug toolbar urls
