@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.3.2
+Version 0.3.2 (Released March 27, 2025)
 -------------
 
 - use edx module ids to find the problem
