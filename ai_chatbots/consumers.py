@@ -135,15 +135,24 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
                 current_thread_id, cookie_object_id = current_thread_id.split("|")
                 if object_id and object_id != cookie_object_id:
                     current_thread_id = None
-        if user and not user.is_anonymous and anon_cookie:
-            # Anon user has logged in, so associate any existing anon threads
-            # with the same session key
-            await UserChatSession.objects.filter(
-                user_id=None, dj_session_key=self.session_key
-            ).aupdate(user=user)
-        if not current_thread_id:
-            # Still no thread id, so create a new one
-            current_thread_id = uuid4().hex
+        if user and not user.is_anonymous:
+            if anon_cookie:
+                # Anon user has logged in, so associate any existing anon threads
+                # with the same session key
+                await UserChatSession.objects.filter(
+                    user_id=None, dj_session_key=self.session_key
+                ).aupdate(user=user)
+            if not clear_history and current_thread_id:
+                # User may have logged in under a different account
+                session = (
+                    await UserChatSession.objects.filter(thread_id=current_thread_id)
+                    .select_related("user")
+                    .afirst()
+                )
+                current_thread_id = (
+                    None if (session and session.user != user) else current_thread_id
+                )
+        current_thread_id = current_thread_id or uuid4().hex
 
         # Incorporate object id into cookie value if present
         cookie_value = urlsafe_base64_encode(

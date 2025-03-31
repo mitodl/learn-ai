@@ -18,6 +18,7 @@ from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
 from ai_chatbots.models import UserChatSession
+from main.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -324,6 +325,35 @@ async def test_assign_thread_cookie(
                 str(cookies[0])
                 == f"{user_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
             )
+
+
+async def test_assign_thread_cookie_changed_account(syllabus_consumer, async_user):
+    """Test the cookie handling if a user logs in under a different account."""
+    old_thread_id = uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+
+    encoded_user_cookie = urlsafe_base64_encode(force_bytes(old_thread_id))
+
+    syllabus_consumer.scope["cookies"] = {user_cookie_name: encoded_user_cookie}
+
+    syllabus_consumer.scope["user"] = async_user
+
+    # Clear out any old saved sessions
+    await UserChatSession.objects.all().adelete()
+
+    # Associate old thread id with a different user
+    await UserChatSession.objects.acreate(
+        thread_id=old_thread_id,
+        user=await sync_to_async(UserFactory.create)(),
+        agent=SyllabusBot.__name__,
+    )
+
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(async_user)
+    encoded_thread_id = urlsafe_base64_encode(force_bytes(thread_id))
+
+    # Should have gotten assigned a new thread id
+    assert thread_id != old_thread_id
+    assert cookies[0].value == encoded_thread_id
 
 
 @pytest.mark.parametrize(
