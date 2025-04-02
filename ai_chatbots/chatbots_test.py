@@ -1,7 +1,7 @@
 """Tests for AI chatbots."""
 
 import json
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -72,6 +72,14 @@ def mock_latest_state_history(mocker):
             ]
         ),
     )
+
+
+@pytest.fixture
+def posthog_settings(settings):
+    """Mock the PostHog settings"""
+    settings.POSTHOG_PROJECT_API_KEY = "testkey"
+    settings.POSTHOG_HOST = "testhost"
+    return settings
 
 
 @pytest.mark.parametrize(
@@ -165,10 +173,11 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
 
 @pytest.mark.parametrize("debug", [True, False])
 async def test_get_completion(
-    settings, mocker, mock_checkpointer, debug, search_results
+    posthog_settings, mocker, mock_checkpointer, debug, search_results
 ):
     """Test that the ResourceRecommendationBot get_completion method returns expected values."""
-    settings.AI_DEBUG = debug
+    posthog_settings.AI_DEBUG = debug
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
         return_value=MockAsyncIterator(
@@ -217,6 +226,16 @@ async def test_get_completion(
     if debug:
         assert '<!-- {"metadata"' in results
     assert "".join([value.decode() for value in expected_return_value]) in results
+    mock_posthog.Posthog.return_value.capture.assert_called_once_with(
+        "anonymous",
+        event="RECOMMENDATION_JOB",
+        properties={
+            "question": user_msg,
+            "answer": ANY,
+            "metadata": "{}",
+            "user": "anonymous",
+        },
+    )
 
 
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
@@ -500,9 +519,9 @@ async def test_tutor_bot_intitiation(mocker, model, temperature):
     assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
 
 
-async def test_tutor_get_completion(mocker, mock_checkpointer):
+async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer):
     """Test that the tutor bot get_completion method returns expected values."""
-
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
     json_output = {
         "chat_history": [
             {"type": "HumanMessage", "content": "what should i try next?"},
@@ -573,6 +592,26 @@ async def test_tutor_get_completion(mocker, mock_checkpointer):
     history = await get_history(thread_id)
     assert history.thread_id == thread_id
     assert history.chat_json == json.dumps(json_output)
+    mock_posthog.Posthog.return_value.capture.assert_called_once_with(
+        "anonymous",
+        event="TUTOR_JOB",
+        properties={
+            "question": user_msg,
+            "answer": results,
+            "metadata": json.dumps(
+                {
+                    "edx_module_id": "block1",
+                    "block_siblings": [
+                        "block1",
+                        "block2",
+                    ],
+                    "problem": "problem_xml",
+                    "problem_set": "problem_set_xml",
+                }
+            ),
+            "user": "anonymous",
+        },
+    )
 
 
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):

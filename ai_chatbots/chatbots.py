@@ -165,6 +165,30 @@ class BaseChatbot(ABC):
                 return state
         return None
 
+    async def send_posthog_event(
+        self, message: str, full_response: str, metadata: dict
+    ) -> None:
+        """
+        Send a posthog event with the user message, AI response, and metadata
+        """
+        if settings.POSTHOG_PROJECT_API_KEY:
+            try:
+                hog_client = posthog.Posthog(
+                    settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
+                )
+                hog_client.capture(
+                    self.user_id,
+                    event=self.JOB_ID,
+                    properties={
+                        "question": message,
+                        "answer": full_response,
+                        "metadata": metadata,
+                        "user": self.user_id,
+                    },
+                )
+            except:  # noqa: E722
+                log.exception("Error sending posthog event")
+
     async def get_completion(
         self,
         message: str,
@@ -215,27 +239,15 @@ class BaseChatbot(ABC):
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
+        metadata = await self.get_tool_metadata()
         if debug:
-            yield f"\n\n<!-- {await self.get_tool_metadata()} -->\n\n"
-        if settings.POSTHOG_PROJECT_API_KEY:
-            hog_client = posthog.Posthog(
-                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
-            )
-            hog_client.capture(
-                self.user_id,
-                event=self.JOB_ID,
-                properties={
-                    "question": message,
-                    "answer": full_response,
-                    "metadata": await self.get_tool_metadata(),
-                    "user": self.user_id,
-                },
-            )
+            yield f"\n\n<!-- {metadata} -->\n\n"
+        await self.send_posthog_event(message, full_response, metadata)
 
     @abstractmethod
     async def get_tool_metadata(self) -> str:
         """
-        Yield markdown comments to send hidden metadata in the response
+        Return metadata JSON about the response
         """
         raise NotImplementedError
 
@@ -430,6 +442,9 @@ class TutorBot(BaseChatbot):
     Chatbot that assists with problem sets
     """
 
+    TASK_NAME = "TUTOR_TASK"
+    JOB_ID = "TUTOR_JOB"
+
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
@@ -451,6 +466,8 @@ class TutorBot(BaseChatbot):
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
         )
 
+        self.edx_module_id = edx_module_id
+        self.block_siblings = block_siblings
         self.problem, self.problem_set = get_problem_from_edx_block(
             edx_module_id, block_siblings
         )
@@ -479,7 +496,14 @@ class TutorBot(BaseChatbot):
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
-        return None
+        return json.dumps(
+            {
+                "edx_module_id": self.edx_module_id,
+                "block_siblings": self.block_siblings,
+                "problem": self.problem,
+                "problem_set": self.problem_set,
+            }
+        )
 
     async def get_completion(
         self,
@@ -530,6 +554,9 @@ class TutorBot(BaseChatbot):
                     ]
 
             yield response
+            await self.send_posthog_event(
+                message, response, await self.get_tool_metadata()
+            )
 
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
