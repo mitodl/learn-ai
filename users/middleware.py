@@ -39,7 +39,7 @@ class ApisixChannelAuthMiddleware:
             headers[header[0].decode()] = header[1]
 
         if decode_header not in headers:
-            log.error("decode_scope_header: Header %s not found", decode_header)
+            log.debug("decode_scope_header: Header %s not found", decode_header)
             return None
 
         decoded_x_header = base64.b64decode(headers[decode_header])
