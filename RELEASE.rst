@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.4.0
+Version 0.4.0 (Released April 03, 2025)
 -------------
 
 - fix(deps): update dependency next to v15.2.4 [security] (#117)
