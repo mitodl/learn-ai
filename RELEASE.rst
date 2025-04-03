@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.4.0
+-------------
+
+- fix(deps): update dependency next to v15.2.4 [security] (#117)
+- Send posthog event with metadata for tutorbot (#116)
+- Do not update sessions assigned to another user (#115)
+
 Version 0.3.2 (Released March 27, 2025)
 -------------
 
