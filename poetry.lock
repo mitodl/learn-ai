@@ -164,30 +164,6 @@ files = [
 ]
 
 [[package]]
-name = "anthropic"
-version = "0.49.0"
-description = "The official Python library for the anthropic API"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "anthropic-0.49.0-py3-none-any.whl", hash = "sha256:bbc17ad4e7094988d2fa86b87753ded8dce12498f4b85fe5810f208f454a8375"},
-    {file = "anthropic-0.49.0.tar.gz", hash = "sha256:c09e885b0f674b9119b4f296d8508907f6cff0009bc20d5cf6b35936c40b4398"},
-]
-
-[package.dependencies]
-anyio = ">=3.5.0,<5"
-distro = ">=1.7.0,<2"
-httpx = ">=0.23.0,<1"
-jiter = ">=0.4.0,<1"
-pydantic = ">=1.9.0,<3"
-sniffio = "*"
-typing-extensions = ">=4.10,<5"
-
-[package.extras]
-bedrock = ["boto3 (>=1.28.57)", "botocore (>=1.31.57)"]
-vertex = ["google-auth (>=2,<3)"]
-
-[[package]]
 name = "anyio"
 version = "4.8.0"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
@@ -1701,13 +1677,13 @@ sidecar = ["drf-spectacular-sidecar"]
 
 [[package]]
 name = "e2b"
-version = "1.3.1"
+version = "1.3.3"
 description = "E2B SDK that give agents cloud environments"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b-1.3.1-py3-none-any.whl", hash = "sha256:2c7fa76e7a8614ebbc0df7f0863275284f9cd4afba7dc631e1c1471658809c37"},
-    {file = "e2b-1.3.1.tar.gz", hash = "sha256:d704faa618f0c7b3a4374654443609522a589189ece24d791129e9722f266e75"},
+    {file = "e2b-1.3.3-py3-none-any.whl", hash = "sha256:1f851345fd22abc1f16fb82197e88786909323edfd140a7a17b8a6ed4bd4ef03"},
+    {file = "e2b-1.3.3.tar.gz", hash = "sha256:b0afb2e3b8edaade44a50d40dbf8934cbd9e2bc3c1c214ce11dbfd9e1d6815b0"},
 ]
 
 [package.dependencies]
@@ -3326,22 +3302,6 @@ together = ["langchain-together"]
 xai = ["langchain-xai"]
 
 [[package]]
-name = "langchain-anthropic"
-version = "0.3.10"
-description = "An integration package connecting AnthropicMessages and LangChain"
-optional = false
-python-versions = "<4.0,>=3.9"
-files = [
-    {file = "langchain_anthropic-0.3.10-py3-none-any.whl", hash = "sha256:f4aa8ec03b1f5bcfbb73d2db516bddf009bc457e524f1ee8d651c1fe7338603f"},
-    {file = "langchain_anthropic-0.3.10.tar.gz", hash = "sha256:b4364434393476bf076c8326a51261a55d4e4cfefda01b8adf53533e8ebd8ec5"},
-]
-
-[package.dependencies]
-anthropic = ">=0.49.0,<1"
-langchain-core = ">=0.3.45,<1.0.0"
-pydantic = ">=2.7.4,<3.0.0"
-
-[[package]]
 name = "langchain-community"
 version = "0.3.18"
 description = "Community contributed LangChain integrations."
@@ -3430,23 +3390,6 @@ files = [
 
 [package.dependencies]
 langchain-core = ">=0.3.45,<1.0.0"
-
-[[package]]
-name = "langchain-together"
-version = "0.3.0"
-description = "An integration package connecting Together AI and LangChain"
-optional = false
-python-versions = "<4.0,>=3.9"
-files = [
-    {file = "langchain_together-0.3.0-py3-none-any.whl", hash = "sha256:4dcb4f6858c910c23d2268da1ed5f54e8cd01224ecf086dc7a8adbacdc6cb686"},
-    {file = "langchain_together-0.3.0.tar.gz", hash = "sha256:c8a96377e49c065526435f766c6e1c7da3f7d054361326f079de8bd368ea76f2"},
-]
-
-[package.dependencies]
-aiohttp = ">=3.9.1,<4.0.0"
-langchain-core = ">=0.3.29,<0.4.0"
-langchain-openai = ">=0.3,<0.4"
-requests = ">=2,<3"
 
 [[package]]
 name = "langgraph"
@@ -4186,23 +4129,20 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.0.4"
+version = "0.0.5"
 description = "AI powered tutor"
 optional = false
 python-versions = "<4.0,>=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.0.4-py3-none-any.whl", hash = "sha256:8e5a3d7fceb03a1dce24bb290eb0cff5338032033b6c7e1f9fc75ee139a7879a"},
-    {file = "open_learning_ai_tutor-0.0.4.tar.gz", hash = "sha256:60a5d7d28a942aff4acca9550799a5d917c4f6748a316ee026701b6ba4e3dc4c"},
+    {file = "open_learning_ai_tutor-0.0.5-py3-none-any.whl", hash = "sha256:5b83a1cb67567d59b321db1ba9d43d22a2355dd3bfd273c1ca2f78553262289c"},
+    {file = "open_learning_ai_tutor-0.0.5.tar.gz", hash = "sha256:b88051fb5eac008cc9c7319861ca81ac03bd0faf8fb58f7f8db1fa63a918dccd"},
 ]
 
 [package.dependencies]
 e2b-code-interpreter = ">=1.1.0,<2.0.0"
 langchain = ">=0.3.20,<0.4.0"
-langchain-anthropic = ">=0.3.10,<0.4.0"
 langchain-core = ">=0.3.45,<0.4.0"
 langchain-experimental = ">=0.3.4,<0.4.0"
-langchain-openai = ">=0.3.8,<0.4.0"
-langchain-together = ">=0.3.0,<0.4.0"
 langgraph = ">=0.3.10,<0.4.0"
 
 [[package]]
@@ -7741,4 +7681,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.2"
-content-hash = "238bbc306d165813a00b4fe54d906f0f207e05a1a7402ff487f1ce312f42f976"
+content-hash = "4077dc5de9abab86ebc3ae8d261aca2c7fd006bc7d066cd917809cdc5c30d985"

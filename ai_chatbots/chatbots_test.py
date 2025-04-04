@@ -526,44 +526,25 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
     json_output = {
         "chat_history": [
-            {"type": "HumanMessage", "content": "what should i try next?"},
+            {"type": "HumanMessage", "content": "How do i solve the problem?"},
             {
                 "type": "AIMessage",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "call_2YfyQtpoDAaSfJo0XiYEVEI3",
-                        "function": {
-                            "arguments": '{"message_to_student":"Let\'s start with Problem 1.1. Have you tried plotting the states\' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you\'ve tried so far."}',
-                            "name": "text_student",
-                        },
-                        "type": "function",
-                    }
-                ],
+                "content": "Let's start by understanding what the problem is asking. Could you share your initial thoughts or intuition about how you might approach solving this problem? What do you think the first step should be?",
                 "refusal": None,
-            },
-            {
-                "type": "ToolMessage",
-                "content": "Message sent",
-                "name": "text_student",
-                "tool_call_id": "call_2YfyQtpoDAaSfJo0XiYEVEI3",
             },
         ],
         "intent_history": '[["P_HYPOTHESIS"]]',
         "assessment_history": [
-            {"type": "HumanMessage", "content": 'Student: "what should i try next?"'},
+            {
+                "type": "HumanMessage",
+                "content": ' Student: "How do i solve the problem?"',
+            },
             {
                 "type": "AIMessage",
-                "content": '{"justification": "The student is explicitly asking about how to solve the problem, indicating they are seeking guidance on the next steps to take.", "selection": "g"}',
-                "refusal": None,
+                "content": '{\n    "justification": "The student is explicitly asking about how to solve the problem.",\n    "selection": "g"\n}',
             },
         ],
-        "metadata": {
-            "docs": None,
-            "rag_queries": None,
-            "A_B_test": False,
-            "tutor_model": "gpt-4o",
-        },
+        "metadata": {"A_B_test": False, "tutor_model": "gpt-4o"},
     }
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block",
@@ -588,7 +569,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
         results += str(chunk)
     assert (
         results
-        == "Let's start with Problem 1.1. Have you tried plotting the states' centers using latitude and longitude? What do you think should be the first variable in the plot command? Share your thoughts or any code you've tried so far."
+        == "Let's start by understanding what the problem is asking. Could you share your initial thoughts or intuition about how you might approach solving this problem? What do you think the first step should be?"
     )
 
     history = await get_history(thread_id)
