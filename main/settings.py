@@ -584,6 +584,10 @@ AI_MIT_SEARCH_URL = get_string(
     name="AI_MIT_SEARCH_URL",
     default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
 )
+AI_MIT_SEARCH_DETAIL_URL = get_string(
+    name="AI_MIT_SEARCH_DETAIL_URL",
+    default="https://learn.mit.edu/?resource=",
+)
 AI_MIT_SYLLABUS_URL = get_string(
     "AI_MIT_SYLLABUS_URL",
     "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
@@ -643,9 +647,9 @@ APISIX_USERDATA_MAP = {
 }
 
 # OpenTelemetry configuration
-OPENTELEMETRY_ENABLED = get_bool("OPENTELEMETRY_ENABLED", False)  # noqa: FBT003
+OPENTELEMETRY_ENABLED = get_bool("OPENTELEMETRY_ENABLED", default=False)
 OPENTELEMETRY_SERVICE_NAME = get_string("OPENTELEMETRY_SERVICE_NAME", "learn-ai")
-OPENTELEMETRY_INSECURE = get_bool("OPENTELEMETRY_INSECURE", True)
+OPENTELEMETRY_INSECURE = get_bool("OPENTELEMETRY_INSECURE", default=True)
 OPENTELEMETRY_ENDPOINT = get_string("OPENTELEMETRY_ENDPOINT", None)
 OPENTELEMETRY_BATCH_SIZE = get_int("OPENTELEMETRY_BATCH_SIZE", 512)
 OPENTELEMETRY_EXPORT_TIMEOUT_MS = get_int("OPENTELEMETRY_EXPORT_TIMEOUT_MS", 5000)

@@ -129,9 +129,10 @@ async def test_recommendation_bot_initialization_defaults(
 async def test_recommendation_bot_tool(settings, mocker, search_results):
     """The ResourceRecommendationBot tool should be created and function correctly."""
     settings.AI_MIT_SEARCH_LIMIT = 5
+    settings.AI_MIT_SEARCH_DETAIL_URL = "https://test.mit.edu/resource="
     retained_attributes = [
         "title",
-        "url",
+        "id",
         "description",
         "offered_by",
         "free",
@@ -145,6 +146,7 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
         simple_result = {key: resource.get(key) for key in retained_attributes}
         simple_result["instructors"] = resource.get("runs")[-1].get("instructors")
         simple_result["level"] = resource.get("runs")[-1].get("level")
+        simple_result["url"] = f"https://test.mit.edu/resource={resource.get('id')}"
         expected_results["results"].append(simple_result)
 
     mock_post = mocker.patch(
