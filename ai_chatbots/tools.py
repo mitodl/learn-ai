@@ -131,7 +131,7 @@ def search_courses(q: str, **kwargs) -> str:
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
-    log.info("Searching MIT API with params: %s", params)
+    log.debug("Searching MIT API with params: %s", params)
     try:
         response = requests.get(settings.AI_MIT_SEARCH_URL, params=params, timeout=30)
         response.raise_for_status()
@@ -139,7 +139,7 @@ def search_courses(q: str, **kwargs) -> str:
         # Simplify the response to only include the main properties
         main_properties = [
             "title",
-            "url",
+            "id",
             "description",
             "offered_by",
             "free",
@@ -149,6 +149,9 @@ def search_courses(q: str, **kwargs) -> str:
         simplified_results = []
         for result in raw_results:
             simplified_result = {k: result.get(k) for k in main_properties}
+            simplified_result["url"] = (
+                f"{settings.AI_MIT_SEARCH_DETAIL_URL}{result.pop('id')}"
+            )
             # Instructors and level will be in the runs data if present
             next_date = result.get("next_start_date", None)
             raw_runs = result.get("runs", [])
