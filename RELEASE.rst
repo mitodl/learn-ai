@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.5.0
+Version 0.5.0 (Released April 07, 2025)
 -------------
 
 - Change recommendation bot course links to a resource drawer link (#120)
