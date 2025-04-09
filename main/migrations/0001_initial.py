@@ -15,8 +15,8 @@ def set_initial_rate_limits(apps, schema_editor):
         ConsumerThrottleLimit.objects.get_or_create(
             throttle_key=throttle_key,
             defaults={
-                "auth_limit": 100,
-                "anon_limit": 50,
+                "auth_limit": 1000,
+                "anon_limit": 500,
                 "interval": "day",
             },
         )
