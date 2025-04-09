@@ -660,5 +660,5 @@ SPECTACULAR_SETTINGS = open_spectacular_settings
 
 CONSUMER_THROTTLE_CLASSES = get_list_of_str(
     "CONSUMER_THROTTLE_CLASSES",
-    [],
+    ["main.consumer_throttles.UserScopedRateThrottle"],
 )

@@ -5,7 +5,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils.module_loading import import_string
 from django.utils.text import slugify
-from rest_framework import exceptions
+
+from main.exceptions import AsyncThrottled
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
         """
         Determine what kind of exception to raise if throttled
         """
-        raise exceptions.Throttled(wait)
+        raise AsyncThrottled(wait)
 
     async def get_throttles(self):
         """

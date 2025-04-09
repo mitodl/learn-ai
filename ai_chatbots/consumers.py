@@ -257,6 +257,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         Send the appropriate error response. Send error status code if the
         headers have not yet been sent; otherwise it is too late.
         """
+        log.exception("Error in consumer handle")
         error_msg = {"error": {"message": str(error)}}
         if not self.headers_sent:
             await self.start_response(status=status, cookies=cookies)
@@ -350,9 +351,6 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
     """
 
     ROOM_NAME = ResourceRecommendationBot.__name__
-    throttle_classes = [
-        "main.consumer_throttles.UserScopedRateThrottle",
-    ]
     throttle_scope = "recommendation_bot"
 
     def create_chatbot(
@@ -380,9 +378,6 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
 
     serializer_class = SyllabusChatRequestSerializer
     ROOM_NAME = SyllabusBot.__name__
-    throttle_classes = [
-        "main.consumer_throttles.UserScopedRateThrottle",
-    ]
     throttle_scope = "syllabus_bot"
 
     def create_chatbot(
@@ -441,9 +436,6 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
 
     serializer_class = TutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
-    throttle_classes = [
-        "main.consumer_throttles.UserScopedRateThrottle",
-    ]
     throttle_scope = "tutor_bot"
 
     def create_chatbot(
@@ -497,9 +489,6 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
 
     serializer_class = VideoGPTRequestSerializer
     ROOM_NAME = VideoGPTBot.__name__
-    throttle_classes = [
-        "main.consumer_throttles.UserScopedRateThrottle",
-    ]
     throttle_scope = "video_gpt_bot"
 
     def create_chatbot(
