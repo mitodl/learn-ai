@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
-from rest_framework.exceptions import Throttled, ValidationError
+from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers
 from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, VideoGPTBot
@@ -18,6 +18,7 @@ from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
 from ai_chatbots.models import UserChatSession
+from main.exceptions import AsyncThrottled
 from main.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
@@ -522,7 +523,7 @@ async def test_rate_limit_message(mocker, wait_time, formatted_time):
     """Test that a user gets a rate limit message if they are rate limited."""
     mocker.patch(
         "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
-        side_effect=Throttled(wait_time),
+        side_effect=AsyncThrottled(wait_time),
     )
     mocker.patch("ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock)
     mock_send_chunk = mocker.patch(

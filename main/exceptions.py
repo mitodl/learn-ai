@@ -1,5 +1,6 @@
 """Exceptions for open discussions"""
 
+from rest_framework.exceptions import Throttled
 from rest_framework.views import exception_handler
 
 
@@ -21,3 +22,13 @@ def api_exception_handler(exc, context):
 
 class DoNotUseRequestException(Exception):  # noqa: N818
     """This exception is raised during unit tests if an HTTP request is attempted"""
+
+
+class AsyncThrottled(Throttled):
+    """
+    This exception is raised when an AsyncConsumer request is throttled.
+    It is used to indicate that the request should be retried after a certain period.
+    """
+
+    def __init__(self, wait):
+        super().__init__(wait)

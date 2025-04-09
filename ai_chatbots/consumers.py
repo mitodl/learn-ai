@@ -10,7 +10,7 @@ from django.conf import settings
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from rest_framework.exceptions import Throttled, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
 
 from ai_chatbots.chatbots import (
@@ -33,6 +33,7 @@ from ai_chatbots.serializers import (
     VideoGPTRequestSerializer,
 )
 from main.consumers import BaseThrottledAsyncConsumer
+from main.exceptions import AsyncThrottled
 from main.utils import decode_value, format_seconds
 from users.models import User
 
@@ -302,7 +303,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
-        except Throttled as err:
+        except AsyncThrottled as err:
             log_msg = "User %s throttled on %s for %d seconds" % (
                 self.get_ident(),
                 self.__class__.__name__,
