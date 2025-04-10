@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from ai_chatbots.models import DjangoCheckpoint, UserChatSession
+from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 
 
 class ChatRequestSerializer(serializers.Serializer):
@@ -107,3 +107,9 @@ class TutorChatRequestSerializer(ChatRequestSerializer):
     block_siblings = serializers.ListField(
         child=serializers.CharField(), required=True, allow_empty=False
     )
+
+
+class LLMModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LLMModel
+        fields = ["provider", "name", "litellm_id"]

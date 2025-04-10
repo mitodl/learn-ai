@@ -1,12 +1,18 @@
 """Tests for ai_chatbots views"""
 
+from random import randint
 from types import SimpleNamespace
 
 import pytest
 from django.urls import reverse
 from open_learning_ai_tutor.problems import get_pb_sol
 
-from ai_chatbots.factories import CheckpointFactory, UserChatSessionFactory
+from ai_chatbots.factories import (
+    CheckpointFactory,
+    LLMModelFactory,
+    UserChatSessionFactory,
+)
+from ai_chatbots.models import LLMModel
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from main.factories import UserFactory
 from main.test_utils import assert_json_equal
@@ -153,3 +159,36 @@ def test_tutor_problem_view(client):
     response = client.get(reverse("ai:v0:tutor_problem"), {"problem_code": "invalid"})
     assert response.status_code == 404
     assert response.json()["error"] == "Problem code invalid not found."
+
+
+def test_llm_model_viewset(client):
+    """Test LLMModelViewSet"""
+    providers = ["openai", "google"]
+    [
+        LLMModelFactory.create_batch(randint(1, 3), provider=provider)  # noqa: S311
+        for provider in providers
+    ]
+    llm_queryset = LLMModel.objects.all()
+    response = client.get("/api/v0/llm_models/")
+    assert response.status_code == 200
+    assert len(response.json()) == llm_queryset.count()
+
+    # Test filtering by provider
+    for provider in providers:
+        response = client.get("/api/v0/llm_models/", {"provider": provider})
+        assert response.status_code == 200
+        for result in response.json():
+            assert result["provider"] == provider
+        assert (
+            len(response.json()) == LLMModel.objects.filter(provider=provider).count()
+        )
+
+
+def test_llm_model_viewset_enabled_only(client):
+    """Test that LLMModelViewSet does nto return disabled models"""
+    disabled_model = LLMModelFactory.create(enabled=False)
+    response = client.get("/api/v0/llm_models/")
+    assert response.status_code == 200
+    assert disabled_model.litellm_id not in [
+        model["litellm_id"] for model in response.json()
+    ]

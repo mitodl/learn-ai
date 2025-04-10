@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from ai_chatbots.models import UserChatSession
+from ai_chatbots.models import LLMModel, UserChatSession
 
 
 @admin.register(UserChatSession)
@@ -14,3 +14,13 @@ class UserChatSessionAdmin(admin.ModelAdmin):
     search_fields = ("title", "thread_id")
     ordering = ("-updated_on",)
     readonly_fields = ("agent", "thread_id", "created_on", "updated_on")
+
+
+@admin.register(LLMModel)
+class LLMModelAdmin(admin.ModelAdmin):
+    """LLM Model admin configuration."""
+
+    list_display = ("provider", "name", "litellm_id")
+    list_filter = ("provider",)
+    search_fields = ("name", "litellm_id")
+    ordering = ("provider", "name", "litellm_id")
