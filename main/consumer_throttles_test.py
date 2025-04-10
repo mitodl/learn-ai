@@ -13,18 +13,28 @@ from main.consumers import BaseThrottledAsyncConsumer
 from main.factories import ConsumerThrottleLimitFactory
 
 
-@pytest.mark.parametrize("is_authenticated", [True, False])
+@pytest.mark.parametrize(
+    ("is_authenticated", "is_staff"), [(True, True), (True, False), (False, False)]
+)
 @pytest.mark.parametrize("interval", ["minute", "hour", "day", "week"])
-async def test_scoped_throttle_parse_rate(user, is_authenticated, interval):
+async def test_scoped_throttle_parse_rate(user, is_authenticated, interval, is_staff):
     """Test the parse_rate method of ScopedRateThrottle."""
     throttle_limit = await sync_to_async(ConsumerThrottleLimitFactory.create)(
         interval=interval
     )
     user = user if is_authenticated else AnonymousUser()
+    if is_authenticated:
+        user.is_staff = is_staff
     rate = await UserScopedRateThrottle().parse_rate(throttle_limit.__dict__, user)
-    assert rate == (
-        throttle_limit.auth_limit if is_authenticated else throttle_limit.anon_limit,
-        DURATION_MAPPING[interval],
+    assert (
+        rate == (0, 0)
+        if is_staff
+        else (
+            throttle_limit.auth_limit
+            if is_authenticated
+            else throttle_limit.anon_limit,
+            DURATION_MAPPING[interval],
+        )
     )
 
 
