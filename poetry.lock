@@ -3241,18 +3241,18 @@ typing-extensions = ">=4.5.0"
 
 [[package]]
 name = "kombu"
-version = "5.5.2"
+version = "5.5.3"
 description = "Messaging library for Python."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "kombu-5.5.2-py3-none-any.whl", hash = "sha256:40f3674ed19603b8a771b6c74de126dbf8879755a0337caac6602faa82d539cd"},
-    {file = "kombu-5.5.2.tar.gz", hash = "sha256:2dd27ec84fd843a4e0a7187424313f87514b344812cb98c25daddafbb6a7ff0e"},
+    {file = "kombu-5.5.3-py3-none-any.whl", hash = "sha256:5b0dbceb4edee50aa464f59469d34b97864be09111338cfb224a10b6a163909b"},
+    {file = "kombu-5.5.3.tar.gz", hash = "sha256:021a0e11fcfcd9b0260ef1fb64088c0e92beb976eb59c1dfca7ddd4ad4562ea2"},
 ]
 
 [package.dependencies]
 amqp = ">=5.1.1,<6.0.0"
-tzdata = {version = "2025.2", markers = "python_version >= \"3.9\""}
+tzdata = {version = ">=2025.2", markers = "python_version >= \"3.9\""}
 vine = "5.1.0"
 
 [package.extras]
@@ -3267,7 +3267,7 @@ msgpack = ["msgpack (==1.1.0)"]
 pyro = ["pyro4 (==4.82)"]
 qpid = ["qpid-python (>=0.26)", "qpid-tools (>=0.26)"]
 redis = ["redis (>=4.5.2,!=4.5.5,!=5.0.2,<=5.2.1)"]
-slmq = ["softlayer-messaging (>=1.0.3)"]
+slmq = ["softlayer_messaging (>=1.0.3)"]
 sqlalchemy = ["sqlalchemy (>=1.4.48,<2.1)"]
 sqs = ["boto3 (>=1.26.143)", "urllib3 (>=1.26.16)"]
 yaml = ["PyYAML (>=3.10)"]
@@ -3538,13 +3538,13 @@ proxy = ["PyJWT (>=2.8.0,<3.0.0)", "apscheduler (>=3.10.4,<4.0.0)", "backoff", "
 
 [[package]]
 name = "locust"
-version = "2.34.1"
+version = "2.35.0"
 description = "Developer-friendly load testing framework"
 optional = false
 python-versions = ">=3.10"
 files = [
-    {file = "locust-2.34.1-py3-none-any.whl", hash = "sha256:487bfadd584e3320f9862adf5aa1cfa1023e030a6af414f4e0a92e62617ce451"},
-    {file = "locust-2.34.1.tar.gz", hash = "sha256:184a6ffcb0d6c543bbeae4de65cbb198c7e0739d569d48a2b8bf5db962077733"},
+    {file = "locust-2.35.0-py3-none-any.whl", hash = "sha256:fb9e0ec25c5db3ed6a3c6d48e7236d7c2c370b0ddae102e9badcb2d3d101abde"},
+    {file = "locust-2.35.0.tar.gz", hash = "sha256:97f83e591646ca3227644cfb6d4fa590e9a3e3d791ab18b216ca98be235b9b24"},
 ]
 
 [package.dependencies]
@@ -4173,13 +4173,13 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.0.5"
+version = "0.0.6"
 description = "AI powered tutor"
 optional = false
 python-versions = "<4.0,>=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.0.5-py3-none-any.whl", hash = "sha256:5b83a1cb67567d59b321db1ba9d43d22a2355dd3bfd273c1ca2f78553262289c"},
-    {file = "open_learning_ai_tutor-0.0.5.tar.gz", hash = "sha256:b88051fb5eac008cc9c7319861ca81ac03bd0faf8fb58f7f8db1fa63a918dccd"},
+    {file = "open_learning_ai_tutor-0.0.6-py3-none-any.whl", hash = "sha256:bb29acdf76c4a5b0f245f3e5496d3bc4d02923ab3ac59774dae2729f569dcd67"},
+    {file = "open_learning_ai_tutor-0.0.6.tar.gz", hash = "sha256:e450a1f36b688371e6bc8938d08cfdd0153d47d37ae7879c1ae42b8da36b5d38"},
 ]
 
 [package.dependencies]
@@ -4683,13 +4683,13 @@ testing = ["docopt", "pytest"]
 
 [[package]]
 name = "pdbpp"
-version = "0.11.5"
+version = "0.11.6"
 description = "pdb++, a drop-in replacement for pdb"
 optional = false
 python-versions = "*"
 files = [
-    {file = "pdbpp-0.11.5-py3-none-any.whl", hash = "sha256:aec6495b74e2bdd3fe3e7e72b41b2d0c162940feda9aff20804bdc8a2422b512"},
-    {file = "pdbpp-0.11.5.tar.gz", hash = "sha256:3f383b0305f0d0bf54dd53c0f485290f3d92ac2cb07c59f45b28e8a68e2930fe"},
+    {file = "pdbpp-0.11.6-py3-none-any.whl", hash = "sha256:8e024d36bd2f35a3b19d8732524c696b8b4aef633250d28547198e746cd81ccb"},
+    {file = "pdbpp-0.11.6.tar.gz", hash = "sha256:36a73c5bcf0c3c35034be4cf99e6106e3ee0c8f5e0faafc2cf9be5f1481eb4b7"},
 ]
 
 [package.dependencies]
@@ -4746,13 +4746,13 @@ testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
 name = "posthog"
-version = "3.24.3"
+version = "3.25.0"
 description = "Integrate PostHog into any python application."
 optional = false
 python-versions = "*"
 files = [
-    {file = "posthog-3.24.3-py2.py3-none-any.whl", hash = "sha256:f1659d6513fcf839337f0d4fcb2f080825087036e135a208b26b5c7238f3e3f1"},
-    {file = "posthog-3.24.3.tar.gz", hash = "sha256:6685f2c6c3ed7a4b990df4c4273e29f7be785256dd259b56968f49454d7645c9"},
+    {file = "posthog-3.25.0-py2.py3-none-any.whl", hash = "sha256:85db78c13d1ecb11aed06fad53759c4e8fb3633442c2f3d0336bc0ce8a585d30"},
+    {file = "posthog-3.25.0.tar.gz", hash = "sha256:9168f3e7a0a5571b6b1065c41b3c171fbc68bfe72c3ac0bfd6e3d2fcdb7df2ca"},
 ]
 
 [package.dependencies]
@@ -7752,4 +7752,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "756a75e99d5aab29838191bb18ba82daaedd99910b2e75b8f3d771929fddaca2"
+content-hash = "8c71b13ef5eb363fd08a07ed2ced0f0368983615de4980d3b1d0c08dd7540d7e"

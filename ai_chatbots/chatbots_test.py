@@ -7,8 +7,10 @@ from uuid import uuid4
 import pytest
 from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableBinding
+from open_learning_ai_tutor.constants import Intent
+from open_learning_ai_tutor.utils import tutor_output_to_json
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
@@ -524,35 +526,41 @@ async def test_tutor_bot_intitiation(mocker, model, temperature):
 async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer):
     """Test that the tutor bot get_completion method returns expected values."""
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
-    json_output = {
-        "chat_history": [
-            {"type": "HumanMessage", "content": "How do i solve the problem?"},
-            {
-                "type": "AIMessage",
-                "content": "Let's start by understanding what the problem is asking. Could you share your initial thoughts or intuition about how you might approach solving this problem? What do you think the first step should be?",
-                "refusal": None,
-            },
+    output = (
+        [
+            HumanMessage(
+                content="what should i try first",
+                additional_kwargs={},
+                response_metadata={},
+            ),
+            AIMessage(
+                content="Let's start by thinking about the problem.",
+                additional_kwargs={},
+                response_metadata={},
+            ),
         ],
-        "intent_history": '[["P_HYPOTHESIS"]]',
-        "assessment_history": [
-            {
-                "type": "HumanMessage",
-                "content": ' Student: "How do i solve the problem?"',
-            },
-            {
-                "type": "AIMessage",
-                "content": '{\n    "justification": "The student is explicitly asking about how to solve the problem.",\n    "selection": "g"\n}',
-            },
+        [
+            [Intent.P_HYPOTHESIS],
         ],
-        "metadata": {"A_B_test": False, "tutor_model": "gpt-4o"},
-    }
+        [
+            HumanMessage(
+                content='Student: "what should i try first"',
+                additional_kwargs={},
+                response_metadata={},
+            ),
+            AIMessage(
+                content='{"justification": "test", "selection": "g"}',
+                additional_kwargs={},
+                response_metadata={},
+            ),
+        ],
+        {"tutor_model": "test_model"},
+    )
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block",
         return_value=("problem_xml", "problem_set_xml"),
     )
-    mocker.patch(
-        "ai_chatbots.chatbots.message_tutor", return_value=json.dumps(json_output)
-    )
+    mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
     user_msg = "what should i try next?"
     thread_id = "TEST"
 
@@ -567,14 +575,11 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
     results = ""
     async for chunk in chatbot.get_completion(user_msg):
         results += str(chunk)
-    assert (
-        results
-        == "Let's start by understanding what the problem is asking. Could you share your initial thoughts or intuition about how you might approach solving this problem? What do you think the first step should be?"
-    )
+    assert results == "Let's start by thinking about the problem."
 
     history = await get_history(thread_id)
     assert history.thread_id == thread_id
-    assert history.chat_json == json.dumps(json_output)
+    assert history.chat_json == tutor_output_to_json(*output)
     mock_posthog.Posthog.return_value.capture.assert_called_once_with(
         "anonymous",
         event="TUTOR_JOB",
