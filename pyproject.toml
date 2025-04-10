@@ -63,8 +63,8 @@ opentelemetry-instrumentation-redis = ">=0.52b0"
 opentelemetry-instrumentation-celery = ">=0.52b0"
 opentelemetry-instrumentation-requests = ">=0.52b0"
 opentelemetry-exporter-otlp = ">=1.31.0"
-open-learning-ai-tutor = "^0.0.5"
 django-filter = "^25.1"
+open-learning-ai-tutor = "^0.0.6"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

@@ -24,12 +24,6 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from open_learning_ai_tutor.StratL import message_tutor, process_StratL_json_output
-from open_learning_ai_tutor.tools import tutor_tools
-from open_learning_ai_tutor.utils import (
-    json_to_messages,
-    messages_to_json,
-)
 from openai import BadRequestError
 from typing_extensions import TypedDict
 
@@ -37,6 +31,13 @@ from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
+from open_learning_ai_tutor.message_tutor import message_tutor
+from open_learning_ai_tutor.tools import tutor_tools
+from open_learning_ai_tutor.utils import (
+    json_to_intent_list,
+    json_to_messages,
+    tutor_output_to_json,
+)
 
 log = logging.getLogger(__name__)
 
@@ -518,35 +519,38 @@ class TutorBot(BaseChatbot):
 
         if history:
             json_history = json.loads(history.chat_json)
-            self.chat_history = json_to_messages(  # noqa: RUF005
+            chat_history = json_to_messages(  # noqa: RUF005
                 json_history.get("chat_history", [])
             ) + [HumanMessage(content=message)]
 
-            self.intent_history = json_history.get("intent_history", [])
-            self.assessment_history = json_history.get("assessment_history", [])
+            intent_history = json_to_intent_list(json_history["intent_history"])
+            assessment_history = json_to_messages(json_history["assessment_history"])
+
         else:
-            self.chat_history = [HumanMessage(content=message)]
-            self.intent_history = "[]"
-            self.assessment_history = ""
+            chat_history = [HumanMessage(content=message)]
+            intent_history = []
+            assessment_history = []
 
         response = ""
 
         try:
-            json_output = message_tutor(
-                self.problem,
-                self.problem_set,
-                self.llm,
-                messages_to_json([HumanMessage(content=message)]),
-                messages_to_json(self.chat_history),
-                self.assessment_history,
-                self.intent_history,
-                {"assessor_client": self.llm},
-                tools=tutor_tools,
+            new_history, new_intent_history, new_assessment_history, metadata = (
+                message_tutor(
+                    self.problem,
+                    self.problem_set,
+                    self.llm,
+                    [HumanMessage(content=message)],
+                    chat_history,
+                    assessment_history,
+                    intent_history,
+                    tools=tutor_tools,
+                )
             )
-
+            json_output = tutor_output_to_json(
+                new_history, new_intent_history, new_assessment_history, metadata
+            )
             await create_tutorbot_output(self.thread_id, json_output)
-            prossessed = process_StratL_json_output(json_output)
-            response = prossessed[0][-1].content
+            response = new_history[-1].content
             yield response
             await self.send_posthog_event(
                 message, response, await self.get_tool_metadata()
