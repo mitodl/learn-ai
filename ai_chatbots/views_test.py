@@ -168,7 +168,7 @@ def test_llm_model_viewset(client):
         LLMModelFactory.create_batch(randint(1, 3), provider=provider)  # noqa: S311
         for provider in providers
     ]
-    llm_queryset = LLMModel.objects.all()
+    llm_queryset = LLMModel.objects.filter(enabled=True)
     response = client.get("/api/v0/llm_models/")
     assert response.status_code == 200
     assert len(response.json()) == llm_queryset.count()
@@ -180,7 +180,8 @@ def test_llm_model_viewset(client):
         for result in response.json():
             assert result["provider"] == provider
         assert (
-            len(response.json()) == LLMModel.objects.filter(provider=provider).count()
+            len(response.json())
+            == LLMModel.objects.filter(provider=provider, enabled=True).count()
         )
 
 
