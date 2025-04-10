@@ -89,6 +89,7 @@ INSTALLED_APPS = (
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "django.contrib.sites",
+    "django_filters",
     "django_scim",
     "rest_framework",
     "drf_spectacular",
