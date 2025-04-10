@@ -17,6 +17,7 @@ def populate_models(apps, schema_editor):
                 provider=llm_model["provider"],
                 name=llm_model["name"],
                 litellm_id=llm_model["litellm_id"],
+                enabled=llm_model["enabled"],
             )
 
 
