@@ -11,7 +11,7 @@ def populate_models(apps, schema_editor):
     """
     LLMModel = apps.get_model("ai_chatbots", "LLMModel")
     # Add any initial data you want to populate here
-    with Path.open("ai_chatbots/fixtures/llm_models.json") as llm_json:
+    with Path.open("ai_chatbots/fixtures/initial_llm_models.json") as llm_json:
         for llm_model in json.load(llm_json):
             LLMModel.objects.get_or_create(
                 provider=llm_model["provider"],
