@@ -20,7 +20,15 @@ class UserChatSessionAdmin(admin.ModelAdmin):
 class LLMModelAdmin(admin.ModelAdmin):
     """LLM Model admin configuration."""
 
-    list_display = ("provider", "name", "litellm_id")
-    list_filter = ("provider",)
+    list_display = (
+        "provider",
+        "name",
+        "litellm_id",
+        "enabled",
+    )
+    list_filter = (
+        "provider",
+        "enabled",
+    )
     search_fields = ("name", "litellm_id")
     ordering = ("provider", "name", "litellm_id")
