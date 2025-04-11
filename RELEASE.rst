@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.5.1
+-------------
+
+- Chat request limits for users (#122)
+- LLM models API endpoint for playground (#124)
+- Update open_learning_ai_tutor
+
 Version 0.5.0 (Released April 07, 2025)
 -------------
 
