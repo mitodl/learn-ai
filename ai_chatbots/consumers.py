@@ -9,7 +9,6 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
-from django.utils.text import slugify
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
@@ -33,13 +32,15 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
-from main.utils import decode_value
+from main.consumers import BaseThrottledAsyncConsumer
+from main.exceptions import AsyncThrottled
+from main.utils import decode_value, format_seconds
 from users.models import User
 
 log = logging.getLogger(__name__)
 
 
-class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
+class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     """Base HttpConsumer for chatbots"""
 
     # Each bot consumer should define a unique ROOM_NAME
@@ -178,32 +179,20 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         self, serializer: ChatRequestSerializer, object_id_field: Optional[str] = None
     ) -> tuple[str, list[str]]:
         """Prepare consumer for the API response"""
-        user = self.scope.get("user", None)
-        session = self.scope.get("session", None)
         if object_id_field:
             object_id = f"{serializer.validated_data.get(object_id_field, '')}"
         else:
             object_id = ""
 
         current_thread_id, cookies = await self.assign_thread_cookies(
-            user,
+            self.scope.get("user", None),
             clear_history=serializer.validated_data.pop("clear_history", False),
             thread_id=serializer.validated_data.pop("thread_id", None),
             object_id=object_id,
         )
 
         self.thread_id = current_thread_id
-
-        if user and user.username and user.username != "AnonymousUser":
-            self.user_id = user.global_id
-        elif session:
-            if not session.session_key:
-                session.save()
-            self.session_key = session.session_key
-            self.user_id = slugify(session.session_key)
-        else:
-            log.info("Anon user, no session")
-            self.user_id = "Anonymous"
+        self.user_id = self.get_ident()
 
         self.channel_layer = get_channel_layer()
         self.room_name = self.ROOM_NAME
@@ -296,6 +285,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         """Handle the incoming message and send the response."""
         cookies = None
         try:
+            await self.check_throttles()
             serializer = self.process_message(message, self.serializer_class)
             thread_id, cookies = await self.prepare_response(serializer)
             message_text = serializer.validated_data["message"]
@@ -314,6 +304,18 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer):
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
+        except AsyncThrottled as err:
+            log_msg = "User %s throttled on %s for %d seconds" % (
+                self.get_ident(),
+                self.__class__.__name__,
+                err.wait,
+            )
+            log.info(log_msg)
+            await self.start_response(thread_id=None, status=200, cookies=cookies)
+            await self.send_chunk(
+                f"You have reached the maximum number of chat requests.\
+                \nPlease try again in {format_seconds(err.wait)}."
+            )
         except Exception as err:
             log.exception("An error occured in consumer handle")
             await self.send_error_response(500, err, cookies)
@@ -349,6 +351,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
     """
 
     ROOM_NAME = ResourceRecommendationBot.__name__
+    throttle_scope = "recommendation_bot"
 
     def create_chatbot(
         self, serializer: ChatRequestSerializer, checkpointer: BaseCheckpointSaver
@@ -375,6 +378,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
 
     serializer_class = SyllabusChatRequestSerializer
     ROOM_NAME = SyllabusBot.__name__
+    throttle_scope = "syllabus_bot"
 
     def create_chatbot(
         self,
@@ -432,6 +436,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
 
     serializer_class = TutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
+    throttle_scope = "tutor_bot"
 
     def create_chatbot(
         self,
@@ -484,6 +489,7 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
 
     serializer_class = VideoGPTRequestSerializer
     ROOM_NAME = VideoGPTBot.__name__
+    throttle_scope = "video_gpt_bot"
 
     def create_chatbot(
         self,

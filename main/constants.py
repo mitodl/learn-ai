@@ -9,3 +9,6 @@ DJANGO_PERMISSION_ERROR_TYPES = (
     status.HTTP_403_FORBIDDEN,
 )
 VALID_HTTP_METHODS = ["get", "post", "patch", "delete"]
+
+
+DURATION_MAPPING = {"minute": 60, "hour": 3600, "day": 86400, "week": 604800}
