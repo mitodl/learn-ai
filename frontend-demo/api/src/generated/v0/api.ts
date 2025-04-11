@@ -67,6 +67,31 @@ export interface ChatMessage {
 /**
  *
  * @export
+ * @interface LLMModel
+ */
+export interface LLMModel {
+  /**
+   *
+   * @type {string}
+   * @memberof LLMModel
+   */
+  provider: string
+  /**
+   *
+   * @type {string}
+   * @memberof LLMModel
+   */
+  name: string
+  /**
+   *
+   * @type {string}
+   * @memberof LLMModel
+   */
+  litellm_id: string
+}
+/**
+ *
+ * @export
  * @interface PaginatedChatMessageList
  */
 export interface PaginatedChatMessageList {
@@ -1497,6 +1522,281 @@ export class ChatSessionsApi extends BaseAPI {
   ) {
     return ChatSessionsApiFp(this.configuration)
       .chatSessionsRetrieve(requestParameters.thread_id, options)
+      .then((request) => request(this.axios, this.basePath))
+  }
+}
+
+/**
+ * LlmModelsApi - axios parameter creator
+ * @export
+ */
+export const LlmModelsApiAxiosParamCreator = function (
+  configuration?: Configuration,
+) {
+  return {
+    /**
+     * API view to list available LLM models.
+     * @param {string} [provider]
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    llmModelsList: async (
+      provider?: string,
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      const localVarPath = `/api/v0/llm_models/`
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      if (provider !== undefined) {
+        localVarQueryParameter["provider"] = provider
+      }
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+    /**
+     * API view to list available LLM models.
+     * @param {string} litellm_id A unique value identifying this llm model.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    llmModelsRetrieve: async (
+      litellm_id: string,
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      // verify required parameter 'litellm_id' is not null or undefined
+      assertParamExists("llmModelsRetrieve", "litellm_id", litellm_id)
+      const localVarPath = `/api/v0/llm_models/{litellm_id}/`.replace(
+        `{${"litellm_id"}}`,
+        encodeURIComponent(String(litellm_id)),
+      )
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+  }
+}
+
+/**
+ * LlmModelsApi - functional programming interface
+ * @export
+ */
+export const LlmModelsApiFp = function (configuration?: Configuration) {
+  const localVarAxiosParamCreator = LlmModelsApiAxiosParamCreator(configuration)
+  return {
+    /**
+     * API view to list available LLM models.
+     * @param {string} [provider]
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async llmModelsList(
+      provider?: string,
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (
+        axios?: AxiosInstance,
+        basePath?: string,
+      ) => AxiosPromise<Array<LLMModel>>
+    > {
+      const localVarAxiosArgs = await localVarAxiosParamCreator.llmModelsList(
+        provider,
+        options,
+      )
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["LlmModelsApi.llmModelsList"]?.[index]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+    /**
+     * API view to list available LLM models.
+     * @param {string} litellm_id A unique value identifying this llm model.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async llmModelsRetrieve(
+      litellm_id: string,
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<LLMModel>
+    > {
+      const localVarAxiosArgs =
+        await localVarAxiosParamCreator.llmModelsRetrieve(litellm_id, options)
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["LlmModelsApi.llmModelsRetrieve"]?.[index]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+  }
+}
+
+/**
+ * LlmModelsApi - factory interface
+ * @export
+ */
+export const LlmModelsApiFactory = function (
+  configuration?: Configuration,
+  basePath?: string,
+  axios?: AxiosInstance,
+) {
+  const localVarFp = LlmModelsApiFp(configuration)
+  return {
+    /**
+     * API view to list available LLM models.
+     * @param {LlmModelsApiLlmModelsListRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    llmModelsList(
+      requestParameters: LlmModelsApiLlmModelsListRequest = {},
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<Array<LLMModel>> {
+      return localVarFp
+        .llmModelsList(requestParameters.provider, options)
+        .then((request) => request(axios, basePath))
+    },
+    /**
+     * API view to list available LLM models.
+     * @param {LlmModelsApiLlmModelsRetrieveRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    llmModelsRetrieve(
+      requestParameters: LlmModelsApiLlmModelsRetrieveRequest,
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<LLMModel> {
+      return localVarFp
+        .llmModelsRetrieve(requestParameters.litellm_id, options)
+        .then((request) => request(axios, basePath))
+    },
+  }
+}
+
+/**
+ * Request parameters for llmModelsList operation in LlmModelsApi.
+ * @export
+ * @interface LlmModelsApiLlmModelsListRequest
+ */
+export interface LlmModelsApiLlmModelsListRequest {
+  /**
+   *
+   * @type {string}
+   * @memberof LlmModelsApiLlmModelsList
+   */
+  readonly provider?: string
+}
+
+/**
+ * Request parameters for llmModelsRetrieve operation in LlmModelsApi.
+ * @export
+ * @interface LlmModelsApiLlmModelsRetrieveRequest
+ */
+export interface LlmModelsApiLlmModelsRetrieveRequest {
+  /**
+   * A unique value identifying this llm model.
+   * @type {string}
+   * @memberof LlmModelsApiLlmModelsRetrieve
+   */
+  readonly litellm_id: string
+}
+
+/**
+ * LlmModelsApi - object-oriented interface
+ * @export
+ * @class LlmModelsApi
+ * @extends {BaseAPI}
+ */
+export class LlmModelsApi extends BaseAPI {
+  /**
+   * API view to list available LLM models.
+   * @param {LlmModelsApiLlmModelsListRequest} requestParameters Request parameters.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof LlmModelsApi
+   */
+  public llmModelsList(
+    requestParameters: LlmModelsApiLlmModelsListRequest = {},
+    options?: RawAxiosRequestConfig,
+  ) {
+    return LlmModelsApiFp(this.configuration)
+      .llmModelsList(requestParameters.provider, options)
+      .then((request) => request(this.axios, this.basePath))
+  }
+
+  /**
+   * API view to list available LLM models.
+   * @param {LlmModelsApiLlmModelsRetrieveRequest} requestParameters Request parameters.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof LlmModelsApi
+   */
+  public llmModelsRetrieve(
+    requestParameters: LlmModelsApiLlmModelsRetrieveRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
+    return LlmModelsApiFp(this.configuration)
+      .llmModelsRetrieve(requestParameters.litellm_id, options)
       .then((request) => request(this.axios, this.basePath))
   }
 }

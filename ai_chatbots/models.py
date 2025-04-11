@@ -87,3 +87,13 @@ class TutorBotOutput(models.Model):
 
     def __str__(self):
         return f"{self.thread_id}"
+
+
+class LLMModel(models.Model):
+    litellm_id = models.CharField(max_length=512, primary_key=True)
+    provider = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
+    enabled = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.provider} - {self.name}"

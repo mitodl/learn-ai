@@ -16,6 +16,7 @@ router.register(
     views.ChatMessageViewSet,
     basename="chat_session_messages",
 )
+router.register(r"llm_models", views.LLMModelViewSet, basename="llm_models")
 
 v0_urls = [
     *router.urls,

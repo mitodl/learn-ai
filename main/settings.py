@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 log = logging.getLogger()
 
@@ -89,6 +89,7 @@ INSTALLED_APPS = (
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "django.contrib.sites",
+    "django_filters",
     "django_scim",
     "rest_framework",
     "drf_spectacular",
@@ -655,3 +656,9 @@ OPENTELEMETRY_BATCH_SIZE = get_int("OPENTELEMETRY_BATCH_SIZE", 512)
 OPENTELEMETRY_EXPORT_TIMEOUT_MS = get_int("OPENTELEMETRY_EXPORT_TIMEOUT_MS", 5000)
 
 SPECTACULAR_SETTINGS = open_spectacular_settings
+
+
+CONSUMER_THROTTLE_CLASSES = get_list_of_str(
+    "CONSUMER_THROTTLE_CLASSES",
+    ["main.consumer_throttles.UserScopedRateThrottle"],
+)

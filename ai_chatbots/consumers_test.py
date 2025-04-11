@@ -18,6 +18,7 @@ from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
 from ai_chatbots.models import UserChatSession
+from main.exceptions import AsyncThrottled
 from main.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
@@ -505,6 +506,36 @@ async def test_handle_errors(
                 "more_body": True,
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("wait_time", "formatted_time"),
+    [
+        (35, "35s"),
+        (68, "1m 8s"),
+        (3600, "1h"),
+        (86400, "1d"),
+        (90061, "1d 1h"),
+        (360000, "4d 4h"),
+    ],
+)
+async def test_rate_limit_message(mocker, wait_time, formatted_time):
+    """Test that a user gets a rate limit message if they are rate limited."""
+    mocker.patch(
+        "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
+        side_effect=AsyncThrottled(wait_time),
+    )
+    mocker.patch("ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock)
+    mock_send_chunk = mocker.patch(
+        "ai_chatbots.consumers.SyllabusBotHttpConsumer.send_chunk"
+    )
+    consumer = consumers.SyllabusBotHttpConsumer()
+    consumer.scope = {"user": AnonymousUser()}
+    await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
+    mock_send_chunk.assert_any_call(
+        f"You have reached the maximum number of chat requests.\
+                \nPlease try again in {formatted_time}."
+    )
 
 
 async def test_tutor_agent_handle(

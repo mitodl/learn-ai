@@ -11,8 +11,10 @@ class MainConfig(AppConfig):
         """Initialize the app"""
         # Initialize features
         from main import features
+
         features.configure()
-        
+
         # Initialize OpenTelemetry
         from main.telemetry import configure_opentelemetry
+
         configure_opentelemetry()

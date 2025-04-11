@@ -241,3 +241,21 @@ def decode_value(encoded_value: str) -> str:
     if padding != PAD_AMT:
         encoded_value += "=" * padding
     return force_str(urlsafe_base64_decode(encoded_value))
+
+
+def format_seconds(seconds):
+    """Format seconds into the most appropriate time unit"""
+    td = datetime.timedelta(seconds=seconds)
+
+    days = td.days
+    hours, remainder = divmod(td.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if days > 0:
+        return f"{days}d{f' {hours}h' if hours else ''}"
+    elif hours > 0:
+        return f"{hours}h{f' {minutes}m' if minutes else ''}"
+    elif minutes > 0:
+        return f"{minutes}m{f' {seconds}s' if seconds else ''}"
+    else:
+        return f"{seconds}s"

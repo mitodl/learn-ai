@@ -2,7 +2,7 @@
 Classes related to models for main
 """
 
-from django.db.models import DateTimeField, Model
+from django.db.models import CharField, DateTimeField, IntegerField, Model
 from django.db.models.query import QuerySet
 
 from main.utils import now_in_utc
@@ -52,3 +52,28 @@ class NoDefaultTimestampedModel(TimestampedModel):
 
     class Meta:
         abstract = True
+
+
+class ConsumerThrottleLimit(Model):
+    """
+    Model for throttling consumers by a certain rate
+    """
+
+    throttle_key = CharField(max_length=255, primary_key=True)
+    auth_limit = IntegerField(default=0)
+    anon_limit = IntegerField(default=0)
+    interval = CharField(
+        choices=[
+            ("minute", "minute"),
+            ("hour", "hour"),
+            ("day", "day"),
+            ("week", "week"),
+        ],
+        max_length=12,
+    )
+
+    def __str__(self):
+        return f"{self.throttle_key} -\
+            Auth {self.auth_limit}, \
+            Anon {self.anon_limit} \
+            per {self.interval}"

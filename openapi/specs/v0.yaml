@@ -164,6 +164,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedChatMessageList'
           description: ''
+  /api/v0/llm_models/:
+    get:
+      operationId: llm_models_list
+      description: API view to list available LLM models.
+      parameters:
+      - in: query
+        name: provider
+        schema:
+          type: string
+      tags:
+      - llm_models
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LLMModel'
+          description: ''
+  /api/v0/llm_models/{litellm_id}/:
+    get:
+      operationId: llm_models_retrieve
+      description: API view to list available LLM models.
+      parameters:
+      - in: path
+        name: litellm_id
+        schema:
+          type: string
+        description: A unique value identifying this llm model.
+        required: true
+      tags:
+      - llm_models
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LLMModel'
+          description: ''
   /api/v0/tutor_problem/:
     get:
       operationId: tutor_problem_retrieve
@@ -293,6 +337,22 @@ components:
       - checkpoint_id
       - content
       - role
+    LLMModel:
+      type: object
+      properties:
+        provider:
+          type: string
+          maxLength: 255
+        name:
+          type: string
+          maxLength: 255
+        litellm_id:
+          type: string
+          maxLength: 512
+      required:
+      - litellm_id
+      - name
+      - provider
     PaginatedChatMessageList:
       type: object
       required:

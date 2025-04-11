@@ -1,0 +1,62 @@
+[
+  {
+    "provider": "openai",
+    "name": "gpt-4o",
+    "litellm_id": "openai/gpt-4o",
+    "enabled": true
+  },
+  {
+    "provider": "openai",
+    "name": "gpt-4o-mini",
+    "litellm_id": "openai/gpt-4o-mini",
+    "enabled": true
+  },
+  {
+    "provider": "openai",
+    "name": "gpt-4-turbo",
+    "litellm_id": "openai/gpt-4-turbo",
+    "enabled": true
+  },
+  {
+    "provider": "openai",
+    "name": "o1-mini",
+    "litellm_id": "openai/o1-mini",
+    "enabled": true
+  },
+  {
+    "provider": "openai",
+    "name": "o3-mini",
+    "litellm_id": "openai/o3-mini",
+    "enabled": true
+  },
+  {
+    "provider": "anthropic",
+    "name": "claude-3-5-sonnet-20241022-v2",
+    "litellm_id": "bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "enabled": true
+  },
+  {
+    "provider": "meta",
+    "name": "llama3-3-70b-instruct-v1",
+    "litellm_id": "bedrock/us.meta.llama3-3-70b-instruct-v1:0",
+    "enabled": false
+  },
+  {
+    "provider": "deepseek",
+    "name": "deepseek-chat",
+    "litellm_id": "deepseek/deepseek-chat",
+    "enabled": false
+  },
+  {
+    "provider": "google",
+    "name": "gemini-2.0-flash",
+    "litellm_id": "gemini/gemini-2.0-flash",
+    "enabled": false
+  },
+  {
+    "provider": "google",
+    "name": "gemini-1.5-flash",
+    "litellm_id": "gemini/gemini-1.5-flash",
+    "enabled": false
+  }
+]

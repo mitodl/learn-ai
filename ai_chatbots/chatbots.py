@@ -15,7 +15,7 @@ from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langchain_openai import ChatOpenAI
@@ -546,13 +546,7 @@ class TutorBot(BaseChatbot):
 
             await create_tutorbot_output(self.thread_id, json_output)
             prossessed = process_StratL_json_output(json_output)
-            response = "An error has occurred, please try again"
-            for index, msg in enumerate(prossessed[0]):
-                if isinstance(msg, ToolMessage) and msg.name == "text_student":
-                    response = prossessed[0][index - 1].tool_calls[0]["args"][
-                        "message_to_student"
-                    ]
-
+            response = prossessed[0][-1].content
             yield response
             await self.send_posthog_event(
                 message, response, await self.get_tool_metadata()

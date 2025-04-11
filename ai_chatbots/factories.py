@@ -15,12 +15,12 @@ from langchain_core.messages import (
 from langchain_core.messages.ai import AIMessageChunk
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+from ai_chatbots import models
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
     SyllabusAgentState,
     VideoGPTAgentState,
 )
-from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChatSession
 from main.factories import UserFactory
 
 
@@ -217,7 +217,7 @@ class UserChatSessionFactory(DjangoModelFactory):
     )
 
     class Meta:
-        model = UserChatSession
+        model = models.UserChatSession
 
 
 class CheckpointFactory(DjangoModelFactory):
@@ -235,7 +235,7 @@ class CheckpointFactory(DjangoModelFactory):
     type = "msgpack"
 
     class Meta:
-        model = DjangoCheckpoint
+        model = models.DjangoCheckpoint
 
     class Params:
         is_human = factory.Trait(metadata=generate_user_metadata())
@@ -260,4 +260,15 @@ class CheckpointWriteFactory(DjangoModelFactory):
     task_path = FuzzyText()
 
     class Meta:
-        model = DjangoCheckpointWrite
+        model = models.DjangoCheckpointWrite
+
+
+class LLMModelFactory(DjangoModelFactory):
+    """Factory for LLMModel instances."""
+
+    provider = FuzzyChoice(["openai", "anthropic", "meta", "deepseek", "google"])
+    name = FuzzyText()
+    litellm_id = FuzzyText()
+
+    class Meta:
+        model = models.LLMModel

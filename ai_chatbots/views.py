@@ -1,6 +1,7 @@
 """DRF API views for chat sessions and messages."""
 
 from django.db.models import QuerySet
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -10,13 +11,18 @@ from drf_spectacular.utils import (
 )
 from open_learning_ai_tutor.problems import get_pb_sol
 from rest_framework import mixins, serializers, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from ai_chatbots.models import DjangoCheckpoint, UserChatSession
+from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 from ai_chatbots.permissions import IsThreadOwner
-from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
+from ai_chatbots.serializers import (
+    ChatMessageSerializer,
+    LLMModelSerializer,
+    UserChatSessionSerializer,
+)
 from main.constants import VALID_HTTP_METHODS
 from main.views import DefaultPagination
 
@@ -136,3 +142,17 @@ class TutorProblemView(APIView):
             return Response(
                 {"error": f"Problem code {problem_code} not found."}, status=404
             )
+
+
+class LLMModelViewSet(ReadOnlyModelViewSet):
+    """
+    API view to list available LLM models.
+    """
+
+    queryset = LLMModel.objects.filter(enabled=True)
+    serializer_class = LLMModelSerializer
+    permission_classes = (AllowAny,)
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["provider"]
+    ordering = ["provider", "name"]
+    ordering_fields = ["provider", "name", "litellm_id"]
