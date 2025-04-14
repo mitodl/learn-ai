@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/public/*": ["./public/*"],
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@api/v0": ["./api/src/generated/v0/index.ts"]
     },
     "types": [
       "@mitodl/smoot-design/type-augmentation",
