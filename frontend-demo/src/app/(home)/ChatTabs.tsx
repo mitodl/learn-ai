@@ -4,8 +4,7 @@ import type { TabListProps } from "@mui/lab/TabList"
 import Tab from "@mui/material/Tab"
 import { Box } from "@mui/material"
 import { useSearchParams } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
-import { queries as llmModelQueries } from "@/services/ai/llm-models/queries"
+import RecommendationContent from "./RecommendationContent"
 
 export enum ChatTab {
   RecommendationGPT = "RecommendationGPT",
@@ -24,10 +23,6 @@ const ChatTabs = () => {
     window.history.pushState({}, "", url.toString())
   }
 
-  const llmModels = useQuery(llmModelQueries.list())
-  console.log({
-    data: llmModels.data,
-  })
   return (
     <TabContext value={currentTab}>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -39,7 +34,7 @@ const ChatTabs = () => {
         </TabList>
       </Box>
       <TabPanel value={ChatTab.RecommendationGPT}>
-        RecommendationGPT Content
+        <RecommendationContent />
       </TabPanel>
       <TabPanel value={ChatTab.SyllabusGPT}>SyllabusGPT Content</TabPanel>
       <TabPanel value={ChatTab.VideoGPT}>VideoGPT Content</TabPanel>
