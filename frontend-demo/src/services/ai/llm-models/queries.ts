@@ -1,5 +1,8 @@
 import { queryOptions } from "@tanstack/react-query"
-import { llmModelsApi } from "../clients"
+import { getAPISettings } from "../settings"
+import { LlmModelsApi } from "@api/v0"
+
+const llmModelsApi = new LlmModelsApi(...getAPISettings())
 
 const keys = {
   root: () => ["llm-models"],
