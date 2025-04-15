@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.5.1
+Version 0.5.1 (Released April 15, 2025)
 -------------
 
 - Chat request limits for users (#122)
