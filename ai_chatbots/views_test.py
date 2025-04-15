@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 from django.urls import reverse
-from open_learning_ai_tutor.problems import get_pb_sol
 
 from ai_chatbots.factories import (
     CheckpointFactory,
@@ -144,21 +143,6 @@ def test_thread_messages_view_403(client, test_session_w_messages):
         reverse("ai:v0:chat_session_messages-list", args=[session.thread_id])
     )
     assert response.status_code == 403
-
-
-def test_tutor_problem_view(client):
-    """Test TutorProblemVeiew"""
-
-    response = client.get(reverse("ai:v0:tutor_problem"), {"problem_code": "A1P1"})
-    assert response.status_code == 200
-    problem, solution = get_pb_sol("A1P1")
-
-    assert response.json()["problem"] == problem
-    assert response.json()["solution"] == solution
-
-    response = client.get(reverse("ai:v0:tutor_problem"), {"problem_code": "invalid"})
-    assert response.status_code == 404
-    assert response.json()["error"] == "Problem code invalid not found."
 
 
 def test_llm_model_viewset(client):
