@@ -5,6 +5,7 @@ import Tab from "@mui/material/Tab"
 import { Box } from "@mui/material"
 import { useSearchParams } from "next/navigation"
 import RecommendationContent from "./RecommendationContent"
+import SyllabusContent from "./SyllabusContent"
 
 export enum ChatTab {
   RecommendationGPT = "RecommendationGPT",
@@ -36,7 +37,9 @@ const ChatTabs = () => {
       <TabPanel value={ChatTab.RecommendationGPT}>
         <RecommendationContent />
       </TabPanel>
-      <TabPanel value={ChatTab.SyllabusGPT}>SyllabusGPT Content</TabPanel>
+      <TabPanel value={ChatTab.SyllabusGPT}>
+        <SyllabusContent />
+      </TabPanel>
       <TabPanel value={ChatTab.VideoGPT}>VideoGPT Content</TabPanel>
       <TabPanel value={ChatTab.AssessmentGPT}>AssessmentGPT Content</TabPanel>
     </TabContext>
