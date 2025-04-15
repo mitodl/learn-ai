@@ -1,0 +1,58 @@
+import { RECOMMENDATION_GPT_URL } from "@/services/ai/urls"
+import { AiChat } from "@mitodl/smoot-design/ai"
+import type { AiChatProps } from "@mitodl/smoot-design/ai"
+import Typography from "@mui/material/Typography"
+import Grid from "@mui/material/Grid2"
+import SelectModel from "./SelectModel"
+import React, { useMemo, useState } from "react"
+
+const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
+  {
+    content: "What are some good courses to take for a career in data science?",
+  },
+]
+
+type Settings = {
+  model?: string
+}
+const getRequestOpts = (
+  settings: Settings = {},
+): AiChatProps["requestOpts"] => {
+  return {
+    apiUrl: RECOMMENDATION_GPT_URL,
+    fetchOpts: { credentials: "include" },
+    transformBody: (messages) => ({
+      message: messages[messages.length - 1].content,
+      model: settings.model,
+    }),
+  }
+}
+
+const RecommendationContent: React.FC = () => {
+  const [model, setModel] = useState<string | undefined>(undefined)
+
+  const requestOpts = useMemo(() => getRequestOpts({ model }), [model])
+  return (
+    <>
+      <Typography variant="h3">RecommendationGPT</Typography>
+      <Grid container spacing={2} sx={{ padding: 2 }}>
+        <Grid
+          size={{ xs: 12, md: 8 }}
+          sx={{ position: "relative", minHeight: "600px" }}
+        >
+          <AiChat
+            chatId="recommendation-gpt"
+            entryScreenEnabled={false}
+            conversationStarters={CONVERSATION_STARTERS}
+            requestOpts={requestOpts}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <SelectModel onChange={setModel} />
+        </Grid>
+      </Grid>
+    </>
+  )
+}
+
+export default RecommendationContent
