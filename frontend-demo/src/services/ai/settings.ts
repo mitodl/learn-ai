@@ -1,4 +1,4 @@
-import { LlmModelsApi, Configuration } from "@api/v0"
+import { Configuration } from "@api/v0"
 import axios from "axios"
 
 /**
@@ -16,6 +16,11 @@ const getConfig = () => {
     basePath: process.env.NEXT_PUBLIC_MITOL_API_BASE_URL,
   })
 }
-const llmModelsApi = new LlmModelsApi(getConfig(), undefined, instance)
 
-export { llmModelsApi }
+/**
+ * Settings for generated learn-ai API Client.
+ * Spread the result into any client, e.g., LlmModelsApi
+ */
+const getAPISettings = () => [getConfig(), undefined, instance] as const
+
+export { getAPISettings }
