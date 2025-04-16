@@ -3,6 +3,7 @@ import type { AxiosResponse } from "axios"
 
 type CourseV2BlocksRequest = {
   blockUsageKey: string
+  username: string
 }
 type CourseV2BlocksResponse = {
   root: string
@@ -21,15 +22,29 @@ type CourseV2BlocksResponse = {
 
 const fetchCourseBlocks = ({
   blockUsageKey,
+  username,
 }: CourseV2BlocksRequest): Promise<AxiosResponse<CourseV2BlocksResponse>> => {
   const baseUrl = process.env.NEXT_PUBLIC_OPENEDX_API_BASE_URL
   if (!baseUrl) {
     throw new Error("NEXT_PUBLIC_OPENEDX_API_BASE_URL is not defined")
   }
 
-  const url = `${baseUrl}api/courses/v2/blocks/${blockUsageKey}?depth=all&all_blocks=true`
+  const url = `${baseUrl}api/courses/v2/blocks/${blockUsageKey}?depth=all&username=${username}`
   return axios.get<CourseV2BlocksResponse>(url)
 }
 
-export { fetchCourseBlocks }
-export type { CourseV2BlocksRequest, CourseV2BlocksResponse }
+type UserMeResponse = {
+  username: string
+}
+const fetchUserMe = (): Promise<UserMeResponse> => {
+  const baseUrl = process.env.NEXT_PUBLIC_OPENEDX_API_BASE_URL
+  if (!baseUrl) {
+    throw new Error("NEXT_PUBLIC_OPENEDX_API_BASE_URL is not defined")
+  }
+
+  const url = `${baseUrl}api/user/v1/me/`
+  return axios.get(url).then((response) => response.data)
+}
+
+export { fetchCourseBlocks, fetchUserMe }
+export type { CourseV2BlocksRequest, CourseV2BlocksResponse, UserMeResponse }

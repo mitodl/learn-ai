@@ -14,6 +14,7 @@ const SelectModel: React.FC<
     <TextField
       label="Model"
       size="small"
+      margin="normal"
       fullWidth
       select
       {...props}
