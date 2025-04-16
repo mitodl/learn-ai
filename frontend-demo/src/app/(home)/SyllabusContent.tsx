@@ -83,28 +83,20 @@ const SyllabusContent = () => {
   const [resourceParseError, setResourceParseError] = useState<string | null>(
     null,
   )
+  const [resourceText, setResourceText] = useState(settings.syllabus_resource)
   useEffect(() => {
-    /**
-     * This changes what the user entered to extract just the resource ID.
-     * Delay it so they see the URL they copy-pasted.
-     */
-    setTimeout(() => {
-      const { id, errMsg } = getResourceId(settings.syllabus_resource)
-      setResourceParseError(errMsg)
-      if (id) {
-        setSettings({ syllabus_resource: id.toString() })
-      }
-    }, 150)
-  }, [settings.syllabus_resource, setSettings])
+    const { id, errMsg } = getResourceId(resourceText)
+    setResourceParseError(errMsg)
+    setSettings({ syllabus_resource: String(id) ?? resourceText })
+  }, [resourceText, setSettings])
   const resourceId = Number.isFinite(+settings.syllabus_resource)
     ? +settings.syllabus_resource
     : -1
   const resource = useQuery({
-    ...learningResourcesQueries.retrieve({
-      id: resourceId,
-    }),
+    ...learningResourcesQueries.retrieve({ id: resourceId }),
     enabled: !!resourceId,
   })
+
   const requestOpts = getRequestOpts({
     apiUrl: SYLLABUS_GPT_URL,
     extraBody: {
@@ -133,10 +125,13 @@ const SyllabusContent = () => {
             size="small"
             label="Resource ID or Learn Resource URL"
             fullWidth
-            value={settings.syllabus_resource}
-            onChange={(e) => {
-              setSettings({ syllabus_resource: e.target.value })
-            }}
+            /**
+             * don't use settings.syllabus_resource directly here to avoid
+             * so that we can keep the updates syncrhonous to avoid
+             * https://stackoverflow.com/questions/46000544/react-controlled-input-cursor-jumps
+             */
+            value={resourceText}
+            onChange={(e) => setResourceText(e.target.value)}
             sx={{ marginBottom: 2 }}
             error={!!resourceParseError || resource.isError}
             helperText={getResourceHelpText(resourceParseError, resource)}
