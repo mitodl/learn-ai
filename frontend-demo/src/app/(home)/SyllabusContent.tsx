@@ -1,15 +1,16 @@
 import { SYLLABUS_GPT_URL } from "@/services/ai/urls"
 import { AiChat } from "@mitodl/smoot-design/ai"
 import type { AiChatProps } from "@mitodl/smoot-design/ai"
+import Link from "@mui/material/Link"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import TextField from "@mui/material/TextField"
-import { useState } from "react"
 import SelectModel from "./SelectModel"
-import { getRequestOpts } from "./util"
+import { getRequestOpts, useSearchParamSettings } from "./util"
 import { useQuery, UseQueryResult } from "@tanstack/react-query"
 import { learningResourcesQueries } from "@/services/learn"
 import { LearningResource } from "@mitodl/open-api-axios/v1"
+import { useEffect, useState } from "react"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -17,27 +18,29 @@ const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   },
 ]
 
-const getResourceId = (url: string) => {
-  if (!url) {
-    return { id: null, errMsg: "URL is required." }
+const getResourceId = (resource: string) => {
+  if (!resource) {
+    return { id: null, errMsg: "Resource is required." }
   }
+  if (Number.isFinite(+resource)) {
+    return { id: +resource, errMsg: null }
+  }
+
+  const errMsg =
+    "Resource must be a numeric id or URL with `resource=<id>` param."
   try {
-    const urlObj = new URL(url)
-    const resource = urlObj.searchParams.get("resource")
-    if (!resource) {
-      return { id: null, errMsg: "URL did not include 'resource' param." }
+    const url = new URL(resource)
+    const resourceId = url.searchParams.get("resource") ?? ""
+    const id = +resourceId
+    console.log({ id })
+    if (Number.isFinite(id)) {
+      return { id, errMsg: null }
     }
-    const id = +resource
-    if (!Number.isFinite(id)) {
-      return { id: null, errMsg: "URL's 'resource' param is not a number" }
-    }
-    return { id, errMsg: null }
-  } catch (err) {
-    if (err instanceof Error) {
-      return { id: null, errMsg: err.message }
-    }
-    return { id: null, errMsg: "Unknown Error" }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_err) {
+    // pass, return below
   }
+  return { id: null, errMsg }
 }
 
 const getResourceHelpText = (
@@ -58,24 +61,56 @@ const getResourceHelpText = (
   }
   return (
     <span>
-      Found <strong>{resource.data.title}</strong>
+      Found{" "}
+      <Link
+        target="_blank"
+        href={`${process.env.NEXT_PUBLIC_MIT_LEARN_APP_BASE_URL}?resource=${resource.data.id}`}
+      >
+        {resource.data.title}
+      </Link>
     </span>
   )
 }
 
-const DEFAULT_RESOURCE_URL = "https://learn.mit.edu/search?resource=2812"
+// https://learn.mit.edu/?resource=2812
+const DEFAULT_RESOURCE = "2812"
 
 const SyllabusContent = () => {
-  const [model, setModel] = useState<string | undefined>(undefined)
-  const [resourceUrl, setResourceUrl] = useState<string>(DEFAULT_RESOURCE_URL)
-  const { id: resourceId, errMsg } = getResourceId(resourceUrl || "")
+  const [settings, setSettings] = useSearchParamSettings({
+    syllabus_model: "",
+    syllabus_resource: DEFAULT_RESOURCE,
+  })
+  const [resourceParseError, setResourceParseError] = useState<string | null>(
+    null,
+  )
+  useEffect(() => {
+    /**
+     * This changes what the user entered to extract just the resource ID.
+     * Delay it so they see the URL they copy-pasted.
+     */
+    setTimeout(() => {
+      const { id, errMsg } = getResourceId(settings.syllabus_resource)
+      setResourceParseError(errMsg)
+      if (id) {
+        setSettings({ syllabus_resource: id.toString() })
+      }
+    }, 150)
+  }, [settings.syllabus_resource, setSettings])
+  const resourceId = Number.isFinite(+settings.syllabus_resource)
+    ? +settings.syllabus_resource
+    : -1
   const resource = useQuery({
-    ...learningResourcesQueries.retrieve({ id: resourceId ?? -1 }),
+    ...learningResourcesQueries.retrieve({
+      id: resourceId,
+    }),
     enabled: !!resourceId,
   })
   const requestOpts = getRequestOpts({
     apiUrl: SYLLABUS_GPT_URL,
-    extraBody: { model, course_id: resource.data?.readable_id },
+    extraBody: {
+      model: settings.syllabus_model,
+      course_id: resource.data?.readable_id,
+    },
   })
 
   return (
@@ -96,15 +131,20 @@ const SyllabusContent = () => {
         <Grid size={{ xs: 12, md: 4 }}>
           <TextField
             size="small"
-            label="Resource URL"
+            label="Resource ID or Learn Resource URL"
             fullWidth
-            value={resourceUrl || ""}
-            onChange={(e) => setResourceUrl(e.target.value)}
+            value={settings.syllabus_resource}
+            onChange={(e) => {
+              setSettings({ syllabus_resource: e.target.value })
+            }}
             sx={{ marginBottom: 2 }}
-            error={!!errMsg || resource.isError}
-            helperText={getResourceHelpText(errMsg, resource)}
+            error={!!resourceParseError || resource.isError}
+            helperText={getResourceHelpText(resourceParseError, resource)}
           />
-          <SelectModel onChange={setModel} />
+          <SelectModel
+            value={settings.syllabus_model}
+            onChange={(e) => setSettings({ syllabus_model: e.target.value })}
+          />
         </Grid>
       </Grid>
     </>

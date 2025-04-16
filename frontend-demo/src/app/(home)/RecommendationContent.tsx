@@ -4,8 +4,8 @@ import type { AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import SelectModel from "./SelectModel"
-import React, { useMemo, useState } from "react"
-import { getRequestOpts } from "./util"
+import React, { useMemo } from "react"
+import { getRequestOpts, useSearchParamSettings } from "./util"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -14,13 +14,19 @@ const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
 ]
 
 const RecommendationContent: React.FC = () => {
-  const [model, setModel] = useState<string | undefined>(undefined)
+  const [settings, setSettings] = useSearchParamSettings({
+    rec_model: "",
+  })
 
   const requestOpts = useMemo(
     () =>
-      getRequestOpts({ apiUrl: RECOMMENDATION_GPT_URL, extraBody: { model } }),
-    [model],
+      getRequestOpts({
+        apiUrl: RECOMMENDATION_GPT_URL,
+        extraBody: { model: settings.rec_model },
+      }),
+    [settings.rec_model],
   )
+
   return (
     <>
       <Typography
@@ -55,7 +61,10 @@ const RecommendationContent: React.FC = () => {
           >
             Settings
           </Typography>
-          <SelectModel onChange={setModel} />
+          <SelectModel
+            value={settings.rec_model}
+            onChange={(e) => setSettings({ rec_model: e.target.value })}
+          />
         </Grid>
       </Grid>
     </>

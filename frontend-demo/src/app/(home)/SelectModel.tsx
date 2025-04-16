@@ -1,14 +1,14 @@
 import MenuItem from "@mui/material/MenuItem"
 import TextField from "@mui/material/TextField"
+import type { TextFieldProps } from "@mui/material/TextField"
 import { llmModelsQueries } from "@/services/ai"
 import { useQuery } from "@tanstack/react-query"
-import { useState } from "react"
 
-type SelectModelProps = {
-  onChange: (model?: string) => void
-}
-const SelectModel = ({ onChange }: SelectModelProps) => {
-  const [value, setValue] = useState<string>("")
+const SelectModel: React.FC<
+  TextFieldProps & {
+    value: string
+  }
+> = (props) => {
   const llmModels = useQuery(llmModelsQueries.list())
   return (
     <TextField
@@ -16,16 +16,11 @@ const SelectModel = ({ onChange }: SelectModelProps) => {
       size="small"
       fullWidth
       select
-      value={value}
-      onChange={(e) => {
-        const value = e.target.value
-        setValue(value)
-        if (value) {
-          onChange(e.target.value)
-        } else {
-          onChange(undefined)
-        }
-      }}
+      {...props}
+      /**
+       * Avoid passing an out-of-range value while the options are loading.
+       */
+      value={llmModels.isLoading ? "" : props.value}
     >
       <MenuItem value="">Model</MenuItem>
       {llmModels.data?.map((model) => (
