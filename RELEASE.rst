@@ -1,6 +1,29 @@
 Release Notes
 =============
 
+Version 0.5.2
+-------------
+
+- remove tutor problem view
+- Update to open_learning_ai_tutor 0.0.6
+- chore(deps): lock file maintenance (#134)
+- chore(deps): update dependency pdbpp to ^0.11.0 (#138)
+- fix(deps): update python docker tag to v3.13.3
+- chore(deps): update codecov/codecov-action action to v5.4.2
+- chore(deps): update actions/setup-python digest to 8d9ed9a
+- fix(deps): update material-ui monorepo to v7
+- chore(deps): update dependency eslint-import-resolver-typescript to v4
+- chore(deps): update dependency pytest-asyncio to ^0.26.0 (#131)
+- chore(deps): update dependency eslint-config-next to v15.3.0
+- fix(deps): update dependency starlette to v0.46.2
+- chore(deps): update dependency django-debug-toolbar to v5
+- chore(deps): update dependency eslint-config-prettier to v10
+- fix(deps): update dependency ipython to v9
+- fix(deps): update dependency ruff to v0.11.5
+- chore(deps): update react monorepo
+- chore(deps): update actions/setup-node digest to 49933ea
+- chore(deps): update dependency faker to v37
+
 Version 0.5.1 (Released April 15, 2025)
 -------------
 
