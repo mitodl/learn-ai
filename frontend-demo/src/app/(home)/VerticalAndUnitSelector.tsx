@@ -45,6 +45,9 @@ const isVerticalBlockId = (value: string) => {
 const extractVerticalBlockId = (
   value: string,
 ): { blockId: string | null; errMsg: string | null } => {
+  if (!value) {
+    return { blockId: null, errMsg: "Vertical ID is required." }
+  }
   try {
     validateVerticalBlockId(value)
     return { blockId: value, errMsg: null }
@@ -115,7 +118,7 @@ const VerticalAndUnitSelector: React.FC<VerticalAndUnitSelectorProps> = ({
   setSettings,
 }) => {
   const [verticalParseError, setVerticalParseError] = useState<string | null>(
-    null,
+    extractVerticalBlockId(settings[verticalSettingsName]).errMsg,
   )
 
   const units = Object.values(vertical.data?.blocks ?? {}).filter((block) => {
@@ -125,6 +128,11 @@ const VerticalAndUnitSelector: React.FC<VerticalAndUnitSelectorProps> = ({
   const selectedUnitId = units.find(
     (block) => block.id === settings[unitSettingsName],
   )?.id
+  useEffect(() => {
+    if (!selectedUnitId && vertical.data) {
+      setSettings({ [unitSettingsName]: "" })
+    }
+  }, [selectedUnitId, setSettings, unitSettingsName, vertical.data])
 
   const [verticalValue, setVerticalValue] = useState<string>(
     settings[verticalSettingsName],
@@ -137,6 +145,8 @@ const VerticalAndUnitSelector: React.FC<VerticalAndUnitSelectorProps> = ({
      */
     setSettings({ [verticalSettingsName]: verticalValue })
   }, [verticalValue, setSettings, verticalSettingsName])
+
+  console.log(vertical)
 
   return (
     <>
@@ -153,7 +163,7 @@ const VerticalAndUnitSelector: React.FC<VerticalAndUnitSelectorProps> = ({
           setVerticalParseError(errMsg)
           setVerticalValue(blockId ?? e.target.value)
         }}
-        margin="normal"
+        required
         error={!!verticalParseError || vertical.isError}
         helperText={getVerticalHelpText(verticalParseError, vertical)}
       />
@@ -163,6 +173,7 @@ const VerticalAndUnitSelector: React.FC<VerticalAndUnitSelectorProps> = ({
         fullWidth
         margin="normal"
         select
+        required
         /**
          * Avoid passing an out-of-range value while the options are loading.
          */

@@ -4,7 +4,6 @@ import { LearningResourcesApi } from "@mitodl/open-api-axios/v1"
 import type { LearningResourcesApiLearningResourcesRetrieveRequest } from "@mitodl/open-api-axios/v1"
 
 const learningResources = new LearningResourcesApi(...getAPISettings())
-
 const keys = {
   root: () => ["learning_resources"],
   retrieve: (opts: LearningResourcesApiLearningResourcesRetrieveRequest) => [

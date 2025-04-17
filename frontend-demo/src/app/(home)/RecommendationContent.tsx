@@ -53,14 +53,6 @@ const RecommendationContent: React.FC = () => {
           size={{ xs: 12, md: 4 }}
           sx={{ display: "flex", flexDirection: "column", gap: "16px" }}
         >
-          <Typography
-            variant="h5"
-            sx={(theme) => ({
-              color: theme.custom.colors.silverGrayDark,
-            })}
-          >
-            Settings
-          </Typography>
           <SelectModel
             value={settings.rec_model}
             onChange={(e) => setSettings({ rec_model: e.target.value })}
