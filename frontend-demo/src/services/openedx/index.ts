@@ -1,1 +1,1 @@
-export { queries as openEdxQueries } from "./queries"
+export * from "./queries"

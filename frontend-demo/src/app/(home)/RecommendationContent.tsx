@@ -1,5 +1,5 @@
 import { RECOMMENDATION_GPT_URL } from "@/services/ai/urls"
-import { AiChat } from "@mitodl/smoot-design/ai"
+import AiChat from "./StyledAiChat"
 import type { AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"

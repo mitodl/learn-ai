@@ -8,6 +8,7 @@ import RecommendationContent from "./RecommendationContent"
 import SyllabusContent from "./SyllabusContent"
 import AssessmentContent from "./AssessmentContent"
 import VideoContent from "./VideoContent"
+import { useEffect, useState } from "react"
 
 export enum ChatTab {
   RecommendationGPT = "RecommendationGPT",
@@ -24,6 +25,14 @@ const ChatTabs = () => {
     const url = new URL(window.location.href)
     url.searchParams.set("tab", newValue)
     window.history.pushState({}, "", url.toString())
+  }
+
+  const [hasRendered, setHasRendered] = useState(false)
+  useEffect(() => {
+    setHasRendered(true)
+  }, [])
+  if (!hasRendered) {
+    return null
   }
 
   return (

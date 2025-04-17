@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query"
+import { queryOptions, useQuery } from "@tanstack/react-query"
 import { fetchCourseBlocks, fetchUserMe } from "./client"
 
 import type { CourseV2BlocksRequest } from "./client"
@@ -27,4 +27,20 @@ const queries = {
   },
 }
 
-export { queries }
+const useV2Block = (
+  opts: Omit<CourseV2BlocksRequest, "username">,
+  {
+    enabled,
+  }: {
+    enabled?: boolean
+  } = {},
+) => {
+  const userMe = useQuery(queries.userMe())
+  const username = userMe.data?.username ?? ""
+  return useQuery({
+    ...queries.coursesV2Blocks({ ...opts, username }),
+    enabled: enabled && Boolean(username && opts.blockUsageKey),
+  })
+}
+
+export { queries as openEdxQueries, useV2Block }

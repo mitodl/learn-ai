@@ -1,5 +1,5 @@
 import { SYLLABUS_GPT_URL } from "@/services/ai/urls"
-import { AiChat } from "@mitodl/smoot-design/ai"
+import AiChat from "./StyledAiChat"
 import type { AiChatProps } from "@mitodl/smoot-design/ai"
 import Link from "@mui/material/Link"
 import Typography from "@mui/material/Typography"
@@ -86,8 +86,12 @@ const SyllabusContent = () => {
   useEffect(() => {
     const { id, errMsg } = getResourceId(resourceText)
     setResourceParseError(errMsg)
-    setSettings({ syllabus_resource: String(id) ?? resourceText })
-  }, [resourceText, setSettings])
+
+    const nextValue = String(id) ?? resourceText
+    if (settings.syllabus_resource !== nextValue) {
+      setSettings({ syllabus_resource: nextValue })
+    }
+  }, [resourceText, setSettings, settings.syllabus_resource])
   const resourceId = Number.isFinite(+settings.syllabus_resource)
     ? +settings.syllabus_resource
     : -1
@@ -120,8 +124,13 @@ const SyllabusContent = () => {
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
+          <SelectModel
+            value={settings.syllabus_model}
+            onChange={(e) => setSettings({ syllabus_model: e.target.value })}
+          />
           <TextField
             size="small"
+            margin="normal"
             label="Resource ID or Learn Resource URL"
             fullWidth
             /**
@@ -131,13 +140,8 @@ const SyllabusContent = () => {
              */
             value={resourceText}
             onChange={(e) => setResourceText(e.target.value)}
-            sx={{ marginBottom: 2 }}
             error={!!resourceParseError || resource.isError}
             helperText={getResourceHelpText(resourceParseError, resource)}
-          />
-          <SelectModel
-            value={settings.syllabus_model}
-            onChange={(e) => setSettings({ syllabus_model: e.target.value })}
           />
         </Grid>
       </Grid>
