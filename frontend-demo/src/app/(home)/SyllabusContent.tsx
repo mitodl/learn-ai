@@ -32,7 +32,6 @@ const getResourceId = (resource: string) => {
     const url = new URL(resource)
     const resourceId = url.searchParams.get("resource") ?? ""
     const id = +resourceId
-    console.log({ id })
     if (Number.isFinite(id)) {
       return { id, errMsg: null }
     }

@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation"
 import RecommendationContent from "./RecommendationContent"
 import SyllabusContent from "./SyllabusContent"
 import AssessmentContent from "./AssessmentContent"
+import VideoContent from "./VideoContent"
 
 export enum ChatTab {
   RecommendationGPT = "RecommendationGPT",
@@ -41,7 +42,9 @@ const ChatTabs = () => {
       <TabPanel value={ChatTab.SyllabusGPT}>
         <SyllabusContent />
       </TabPanel>
-      <TabPanel value={ChatTab.VideoGPT}>VideoGPT Content</TabPanel>
+      <TabPanel value={ChatTab.VideoGPT}>
+        <VideoContent />
+      </TabPanel>
       <TabPanel value={ChatTab.AssessmentGPT}>
         <AssessmentContent />
       </TabPanel>

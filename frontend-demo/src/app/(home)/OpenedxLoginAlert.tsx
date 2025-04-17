@@ -9,7 +9,6 @@ invariant(LOGIN_URL, "NEXT_PUBLIC_OPENEDX_LOGIN_URL is required")
 
 const OpenEdxLoginAlert = () => {
   const userMe = useQuery(openEdxQueries.userMe())
-  console.log({ userMe })
   return (
     userMe.isError && (
       <Alert severity="error">
