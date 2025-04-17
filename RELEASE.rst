@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.5.2
+Version 0.5.2 (Released April 17, 2025)
 -------------
 
 - remove tutor problem view
