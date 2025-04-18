@@ -18,19 +18,11 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from openai import BadRequestError
-from typing_extensions import TypedDict
-
-from ai_chatbots import tools
-from ai_chatbots.api import get_search_tool_metadata
-from ai_chatbots.models import TutorBotOutput
-from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.tools import tutor_tools
 from open_learning_ai_tutor.utils import (
@@ -38,6 +30,13 @@ from open_learning_ai_tutor.utils import (
     json_to_messages,
     tutor_output_to_json,
 )
+from openai import BadRequestError
+from typing_extensions import TypedDict
+
+from ai_chatbots import tools
+from ai_chatbots.api import get_search_tool_metadata
+from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
 
 log = logging.getLogger(__name__)
 
@@ -473,28 +472,6 @@ class TutorBot(BaseChatbot):
             edx_module_id, block_siblings
         )
 
-    def get_llm(self, **kwargs) -> BaseChatModel:
-        """
-        Return the LLM instance for the chatbot.
-        Set it up to use a proxy, with required proxy kwargs, if applicable.
-        """
-        llm = ChatOpenAI(
-            model=f"{self.proxy_prefix}{self.model}",
-            **(
-                self.proxy.get_api_kwargs(
-                    base_url_key="base_url", api_key_key="openai_api_key"
-                )
-                if self.proxy
-                else {}
-            ),
-            **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
-            **kwargs,
-        )
-        # Set the temperature if it's supported by the model
-        if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
-            llm.temperature = self.temperature
-        return llm
-
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
         return json.dumps(
@@ -534,18 +511,18 @@ class TutorBot(BaseChatbot):
         response = ""
 
         try:
-            new_history, new_intent_history, new_assessment_history, metadata = (
-                message_tutor(
-                    self.problem,
-                    self.problem_set,
-                    self.llm,
-                    [HumanMessage(content=message)],
-                    chat_history,
-                    assessment_history,
-                    intent_history,
-                    tools=tutor_tools,
-                )
+            new_history, new_intent_history, new_assessment_history = message_tutor(
+                self.problem,
+                self.problem_set,
+                self.llm,
+                [HumanMessage(content=message)],
+                chat_history,
+                assessment_history,
+                intent_history,
+                tools=tutor_tools,
             )
+
+            metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
             json_output = tutor_output_to_json(
                 new_history, new_intent_history, new_assessment_history, metadata
             )
