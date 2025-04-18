@@ -4176,18 +4176,22 @@ name = "open-learning-ai-tutor"
 version = "0.0.6"
 description = "AI powered tutor"
 optional = false
-python-versions = "<4.0,>=3.12"
-files = [
-    {file = "open_learning_ai_tutor-0.0.6-py3-none-any.whl", hash = "sha256:bb29acdf76c4a5b0f245f3e5496d3bc4d02923ab3ac59774dae2729f569dcd67"},
-    {file = "open_learning_ai_tutor-0.0.6.tar.gz", hash = "sha256:e450a1f36b688371e6bc8938d08cfdd0153d47d37ae7879c1ae42b8da36b5d38"},
-]
+python-versions = "^3.12"
+files = []
+develop = false
 
 [package.dependencies]
-e2b-code-interpreter = ">=1.1.0,<2.0.0"
-langchain = ">=0.3.20,<0.4.0"
-langchain-core = ">=0.3.45,<0.4.0"
-langchain-experimental = ">=0.3.4,<0.4.0"
-langgraph = ">=0.3.10,<0.4.0"
+e2b-code-interpreter = "^1.1.0"
+langchain = "^0.3.20"
+langchain-core = "^0.3.45"
+langchain-experimental = "^0.3.4"
+langgraph = "^0.3.10"
+
+[package.source]
+type = "git"
+url = "https://github.com/mitodl/open-learning-ai-tutor.git"
+reference = "ab/refactor-metadata"
+resolved_reference = "835675e8f9b1c6f8fa0db14aacb46397adcdae0d"
 
 [[package]]
 name = "openai"
@@ -7752,4 +7756,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "8c71b13ef5eb363fd08a07ed2ced0f0368983615de4980d3b1d0c08dd7540d7e"
+content-hash = "ff97bb3b87e030607359a8320dc75c0ee84174076c9b1c287fa6b57cca90c06f"
