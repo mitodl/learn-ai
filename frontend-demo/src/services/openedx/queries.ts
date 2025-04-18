@@ -17,7 +17,9 @@ const queries = {
   coursesV2Blocks: (opts: CourseV2BlocksRequest) =>
     queryOptions({
       queryKey: keys.coursesV2Blocks(opts),
-      queryFn: () => fetchCourseBlocks(opts).then((res) => res.data),
+      queryFn: () => {
+        return fetchCourseBlocks(opts).then((res) => res.data)
+      },
     }),
   userMe: () => {
     return queryOptions({
@@ -39,7 +41,11 @@ const useV2Block = (
   const username = userMe.data?.username ?? ""
   return useQuery({
     ...queries.coursesV2Blocks({ ...opts, username }),
-    enabled: enabled && Boolean(username && opts.blockUsageKey),
+    // Note: enabled must come AFTER the Boolean(...)
+    // true && undefined => undefined  => query enabled, since that's the default.
+    // false && undefined => false => query disabled, as it should be
+    // If enabled comes first, then the Boolean(...) won't always be checked.
+    enabled: Boolean(username && opts.blockUsageKey) && enabled,
   })
 }
 

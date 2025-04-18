@@ -184,7 +184,6 @@ const VideoCntent = () => {
             defaultUnit={settings.video_unit}
             defaultVertical={settings.video_vertical}
             onSubmit={(values) => {
-              console.log("Submitting", values)
               setSettings({
                 video_unit: values.unit,
                 video_vertical: values.vertical,
