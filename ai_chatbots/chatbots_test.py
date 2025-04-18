@@ -554,7 +554,6 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
                 response_metadata={},
             ),
         ],
-        {"tutor_model": "test_model"},
     )
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block",
@@ -579,7 +578,9 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
 
     history = await get_history(thread_id)
     assert history.thread_id == thread_id
-    assert history.chat_json == tutor_output_to_json(*output)
+    metadata = {"edx_module_id": "block1", "tutor_model": chatbot.model}
+
+    assert history.chat_json == tutor_output_to_json(*output, metadata)
     mock_posthog.Posthog.return_value.capture.assert_called_once_with(
         "anonymous",
         event="TUTOR_JOB",
