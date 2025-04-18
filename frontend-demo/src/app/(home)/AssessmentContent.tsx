@@ -8,6 +8,7 @@ import { getRequestOpts, useSearchParamSettings } from "./util"
 import { useV2Block } from "@/services/openedx"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
+import CircularProgress from "@mui/material/CircularProgress"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -44,6 +45,7 @@ const AssessmentContent = () => {
       edx_module_id: settings.tutor_unit,
     },
   })
+  const isReady = vertical.isSuccess
 
   return (
     <>
@@ -52,6 +54,7 @@ const AssessmentContent = () => {
         <Grid
           size={{ xs: 12, md: 8 }}
           sx={{ position: "relative", minHeight: "600px" }}
+          inert={!isReady}
         >
           <AiChat
             chatId="syllabus-gpt"
@@ -60,6 +63,18 @@ const AssessmentContent = () => {
             conversationStarters={CONVERSATION_STARTERS}
             requestOpts={requestOpts}
           />
+          {!isReady && (
+            <CircularProgress
+              color="primary"
+              sx={{
+                position: "absolute",
+                zIndex: 1000,
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+              }}
+            />
+          )}
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <OpenEdxLoginAlert />

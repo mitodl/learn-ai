@@ -15,6 +15,7 @@ import { useMemo } from "react"
 
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
 import { ContentFile } from "@mitodl/open-api-axios/v1"
+import { CircularProgress } from "@mui/material"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -134,6 +135,7 @@ const VideoCntent = () => {
       edx_module_id: settings.video_unit,
     },
   })
+  const isReady = !!transcriptBlockId
   return (
     <>
       <Typography variant="h3">VideoGPT</Typography>
@@ -141,6 +143,7 @@ const VideoCntent = () => {
         <Grid
           size={{ xs: 12, md: 8 }}
           sx={{ position: "relative", minHeight: "600px" }}
+          inert={!isReady}
         >
           <AiChat
             chatId="syllabus-gpt"
@@ -149,6 +152,18 @@ const VideoCntent = () => {
             conversationStarters={CONVERSATION_STARTERS}
             requestOpts={requestOpts}
           />
+          {!isReady && (
+            <CircularProgress
+              color="primary"
+              sx={{
+                position: "absolute",
+                zIndex: 1000,
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+              }}
+            />
+          )}
         </Grid>
         <Grid
           size={{ xs: 12, md: 4 }}

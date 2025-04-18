@@ -11,6 +11,7 @@ import { useQuery, UseQueryResult } from "@tanstack/react-query"
 import { learningResourcesQueries } from "@/services/learn"
 import { LearningResource } from "@mitodl/open-api-axios/v1"
 import { useEffect, useState } from "react"
+import CircularProgress from "@mui/material/CircularProgress"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -108,6 +109,7 @@ const SyllabusContent = () => {
     },
   })
 
+  const isReady = resource.isSuccess
   return (
     <>
       <Typography variant="h3">SyllabusGPT</Typography>
@@ -115,6 +117,7 @@ const SyllabusContent = () => {
         <Grid
           size={{ xs: 12, md: 8 }}
           sx={{ position: "relative", minHeight: "600px" }}
+          inert={!isReady}
         >
           <AiChat
             chatId="syllabus-gpt"
@@ -122,6 +125,18 @@ const SyllabusContent = () => {
             conversationStarters={CONVERSATION_STARTERS}
             requestOpts={requestOpts}
           />
+          {!isReady && (
+            <CircularProgress
+              color="primary"
+              sx={{
+                position: "absolute",
+                zIndex: 1000,
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+              }}
+            />
+          )}
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <SelectModel
