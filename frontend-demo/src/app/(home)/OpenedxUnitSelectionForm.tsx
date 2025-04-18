@@ -22,7 +22,6 @@ const verticalSchema = yup
     try {
       const urlObj = new URL(value)
       const blockId = urlObj.pathname.split("/").at(-1)
-      console.log("Extracted blockId", blockId)
       if (blockId) {
         return blockId
       }
