@@ -255,7 +255,14 @@ const OpenedxUnitSelectionForm: React.FC<OpenedxUnitSelectionFormProps> = ({
         })}
       </TextField>
       <Stack direction="row" gap="16px">
-        <Button variant="secondary" onClick={onReset}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            onReset()
+            formik.resetForm()
+            setEditing(false)
+          }}
+        >
           Reset
         </Button>
         <Button type="submit">Submit</Button>
