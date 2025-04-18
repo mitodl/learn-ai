@@ -6,7 +6,7 @@ import Providers from "./providers"
 import Container from "@mui/material/Container"
 
 export const metadata: Metadata = {
-  title: "Learn AI Demo",
+  title: "Learn AI Sandbox",
 }
 
 export default function RootLayout({
