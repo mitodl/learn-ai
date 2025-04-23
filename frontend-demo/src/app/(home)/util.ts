@@ -6,12 +6,12 @@ import { useMemo } from "react"
  * Convenience for AiChat component to compute requestOpts settings
  * for a particular apiUrl / set of extra body params.
  */
-const getRequestOpts = <B extends Record<string, unknown>>({
+const getRequestOpts = <Body extends Record<string, unknown>>({
   extraBody,
   apiUrl,
 }: {
   apiUrl: string
-  extraBody: B
+  extraBody: Body
 }): AiChatProps["requestOpts"] => {
   return {
     apiUrl,
@@ -29,10 +29,9 @@ const getRequestOpts = <B extends Record<string, unknown>>({
 /**
  * Patch the current URL with new search params.
  */
-const patchSearchParams = <S extends Record<string, string>>(
-  patch: Partial<Record<keyof S, string | null>>,
+const patchSearchParams = <Settings extends Record<string, string>>(
+  patch: Partial<Record<keyof Settings, string | null>>,
 ) => {
-  console.log("patching", patch)
   const url = new URL(window.location.href)
   Object.entries(patch).forEach(([key, value]) => {
     if (value !== null && value !== undefined) {
@@ -43,8 +42,8 @@ const patchSearchParams = <S extends Record<string, string>>(
   })
   window.history.pushState({}, "", url.toString())
 }
-const useSearchParamSettings = <S extends Record<string, string>>(
-  defaultSettings: S,
+const useSearchParamSettings = <Settings extends Record<string, string>>(
+  defaultSettings: Settings,
 ) => {
   const searchParams = useSearchParams()
   const settings = useMemo(() => {
@@ -55,7 +54,7 @@ const useSearchParamSettings = <S extends Record<string, string>>(
           .entries()
           .filter(([key]) => Object.keys(defaultSettings).includes(key)),
       ),
-    } as S
+    } as Settings
   }, [searchParams, defaultSettings])
 
   return [
@@ -65,7 +64,7 @@ const useSearchParamSettings = <S extends Record<string, string>>(
      * 1. mimic useState API
      * 2. provide a type-definition that matches `settings`
      */
-    patchSearchParams<S>,
+    patchSearchParams<Settings>,
   ] as const
 }
 
