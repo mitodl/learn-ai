@@ -2,9 +2,11 @@
 Classes related to models for main
 """
 
+from django.core.cache import cache
 from django.db.models import CharField, DateTimeField, IntegerField, Model
 from django.db.models.query import QuerySet
 
+from main.constants import CONSUMER_THROTTLES_KEY
 from main.utils import now_in_utc
 
 
@@ -77,3 +79,8 @@ class ConsumerThrottleLimit(Model):
             Auth {self.auth_limit}, \
             Anon {self.anon_limit} \
             per {self.interval}"
+
+    def save(self, **kwargs):
+        """Override save to reset the throttles cache"""
+        cache.delete(CONSUMER_THROTTLES_KEY)
+        return super().save(**kwargs)
