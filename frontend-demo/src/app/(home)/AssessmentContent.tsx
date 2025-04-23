@@ -57,7 +57,7 @@ const AssessmentContent = () => {
           inert={!isReady}
         >
           <AiChat
-            chatId="syllabus-gpt"
+            chatId="assessment-gpt"
             entryScreenEnabled={false}
             initialMessages={INITIAL_MESSAGES}
             conversationStarters={CONVERSATION_STARTERS}

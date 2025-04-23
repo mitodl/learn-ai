@@ -146,7 +146,7 @@ const VideoCntent = () => {
           inert={!isReady}
         >
           <AiChat
-            chatId="syllabus-gpt"
+            chatId="video-gpt"
             entryScreenEnabled={false}
             initialMessages={INITIAL_MESSAGES}
             conversationStarters={CONVERSATION_STARTERS}
