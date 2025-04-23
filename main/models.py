@@ -83,4 +83,5 @@ class ConsumerThrottleLimit(Model):
     def save(self, **kwargs):
         """Override save to reset the throttles cache"""
         cache.delete(CONSUMER_THROTTLES_KEY)
+        cache.close()
         return super().save(**kwargs)
