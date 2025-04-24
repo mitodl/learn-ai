@@ -28,6 +28,7 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
             content = json.loads(msg_content or {})
             metadata = {
                 "metadata": {
+                    "search_url": content.get("metadata", {}).get("search_url"),
                     "search_parameters": content.get("metadata", {}).get(
                         "parameters", []
                     ),

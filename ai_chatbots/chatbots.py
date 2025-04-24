@@ -252,6 +252,15 @@ class BaseChatbot(ABC):
         raise NotImplementedError
 
 
+class RecommendationAgentState(AgentState):
+    """
+    State for the recommendation bot. Passes search url
+    to the associated tool function.
+    """
+
+    search_url: Annotated[list[str], add]
+
+
 class ResourceRecommendationBot(BaseChatbot):
     """
     Chatbot that searches for learning resources in the MIT Learn catalog,
@@ -347,6 +356,20 @@ ANSWER QUESTIONS.
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Generate a standard react agent graph for the recommendation agent.
+        Use the custom RecommendationAgentState to pass search_url
+        to the associated tool function.
+        """
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.checkpointer,
+            state_schema=RecommendationAgentState,
+            state_modifier=self.instructions,
+        )
 
 
 class SyllabusAgentState(AgentState):

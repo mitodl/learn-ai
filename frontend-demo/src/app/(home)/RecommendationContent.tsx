@@ -6,6 +6,7 @@ import Grid from "@mui/material/Grid2"
 import SelectModel from "./SelectModel"
 import React, { useMemo } from "react"
 import { getRequestOpts, useSearchParamSettings } from "./util"
+import SelectSearchURL from "./SelectSearchUrl"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -16,15 +17,19 @@ const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
 const RecommendationContent: React.FC = () => {
   const [settings, setSettings] = useSearchParamSettings({
     rec_model: "",
+    search_url: "",
   })
 
   const requestOpts = useMemo(
     () =>
       getRequestOpts({
         apiUrl: RECOMMENDATION_GPT_URL,
-        extraBody: { model: settings.rec_model },
+        extraBody: {
+          model: settings.rec_model,
+          search_url: settings.search_url,
+        },
       }),
-    [settings.rec_model],
+    [settings.rec_model, settings.search_url],
   )
 
   return (
@@ -56,6 +61,10 @@ const RecommendationContent: React.FC = () => {
           <SelectModel
             value={settings.rec_model}
             onChange={(e) => setSettings({ rec_model: e.target.value })}
+          />
+          <SelectSearchURL
+            value={settings.search_url}
+            onChange={(e) => setSettings({ search_url: e.target.value })}
           />
         </Grid>
       </Grid>

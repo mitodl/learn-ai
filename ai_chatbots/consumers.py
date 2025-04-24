@@ -28,6 +28,7 @@ from ai_chatbots.constants import (
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     ChatRequestSerializer,
+    RecommendationChatRequestSerializer,
     SyllabusChatRequestSerializer,
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
@@ -46,7 +47,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     # Each bot consumer should define a unique ROOM_NAME
     ROOM_NAME = None
 
-    serializer_class = ChatRequestSerializer
+    serializer_class = RecommendationChatRequestSerializer
     headers_sent = False
     session_key = ""
 
@@ -353,8 +354,17 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
     ROOM_NAME = ResourceRecommendationBot.__name__
     throttle_scope = "recommendation_bot"
 
+    def process_extra_state(self, data: dict) -> dict:
+        """Process extra state parameters if any"""
+        log.info("Processing extra state for rec bot: %s", data)
+        return {
+            "search_url": [data.get("search_url")],
+        }
+
     def create_chatbot(
-        self, serializer: ChatRequestSerializer, checkpointer: BaseCheckpointSaver
+        self,
+        serializer: RecommendationChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
     ):
         """Return a ResourceRecommendationBot instance"""
         temperature = serializer.validated_data.pop("temperature", None)

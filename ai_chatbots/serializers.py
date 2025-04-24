@@ -1,5 +1,6 @@
 """Serializers for the ai_chatbots app"""
 
+from django.conf import settings
 from rest_framework import serializers
 
 from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
@@ -28,6 +29,16 @@ class ChatRequestSerializer(serializers.Serializer):
             err_msg = "You do not have permission to adjust the instructions."
             raise serializers.ValidationError(err_msg)
         return value
+
+
+class RecommendationChatRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the syllabus chatbot.
+    """
+
+    search_url = serializers.CharField(
+        required=False, allow_blank=False, default=settings.AI_MIT_SEARCH_URL
+    )
 
 
 class SyllabusChatRequestSerializer(ChatRequestSerializer):

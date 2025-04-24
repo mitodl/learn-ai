@@ -581,9 +581,17 @@ CHANNEL_LAYERS = {
 
 # AI settings
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
+AI_MIT_SEARCH_VECTOR_URL = get_string(
+    name="AI_MIT_SEARCH_VECTOR_URL",
+    default="https://api.learn.mit.edu/api/v0/vector_learning_resources_search/",
+)
+AI_MIT_SEARCH_ELASTIC_URL = get_string(
+    name="AI_MIT_SEARCH_ELASTIC_URL",
+    default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
+)
 AI_MIT_SEARCH_URL = get_string(
     name="AI_MIT_SEARCH_URL",
-    default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
+    default=AI_MIT_SEARCH_ELASTIC_URL,
 )
 AI_MIT_SEARCH_DETAIL_URL = get_string(
     name="AI_MIT_SEARCH_DETAIL_URL",
