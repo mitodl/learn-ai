@@ -163,10 +163,13 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
         "certification": True,
         "offered_by": ["xpro"],
         "limit": 5,
+        "state": {"search_url": [settings.AI_MIT_SEARCH_URL]},
     }
-    expected_results["metadata"]["parameters"] = search_parameters.copy()
     tool = chatbot.create_tools()[0]
     results = tool.invoke(search_parameters)
+    search_parameters.pop("state")
+    expected_results["metadata"]["parameters"] = search_parameters
+    expected_results["metadata"]["search_url"] = settings.AI_MIT_SEARCH_URL
     mock_post.assert_called_once_with(
         settings.AI_MIT_SEARCH_URL,
         params={"q": "physics", **search_parameters},
@@ -361,7 +364,8 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
                 "q": "main topics",
                 "resource_readable_id": "MITx+6.00.1x",
                 "collection_name": "vector512",
-            }
+            },
+            "search_url": "https://test.mit.edu/search2",
         },
         "results": [
             {
@@ -385,7 +389,11 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
                                 tool_args={"q": "main topics"},
                                 content=json.dumps(mock_tool_content),
                             ),
-                        ]
+                        ],
+                        "search_url": [
+                            "https://test.mit.edu/search0",
+                            "https://test.mit.edu/search1",
+                        ],
                     }
                 )
             ]
@@ -397,6 +405,9 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
     assert metadata == json.dumps(
         {
             "metadata": {
+                "search_url": mock_tool_content.get("metadata", {}).get(
+                    "search_url", []
+                ),
                 "search_parameters": mock_tool_content.get("metadata", {}).get(
                     "parameters", []
                 ),

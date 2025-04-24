@@ -57,6 +57,11 @@ class SearchToolSchema(pydantic.BaseModel):
             """
         )
     )
+
+    state: Annotated[dict, InjectedState] = Field(
+        description="The agent state, including the search url to use"
+    )
+
     resource_type: Optional[list[enum_zip("resource_type", LearningResourceType)]] = (
         Field(
             default=None,
@@ -114,13 +119,11 @@ class SearchToolSchema(pydantic.BaseModel):
             """,
     )
 
-    state: Annotated[dict, InjectedState] = Field(
-        description="The agent state, including the search url to use"
-    )
-
 
 @tool(args_schema=SearchToolSchema)
-def search_courses(q: str, state: Annotated[dict, InjectedState], **kwargs) -> str:
+def search_courses(
+    q: str, state: Optional[Annotated[dict, InjectedState]], **kwargs
+) -> str:
     """
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
@@ -135,7 +138,7 @@ def search_courses(q: str, state: Annotated[dict, InjectedState], **kwargs) -> s
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
-    search_url = state["search_url"][-1]
+    search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT API at %s with params: %s", search_url, params)
     try:
         response = requests.get(search_url, params=params, timeout=30)
