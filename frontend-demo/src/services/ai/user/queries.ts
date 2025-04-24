@@ -17,7 +17,7 @@ const queries = {
       queryKey: keys.me(),
       queryFn: (): Promise<UserResponse> => {
         return axiosInstance
-          .get(`${AI_API_BASE_URL}/me`)
+          .get(`${AI_API_BASE_URL}/me/`)
           .then((res) => res.data)
       },
     }),

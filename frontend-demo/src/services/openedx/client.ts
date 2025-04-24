@@ -42,7 +42,7 @@ const fetchUserMe = (): Promise<UserMeResponse> => {
     throw new Error("NEXT_PUBLIC_OPENEDX_API_BASE_URL is not defined")
   }
 
-  const url = `${baseUrl}api/user/v1/me/`
+  const url = `${baseUrl}api/user/v1/me`
   return axios.get(url).then((response) => response.data)
 }
 
