@@ -1,5 +1,9 @@
-import axios from "axios"
+import defaultAxios from "axios"
 import type { AxiosResponse } from "axios"
+
+const axios = defaultAxios.create({
+  withCredentials: true,
+})
 
 type CourseV2BlocksRequest = {
   blockUsageKey: string
