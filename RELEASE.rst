@@ -1,6 +1,36 @@
 Release Notes
 =============
 
+Version 0.5.4
+-------------
+
+- fix two trailing slash issues (#152)
+- fix chat ids
+- better names
+- add action env vars
+- fix reset
+- remove old tutor ui
+- remove some logs, add a comment
+- add workflow env vars
+- prevent using chat while loading
+- simplify resource selection, add login
+- add video tab
+- add assessment tab
+- start tying to url
+- add syllabus gpt panel
+- add recommendation tab
+- add openedx queries
+- allow proxying local dev requests to deployed openedx
+- add models api call
+- add tabs with placeholder content
+- use litellm for tutor
+- chore(deps): lock file maintenance (#149)
+- fix(deps): update react monorepo to v19.1.0 (#147)
+- fix(deps): update dependency next to v15.3.1 (#146)
+- fix(deps): update dependency ruff to v0.11.6 (#145)
+- chore(deps): update nginx docker tag to v1.27.5 (#144)
+- chore(deps): update dependency eslint-config-next to v15.3.1 (#143)
+
 Version 0.5.2 (Released April 17, 2025)
 -------------
 
