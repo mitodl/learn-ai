@@ -12,13 +12,10 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache as default_cache
 from django.core.exceptions import ImproperlyConfigured
 
-from main.constants import DURATION_MAPPING
+from main.constants import CONSUMER_THROTTLES_KEY, DURATION_MAPPING
 from main.models import ConsumerThrottleLimit
 
 log = logging.getLogger(__name__)
-
-
-CONSUMER_THROTTLES_KEY = "consumer_throttles"
 
 
 class AsyncBaseThrottle(ABC):
