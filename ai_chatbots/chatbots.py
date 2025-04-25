@@ -31,6 +31,7 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
+from posthog.ai.langchain import CallbackHandler
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
@@ -109,6 +110,18 @@ class BaseChatbot(ABC):
             llm = llm.bind_tools(self.tools)
         return llm
 
+    def posthog_callback_handler(self):
+        log.error("POSTHOG GO!!!!!")
+        client = posthog.Posthog(
+            project_api_key=settings.POSTHOG_PROJECT_API_KEY,
+            host=settings.POSTHOG_API_HOST,
+        )
+        return CallbackHandler(
+            client=client,
+            distinct_id=self.user_id,  # optional
+            properties={"conversation_id": self.thread_id, "agent": self.TASK_NAME},
+        )
+
     def create_agent_graph(self) -> CompiledGraph:
         """
         Return a graph for the relevant LLM and tools.
@@ -138,7 +151,14 @@ class BaseChatbot(ABC):
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
                 state["messages"].insert(0, SystemMessage(self.instructions))
-            return MessagesState(messages=[self.llm.invoke(state["messages"])])
+            return MessagesState(
+                messages=[
+                    self.llm.invoke(
+                        state["messages"],
+                        config={"callbacks": [self.posthog_callback_handler()]},
+                    )
+                ]
+            )
 
         agent_graph = StateGraph(MessagesState)
         # Add the agent node that first calls the LLM
