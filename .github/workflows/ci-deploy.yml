@@ -29,7 +29,16 @@ jobs:
         run: yarn build
         env:
           NODE_ENV: production
+          # Learn-ai
           NEXT_PUBLIC_MITOL_API_BASE_URL: ${{ vars.API_BASE_CI }}
+          NEXT_PUBLIC_AI_CSRF_COOKIE_NAME: ${{ vars.AI_CSRF_COOKIE_NAME_CI }}
+          NEXT_PUBLIC_MIT_LEARN_AI_LOGIN_URL: ${{ vars.MIT_LEARN_AI_LOGIN_URL_CI }}
+          # mi-learn
+          NEXT_PUBLIC_MIT_LEARN_API_BASE_URL: ${{ vars.MIT_LEARN_API_BASE_URL_CI }}
+          NEXT_PUBLIC_MIT_LEARN_APP_BASE_URL: ${{ vars.MIT_LEARN_APP_BASE_URL_CI }}
+          # openedx
+          NEXT_PUBLIC_OPENEDX_API_BASE_URL: ${{ vars.OPENEDX_API_BASE_URL_CI }}
+          NEXT_PUBLIC_OPENEDX_LOGIN_URL: ${{ vars.OPENEDX_LOGIN_URL_CI }}
 
       - name: Write commit SHA to file
         run: echo $GITHUB_SHA > out/hash.txt
