@@ -24,7 +24,7 @@ jobs:
           - 5433:5433
 
       redis:
-        image: redis:7.4.2
+        image: redis:7.4.3
         ports:
           - 6379:6379
 
