@@ -50,12 +50,32 @@ def test_search_courses(  # noqa: PLR0913
     """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SEARCH_URL = search_url
     settings.AI_MIT_SEARCH_LIMIT = limit
-    expected_params = {"limit": limit, **params}
+    params["state"] = {"search_url": [search_url]}
     results = json.loads(search_courses.invoke(params))
+    params.pop("state")
+    expected_params = {"limit": limit, **params}
     mock_get_resources.assert_called_once_with(
         search_url, params=expected_params, timeout=30
     )
     assert len(results["results"]) == len(search_results["results"])
+
+
+@pytest.mark.parametrize(
+    "search_url",
+    ["https://mit.edu/search", "https://mit.edu/vector"],
+)
+def test_search_courses_override_url(settings, mock_get_resources, search_url):
+    """Test that the search_courses tool returns expected results w/expected params."""
+    settings.AI_MIT_SEARCH_URL = "http://default_url.edu"
+    params = {
+        "q": "physics",
+        "limit": 10,
+        "resource_type": ["course"],
+        "state": {"search_url": [search_url]},
+    }
+    search_courses.invoke(params)
+    params.pop("state")
+    mock_get_resources.assert_called_once_with(search_url, params=params, timeout=30)
 
 
 @pytest.mark.parametrize(
@@ -79,7 +99,9 @@ def test_invalid_params(params):
 def test_request_exception(mocker):
     """Test that a request exception returns a JSON error msg"""
     mocker.patch("ai_chatbots.tools.requests.get", side_effect=RequestException)
-    result = search_courses.invoke({"q": "physics"})
+    result = search_courses.invoke(
+        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
+    )
     assert result == '{"error": "An error occurred while searching"}'
 
 

@@ -57,6 +57,11 @@ class SearchToolSchema(pydantic.BaseModel):
             """
         )
     )
+
+    state: Annotated[dict, InjectedState] = Field(
+        description="The agent state, including the search url to use"
+    )
+
     resource_type: Optional[list[enum_zip("resource_type", LearningResourceType)]] = (
         Field(
             default=None,
@@ -116,7 +121,9 @@ class SearchToolSchema(pydantic.BaseModel):
 
 
 @tool(args_schema=SearchToolSchema)
-def search_courses(q: str, **kwargs) -> str:
+def search_courses(
+    q: str, state: Optional[Annotated[dict, InjectedState]], **kwargs
+) -> str:
     """
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
@@ -131,9 +138,10 @@ def search_courses(q: str, **kwargs) -> str:
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
-    log.debug("Searching MIT API with params: %s", params)
+    search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
+    log.debug("Searching MIT API at %s with params: %s", search_url, params)
     try:
-        response = requests.get(settings.AI_MIT_SEARCH_URL, params=params, timeout=30)
+        response = requests.get(search_url, params=params, timeout=30)
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -168,7 +176,7 @@ def search_courses(q: str, **kwargs) -> str:
             simplified_results.append(simplified_result)
         full_output = {
             "results": simplified_results,
-            "metadata": {"parameters": params},
+            "metadata": {"search_url": search_url, "parameters": params},
         }
         return json.dumps(full_output)
     except requests.exceptions.RequestException:

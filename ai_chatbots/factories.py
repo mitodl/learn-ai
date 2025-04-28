@@ -17,6 +17,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from ai_chatbots import models
 from ai_chatbots.chatbots import (
+    RecommendationAgentState,
     ResourceRecommendationBot,
     SyllabusAgentState,
     VideoGPTAgentState,
@@ -183,6 +184,16 @@ class AIMessageChunkFactory(BaseMessageFactory):
 
     class Meta:
         model = AIMessageChunk
+
+
+class RecommendationAgentStateFactory(factory.Factory):
+    """Factory for generating RecommendationAgent instances."""
+
+    messages = [factory.SubFactory(HumanMessageFactory)]
+    search_url = [factory.Faker("url")]
+
+    class Meta:
+        model = RecommendationAgentState
 
 
 class SyllabusAgentStateFactory(factory.Factory):

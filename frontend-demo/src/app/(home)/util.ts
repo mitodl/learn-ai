@@ -21,6 +21,7 @@ const getRequestOpts = <Body extends Record<string, unknown>>({
         message: messages[messages.length - 1].content,
         ...extraBody,
         model: extraBody.model ? extraBody.model : undefined,
+        search_url: extraBody.search_url ? extraBody.search_url : undefined,
       }
     },
   }
