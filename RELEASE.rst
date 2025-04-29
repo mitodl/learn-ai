@@ -1,6 +1,17 @@
 Release Notes
 =============
 
+Version 0.6.0
+-------------
+
+- Option to override the default recommendation bot search url  (#157)
+- Update Node.js to v22.15.0 (#163)
+- Update nginx Docker tag to v1.28.0 (#162)
+- Update redis Docker tag to v7.4.3 (#161)
+- Update dependency ruff to v0.11.7 (#160)
+- add ci env vars (#158)
+- Clear throttle cache on ConsumerThrottleLimit.save (#150)
+
 Version 0.5.5 (Released April 29, 2025)
 -------------
 
