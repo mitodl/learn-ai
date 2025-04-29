@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.5.5
+Version 0.5.5 (Released April 29, 2025)
 -------------
 
 - include credentials in edx requests (#155)
