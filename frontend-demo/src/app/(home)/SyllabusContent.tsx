@@ -1,6 +1,6 @@
 import { SYLLABUS_GPT_URL } from "@/services/ai/urls"
-import AiChat from "./StyledAiChat"
-import type { AiChatProps } from "@mitodl/smoot-design/ai"
+import AiChatDisplay from "./StyledAiChatDisplay"
+import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Link from "@mui/material/Link"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
@@ -12,6 +12,7 @@ import { learningResourcesQueries } from "@/services/learn"
 import { LearningResource } from "@mitodl/open-api-axios/v1"
 import { useEffect, useState } from "react"
 import CircularProgress from "@mui/material/CircularProgress"
+import MetadataDisplay from "./MetadataDisplay"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -113,53 +114,56 @@ const SyllabusContent = () => {
   return (
     <>
       <Typography variant="h3">SyllabusGPT</Typography>
-      <Grid container spacing={2} sx={{ padding: 2 }}>
-        <Grid
-          size={{ xs: 12, md: 8 }}
-          sx={{ position: "relative", minHeight: "600px" }}
-          inert={!isReady}
-        >
-          <AiChat
-            chatId="syllabus-gpt"
-            entryScreenEnabled={false}
-            conversationStarters={CONVERSATION_STARTERS}
-            requestOpts={requestOpts}
-          />
-          {!isReady && (
-            <CircularProgress
-              color="primary"
-              sx={{
-                position: "absolute",
-                zIndex: 1000,
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-              }}
+      <AiChatProvider chatId="syllabus-gpt" requestOpts={requestOpts}>
+        <Grid container spacing={2} sx={{ padding: 2 }}>
+          <Grid
+            size={{ xs: 12, md: 8 }}
+            sx={{ position: "relative", minHeight: "600px" }}
+            inert={!isReady}
+          >
+            <AiChatDisplay
+              entryScreenEnabled={false}
+              conversationStarters={CONVERSATION_STARTERS}
             />
-          )}
+            {!isReady && (
+              <CircularProgress
+                color="primary"
+                sx={{
+                  position: "absolute",
+                  zIndex: 1000,
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
+            )}
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <SelectModel
+              value={settings.syllabus_model}
+              onChange={(e) => setSettings({ syllabus_model: e.target.value })}
+            />
+            <TextField
+              size="small"
+              margin="normal"
+              label="Resource ID or Learn Resource URL"
+              fullWidth
+              /**
+               * don't use settings.syllabus_resource directly here to avoid
+               * so that we can keep the updates syncrhonous to avoid
+               * https://stackoverflow.com/questions/46000544/react-controlled-input-cursor-jumps
+               */
+              value={resourceText}
+              onChange={(e) => setResourceText(e.target.value)}
+              error={!!resourceParseError || resource.isError}
+              helperText={getResourceHelpText(resourceParseError, resource)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <MetadataDisplay />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <SelectModel
-            value={settings.syllabus_model}
-            onChange={(e) => setSettings({ syllabus_model: e.target.value })}
-          />
-          <TextField
-            size="small"
-            margin="normal"
-            label="Resource ID or Learn Resource URL"
-            fullWidth
-            /**
-             * don't use settings.syllabus_resource directly here to avoid
-             * so that we can keep the updates syncrhonous to avoid
-             * https://stackoverflow.com/questions/46000544/react-controlled-input-cursor-jumps
-             */
-            value={resourceText}
-            onChange={(e) => setResourceText(e.target.value)}
-            error={!!resourceParseError || resource.isError}
-            helperText={getResourceHelpText(resourceParseError, resource)}
-          />
-        </Grid>
-      </Grid>
+      </AiChatProvider>
     </>
   )
 }
