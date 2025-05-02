@@ -4,10 +4,11 @@ import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import SelectModel from "./SelectModel"
-import React, { useMemo } from "react"
-import { getRequestOpts, useSearchParamSettings } from "./util"
+import React from "react"
+import { useRequestOpts, useSearchParamSettings } from "./util"
 import SelectSearchURL from "./SelectSearchUrl"
 import MetadataDisplay from "./MetadataDisplay"
+import { Button } from "@mitodl/smoot-design"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -21,17 +22,15 @@ const RecommendationContent: React.FC = () => {
     search_url: "",
   })
 
-  const requestOpts = useMemo(
-    () =>
-      getRequestOpts({
-        apiUrl: RECOMMENDATION_GPT_URL,
-        extraBody: {
-          model: settings.rec_model,
-          search_url: settings.search_url,
-        },
-      }),
-    [settings.rec_model, settings.search_url],
-  )
+  const { requestOpts, requestNewThread, threadCount } = useRequestOpts({
+    apiUrl: RECOMMENDATION_GPT_URL,
+    extraBody: {
+      model: settings.rec_model,
+      search_url: settings.search_url,
+    },
+  })
+
+  const chatId = `recommendation-gpt-${threadCount}`
 
   return (
     <>
@@ -43,7 +42,7 @@ const RecommendationContent: React.FC = () => {
       >
         RecommendationGPT
       </Typography>
-      <AiChatProvider chatId="recommendation-gpt" requestOpts={requestOpts}>
+      <AiChatProvider chatId={chatId} requestOpts={requestOpts}>
         <Grid container spacing={2} sx={{ padding: 2 }}>
           <Grid
             size={{ xs: 12, md: 8 }}
@@ -56,16 +55,26 @@ const RecommendationContent: React.FC = () => {
           </Grid>
           <Grid
             size={{ xs: 12, md: 4 }}
-            sx={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+            }}
           >
             <SelectModel
               value={settings.rec_model}
-              onChange={(e) => setSettings({ rec_model: e.target.value })}
+              onChange={(e) => {
+                setSettings({ rec_model: e.target.value })
+                requestNewThread()
+              }}
             />
             <SelectSearchURL
               value={settings.search_url}
               onChange={(e) => setSettings({ search_url: e.target.value })}
             />
+            <Button variant="secondary" onClick={requestNewThread}>
+              Start new thread
+            </Button>
           </Grid>
           <Grid size={{ xs: 12 }}>
             <MetadataDisplay />

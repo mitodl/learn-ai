@@ -4,7 +4,7 @@ import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import SelectModel from "./SelectModel"
-import { getRequestOpts, useSearchParamSettings } from "./util"
+import { useRequestOpts, useSearchParamSettings } from "./util"
 
 import { useQuery } from "@tanstack/react-query"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
@@ -17,6 +17,7 @@ import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
 import { ContentFile } from "@mitodl/open-api-axios/v1"
 import { CircularProgress } from "@mui/material"
 import MetadataDisplay from "./MetadataDisplay"
+import { Button } from "@mitodl/smoot-design"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -128,7 +129,7 @@ const VideoCntent = () => {
     }
   }, [videoContenfiles])
 
-  const requestOpts = getRequestOpts({
+  const { requestOpts, threadCount, requestNewThread } = useRequestOpts({
     apiUrl: VIDEO_GPT_URL,
     extraBody: {
       model: settings.video_model,
@@ -137,11 +138,12 @@ const VideoCntent = () => {
     },
   })
   const isReady = !!transcriptBlockId
+  const chatId = `video-gpt-${threadCount}`
   return (
     <>
       <Typography variant="h3">VideoGPT</Typography>
       <AiChatProvider
-        chatId="video-gpt"
+        chatId={chatId}
         initialMessages={INITIAL_MESSAGES}
         requestOpts={requestOpts}
       >
@@ -179,7 +181,10 @@ const VideoCntent = () => {
             <OpenEdxLoginAlert />
             <SelectModel
               value={settings.video_model}
-              onChange={(e) => setSettings({ video_model: e.target.value })}
+              onChange={(e) => {
+                setSettings({ video_model: e.target.value })
+                requestNewThread()
+              }}
             />
             <OpenedxUnitSelectionForm
               selectedVertical={settings.video_vertical}
@@ -205,6 +210,9 @@ const VideoCntent = () => {
             {transcriptError && (
               <Alert severity="error">{transcriptError}</Alert>
             )}
+            <Button variant="secondary" onClick={requestNewThread}>
+              Start new thread
+            </Button>
           </Grid>
           <Grid size={{ xs: 12 }}>
             <MetadataDisplay />
