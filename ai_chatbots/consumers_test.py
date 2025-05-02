@@ -181,6 +181,19 @@ async def test_http_request(mocker):
     mock_handle.assert_called_once_with(msg["body"])
 
 
+async def test_http_request_error(mocker):
+    """Test that exceptions in the http_request function are logged."""
+    mock_log = mocker.patch("ai_chatbots.consumers.log.exception")
+    mock_handle = mocker.patch(
+        "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle",
+        side_effect=Exception("Test exception"),
+    )
+    consumer = consumers.RecommendationBotHttpConsumer()
+    await consumer.http_request({"body": "test"})
+    mock_handle.assert_called_once()
+    mock_log.assert_called_once_with("Error in handling consumer http_request")
+
+
 @pytest.mark.parametrize("has_layer", [True, False])
 async def test_disconnect(mocker, recommendation_consumer, has_layer):
     """Test the disconnect function of the recommendation agent."""

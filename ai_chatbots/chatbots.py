@@ -221,6 +221,7 @@ class BaseChatbot(ABC):
                     full_response += chunk[0].content
                     yield chunk[0].content
         except BadRequestError as error:
+            log.exception("Bad request error")
             # Format and yield an error message inside a hidden comment
             if hasattr(error, "response"):
                 error = error.response.json()
