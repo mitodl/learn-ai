@@ -236,7 +236,7 @@ class BaseChatbot(ABC):
                 error["error"]["message"] = (
                     "You have exceeded your AI usage limit. Please try again later."
                 )
-            yield f"<!-- {json.dumps(error)} -->".encode()
+            yield f"<!-- {json.dumps(error)} -->"
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
