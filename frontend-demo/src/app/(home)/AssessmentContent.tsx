@@ -1,6 +1,6 @@
 import { ASSESSMENT_GPT_URL } from "@/services/ai/urls"
-import AiChat from "./StyledAiChat"
-import type { AiChatProps } from "@mitodl/smoot-design/ai"
+import AiChatDisplay from "./StyledAiChatDisplay"
+import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import SelectModel from "./SelectModel"
@@ -9,6 +9,7 @@ import { useV2Block } from "@/services/openedx"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
 import CircularProgress from "@mui/material/CircularProgress"
+import MetadataDisplay from "./MetadataDisplay"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -50,60 +51,66 @@ const AssessmentContent = () => {
   return (
     <>
       <Typography variant="h3">AssessmentGPT</Typography>
-      <Grid container spacing={2} sx={{ padding: 2 }}>
-        <Grid
-          size={{ xs: 12, md: 8 }}
-          sx={{ position: "relative", minHeight: "600px" }}
-          inert={!isReady}
-        >
-          <AiChat
-            chatId="assessment-gpt"
-            entryScreenEnabled={false}
-            initialMessages={INITIAL_MESSAGES}
-            conversationStarters={CONVERSATION_STARTERS}
-            requestOpts={requestOpts}
-          />
-          {!isReady && (
-            <CircularProgress
-              color="primary"
-              sx={{
-                position: "absolute",
-                zIndex: 1000,
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-              }}
+      <AiChatProvider
+        chatId="assessment-gpt"
+        initialMessages={INITIAL_MESSAGES}
+        requestOpts={requestOpts}
+      >
+        <Grid container spacing={2} sx={{ padding: 2 }}>
+          <Grid
+            size={{ xs: 12, md: 8 }}
+            sx={{ position: "relative", minHeight: "600px" }}
+            inert={!isReady}
+          >
+            <AiChatDisplay
+              entryScreenEnabled={false}
+              conversationStarters={CONVERSATION_STARTERS}
             />
-          )}
+            {!isReady && (
+              <CircularProgress
+                color="primary"
+                sx={{
+                  position: "absolute",
+                  zIndex: 1000,
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
+            )}
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <OpenEdxLoginAlert />
+            <SelectModel
+              value={settings.tutor_model}
+              onChange={(e) => setSettings({ tutor_model: e.target.value })}
+            />
+            <OpenedxUnitSelectionForm
+              selectedVertical={settings.tutor_vertical}
+              selectedUnit={settings.tutor_unit}
+              defaultUnit={settings.tutor_unit}
+              defaultVertical={settings.tutor_vertical}
+              onSubmit={(values) => {
+                setSettings({
+                  tutor_unit: values.unit,
+                  tutor_vertical: values.vertical,
+                })
+              }}
+              onReset={() => {
+                setSettings({
+                  tutor_unit: null,
+                  tutor_vertical: null,
+                })
+              }}
+              unitFilterType="problem"
+              unitLabel="Problem"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <MetadataDisplay />
+          </Grid>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <OpenEdxLoginAlert />
-          <SelectModel
-            value={settings.tutor_model}
-            onChange={(e) => setSettings({ tutor_model: e.target.value })}
-          />
-          <OpenedxUnitSelectionForm
-            selectedVertical={settings.tutor_vertical}
-            selectedUnit={settings.tutor_unit}
-            defaultUnit={settings.tutor_unit}
-            defaultVertical={settings.tutor_vertical}
-            onSubmit={(values) => {
-              setSettings({
-                tutor_unit: values.unit,
-                tutor_vertical: values.vertical,
-              })
-            }}
-            onReset={() => {
-              setSettings({
-                tutor_unit: null,
-                tutor_vertical: null,
-              })
-            }}
-            unitFilterType="problem"
-            unitLabel="Problem"
-          />
-        </Grid>
-      </Grid>
+      </AiChatProvider>
     </>
   )
 }

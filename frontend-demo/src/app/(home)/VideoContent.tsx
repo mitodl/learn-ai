@@ -1,6 +1,6 @@
 import { VIDEO_GPT_URL } from "@/services/ai/urls"
-import AiChat from "./StyledAiChat"
-import type { AiChatProps } from "@mitodl/smoot-design/ai"
+import AiChatDisplay from "./StyledAiChatDisplay"
+import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import SelectModel from "./SelectModel"
@@ -16,6 +16,7 @@ import { useMemo } from "react"
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
 import { ContentFile } from "@mitodl/open-api-axios/v1"
 import { CircularProgress } from "@mui/material"
+import MetadataDisplay from "./MetadataDisplay"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -139,69 +140,77 @@ const VideoCntent = () => {
   return (
     <>
       <Typography variant="h3">VideoGPT</Typography>
-      <Grid container spacing={2} sx={{ padding: 2 }}>
-        <Grid
-          size={{ xs: 12, md: 8 }}
-          sx={{ position: "relative", minHeight: "600px" }}
-          inert={!isReady}
-        >
-          <AiChat
-            chatId="video-gpt"
-            entryScreenEnabled={false}
-            initialMessages={INITIAL_MESSAGES}
-            conversationStarters={CONVERSATION_STARTERS}
-            requestOpts={requestOpts}
-          />
-          {!isReady && (
-            <CircularProgress
-              color="primary"
-              sx={{
-                position: "absolute",
-                zIndex: 1000,
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-              }}
+      <AiChatProvider
+        chatId="video-gpt"
+        initialMessages={INITIAL_MESSAGES}
+        requestOpts={requestOpts}
+      >
+        <Grid container spacing={2} sx={{ padding: 2 }}>
+          <Grid
+            size={{ xs: 12, md: 8 }}
+            sx={{ position: "relative", minHeight: "600px" }}
+            inert={!isReady}
+          >
+            <AiChatDisplay
+              entryScreenEnabled={false}
+              conversationStarters={CONVERSATION_STARTERS}
             />
-          )}
-        </Grid>
-        <Grid
-          size={{ xs: 12, md: 4 }}
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-          }}
-        >
-          <OpenEdxLoginAlert />
-          <SelectModel
-            value={settings.video_model}
-            onChange={(e) => setSettings({ video_model: e.target.value })}
-          />
-          <OpenedxUnitSelectionForm
-            selectedVertical={settings.video_vertical}
-            selectedUnit={settings.video_unit}
-            defaultUnit={settings.video_unit}
-            defaultVertical={settings.video_vertical}
-            onSubmit={(values) => {
-              setSettings({
-                video_unit: values.unit,
-                video_vertical: values.vertical,
-              })
+            {!isReady && (
+              <CircularProgress
+                color="primary"
+                sx={{
+                  position: "absolute",
+                  zIndex: 1000,
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
+            )}
+          </Grid>
+          <Grid
+            size={{ xs: 12, md: 4 }}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
             }}
-            onReset={() => {
-              setSettings({
-                video_unit: null,
-                video_vertical: null,
-              })
-            }}
-            unitFilterType="video"
-            unitLabel="Video"
-          />
-          {videoContenfiles.isLoading && <Typography>Loading...</Typography>}
-          {transcriptError && <Alert severity="error">{transcriptError}</Alert>}
+          >
+            <OpenEdxLoginAlert />
+            <SelectModel
+              value={settings.video_model}
+              onChange={(e) => setSettings({ video_model: e.target.value })}
+            />
+            <OpenedxUnitSelectionForm
+              selectedVertical={settings.video_vertical}
+              selectedUnit={settings.video_unit}
+              defaultUnit={settings.video_unit}
+              defaultVertical={settings.video_vertical}
+              onSubmit={(values) => {
+                setSettings({
+                  video_unit: values.unit,
+                  video_vertical: values.vertical,
+                })
+              }}
+              onReset={() => {
+                setSettings({
+                  video_unit: null,
+                  video_vertical: null,
+                })
+              }}
+              unitFilterType="video"
+              unitLabel="Video"
+            />
+            {videoContenfiles.isLoading && <Typography>Loading...</Typography>}
+            {transcriptError && (
+              <Alert severity="error">{transcriptError}</Alert>
+            )}
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <MetadataDisplay />
+          </Grid>
         </Grid>
-      </Grid>
+      </AiChatProvider>
     </>
   )
 }

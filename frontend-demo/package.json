@@ -19,7 +19,7 @@
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mitodl/open-api-axios": "^2025.4.8",
-    "@mitodl/smoot-design": "^6.2.0",
+    "@mitodl/smoot-design": "^6.3.0",
     "@mui/lab": "^6.0.1-beta.34",
     "@mui/material": "^6.1.8",
     "@mui/material-nextjs": "^6.1.8",

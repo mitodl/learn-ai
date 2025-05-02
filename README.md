@@ -17,7 +17,8 @@ Learn-AI follows the same [initial setup steps outlined in the common OL web app
 Run through those steps **including the addition of `/etc/hosts` aliases and the optional step for running the
 `createsuperuser` command**.
 
-This app runs locally on port 8002.
+- The backend app runs locally on port 8005.
+- A simple frontend sandbox runs at port 8003.
 
 You can start it by running `docker compose up`
 
@@ -28,15 +29,20 @@ Configuration can be put in the following file which is gitignored:
 ```
 mit-learn/
   ├── env/
-      └── backend.local.env
-
+      ├── backend.local.env
+      └── frontend.local.env
 ```
 
 You will need at minimum the following environment variable to run locally:
 
 ```
+# In backend.local.env
 OPENAI_API_KEY=<your_openai_api_key>
 ```
+
+### Frontend Configuration
+
+Some parts of the frontend sandbox are query OpenEdx APIs. In lieue of a localally running OpenEdx instance in-sync with a Learn instance, you can proxy OpenEdx requests to an RC instance. For this to work, you must add `OPENEDX_SESSION_COOKIE_VALUE` to your `frontend.local.env` file. See `frontend.env` for details.
 
 ## Committing & Formatting
 

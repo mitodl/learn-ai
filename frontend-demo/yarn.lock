@@ -34,6 +34,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@ai-sdk/react@npm:1.2.10":
+  version: 1.2.10
+  resolution: "@ai-sdk/react@npm:1.2.10"
+  dependencies:
+    "@ai-sdk/provider-utils": "npm:2.2.7"
+    "@ai-sdk/ui-utils": "npm:1.2.9"
+    swr: "npm:^2.2.5"
+    throttleit: "npm:2.1.0"
+  peerDependencies:
+    react: ^18 || ^19 || ^19.0.0-rc
+    zod: ^3.23.8
+  peerDependenciesMeta:
+    zod:
+      optional: true
+  checksum: 10c0/8767dd04790f65ea481fc9cadc307a5ef4974a1ec2b8b5365008e0d305b52b9e3b2624286341a9f50a6b4cc3daa787818ce285ee973b3ea108c09a24a5066297
+  languageName: node
+  linkType: hard
+
 "@ai-sdk/react@npm:1.2.9":
   version: 1.2.9
   resolution: "@ai-sdk/react@npm:1.2.9"
@@ -62,6 +80,19 @@ __metadata:
   peerDependencies:
     zod: ^3.23.8
   checksum: 10c0/99d8e2b43034dbbc2110e4981c4ba9efc046ee3768e1022b8a64e436eadc62591f2b86020bd36da7bc02c6872f56697d191ef1ab8f45cd02cbb6852ded7a3f1d
+  languageName: node
+  linkType: hard
+
+"@ai-sdk/ui-utils@npm:1.2.9":
+  version: 1.2.9
+  resolution: "@ai-sdk/ui-utils@npm:1.2.9"
+  dependencies:
+    "@ai-sdk/provider": "npm:1.1.3"
+    "@ai-sdk/provider-utils": "npm:2.2.7"
+    zod-to-json-schema: "npm:^3.24.1"
+  peerDependencies:
+    zod: ^3.23.8
+  checksum: 10c0/482f988b926571dd0e53ea0781c460da9b313b616e7f87dccb793d6563805047fab82992f131598fac40d194070451ca8e2e90fdde162db877e9e41ba7046784
   languageName: node
   linkType: hard
 
@@ -1288,13 +1319,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/smoot-design@npm:^6.2.0":
-  version: 6.2.0
-  resolution: "@mitodl/smoot-design@npm:6.2.0"
+"@mitodl/smoot-design@npm:^6.3.0":
+  version: 6.3.0
+  resolution: "@mitodl/smoot-design@npm:6.3.0"
   dependencies:
+    "@ai-sdk/react": "npm:1.2.10"
     "@emotion/cache": "npm:^11.14.0"
     "@mui/utils": "npm:^6.1.6"
-    ai: "npm:^4.0.13"
     classnames: "npm:^2.5.1"
     lodash: "npm:^4.17.21"
     react-markdown: "npm:^10.0.0"
@@ -1310,7 +1341,7 @@ __metadata:
     "@remixicon/react": ^4.2.0
     react: ^18 || ^19
     react-dom: ^18 || ^19
-  checksum: 10c0/feabff73f6ee3374cdcd1d9202682e1d61216d8743394b021fd11ca8fe1efbd0d8409f540564dc48fea170952c272a72af095a8df1bb5e038bc270b14cf4bb23
+  checksum: 10c0/75a8be6fad3d299ecbb9c1b7bb861c9e31d1b8af0b647e0b13e42ab02ed90cda71097b5e33804c30176f2d14c480e31444fee0f35ef9d797103693e4c20d88b1
   languageName: node
   linkType: hard
 
@@ -2817,7 +2848,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ai@npm:^4.0.13, ai@npm:^4.0.25":
+"ai@npm:^4.0.25":
   version: 4.3.9
   resolution: "ai@npm:4.3.9"
   dependencies:
@@ -10159,7 +10190,7 @@ __metadata:
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
     "@mitodl/open-api-axios": "npm:^2025.4.8"
-    "@mitodl/smoot-design": "npm:^6.2.0"
+    "@mitodl/smoot-design": "npm:^6.3.0"
     "@mui/lab": "npm:^6.0.1-beta.34"
     "@mui/material": "npm:^6.1.8"
     "@mui/material-nextjs": "npm:^6.1.8"
