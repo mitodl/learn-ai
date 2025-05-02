@@ -1319,9 +1319,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/smoot-design@npm:0.0.0-cf541fb":
-  version: 0.0.0-cf541fb
-  resolution: "@mitodl/smoot-design@npm:0.0.0-cf541fb"
+"@mitodl/smoot-design@npm:^6.3.0":
+  version: 6.3.0
+  resolution: "@mitodl/smoot-design@npm:6.3.0"
   dependencies:
     "@ai-sdk/react": "npm:1.2.10"
     "@emotion/cache": "npm:^11.14.0"
@@ -1341,7 +1341,7 @@ __metadata:
     "@remixicon/react": ^4.2.0
     react: ^18 || ^19
     react-dom: ^18 || ^19
-  checksum: 10c0/c60ee4aa81713eb48f531ea724f1a27712e67e875a6b415f623c7d184b1c441bdf643dde441f3eaa8047321ca9673df9bb23def97f4e11e5a738656dd75603c5
+  checksum: 10c0/75a8be6fad3d299ecbb9c1b7bb861c9e31d1b8af0b647e0b13e42ab02ed90cda71097b5e33804c30176f2d14c480e31444fee0f35ef9d797103693e4c20d88b1
   languageName: node
   linkType: hard
 
@@ -10190,7 +10190,7 @@ __metadata:
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
     "@mitodl/open-api-axios": "npm:^2025.4.8"
-    "@mitodl/smoot-design": "npm:0.0.0-cf541fb"
+    "@mitodl/smoot-design": "npm:^6.3.0"
     "@mui/lab": "npm:^6.0.1-beta.34"
     "@mui/material": "npm:^6.1.8"
     "@mui/material-nextjs": "npm:^6.1.8"
