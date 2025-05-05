@@ -6,13 +6,14 @@ import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import TextField from "@mui/material/TextField"
 import SelectModel from "./SelectModel"
-import { getRequestOpts, useSearchParamSettings } from "./util"
+import { useRequestOpts, useSearchParamSettings } from "./util"
 import { useQuery, UseQueryResult } from "@tanstack/react-query"
 import { learningResourcesQueries } from "@/services/learn"
 import { LearningResource } from "@mitodl/open-api-axios/v1"
 import { useEffect, useState } from "react"
 import CircularProgress from "@mui/material/CircularProgress"
 import MetadataDisplay from "./MetadataDisplay"
+import { Button } from "@mitodl/smoot-design"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -102,7 +103,7 @@ const SyllabusContent = () => {
     enabled: !!resourceId,
   })
 
-  const requestOpts = getRequestOpts({
+  const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
     apiUrl: SYLLABUS_GPT_URL,
     extraBody: {
       model: settings.syllabus_model,
@@ -111,10 +112,11 @@ const SyllabusContent = () => {
   })
 
   const isReady = resource.isSuccess
+  const chatId = `syllabus-gpt-${chatSuffix}`
   return (
     <>
       <Typography variant="h3">SyllabusGPT</Typography>
-      <AiChatProvider chatId="syllabus-gpt" requestOpts={requestOpts}>
+      <AiChatProvider chatId={chatId} requestOpts={requestOpts}>
         <Grid container spacing={2} sx={{ padding: 2 }}>
           <Grid
             size={{ xs: 12, md: 8 }}
@@ -138,10 +140,20 @@ const SyllabusContent = () => {
               />
             )}
           </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid
+            size={{ xs: 12, md: 4 }}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+            }}
+          >
             <SelectModel
               value={settings.syllabus_model}
-              onChange={(e) => setSettings({ syllabus_model: e.target.value })}
+              onChange={(e) => {
+                setSettings({ syllabus_model: e.target.value })
+                requestNewThread()
+              }}
             />
             <TextField
               size="small"
@@ -158,6 +170,9 @@ const SyllabusContent = () => {
               error={!!resourceParseError || resource.isError}
               helperText={getResourceHelpText(resourceParseError, resource)}
             />
+            <Button variant="secondary" onClick={requestNewThread}>
+              Start new thread
+            </Button>
           </Grid>
           <Grid size={{ xs: 12 }}>
             <MetadataDisplay />
