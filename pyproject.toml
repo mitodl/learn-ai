@@ -64,7 +64,7 @@ opentelemetry-instrumentation-celery = ">=0.52b0"
 opentelemetry-instrumentation-requests = ">=0.52b0"
 opentelemetry-exporter-otlp = ">=1.31.0"
 django-filter = "^25.1"
-open-learning-ai-tutor = {git = "https://github.com/mitodl/open-learning-ai-tutor.git", rev = "09e88b8cf856d807b193e7a4549fb42f79367660"}
+open-learning-ai-tutor = {git = "https://github.com/mitodl/open-learning-ai-tutor.git", rev = "05893bc17751b57ce78161d6a28729b763d99cf1"}
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"
