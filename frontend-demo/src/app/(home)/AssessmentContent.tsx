@@ -40,7 +40,7 @@ const AssessmentContent = () => {
     (key) => key !== vertical.data?.root,
   )
 
-  const { requestOpts, requestNewThread, threadCount } = useRequestOpts({
+  const { requestOpts, requestNewThread, chatSuffix } = useRequestOpts({
     apiUrl: ASSESSMENT_GPT_URL,
     extraBody: {
       model: settings.tutor_model,
@@ -50,7 +50,7 @@ const AssessmentContent = () => {
   })
   const isReady = vertical.isSuccess
 
-  const chatId = `assessment-gpt-${threadCount}`
+  const chatId = `assessment-gpt-${chatSuffix}`
   return (
     <>
       <Typography variant="h3">AssessmentGPT</Typography>

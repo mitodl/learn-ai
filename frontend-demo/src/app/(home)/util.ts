@@ -1,6 +1,6 @@
 import type { AiChatProps } from "@mitodl/smoot-design/ai"
 import { useSearchParams } from "next/navigation"
-import { useMemo, useRef, useState } from "react"
+import { useId, useMemo, useRef, useState } from "react"
 
 /**
  * Convenience for AiChat component to compute requestOpts settings
@@ -34,9 +34,9 @@ const getRequestOpts = <Body extends Record<string, unknown>>({
  *
  * When the requestNewThread function is called, it will:
  * 1. configure the next message sent to chatbot to clear history
- * 2. increment the threadCount state variable
+ * 2. return a new chatSuffix to be used in the AiChat component
  *
- * Incrementing the threadCount variable is to facilitate resetting the state
+ * Incrementing the chatSuffix variable is to facilitate resetting the state
  * of the AiChat component.
  */
 const useRequestOpts = <Body extends Record<string, unknown>>({
@@ -48,7 +48,7 @@ const useRequestOpts = <Body extends Record<string, unknown>>({
 }): {
   requestOpts: AiChatProps["requestOpts"]
   requestNewThread: () => void
-  threadCount: number
+  chatSuffix: string
 } => {
   const clearHistoryRef = useRef(false)
   const [threadCount, setThreadCount] = useState(0)
@@ -74,7 +74,9 @@ const useRequestOpts = <Body extends Record<string, unknown>>({
     clearHistoryRef.current = true
     setThreadCount((count) => count + 1)
   }
-  return { requestOpts, requestNewThread, threadCount }
+  const id = useId()
+  const chatSuffix = `${id}-${threadCount}`
+  return { requestOpts, requestNewThread, chatSuffix }
 }
 
 /**

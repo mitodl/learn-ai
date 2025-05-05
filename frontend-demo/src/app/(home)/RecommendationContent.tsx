@@ -22,7 +22,7 @@ const RecommendationContent: React.FC = () => {
     search_url: "",
   })
 
-  const { requestOpts, requestNewThread, threadCount } = useRequestOpts({
+  const { requestOpts, requestNewThread, chatSuffix } = useRequestOpts({
     apiUrl: RECOMMENDATION_GPT_URL,
     extraBody: {
       model: settings.rec_model,
@@ -30,7 +30,7 @@ const RecommendationContent: React.FC = () => {
     },
   })
 
-  const chatId = `recommendation-gpt-${threadCount}`
+  const chatId = `recommendation-gpt-${chatSuffix}`
 
   return (
     <>

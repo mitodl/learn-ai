@@ -129,7 +129,7 @@ const VideoCntent = () => {
     }
   }, [videoContenfiles])
 
-  const { requestOpts, threadCount, requestNewThread } = useRequestOpts({
+  const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
     apiUrl: VIDEO_GPT_URL,
     extraBody: {
       model: settings.video_model,
@@ -138,7 +138,7 @@ const VideoCntent = () => {
     },
   })
   const isReady = !!transcriptBlockId
-  const chatId = `video-gpt-${threadCount}`
+  const chatId = `video-gpt-${chatSuffix}`
   return (
     <>
       <Typography variant="h3">VideoGPT</Typography>

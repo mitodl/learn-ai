@@ -103,7 +103,7 @@ const SyllabusContent = () => {
     enabled: !!resourceId,
   })
 
-  const { requestOpts, threadCount, requestNewThread } = useRequestOpts({
+  const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
     apiUrl: SYLLABUS_GPT_URL,
     extraBody: {
       model: settings.syllabus_model,
@@ -112,7 +112,7 @@ const SyllabusContent = () => {
   })
 
   const isReady = resource.isSuccess
-  const chatId = `syllabus-gpt-${threadCount}`
+  const chatId = `syllabus-gpt-${chatSuffix}`
   return (
     <>
       <Typography variant="h3">SyllabusGPT</Typography>
