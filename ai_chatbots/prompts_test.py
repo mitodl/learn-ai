@@ -16,10 +16,12 @@ def test_langsmith_prompt_create(mocker):
     """Test that the langsmith_prompt function creates a prompt if it doesn't exist."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
     mock_pull = mocker.patch(
-        "ai_chatbots.utils.LangsmithClient.pull_prompt",
+        "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt",
         side_effect=LangSmithNotFoundError,
     )
-    mock_push = mocker.patch("ai_chatbots.utils.LangsmithClient.push_prompt")
+    mock_push = mocker.patch(
+        "open_learning_ai_tutor.prompts.LangsmithClient.push_prompt"
+    )
     prompt = langsmith_prompt_template(
         chatbots.ResourceRecommendationBot.PROMPT_TEMPLATE, prompts.PROMPT_MAPPING
     )
@@ -36,10 +38,12 @@ def test_langsmith_prompt_retrieve(mocker):
     os.environ["LANGSMITH_API_KEY"] = "test_key"
     os.environ["ENVIRONMENT"] = "rc"
     mock_pull = mocker.patch(
-        "ai_chatbots.utils.LangsmithClient.pull_prompt",
+        "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt",
         return_value=ChatPromptTemplate([("system", prompts.PROMPT_VIDEO_GPT)]),
     )
-    mock_push = mocker.patch("ai_chatbots.utils.LangsmithClient.push_prompt")
+    mock_push = mocker.patch(
+        "open_learning_ai_tutor.prompts.LangsmithClient.push_prompt"
+    )
     prompt = langsmith_prompt_template(
         chatbots.VideoGPTBot.PROMPT_TEMPLATE, "video_gpt_rc"
     )
@@ -53,17 +57,24 @@ def test_get_system_prompt_no_cache(mocker, has_cache):
     """Test that the get_system_prompt function retrieves the system prompt from langsmith."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
     os.environ["ENVIRONMENT"] = "prod"
+    os.environ["CELERY_BROKER_URL"] = ""
     prompt_key = "syllabus_prod"
+
+    def get_test_cache():
+        return cache
+
     if has_cache:
         cache.set(prompt_key, prompts.PROMPT_SYLLABUS)
+        assert cache.get(prompt_key) == prompts.PROMPT_SYLLABUS
     else:
         cache.delete(prompt_key)
+        assert cache.get(prompt_key) is None
     mock_pull = mocker.patch(
         "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt",
         return_value=ChatPromptTemplate([("system", prompts.PROMPT_SYLLABUS)]),
     )
     prompt = get_system_prompt(
-        chatbots.SyllabusBot.PROMPT_TEMPLATE, prompts.PROMPT_MAPPING, get_django_cache
+        chatbots.SyllabusBot.PROMPT_TEMPLATE, prompts.PROMPT_MAPPING, get_test_cache
     )
     assert mock_pull.call_count == (0 if has_cache else 1)
     assert prompt == prompts.PROMPT_SYLLABUS
@@ -73,6 +84,7 @@ def test_get_system_prompt_no_cache(mocker, has_cache):
 def test_get_system_prompt_no_langsmith(mocker):
     """get_system_prompt function should get the correct string if langsmith is not enabled"""
     os.environ["LANGSMITH_API_KEY"] = ""
+    cache = get_django_cache()
     cache.clear()
     mock_pull = mocker.patch(
         "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt"
