@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableBinding
 from open_learning_ai_tutor.constants import Intent
 from open_learning_ai_tutor.utils import tutor_output_to_json
+from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
@@ -728,3 +729,21 @@ async def test_video_gpt_bot_tool(
         timeout=30,
     )
     assert_json_equal(json.loads(results), expected_results)
+
+
+async def test_bad_request(mocker, mock_checkpointer):
+    """Test that the bad_request function logs the exception"""
+    mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")
+    chatbot = VideoGPTBot("anonymous", mock_checkpointer)
+    chatbot.agent.astream = mocker.Mock(
+        side_effect=BadRequestError(
+            response=mocker.Mock(
+                json=mocker.Mock(return_value={"error": {"message": "Bad request"}})
+            ),
+            message="",
+            body="",
+        )
+    )
+    async for _ in chatbot.get_completion("hello"):
+        chatbot.agent.astream.assert_called_once()
+        mock_log.assert_called_once_with("Bad request error")

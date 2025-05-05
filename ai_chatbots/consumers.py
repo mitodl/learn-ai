@@ -342,6 +342,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         """
         try:
             await self.handle(message.get("body"))
+        except:  # noqa: E722
+            log.exception("Error in handling consumer http_request")
         finally:
             await self.disconnect()
 
