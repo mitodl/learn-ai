@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
@@ -552,7 +553,7 @@ class TutorBot(BaseChatbot):
             )
             await create_tutorbot_output(self.thread_id, json_output)
             response = new_history[-1].content
-            yield response
+            yield replace_math_tags(response)
             await self.send_posthog_event(
                 message, response, await self.get_tool_metadata()
             )
@@ -560,6 +561,20 @@ class TutorBot(BaseChatbot):
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
+
+
+# react-markdown expects Mathjax deliminators to be $...$ or $$...$$
+# the prompt for the tutorbot asks for Mathjax tags with $ format but
+# the LLM does not get it right all the time
+# this function replaces the Mathjax tags with the correct format
+# eventually we will probably be able to remove this as LLMs get better
+def replace_math_tags(input_string):
+    r"""
+    Replace instances of \(...\) and \[...\] Mathjax tags with $...$
+    and $$...$$ tags.
+    """
+    input_string = re.sub(r"\\\((.*?)\\\)", r"$\1$", input_string)
+    return re.sub(r"\\\[(.*?)\\\]", r"$$\1$$", input_string)
 
 
 def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):

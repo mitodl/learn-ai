@@ -4186,13 +4186,13 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.0.7"
+version = "0.0.8"
 description = "AI powered tutor"
 optional = false
 python-versions = "<4.0,>=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.0.7-py3-none-any.whl", hash = "sha256:acb35382aa318b7317fec590126852ac04a2ffce12f9c484d368feb12685a404"},
-    {file = "open_learning_ai_tutor-0.0.7.tar.gz", hash = "sha256:8f829d2cf1c9dadd882d81854ae93794ea45f53d70ad21653ef88c184e9ee6d4"},
+    {file = "open_learning_ai_tutor-0.0.8-py3-none-any.whl", hash = "sha256:4c90c63cb87e560f83a34a0bdff207738daf7404a4a753963a49e8a1a3aabd91"},
+    {file = "open_learning_ai_tutor-0.0.8.tar.gz", hash = "sha256:2fb35d40711b55148494158411b525cfb0bc4f567d9f38d896322b0873da3552"},
 ]
 
 [package.dependencies]
@@ -7785,4 +7785,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "6d7b934fd70a4dbaaa4fdf79833cb0e0542d7ce0cfde49e64e7e0ce28e2cf85d"
+content-hash = "e878769cc096a790d4d883c489af12614892e430b384cb58be4ed05c20151af2"

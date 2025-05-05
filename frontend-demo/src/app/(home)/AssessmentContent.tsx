@@ -10,6 +10,7 @@ import OpenEdxLoginAlert from "./OpenedxLoginAlert"
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
 import CircularProgress from "@mui/material/CircularProgress"
 import MetadataDisplay from "./MetadataDisplay"
+import { MathJaxContext } from "better-react-mathjax"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -62,10 +63,13 @@ const AssessmentContent = () => {
             sx={{ position: "relative", minHeight: "600px" }}
             inert={!isReady}
           >
-            <AiChatDisplay
-              entryScreenEnabled={false}
-              conversationStarters={CONVERSATION_STARTERS}
-            />
+            <MathJaxContext>
+              <AiChatDisplay
+                entryScreenEnabled={false}
+                conversationStarters={CONVERSATION_STARTERS}
+                useMathJax={true}
+              />
+            </MathJaxContext>
             {!isReady && (
               <CircularProgress
                 color="primary"
