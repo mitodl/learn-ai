@@ -3,6 +3,8 @@
 import logging
 from enum import Enum
 
+from django.conf import settings
+from django.core.cache import BaseCache, caches
 from named_enum import ExtendedEnum
 
 log = logging.getLogger(__name__)
@@ -22,3 +24,16 @@ def enum_zip(label: str, enum: ExtendedEnum) -> type[Enum]:
 
     """
     return Enum(label, dict(zip(enum.names(), enum.names())))
+
+
+def get_django_cache() -> BaseCache:
+    """
+    Get the Django redis cache if enabled, default cache otherwise.
+
+    Returns:
+        The Django cache.
+
+    """
+    if settings.CELERY_BROKER_URL:
+        return caches["redis"]
+    return caches["default"]
