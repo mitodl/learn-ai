@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.6.1 (Released May 08, 2025)
+-------------
+
+- use mathjax for tutor (#168)
+- Make sure any exceptions are  logged (#173)
+
 Version 0.6.0 (Released May 05, 2025)
 -------------
 
