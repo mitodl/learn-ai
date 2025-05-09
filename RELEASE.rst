@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.6.2
+-------------
+
+- allow newlines in display math replacement (#180)
+- Update dependency Django to v4.2.21 [SECURITY] (#179)
+- Start new thread when changing model in sandbox (#175)
+
 Version 0.6.1 (Released May 08, 2025)
 -------------
 
