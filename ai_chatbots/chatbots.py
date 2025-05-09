@@ -563,6 +563,10 @@ class TutorBot(BaseChatbot):
             log.exception("Error running AI agent")
 
 
+INLINE_MATH_REGEX = re.compile(r"\\\((.*?)\\\)")
+DISPLAY_MATH_REGEX = re.compile(r"\\\[(.*?)\\\]", re.DOTALL)
+
+
 # react-markdown expects Mathjax deliminators to be $...$ or $$...$$
 # the prompt for the tutorbot asks for Mathjax tags with $ format but
 # the LLM does not get it right all the time
@@ -573,8 +577,8 @@ def replace_math_tags(input_string):
     Replace instances of \(...\) and \[...\] Mathjax tags with $...$
     and $$...$$ tags.
     """
-    input_string = re.sub(r"\\\((.*?)\\\)", r"$\1$", input_string)
-    return re.sub(r"\\\[(.*?)\\\]", r"$$\1$$", input_string)
+    input_string = re.sub(INLINE_MATH_REGEX, r"$\1$", input_string)
+    return re.sub(DISPLAY_MATH_REGEX, r"$$\1$$", input_string)
 
 
 def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):

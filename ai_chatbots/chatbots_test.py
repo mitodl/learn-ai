@@ -22,6 +22,7 @@ from ai_chatbots.chatbots import (
     VideoGPTBot,
     get_history,
     get_problem_from_edx_block,
+    replace_math_tags,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -747,3 +748,34 @@ async def test_bad_request(mocker, mock_checkpointer):
     async for _ in chatbot.get_completion("hello"):
         chatbot.agent.astream.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
+
+
+def test_math_replacements():
+    """Test math replacement for tutor bot"""
+    input_text = r"""Hello \(E=mc^2\) and \(a^2 + b^2 = c^2\). Also
+
+\[
+F = ma
+\]
+
+and
+
+\[ PV = NkT \]
+
+Bye now.
+"""
+
+    expected_output = r"""Hello $E=mc^2$ and $a^2 + b^2 = c^2$. Also
+
+$$
+F = ma
+$$
+
+and
+
+$$ PV = NkT $$
+
+Bye now.
+"""
+    output_text = replace_math_tags(input_text)
+    assert output_text == expected_output
