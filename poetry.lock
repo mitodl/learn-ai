@@ -4186,13 +4186,13 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.0.8"
+version = "0.0.9"
 description = "AI powered tutor"
 optional = false
 python-versions = "<4.0,>=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.0.8-py3-none-any.whl", hash = "sha256:4c90c63cb87e560f83a34a0bdff207738daf7404a4a753963a49e8a1a3aabd91"},
-    {file = "open_learning_ai_tutor-0.0.8.tar.gz", hash = "sha256:2fb35d40711b55148494158411b525cfb0bc4f567d9f38d896322b0873da3552"},
+    {file = "open_learning_ai_tutor-0.0.9-py3-none-any.whl", hash = "sha256:705253dc1d6e2e5e4a9c1945276189d979917e94f1bd46b62262fdab6d4eaa5a"},
+    {file = "open_learning_ai_tutor-0.0.9.tar.gz", hash = "sha256:9acf5f81be44ae1c0a2b8d46832cf6d3152df0c337761c86c4fc397901c63bcf"},
 ]
 
 [package.dependencies]
@@ -4201,6 +4201,7 @@ langchain = ">=0.3.20,<0.4.0"
 langchain-core = ">=0.3.45,<0.4.0"
 langchain-experimental = ">=0.3.4,<0.4.0"
 langgraph = ">=0.3.10,<0.4.0"
+langsmith = "0.3.32"
 
 [[package]]
 name = "openai"
@@ -7785,4 +7786,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "4d81f3539dbffe7d8c13b0e94ed1fdbade2ca565384ead20e6252d702a4b51ae"
+content-hash = "f1229593f469a02053be696f9f866a54f802d35c51e7498e2fee8a27cc812776"
