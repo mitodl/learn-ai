@@ -12,8 +12,8 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework.exceptions import ValidationError
 
-from ai_chatbots import consumers
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, VideoGPTBot
+from ai_chatbots import consumers, prompts
+from ai_chatbots.chatbots import SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
@@ -115,7 +115,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
         model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
     assert recommendation_consumer.bot.instructions == (
-        instructions if instructions else ResourceRecommendationBot.INSTRUCTIONS
+        instructions if instructions else prompts.PROMPT_RECOMMENDATION
     )
     default_state = {"search_url": [settings.AI_MIT_SEARCH_URL]}
     mock_completion.assert_called_once_with(message, extra_state=default_state)

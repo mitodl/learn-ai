@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langsmith import trace
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
 
@@ -298,10 +299,23 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             # Start to send the response, including the headers
             await self.start_response(thread_id=thread_id, status=200, cookies=cookies)
             # Stream an LLM
-            async for chunk in self.bot.get_completion(
-                message_text, extra_state=extra_state
-            ):
-                await self.send_chunk(chunk)
+            with trace(
+                name=self.bot.JOB_ID,
+                tags=[self.bot.JOB_ID],
+                inputs={"messages": message_text},
+                metadata={
+                    "thread_id": thread_id,
+                    "user_id": self.user_id,
+                    "model": self.bot.model,
+                },
+            ) as langsmith_trace:
+                output = []
+                async for chunk in self.bot.get_completion(
+                    message_text, extra_state=extra_state
+                ):
+                    await self.send_chunk(chunk)
+                    output.append(chunk)
+                langsmith_trace.end(outputs={"output": "".join(output)})
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)

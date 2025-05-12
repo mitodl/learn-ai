@@ -627,6 +627,9 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
     name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
+AI_PROMPT_CACHE_DURATION = get_int(
+    name="AI_PROMPT_CACHE_DURATION", default=60 * 60 * 24 * 28
+)  # 28 days
 
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
@@ -641,6 +644,10 @@ AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10
 AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
     name="AI_UNSUPPORTED_TEMP_MODELS", default=["openai/o3-mini"]
 )
+AI_PROMPT_CACHE_FUNCTION = get_string(
+    name="AI_PROMPT_CACHE_FUNCTION", default="ai_chatbots.utils.get_django_cache"
+)
+LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
 
 # APISIX middleware settings
 APISIX_USERDATA_MAP = {
