@@ -1,6 +1,7 @@
 """Tests for AI chatbots."""
 
 import json
+import os
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
@@ -37,6 +38,14 @@ from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def mock_settings(settings):
+    """Langsmith API should be blank for most tests"""
+    os.environ["LANGSMITH_API_KEY"] = ""
+    settings.LANGSMITH_API_KEY = ""
+    return settings
 
 
 @pytest.fixture(autouse=True)

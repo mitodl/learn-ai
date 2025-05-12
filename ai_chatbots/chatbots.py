@@ -25,6 +25,7 @@ from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from open_learning_ai_tutor.message_tutor import message_tutor
+from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
 from open_learning_ai_tutor.utils import (
     json_to_intent_list,
@@ -37,7 +38,9 @@ from typing_extensions import TypedDict
 from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.prompts import PROMPT_MAPPING
 from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
+from ai_chatbots.utils import get_django_cache
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ class BaseChatbot(ABC):
     Base AI chatbot class
     """
 
-    INSTRUCTIONS = "Provide instructions for the LLM"
+    PROMPT_TEMPLATE = "base"
 
     # For LiteLLM tracking purposes
     TASK_NAME = "BASE_TASK"
@@ -68,7 +71,13 @@ class BaseChatbot(ABC):
         self.bot_name = name
         self.model = model or settings.AI_DEFAULT_MODEL
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
-        self.instructions = instructions or self.INSTRUCTIONS
+        self.instructions = (
+            instructions
+            or get_system_prompt(self.PROMPT_TEMPLATE, PROMPT_MAPPING, get_django_cache)
+            if self.PROMPT_TEMPLATE
+            else None
+        )
+        log.info("AI instructions: %s", self.instructions)
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
         self.config = {"configurable": {"thread_id": self.thread_id}}
@@ -269,62 +278,9 @@ class ResourceRecommendationBot(BaseChatbot):
     then recommends the best results to the user based on their query.
     """
 
+    PROMPT_TEMPLATE = "recommendation"
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
-
-    INSTRUCTIONS = """You are an assistant helping users find courses from a catalog
-of learning resources. Users can ask about specific topics, levels, or recommendations
-based on their interests or goals.  Do not answer questions that are not related to
-educational resources at MIT.
-
-Your job:
-1. Understand the user's intent AND BACKGROUND based on their message.
-2. Use the available function to gather information or recommend courses.
-3. Provide a clear, user-friendly explanation of your recommendations if search results
-are found.
-
-
-Run the tool to find learning resources that the user is interested in,
-and answer only based on the function search
-results.
-
-VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
-ANSWER QUESTIONS.
-
-If no results are returned, say you could not find any relevant
-resources.  Don't say you're going to try again.  Ask the user if they would like to
-modify their preferences or ask a different question.
-
-Respond in this format:
-- If the user's intent is unclear, ask clarifying questions about users preference on
-price, certificate
-- Understand user background from the message history, like their level of education.
-- After the function executes, rerank results based on user background and return
-only the top 1 or 2 of the results to the user.
-- Make the title of each resource a clickable link.
-
-VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO ANSWER
-QUESTIONS.
-
-Here are some sample user prompts, each with a guide on how to respond to them:
-
-Prompt: “I\'d like to learn some advanced mathematics that I may not have had exposure
-to before, as a physics major.”
-Expected Response: Ask some follow-ups about particular interests (e.g., set theory,
-analysis, topology. Maybe ask whether you are more interested in applied math or theory.
-Then perform the search based on those interests and send the most relevant results back
-based on the user's answers.
-
-Prompt: “As someone with a non-science background, what courses can I take that will
-prepare me for the AI future.”
-Expected Output: Maybe ask whether the user wants to learn how to program, or just use
-AI in their discipline - does this person want to study machine learning? More info
-needed. Then perform a relevant search and send back the best results.
-
-
-AGAIN: NEVER USE ANY INFORMATION OUTSIDE OF THE MIT SEARCH RESULTS TO
-ANSWER QUESTIONS.
-    """
 
     def __init__(  # noqa: PLR0913
         self,
@@ -387,23 +343,9 @@ class SyllabusAgentState(AgentState):
 class SyllabusBot(BaseChatbot):
     """Service class for the AI syllabus agent"""
 
+    PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
-
-    INSTRUCTIONS = """You are an assistant helping users answer questions related
-to a syllabus.
-
-Your job:
-1. Use the available function to gather relevant information about the user's question.
-2. Provide a clear, user-friendly summary of the information retrieved by the tool to
-answer the user's question.
-
-Always use the tool results to answer questions, and answer only based on the tool
-output. Do not include the course id in the query parameter.
-VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
-ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
-information.
-    """
 
     def __init__(  # noqa: PLR0913
         self,
@@ -467,6 +409,7 @@ class TutorBot(BaseChatbot):
     Chatbot that assists with problem sets
     """
 
+    PROMPT_TEMPLATE = None
     TASK_NAME = "TUTOR_TASK"
     JOB_ID = "TUTOR_JOB"
 
@@ -642,6 +585,7 @@ class VideoGPTAgentState(AgentState):
 class VideoGPTBot(BaseChatbot):
     """Service class for the AI video chat agent"""
 
+    PROMPT_TEMPLATE = "video_gpt"
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
 
