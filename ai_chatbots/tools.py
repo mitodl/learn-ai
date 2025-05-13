@@ -12,7 +12,7 @@ from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
-from ai_chatbots.utils import enum_zip
+from ai_chatbots.utils import enum_zip, request_with_token
 
 log = logging.getLogger(__name__)
 
@@ -241,7 +241,7 @@ def search_content_files(
         params["collection_name"] = collection_name
     log.debug("Searching MIT content API with params: %s", params)
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = request_with_token(url, params, timeout=30)
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -279,7 +279,7 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
 
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = request_with_token(url, params, timeout=30)
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties

@@ -10,7 +10,6 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
-import requests
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
@@ -41,7 +40,7 @@ from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
-from ai_chatbots.utils import get_django_cache
+from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
 
@@ -612,7 +611,8 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
 
     api_url = settings.AI_MIT_CONTENTFILE_URL
     params = {"edx_module_id": block_siblings}
-    response = requests.get(api_url, params=params, timeout=10)
+
+    response = request_with_token(api_url, params, timeout=10)
 
     response = response.json()
 
