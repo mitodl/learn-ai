@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.6.2
+Version 0.6.2 (Released May 13, 2025)
 -------------
 
 - allow newlines in display math replacement (#180)
