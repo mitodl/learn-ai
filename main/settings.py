@@ -606,8 +606,12 @@ AI_MIT_VIDEO_TRANSCRIPT_URL = get_string(
     "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
 )
 AI_MIT_CONTENTFILE_URL = get_string(
-    "AI_MIT_CONTENTFILE_URL",
-    "https://api.learn.mit.edu/api/v1/contentfiles/",
+    name="AI_MIT_CONTENTFILE_URL",
+    default="https://api.learn.mit.edu/api/v1/contentfiles/",
+)
+LEARN_ACCESS_TOKEN = get_string(
+    name="LEARN_ACCESS_TOKEN",
+    default="",
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)

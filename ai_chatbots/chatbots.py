@@ -544,7 +544,7 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
     response = requests.get(
         api_url,
         params=params,
-        headers={"Authorization": "access_token testtesttest"},
+        headers={"Authorization": "Bearer " + settings.LEARN_ACCESS_TOKEN},
         timeout=10,
     )
 
