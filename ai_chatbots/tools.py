@@ -230,7 +230,12 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
         params["collection_name"] = collection_name
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = requests.get(
+            url,
+            params=params,
+            headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+            timeout=30,
+        )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -268,7 +273,12 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
 
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = requests.get(
+            url,
+            params=params,
+            headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+            timeout=30,
+        )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
