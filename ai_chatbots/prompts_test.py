@@ -15,6 +15,7 @@ from ai_chatbots.utils import get_django_cache
 def test_langsmith_prompt_create(mocker):
     """Test that the langsmith_prompt function creates a prompt if it doesn't exist."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
+    os.environ["MITOL_ENVIRONMENT"] = "dev"
     mock_pull = mocker.patch(
         "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt",
         side_effect=LangSmithNotFoundError,
@@ -36,7 +37,7 @@ def test_langsmith_prompt_create(mocker):
 def test_langsmith_prompt_retrieve(mocker):
     """Test that the langsmith_prompt function retrieves a prompt."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
-    os.environ["ENVIRONMENT"] = "rc"
+    os.environ["MITOL_ENVIRONMENT"] = "rc"
     mock_pull = mocker.patch(
         "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt",
         return_value=ChatPromptTemplate([("system", prompts.PROMPT_VIDEO_GPT)]),
@@ -56,7 +57,7 @@ def test_langsmith_prompt_retrieve(mocker):
 def test_get_system_prompt_no_cache(mocker, has_cache):
     """Test that the get_system_prompt function retrieves the system prompt from langsmith."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
-    os.environ["ENVIRONMENT"] = "prod"
+    os.environ["MITOL_ENVIRONMENT"] = "prod"
     os.environ["CELERY_BROKER_URL"] = ""
     prompt_key = "syllabus_prod"
 

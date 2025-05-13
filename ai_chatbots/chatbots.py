@@ -77,7 +77,6 @@ class BaseChatbot(ABC):
             if self.PROMPT_TEMPLATE
             else None
         )
-        log.info("AI instructions: %s", self.instructions)
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
         self.config = {"configurable": {"thread_id": self.thread_id}}
