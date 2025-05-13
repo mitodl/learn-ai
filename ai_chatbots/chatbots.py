@@ -613,7 +613,12 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
 
     api_url = settings.AI_MIT_CONTENTFILE_URL
     params = {"edx_module_id": block_siblings}
-    response = requests.get(api_url, params=params, timeout=10)
+    response = requests.get(
+        api_url,
+        params=params,
+        headers={"Authorization": "access_token testtesttest"},
+        timeout=10,
+    )
 
     response = response.json()
 
