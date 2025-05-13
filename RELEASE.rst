@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.7.0
+-------------
+
+- Langsmith tracing and logging (#169)
+- Update dependency ruff to v0.11.9 (#185)
+- Update dependency open-learning-ai-tutor to ^0.0.9 (#184)
+- Update dependency next to v15.3.2 (#183)
+- Update dependency eslint-config-next to v15.3.2 (#182)
+
 Version 0.6.2 (Released May 13, 2025)
 -------------
 
