@@ -102,12 +102,14 @@ const SyllabusContent = () => {
     ...learningResourcesQueries.retrieve({ id: resourceId }),
     enabled: !!resourceId,
   })
-
   const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
     apiUrl: SYLLABUS_GPT_URL,
     extraBody: {
       model: settings.syllabus_model,
       course_id: resource.data?.readable_id,
+      related_resources: resource.data?.children.map(
+        (child) => child.readable_id,
+      ),
     },
   })
 
