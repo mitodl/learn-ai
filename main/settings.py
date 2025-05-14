@@ -35,7 +35,8 @@ VERSION = "0.6.3"
 
 log = logging.getLogger()
 
-CELERY_BROKER_URL = get_string("CELERY_BROKER_URL", get_string("REDISCLOUD_URL", None))
+REDIS_URL = get_string("REDIS_URL", get_string("REDISCLOUD_URL", None))
+CELERY_BROKER_URL = get_string("CELERY_BROKER_URL", REDIS_URL)
 ENVIRONMENT = get_string("MITOL_ENVIRONMENT", "dev")
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
@@ -105,7 +106,46 @@ INSTALLED_APPS = (
     "openapi",
     "users",
     "ai_chatbots",
+    "health_check",
+    "health_check.cache",
+    "health_check.contrib.migrations",
+    "health_check.contrib.celery_ping",
+    "health_check.contrib.redis",
+    "health_check.contrib.db_heartbeat",
 )
+
+HEALTH_CHECK = {
+    "SUBSETS": {
+        # The 'startup' subset includes checks that must pass before the application can
+        # start.
+        "startup": [
+            "MigrationsHealthCheck",  # Ensures database migrations are applied.
+            "CacheBackend",  # Verifies the cache backend is operational.
+            "RedisHealthCheck",  # Confirms Redis is reachable and functional.
+            "DatabaseHeartBeatCheck",  # Checks the database connection is alive.
+        ],
+        # The 'liveness' subset includes checks to determine if the application is
+        # running.
+        "liveness": ["DatabaseHeartBeatCheck"],  # Minimal check to ensure the app is
+        # alive.
+        # The 'readiness' subset includes checks to determine if the application is
+        # ready to serve requests.
+        "readiness": [
+            "CacheBackend",  # Ensures the cache is ready for use.
+            "RedisHealthCheck",  # Confirms Redis is ready for use.
+            "DatabaseHeartBeatCheck",  # Verifies the database is ready for queries.
+        ],
+        # The 'full' subset includes all available health checks for a comprehensive
+        # status report.
+        "full": [
+            "MigrationsHealthCheck",  # Ensures database migrations are applied.
+            "CacheBackend",  # Verifies the cache backend is operational.
+            "RedisHealthCheck",  # Confirms Redis is reachable and functional.
+            "DatabaseHeartBeatCheck",  # Checks the database connection is alive.
+            "CeleryPingHealthCheck",  # Verifies Celery workers are responsive.
+        ],
+    }
+}
 
 if not get_bool("RUN_DATA_MIGRATIONS", default=False):
     MIGRATION_MODULES = {"data_fixtures": None}
@@ -362,7 +402,6 @@ LOGGING = {
 }
 
 STATUS_TOKEN = get_string("STATUS_TOKEN", "")
-HEALTH_CHECK = ["CELERY", "REDIS", "POSTGRES", "OPEN_SEARCH"]
 
 GA_TRACKING_ID = get_string("GA_TRACKING_ID", "")
 GA_G_TRACKING_ID = get_string("GA_G_TRACKING_ID", "")
