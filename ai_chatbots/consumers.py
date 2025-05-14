@@ -429,6 +429,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         return {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
+            "related_resources": data.get("related_resources", []),
         }
 
     def prepare_response(

@@ -193,7 +193,10 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
         )
     )
     state: Annotated[dict, InjectedState] = Field(
-        description="The agent state, including course_id and collection_name params"
+        description=(
+            "The agent state, including course_id, collection_name"
+            " and related_resources params"
+        )
     )
 
 
@@ -217,10 +220,10 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     Query the MIT contentfile vector endpoint API, and return results as a
     JSON string, along with metadata about the query parameters used.
     """
-
     url = settings.AI_MIT_SYLLABUS_URL
     course_id = state["course_id"][-1]
     collection_name = state["collection_name"][-1]
+    related_resources = state["related_resources"]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -228,6 +231,10 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     }
     if collection_name:
         params["collection_name"] = collection_name
+
+    if related_resources:
+        params["resource_readable_id"] = [course_id, *related_resources]
+
     log.info("Searching MIT API with params: %s", params)
     try:
         response = requests.get(url, params=params, timeout=30)

@@ -337,6 +337,7 @@ class SyllabusAgentState(AgentState):
 
     course_id: Annotated[list[str], add]
     collection_name: Annotated[list[str], add]
+    related_resources: Annotated[list[str], add]
 
 
 class SyllabusBot(BaseChatbot):
