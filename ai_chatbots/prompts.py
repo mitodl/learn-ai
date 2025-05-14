@@ -83,8 +83,14 @@ ANSWER QUESTIONS.  If no results are returned, say you could not find any releva
 information."""
 
 
+PROMPT_SUMMARIZER = """
+Generate a summary of the conversation so far. Retain any search results if they exist. Incorporate
+this previous summary if not empty: {{previous_summary}}
+"""
+
 PROMPT_MAPPING = {
     "recommendation": PROMPT_RECOMMENDATION,
     "syllabus": PROMPT_SYLLABUS,
     "video_gpt": PROMPT_VIDEO_GPT,
+    "summarizer": PROMPT_SUMMARIZER,
 }
