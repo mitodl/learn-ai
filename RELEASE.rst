@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.6.3
+Version 0.6.3 (Released May 14, 2025)
 -------------
 
 - Update tutor version (#189)
