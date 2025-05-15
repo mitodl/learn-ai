@@ -205,7 +205,7 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
             msg for msg in all_messages if msg.id not in removed_message_ids
         ]
 
-        log.info(
+        log.debug(
             "Checkpoint %s has %d total messages, {%d valid messages, and %d removed messages.",
             checkpoint_id,
             len(all_messages),

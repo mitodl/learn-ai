@@ -84,7 +84,7 @@ information."""
 
 
 PROMPT_SUMMARIZER = """
-Generate a summary of the conversation so far. Retain any search results if they exist. Incorporate
+Generate a summary of the conversation so far. Retain any search results if they exist. Include 
 this previous summary if not empty: {{previous_summary}}
 """
 

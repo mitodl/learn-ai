@@ -21,7 +21,7 @@ from langchain_core.messages import (
     AIMessage,
     HumanMessage,
     RemoveMessage,
-    SystemMessage,
+    SystemMessage, BaseMessage,
 )
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
@@ -52,24 +52,7 @@ log = logging.getLogger(__name__)
 
 
 class SummarizedState(AgentState):
-    """Advanced state container with summary management capabilities.
-
-    This implementation demonstrates three key features:
-    1. Message storage with LangGraph annotations
-    2. Dynamic summary tracking
-    3. Configurable history window
-
-    Attributes:
-        messages: Annotated list of conversation messages
-        summary: Running summary of conversation context
-        window_size: Maximum messages to maintain before summarization
-
-    Note:
-        The summary field is crucial for maintaining context when
-        older messages are pruned from the window.
-    """
-
-    messages: Annotated[list[str], add]
+    """AgentState container with chat summary field."""
     summary: str
 
 
@@ -163,6 +146,10 @@ class BaseChatbot(ABC):
                 state_modifier=self.instructions,
             )
 
+        The base implementation here is a bit more complex, with 2 nodes.  The 1st
+        node summarizes the chat history if the # of messages is above a certain threshold,
+        and in that case removes the original messages from the graph state.
+        The 2nd node responds to the user's most recent message.
         """
 
         # Names of nodes in the graph
@@ -171,8 +158,10 @@ class BaseChatbot(ABC):
         tools_node = "tools"
 
         async def summarize(state: SummarizedState) -> str:
-            """Summarize the conversation history with a summarizer agent"""
-            log.info("SUMMARY STATE INPUT MSG COUNT: %d", len(state["messages"]))
+            """
+            Use the ChatSummaerizerBot to generate a summary and return it in the state,
+            along with a list of prior messages to remove.
+            """
             summary_bot = ChatSummarizerBot(
                 self.user_id,
                 checkpointer=self.checkpointer,
@@ -181,18 +170,23 @@ class BaseChatbot(ABC):
                 thread_id=self.thread_id,
             )
             summary_state = await summary_bot.agent.ainvoke(state)
-            # Remove all but deleted messages
-            log.info("SUMMARY STATE OUTPUT MSG COUNT: %d", len(summary_state["messages"]))
-            log.info("SUMMARY STATE OUTPUT REMOVE COUNT: %d", len([s for s in summary_state["messages"] if isinstance(s, RemoveMessage)]))
+            # Ensure that only RemoveMessages are passed on in the messages list
             summary_state["messages"] = [
                 m for m in summary_state["messages"] if isinstance(m, RemoveMessage)
             ]
             return summary_state
 
+        def call_summarizer_agent(state: SummarizedState) -> SummarizedState:
+            """Call the LLM to summarize the conversation if needed"""
+            if len(state["messages"]) > settings.AI_MAX_CHAT_SESSION_LENGTH:
+                return async_to_sync(summarize)(state)
+            else:
+                return self.STATE_CLASS(summary=state.get("summary"))
+
+
         def tool_calling_llm(state: SummarizedState) -> SummarizedState:
-            """Call the LLM, injecting system prompt"""
+            """Respond to the user's message"""
             summary = state.get("summary")
-            log.info("TOOL_CALLING_LLM summary? %s", summary)
             removed_message_ids = [
                 m.id for m in state["messages"] if isinstance(m, RemoveMessage)
             ]
@@ -204,70 +198,29 @@ class BaseChatbot(ABC):
             if not isinstance(valid_messages[0], SystemMessage):
                 # inject the system prompt if not there
                 valid_messages.insert(0, SystemMessage(self.instructions))
-            for idx, m in enumerate(state["messages"]):
-                log.info(
-                    "STATE MSG %d: %s: %s: %s",
-                    idx,
-                    m.__class__.__name__,
-                    m.id,
-                    m.content[0:10] if hasattr(m, "content") else "",
-                )
             if summary:
-                # Add the summary to the messages
+                # Add or update the summary to the messages immediately after the system prompt
                 if not isinstance(valid_messages[1], AIMessage):
                     valid_messages.insert(1, AIMessage(content=summary))
                 else:
                     valid_messages[1].content = summary
-            for idx, m in enumerate(valid_messages):
-                log.info(
-                    "VALID MSG %d: %s: %s: %s",
-                    idx,
-                    m.__class__.__name__,
-                    m.id,
-                    m.content[0:10] if hasattr(m, "content") else "",
-                )
             return self.STATE_CLASS(messages=[self.llm.invoke(valid_messages)])
 
-        def summarizing_llm(state: SummarizedState) -> SummarizedState:
-            """Call the LLM to summarize the conversation if needed"""
-            if len(state["messages"]) > settings.AI_MAX_CHAT_SESSION_LENGTH:
-                log.info(
-                    "NEED TO SUMMARIZE %d out of %d MESSAGES",
-                    len(state),
-                    len(state["messages"]),
-                )
-                new_state = async_to_sync(summarize)(state)
-                log.info("NEW STATE # MESSAGES: %d", len(new_state["messages"]))
-                log.info("SUMMARY? %s", new_state["summary"])
-                return new_state
-            else:
-                log.info("NO NEED TO SUMMARIZE %d MESSAGES", len(state["messages"]))
-                return {"summary": state.get("summary")}
-
         agent_graph = StateGraph(self.STATE_CLASS)
-        # Summarize the conversation history
-        agent_graph.add_node(summarizer_node, summarizing_llm)
+        agent_graph.add_node(summarizer_node, call_summarizer_agent)
         agent_graph.add_edge(summarizer_node, agent_node)
-        # Add the agent node that first calls the LLM
         agent_graph.add_node(agent_node, tool_calling_llm)
         if self.tools:
-            # Add the tools node
             agent_graph.add_node(tools_node, ToolNode(tools=self.tools))
-            # Add a conditional edge that determines when to run the tools.
-            # If no tool call is requested, the edge is not taken and the
-            # agent node will end its response.
             agent_graph.add_conditional_edges(agent_node, tools_condition)
-            # Send the tool node output back to the agent node
             agent_graph.add_edge(tools_node, agent_node)
-        # Set the entry point to the agent node
+        agent_graph.add_edge(agent_node, END)
         agent_graph.set_entry_point(summarizer_node)
 
-        # compile and return the agent graph
         return agent_graph.compile(checkpointer=self.checkpointer)
 
     async def get_latest_history(self) -> dict:
         """Get the most recent state history, summarize if needed"""
-        latest_state = None
         async for state in self.agent.aget_state_history(self.config):
             if state:
                 return state
@@ -732,45 +685,27 @@ class ChatSummarizerBot(BaseChatbot):
         Return a graph that generates a summary of the conversation.
         """
 
-        # Names of nodes in the graph
         summarizer_node = "summarizer"
 
         def summarizing_llm(state: SummarizedState) -> SummarizedState:
             """Call the LLM to summarize the conversation"""
-            log.info("State KEYS: %s", state.keys() if state else "No state")
-            valid_messages = state["messages"]
-            log.info("SUMMARIZE LLM MSG COUNT: %d", len(valid_messages))
+            state_messages = state.get("messages", [])
             previous_summary = state.get("summary")
-            if isinstance(previous_summary, dict):
-                log.info("PREVIOUS SUMMARY IS A DICT: %s", previous_summary.keys())
-                previous_summary = previous_summary.get("summary")
-            log.info("PREVIOUS SUMMARY: %s", previous_summary)
-            if previous_summary:
-                # Add the previous summary to the messages
-                valid_messages.insert(1, AIMessage(content=previous_summary))
-            log.info("SUMMARY MESSAGE: %s", self.instructions)
-            # Add prompt to our history
-            valid_messages.append(HumanMessage(content=self.instructions))
-            response = self.llm.invoke(valid_messages, stream=False)
-            log.info("RESPONSE LLM SUMMARY: %s", response.content)
-
-            # Delete all but the initial system prompt and the most recent message
-            #log.info("Last 3 messages: %s", valid_messages[-3])
-            log.info("Last 2 messages: %s", valid_messages[-2])
-            #log.info("Last 1 messages: %s", valid_messages[-1])
-            # Delete all but the system prompt and 2nd to last message
-            last_user_message = [msg for msg in valid_messages if isinstance(msg, HumanMessage)][-2]
+            summarize_prompt = self.instructions.format(previous_summary=previous_summary)
+            log.debug("Previous summary: %s, prompt: %s", previous_summary, summarize_prompt)
+            state_messages.append(HumanMessage(summarize_prompt))
+            response = self.llm.invoke(state_messages, stream=False)
+            log.debug("new summary: %s", response.content)
+            # Delete all but the initial system prompt and the most recent real human message
+            last_user_message = [msg for msg in state_messages if isinstance(msg, HumanMessage)][-2]
             delete_messages = [
                 RemoveMessage(id=m.id)
                 for m in state["messages"]
                 if not isinstance(m, SystemMessage) and m != last_user_message
             ]
-            log.info("last_human_message: %s", last_user_message)
-            log.info("delete_messages count: %d", len(delete_messages))
-            return {"summary": response.content, "messages": delete_messages}
+            return SummarizedState(summary=response.content, messages=delete_messages)
 
         agent_graph = StateGraph(self.STATE_CLASS)
-        # Summarize the conversation history
         agent_graph.add_node(summarizer_node, summarizing_llm)
         agent_graph.add_edge(summarizer_node, END)
         agent_graph.set_entry_point(summarizer_node)
