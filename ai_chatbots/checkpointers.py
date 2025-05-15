@@ -1,13 +1,16 @@
 """Checkpointers for Django, extending the Langgraph BaseCheckpointSaver."""
 
 import json
+import logging
 from collections.abc import AsyncGenerator
 from typing import (
     Any,
     Optional,
 )
+from uuid import uuid4
 
 from django.conf import settings
+from langchain_core.messages import RemoveMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
@@ -23,6 +26,9 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChatSession
 
 USER_MODEL = settings.AUTH_USER_MODEL
+
+
+log = logging.getLogger(__name__)
 
 
 def _parse_django_checkpoint_writes_key(
@@ -187,6 +193,34 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         parent_checkpoint_id = config["configurable"].get("checkpoint_id")
 
         type_, _ = self.serde.dumps_typed(checkpoint)
+
+        # Delete messages that are marked for removal (RemoveMessage class)
+        all_messages = [
+            msg for msg in checkpoint.get("channel_values", {}).get("messages", [])
+        ]
+        removed_message_ids = [
+            msg.id for msg in all_messages if isinstance(msg, RemoveMessage)
+        ]
+        valid_messages = [
+            msg for msg in all_messages if msg.id not in removed_message_ids
+        ]
+
+        log.info(
+            "Checkpoint %s has %d total messages, {%d valid messages, and %d removed messages.",
+            checkpoint_id,
+            len(all_messages),
+            len(valid_messages),
+            len(removed_message_ids)
+        )
+
+        if all_messages:
+            checkpoint["channel_values"]["messages"] = valid_messages
+
+        # Ensure that every message has an ID
+        for msg in valid_messages:
+            if not msg.id:
+                msg.id = str(uuid4())
+
         serialized_checkpoint = json.loads(self.serde.dumps(checkpoint))
         serialized_metadata = json.loads(self.serde.dumps(metadata))
 

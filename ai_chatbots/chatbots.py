@@ -11,17 +11,23 @@ from uuid import uuid4
 
 import posthog
 import requests
+from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, RemoveMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    RemoveMessage,
+    SystemMessage,
+)
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import MessagesState, StateGraph
-from langgraph.graph.graph import CompiledGraph
+from langgraph.graph import StateGraph
+from langgraph.graph.graph import CompiledGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from open_learning_ai_tutor.message_tutor import message_tutor
@@ -45,8 +51,25 @@ from ai_chatbots.utils import get_django_cache
 log = logging.getLogger(__name__)
 
 
-class SummaryState(AgentState):
-    """State for holding the summary of the conversation"""
+class SummarizedState(AgentState):
+    """Advanced state container with summary management capabilities.
+
+    This implementation demonstrates three key features:
+    1. Message storage with LangGraph annotations
+    2. Dynamic summary tracking
+    3. Configurable history window
+
+    Attributes:
+        messages: Annotated list of conversation messages
+        summary: Running summary of conversation context
+        window_size: Maximum messages to maintain before summarization
+
+    Note:
+        The summary field is crucial for maintaining context when
+        older messages are pruned from the window.
+    """
+
+    messages: Annotated[list[str], add]
     summary: str
 
 
@@ -60,18 +83,18 @@ class BaseChatbot(ABC):
     # For LiteLLM tracking purposes
     TASK_NAME = "BASE_TASK"
     JOB_ID = "BASECHAT_JOB"
-    STATE_CLASS = SummaryState
+    STATE_CLASS = SummarizedState
 
     def __init__(  # noqa: PLR0913
-            self,
-            user_id: str,
-            checkpointer: BaseCheckpointSaver,
-            *,
-            name: str = "MIT Open Learning Chatbot",
-            model: Optional[str] = None,
-            temperature: Optional[float] = None,
-            instructions: Optional[str] = None,
-            thread_id: Optional[str] = None,
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
@@ -124,11 +147,12 @@ class BaseChatbot(ABC):
             llm = llm.bind_tools(self.tools)
         return llm
 
-    def create_agent_graph(self) -> CompiledGraph:
+    def create_agent_graph(self) -> CompiledGraph:  # noqa: C901
         """
-        Return a graph for the relevant LLM and tools.
+        Return a graph for the relevant LLM and tools, summarizing the
+        conversation history if needed.
 
-        An easy way to create a graph is to use the prebuilt create_react_agent:
+        An easy way to create a basic graph is to use the prebuilt create_react_agent:
 
             from langgraph.prebuilt import create_react_agent
 
@@ -139,53 +163,92 @@ class BaseChatbot(ABC):
                 state_modifier=self.instructions,
             )
 
-        The base implementation here accomplishes the same thing but a
-        bit more explicitly, to give a better idea of what's happening
-        and how it can be customized.
         """
 
         # Names of nodes in the graph
-
+        summarizer_node = "summarizer"
         agent_node = "agent"
         tools_node = "tools"
-        summary_node = "summary"
 
-        def tool_calling_llm(state: MessagesState) -> MessagesState:
+        async def summarize(state: SummarizedState) -> str:
+            """Summarize the conversation history with a summarizer agent"""
+            log.info("SUMMARY STATE INPUT MSG COUNT: %d", len(state["messages"]))
+            summary_bot = ChatSummarizerBot(
+                self.user_id,
+                checkpointer=self.checkpointer,
+                model=settings.AI_DEFAULT_SUMMARY_MODEL,
+                temperature=self.temperature,
+                thread_id=self.thread_id,
+            )
+            summary_state = await summary_bot.agent.ainvoke(state)
+            # Remove all but deleted messages
+            log.info("SUMMARY STATE OUTPUT MSG COUNT: %d", len(summary_state["messages"]))
+            log.info("SUMMARY STATE OUTPUT REMOVE COUNT: %d", len([s for s in summary_state["messages"] if isinstance(s, RemoveMessage)]))
+            summary_state["messages"] = [
+                m for m in summary_state["messages"] if isinstance(m, RemoveMessage)
+            ]
+            return summary_state
+
+        def tool_calling_llm(state: SummarizedState) -> SummarizedState:
             """Call the LLM, injecting system prompt"""
-            if len(state["messages"]) == 1:
-                # New chat, so inject the system prompt
-                state["messages"].insert(0, SystemMessage(self.instructions))
-            for msg in state["messages"]:
+            summary = state.get("summary")
+            log.info("TOOL_CALLING_LLM summary? %s", summary)
+            removed_message_ids = [
+                m.id for m in state["messages"] if isinstance(m, RemoveMessage)
+            ]
+            valid_messages = [
+                m
+                for m in state["messages"]
+                if not isinstance(m, RemoveMessage) and m.id not in removed_message_ids
+            ]
+            if not isinstance(valid_messages[0], SystemMessage):
+                # inject the system prompt if not there
+                valid_messages.insert(0, SystemMessage(self.instructions))
+            for idx, m in enumerate(state["messages"]):
                 log.info(
-                    "message: %s (%s): %s",
-                    msg.id,
-                    msg.__class__.__name__,
-                    msg.content[0:10] if hasattr(msg, "content") else "N/A",
+                    "STATE MSG %d: %s: %s: %s",
+                    idx,
+                    m.__class__.__name__,
+                    m.id,
+                    m.content[0:10] if hasattr(m, "content") else "",
                 )
-            return RecommendationAgentState(messages=[self.llm.invoke(state["messages"])])
+            if summary:
+                # Add the summary to the messages
+                if not isinstance(valid_messages[1], AIMessage):
+                    valid_messages.insert(1, AIMessage(content=summary))
+                else:
+                    valid_messages[1].content = summary
+            for idx, m in enumerate(valid_messages):
+                log.info(
+                    "VALID MSG %d: %s: %s: %s",
+                    idx,
+                    m.__class__.__name__,
+                    m.id,
+                    m.content[0:10] if hasattr(m, "content") else "",
+                )
+            return self.STATE_CLASS(messages=[self.llm.invoke(valid_messages)])
 
-        def summary_check(state: RecommendationAgentState) -> RecommendationAgentState:
-            """Return a summary if needed"""
+        def summarizing_llm(state: SummarizedState) -> SummarizedState:
+            """Call the LLM to summarize the conversation if needed"""
             if len(state["messages"]) > settings.AI_MAX_CHAT_SESSION_LENGTH:
-                # Delete all but the system prompt and 2nd to last message
-                summary_bot = SummarizerBot(
-                    self.user_id,
-                    checkpointer=self.checkpointer,
-                    model=self.AI_DEFAULT_SUMMARY_MODEL,
-                    temperature=self.temperature,
-                    thread_id=self.thread_id,
+                log.info(
+                    "NEED TO SUMMARIZE %d out of %d MESSAGES",
+                    len(state),
+                    len(state["messages"]),
                 )
-                response = summary_bot.agent.invoke(messages=state["messages"])
-                log.info("summary response: %s", response)
-                return RecommendationAgentState(
-                    summary=response.content,
-                )
+                new_state = async_to_sync(summarize)(state)
+                log.info("NEW STATE # MESSAGES: %d", len(new_state["messages"]))
+                log.info("SUMMARY? %s", new_state["summary"])
+                return new_state
             else:
-                return {}
+                log.info("NO NEED TO SUMMARIZE %d MESSAGES", len(state["messages"]))
+                return {"summary": state.get("summary")}
 
-        agent_graph = StateGraph(MessagesState)
-        agent_graph.add_node(summary_node, summary_check)
-        # Add the agent node that gets recommendations
+        agent_graph = StateGraph(self.STATE_CLASS)
+        # Summarize the conversation history
+        agent_graph.add_node(summarizer_node, summarizing_llm)
+        agent_graph.add_edge(summarizer_node, agent_node)
+        # Add the agent node that first calls the LLM
         agent_graph.add_node(agent_node, tool_calling_llm)
         if self.tools:
             # Add the tools node
@@ -193,25 +256,25 @@ class BaseChatbot(ABC):
             # Add a conditional edge that determines when to run the tools.
             # If no tool call is requested, the edge is not taken and the
             # agent node will end its response.
-            agent_graph.add_edge(summary_node, agent_node)
             agent_graph.add_conditional_edges(agent_node, tools_condition)
             # Send the tool node output back to the agent node
             agent_graph.add_edge(tools_node, agent_node)
         # Set the entry point to the agent node
-        agent_graph.set_entry_point(summary_node)
+        agent_graph.set_entry_point(summarizer_node)
 
         # compile and return the agent graph
         return agent_graph.compile(checkpointer=self.checkpointer)
 
     async def get_latest_history(self) -> dict:
-        """Get the most recent state history"""
+        """Get the most recent state history, summarize if needed"""
+        latest_state = None
         async for state in self.agent.aget_state_history(self.config):
             if state:
                 return state
         return None
 
     async def send_posthog_event(
-            self, message: str, full_response: str, metadata: dict
+        self, message: str, full_response: str, metadata: dict
     ) -> None:
         """
         Send a posthog event with the user message, AI response, and metadata
@@ -235,11 +298,11 @@ class BaseChatbot(ABC):
                 log.exception("Error sending posthog event")
 
     async def get_completion(
-            self,
-            message: str,
-            *,
-            extra_state: Optional[TypedDict] = None,
-            debug: bool = settings.AI_DEBUG,
+        self,
+        message: str,
+        *,
+        extra_state: Optional[TypedDict] = None,
+        debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
         Send the user message to the agent and yield the response as
@@ -275,8 +338,8 @@ class BaseChatbot(ABC):
                     "error": {"message": "An error has occurred, please try again"}
                 }
             if (
-                    error["error"]["message"].startswith("Budget has been exceeded")
-                    and not debug
+                error["error"]["message"].startswith("Budget has been exceeded")
+                and not debug
             ):  # Friendlier message for end user
                 error["error"]["message"] = (
                     "You have exceeded your AI usage limit. Please try again later."
@@ -298,7 +361,7 @@ class BaseChatbot(ABC):
         raise NotImplementedError
 
 
-class RecommendationAgentState(SummaryState):
+class RecommendationAgentState(SummarizedState):
     """
     State for the recommendation bot. Passes search url
     to the associated tool function.
@@ -319,15 +382,15 @@ class ResourceRecommendationBot(BaseChatbot):
     STATE_CLASS = RecommendationAgentState
 
     def __init__(  # noqa: PLR0913
-            self,
-            user_id: str,
-            checkpointer: Optional[BaseCheckpointSaver] = None,
-            *,
-            name: str = "MIT Open Learning Chatbot",
-            model: Optional[str] = None,
-            temperature: Optional[float] = None,
-            instructions: Optional[str] = None,
-            thread_id: Optional[str] = None,
+        self,
+        user_id: str,
+        checkpointer: Optional[BaseCheckpointSaver] = None,
+        *,
+        name: str = "MIT Open Learning Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
         """Initialize the AI search agent service"""
         super().__init__(
@@ -352,7 +415,7 @@ class ResourceRecommendationBot(BaseChatbot):
         return get_search_tool_metadata(thread_id, latest_state)
 
 
-class SyllabusAgentState(SummaryState):
+class SyllabusAgentState(SummarizedState):
     """
     State for the syllabus bot. Passes course_id and
     collection_name to the associated tool function.
@@ -368,17 +431,18 @@ class SyllabusBot(BaseChatbot):
     PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
+    STATE_CLASS = SyllabusAgentState
 
     def __init__(  # noqa: PLR0913
-            self,
-            user_id: str,
-            checkpointer: BaseCheckpointSaver,
-            *,
-            name: str = "MIT Open Learning Syllabus Chatbot",
-            model: Optional[str] = None,
-            temperature: Optional[float] = None,
-            instructions: Optional[str] = None,
-            thread_id: Optional[str] = None,
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Syllabus Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
         super().__init__(
             user_id,
@@ -422,16 +486,16 @@ class TutorBot(BaseChatbot):
     JOB_ID = "TUTOR_JOB"
 
     def __init__(  # noqa: PLR0913
-            self,
-            user_id: str,
-            checkpointer: Optional[BaseCheckpointSaver] = BaseCheckpointSaver,
-            *,
-            name: str = "MIT Open Learning Tutor Chatbot",
-            model: Optional[str] = None,
-            temperature: Optional[float] = None,
-            thread_id: Optional[str] = None,
-            block_siblings: Optional[list[str]] = None,
-            edx_module_id: Optional[str] = None,
+        self,
+        user_id: str,
+        checkpointer: Optional[BaseCheckpointSaver] = BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Tutor Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        thread_id: Optional[str] = None,
+        block_siblings: Optional[list[str]] = None,
+        edx_module_id: Optional[str] = None,
     ):
         super().__init__(
             user_id,
@@ -460,11 +524,11 @@ class TutorBot(BaseChatbot):
         )
 
     async def get_completion(
-            self,
-            message: str,
-            *,
-            extra_state: Optional[TypedDict] = None,  # noqa: ARG002
-            debug: bool = settings.AI_DEBUG,  # noqa: ARG002
+        self,
+        message: str,
+        *,
+        extra_state: Optional[TypedDict] = None,  # noqa: ARG002
+        debug: bool = settings.AI_DEBUG,  # noqa: ARG002
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
 
@@ -581,7 +645,7 @@ def get_matching_content(api_results: json, edx_module_id: str):
     return ""
 
 
-class VideoGPTAgentState(SummaryState):
+class VideoGPTAgentState(SummarizedState):
     """
     State for the video GPT bot. Passes transcript_asset_id
     to the associated tool function.
@@ -599,15 +663,15 @@ class VideoGPTBot(BaseChatbot):
     STATE_CLASS = VideoGPTAgentState
 
     def __init__(  # noqa: PLR0913
-            self,
-            user_id: str,
-            checkpointer: BaseCheckpointSaver,
-            *,
-            name: str = "MIT Open Learning VideoGPT Chatbot",
-            model: Optional[str] = None,
-            temperature: Optional[float] = None,
-            instructions: Optional[str] = None,
-            thread_id: Optional[str] = None,
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning VideoGPT Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
         super().__init__(
             user_id,
@@ -631,67 +695,90 @@ class VideoGPTBot(BaseChatbot):
         return get_search_tool_metadata(thread_id, latest_state)
 
 
-class SummarizerBot(BaseChatbot):
-    """Agent for summarizing conversations"""
+class ChatSummarizerBot(BaseChatbot):
+    """
+    Chatbot that summarizes a user's chat history
+    """
 
     PROMPT_TEMPLATE = "summarizer"
-    TASK_NAME = "SUMMARIZE_GPT_TASK"
-    JOB_ID = "SUMMARIZE_GPT_JOB"
-    STATE_CLASS = SummaryState
+    TASK_NAME = "CHAT_SUMMARIZER_TASK"
+    JOB_ID = "CHAT_SUMMARIZER_JOB"
+    STATE_CLASS = SummarizedState
 
     def __init__(  # noqa: PLR0913
-            self,
-            user_id: str,
-            checkpointer: BaseCheckpointSaver,
-            *,
-            name: str = "MIT Open Learning VideoGPT Chatbot",
-            model: Optional[str] = None,
-            temperature: Optional[float] = None,
-            instructions: Optional[str] = None,
-            thread_id: Optional[str] = None,
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Chat Summarizer",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ):
         super().__init__(
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_VIDEO_GPT_MODEL,
+            model=model or settings.AI_DEFAULT_CHAT_SUMMARIZER_MODEL,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
         )
         self.agent = self.create_agent_graph()
 
-    async def get_tool_metadata(self) -> str:
-        """Return the metadata for the tool, in this case nothing"""
-        return "{}"
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Return a graph that generates a summary of the conversation.
+        """
 
-    def create_agent_graph(self):
-        """Create/return a graph for summarizing the conversation"""
         # Names of nodes in the graph
         summarizer_node = "summarizer"
 
-        def summarizer_llm(state: SummaryState) -> SummaryState:
-            """Call the LLM, injecting system prompt"""
+        def summarizing_llm(state: SummarizedState) -> SummarizedState:
+            """Call the LLM to summarize the conversation"""
+            log.info("State KEYS: %s", state.keys() if state else "No state")
+            valid_messages = state["messages"]
+            log.info("SUMMARIZE LLM MSG COUNT: %d", len(valid_messages))
+            previous_summary = state.get("summary")
+            if isinstance(previous_summary, dict):
+                log.info("PREVIOUS SUMMARY IS A DICT: %s", previous_summary.keys())
+                previous_summary = previous_summary.get("summary")
+            log.info("PREVIOUS SUMMARY: %s", previous_summary)
+            if previous_summary:
+                # Add the previous summary to the messages
+                valid_messages.insert(1, AIMessage(content=previous_summary))
+            log.info("SUMMARY MESSAGE: %s", self.instructions)
+            # Add prompt to our history
+            valid_messages.append(HumanMessage(content=self.instructions))
+            response = self.llm.invoke(valid_messages, stream=False)
+            log.info("RESPONSE LLM SUMMARY: %s", response.content)
+
             # Delete all but the initial system prompt and the most recent message
-            valid_messages = state.get("messages", [])
+            #log.info("Last 3 messages: %s", valid_messages[-3])
+            log.info("Last 2 messages: %s", valid_messages[-2])
+            #log.info("Last 1 messages: %s", valid_messages[-1])
             # Delete all but the system prompt and 2nd to last message
-            last_human_message = [m for m in valid_messages if isinstance(m, HumanMessage)][-2]
-            log.info("last_human_message: %s", last_human_message)
-            response = self.llm.invoke(state["messages"])
+            last_user_message = [msg for msg in valid_messages if isinstance(msg, HumanMessage)][-2]
             delete_messages = [
                 RemoveMessage(id=m.id)
                 for m in state["messages"]
-                if not isinstance(m, SystemMessage) and m != last_human_message
+                if not isinstance(m, SystemMessage) and m != last_user_message
             ]
+            log.info("last_human_message: %s", last_user_message)
             log.info("delete_messages count: %d", len(delete_messages))
-
             return {"summary": response.content, "messages": delete_messages}
 
-        agent_graph = StateGraph(MessagesState)
-        # Add the summarizer node
-        agent_graph.add_node(summarizer_node, summarizer_llm)
-        # Set the entry point to the sunnmarizer node
+        agent_graph = StateGraph(self.STATE_CLASS)
+        # Summarize the conversation history
+        agent_graph.add_node(summarizer_node, summarizing_llm)
+        agent_graph.add_edge(summarizer_node, END)
         agent_graph.set_entry_point(summarizer_node)
 
         # compile and return the agent graph
         return agent_graph.compile(checkpointer=self.checkpointer)
+
+    async def get_tool_metadata(self) -> str:
+        """Return the metadata for the summarizer tool, in this case, nothing"""
+        return ""
+
