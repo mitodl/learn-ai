@@ -303,12 +303,12 @@ class SummarizingChatbot(BaseChatbot):
             token_counter=count_tokens_approximately,
             model=summary_llm,
             max_tokens=self.MAX_TOKENS,
-            max_summary_tokens=self.MAX_TOKENS - 1,
+            max_summary_tokens=int(self.MAX_TOKENS / 2),
             output_messages_key="llm_input_messages",
         )
 
         return create_react_agent(
-            self.llm.bind(max_tokens=self.MAX_TOKENS),
+            self.llm.bind(max_tokens=int(self.MAX_TOKENS / 2)),
             tools=self.tools,
             checkpointer=self.checkpointer,
             pre_model_hook=summarization_node,
