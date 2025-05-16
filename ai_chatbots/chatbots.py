@@ -25,7 +25,7 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from langmem.short_term import SummarizationNode
+from langmem.short_term import SummarizationNode, summarize_messages
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
@@ -35,6 +35,7 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
+from pydantic import BaseModel
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
@@ -276,6 +277,71 @@ class SummaryState(AgentState):
     context: dict[str, Any]
 
 
+class CustomSummarizationNode(SummarizationNode):
+    """
+    Customized implementation of the SummarizationNode.  The original had a bug causing
+    the most recent user question and answer to be lost when the summary was updated.
+    """
+
+    def _func(self, node_input: dict[str, Any] | BaseModel) -> dict[str, Any]:
+        if isinstance(node_input, dict):
+            messages = node_input.get(self.input_messages_key)
+            context = node_input.get("context", {})
+        elif isinstance(node_input, BaseModel):
+            messages = getattr(node_input, self.input_messages_key, None)
+            context = getattr(node_input, "context", {})
+        else:
+            error = f"Invalid input type: {type(node_input)}"
+            raise TypeError(error)
+
+        if messages is None:
+            error = f"Missing required field `{self.input_messages_key}` in the input."
+            raise ValueError(error)
+
+        log.debug("Previous running summary: %s", context.get("running_summary"))
+        previous_summary = context.get("running_summary")
+        summarization_result = summarize_messages(
+            messages,
+            running_summary=context.get("running_summary"),
+            model=self.model,
+            max_tokens=self.max_tokens,
+            max_tokens_before_summary=self.max_tokens_before_summary,
+            max_summary_tokens=self.max_summary_tokens,
+            token_counter=self.token_counter,
+            initial_summary_prompt=self.initial_summary_prompt,
+            existing_summary_prompt=self.existing_summary_prompt,
+            final_prompt=self.final_prompt,
+        )
+
+        state_update = {self.output_messages_key: summarization_result.messages}
+
+        if summarization_result.running_summary and (
+            not previous_summary
+            or summarization_result.running_summary.summary != previous_summary.summary
+        ):
+            # The running summary has changed, update the output messages to include
+            # the latest summarization result if any and last user question/answer
+            log.debug("New running summary: %s", summarization_result.running_summary)
+            last_human_message_idx = (
+                [
+                    (idx, m)
+                    for idx, m in enumerate(messages)
+                    if isinstance(m, HumanMessage)
+                ][-1][0]
+                if len(messages) > 1
+                else 0
+            )
+            log.info("last_human_message_idx: %d", last_human_message_idx)
+            state_update[self.output_messages_key] += messages[last_human_message_idx:]
+
+            state_update["context"] = {
+                **context,
+                "running_summary": summarization_result.running_summary,
+            }
+
+        return state_update
+
+
 class SummarizingChatbot(BaseChatbot):
     """
     Chatbot that summarizes chat history after every n tokens.
@@ -299,16 +365,17 @@ class SummarizingChatbot(BaseChatbot):
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
         )
 
-        summarization_node = SummarizationNode(
+        summarization_node = CustomSummarizationNode(
             token_counter=count_tokens_approximately,
             model=summary_llm,
-            max_tokens=self.MAX_TOKENS,
-            max_summary_tokens=int(self.MAX_TOKENS / 2),
+            max_tokens=int(self.MAX_TOKENS * 1.5),
+            max_tokens_before_summary=self.MAX_TOKENS,
+            max_summary_tokens=self.MAX_TOKENS - 1,
             output_messages_key="llm_input_messages",
         )
 
         return create_react_agent(
-            self.llm.bind(max_tokens=int(self.MAX_TOKENS / 2)),
+            self.llm.bind(max_tokens=self.MAX_TOKENS),
             tools=self.tools,
             checkpointer=self.checkpointer,
             pre_model_hook=summarization_node,
