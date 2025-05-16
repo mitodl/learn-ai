@@ -70,6 +70,12 @@ DEBUG = get_bool("DEBUG", False)  # noqa: FBT003
 ALLOWED_HOSTS = ["*"]
 
 SECURE_SSL_REDIRECT = get_bool("MITOL_SECURE_SSL_REDIRECT", True)  # noqa: FBT003
+SECURE_REDIRECT_EXEMPT = [
+    "^health/startup/$",
+    "^health/liveness/$",
+    "^health/readiness/$",
+    "^health/full/$",
+]
 
 SITE_ID = 1
 APP_BASE_URL = get_string("MITOL_APP_BASE_URL", None)
