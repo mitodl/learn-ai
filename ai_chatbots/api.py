@@ -25,7 +25,7 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
     if tool_messages:
         msg_content = tool_messages[-1].content
         try:
-            content = json.loads(msg_content or {})
+            content = json.loads(msg_content or "{}")
             metadata = {
                 "metadata": {
                     "search_url": content.get("metadata", {}).get("search_url"),
