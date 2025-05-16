@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+Version 0.6.4
+-------------
+
+- feat: Add healthcheck plugin (#188)
+
 Version 0.6.3 (Released May 14, 2025)
 -------------
 
