@@ -16,6 +16,15 @@ from ai_chatbots.factories import (
 from main.factories import UserFactory
 
 
+@pytest.fixture(autouse=True)
+def mock_settings(settings):
+    """Langsmith API should be blank for most tests"""
+    os.environ["LANGSMITH_API_KEY"] = ""
+    os.environ["LANGSMITH_TRACING"] = "false"
+    settings.LANGSMITH_API_KEY = ""
+    return settings
+
+
 @pytest.fixture
 async def async_user():
     """Return a user for the agent."""
