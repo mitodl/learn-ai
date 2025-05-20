@@ -1,13 +1,13 @@
 """Management command for updating a prompt's text content from the command line."""
 
-import os
 import sys
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management import BaseCommand
 from langchain_core.prompts import ChatPromptTemplate
 from langsmith import Client as LangsmithClient
-from langsmith.utils import LangSmithNotFoundError
+from langsmith.utils import LangSmithError, LangSmithNotFoundError
 from open_learning_ai_tutor.prompts import (
     TUTOR_PROMPT_MAPPING,
     assessment_prompt_mapping,
@@ -47,15 +47,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):  # noqa: ARG002
         """Clear the prompt cache."""
+
         prompt_name = options["prompt_name"]
         prompt_value = options["content"]
         prompt_file_value = options["contentfile"]
-
-        if prompt_file_value and prompt_value:
-            self.stdout.error(
-                "Please provide either --content or --contentfile, not both."
-            )
-            return 1
 
         if prompt_file_value:
             with Path.open(prompt_file_value, "r") as file:
@@ -85,9 +80,9 @@ class Command(BaseCommand):
         )
 
         cache = get_django_cache()
-        client = LangsmithClient(api_key=os.environ.get("LANGSMITH_API_KEY"))
         prompt_key = prompt_env_key(prompt_name)
         try:
+            client = LangsmithClient(api_key=settings.LANGSMITH_API_KEY)
             current_value = client.pull_prompt(prompt_key).messages[0].prompt.template
             if current_value != prompt_value:
                 # Prompt exists with different content, make user confirm overwrite
@@ -112,6 +107,9 @@ class Command(BaseCommand):
             prompt = ChatPromptTemplate([("system", prompt_value)])
             client.push_prompt(prompt_key, object=prompt)
             cache.delete(prompt_name)
+        except LangSmithError as le:
+            self.stderr.write(f"{le}\n\nError: Please check your Langsmith env values.")
+            sys.exit(1)
         self.stdout.write(
             self.style.SUCCESS(
                 f"Successfully updated prompt '{prompt_key}' on LangSmith."
