@@ -102,5 +102,14 @@ On the langsmith UI, there is a "Prompts" menu button on the left side that will
 them. Each environment will have its own set of prompts (each prompt will have a "\_dev/rc/prod"
 suffix). If you click on one for details, there will be an "Edit in Playground" button at top
 right that will let you make/test changes. The prompts are cached in redis so if changes are
-made and you want them to take effect right away, you can run a new clear_prompt_cache management
+made and you want them to take effect right away, you can run a new `clear_prompt_cache` management
 command.
+
+If you need to update a prompt, you have 2 options:
+
+- Update it directly from the LangSmith prompt UI
+- Use the "update_prompt" management command (ex: `./manage.py update_prompt --prompt syllabus`). If the
+  prompt already exists in LangSmith and has a different value, you will need to manually confirm
+  the change. This may happen if someone had editied the prompt in the Langsmith UI, in which
+  case you should consult with the editor, merge the changes together into the hardcoded `prompts.py`
+  value, and then run the management command again.
