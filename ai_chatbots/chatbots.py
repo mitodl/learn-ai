@@ -39,7 +39,11 @@ from ai_chatbots import tools
 from ai_chatbots.api import get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
-from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
+from ai_chatbots.tools import (
+    get_video_transcript_chunk,
+    search_content_files,
+    search_related_course_content_files,
+)
 from ai_chatbots.utils import get_django_cache
 
 log = logging.getLogger(__name__)
@@ -357,7 +361,9 @@ class SyllabusBot(BaseChatbot):
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
+        enable_related_resources: Optional[bool] = False,
     ):
+        self.enable_related_resources = enable_related_resources
         super().__init__(
             user_id,
             name=name,
@@ -367,11 +373,15 @@ class SyllabusBot(BaseChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
+
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
         """Create tools required by the agent"""
-        return [search_content_files]
+        tools = [search_content_files]
+        if self.enable_related_resources:
+            tools.append(search_related_course_content_files)
+        return tools
 
     def create_agent_graph(self) -> CompiledGraph:
         """
