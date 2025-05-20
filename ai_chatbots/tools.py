@@ -70,10 +70,11 @@ class SearchToolSchema(pydantic.BaseModel):
                 Type of resource to search for: course, program, video, etc.
                 If the user mentions courses, programs, videos, or podcasts in
                 particular, filter the search by this parameter.  DO NOT USE THE
-                resource_typeFILTER OTHERWISE. You MUST combine multiple resource types
+                resource_type FILTER OTHERWISE. You MUST combine multiple resource types
                 in one request like this: "resource_type=course&resource_type=program".
-                Do not attempt more than one query peruser message. If the user asks for
-                podcasts, filter by both "podcast" and "podcast_episode".
+                Do not attempt more than one query per user message.
+                If the user asks for podcasts, filter by both "podcast"
+                and "podcast_episode".
                 """
             ),
         )
@@ -185,7 +186,7 @@ def search_courses(
 
 
 class SearchContentFilesToolSchema(pydantic.BaseModel):
-    """Schema for searching MIT contentfiles related to a particular course."""
+    """Schema for searching MIT contentfiles for a specific course."""
 
     q: str = Field(
         description=(
@@ -193,10 +194,21 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
         )
     )
     state: Annotated[dict, InjectedState] = Field(
+        description=("The agent state, including course_id, and collection_name")
+    )
+
+
+class SearchRelatedResourceContentFilesToolSchema(pydantic.BaseModel):
+    """Schema for searching MIT contentfiles related to courses within a program."""
+
+    q: str = Field(
         description=(
-            "The agent state, including course_id, collection_name"
-            " and related_resources params"
+            "Query content related to courses within a program that "
+            "might answer the user's question."
         )
+    )
+    state: Annotated[dict, InjectedState] = Field(
+        description=("The agent state with a related_resources param")
     )
 
 
@@ -215,15 +227,18 @@ class VideoGPTToolSchema(pydantic.BaseModel):
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
-def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
+def search_content_files(
+    q: str,
+    state: Annotated[dict, InjectedState],
+) -> str:
     """
     Query the MIT contentfile vector endpoint API, and return results as a
     JSON string, along with metadata about the query parameters used.
     """
+
     url = settings.AI_MIT_SYLLABUS_URL
     course_id = state["course_id"][-1]
     collection_name = state["collection_name"][-1]
-    related_resources = state["related_resources"]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -232,8 +247,47 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     if collection_name:
         params["collection_name"] = collection_name
 
-    if related_resources:
-        params["resource_readable_id"] = [course_id, *related_resources]
+    log.info("Searching MIT API with params: %s", params)
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        raw_results = response.json().get("results", [])
+        # Simplify the response to only include the main properties
+        simplified_results = []
+        for result in raw_results:
+            simplified_result = {
+                "chunk_content": result.get("chunk_content"),
+                "run_title": result.get("run_title"),
+            }
+            simplified_results.append(simplified_result)
+        full_output = {
+            "results": simplified_results,
+            "metadata": {"parameters": params},
+        }
+        return json.dumps(full_output)
+    except requests.exceptions.RequestException:
+        log.exception("Error querying MIT API")
+        return json.dumps({"error": "An error occurred while searching"})
+
+
+@tool(args_schema=SearchRelatedResourceContentFilesToolSchema)
+def search_related_course_content_files(
+    q: str, state: Annotated[dict, InjectedState]
+) -> str:
+    """
+    Query the MIT contentfile vector endpoint API, and return results as a
+    JSON string, along with metadata about the query parameters used.
+    """
+    url = settings.AI_MIT_SYLLABUS_URL
+    collection_name = state["collection_name"][-1]
+    related_resources = state["related_resources"]
+    params = {
+        "q": q,
+        "resource_readable_id": related_resources,
+        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
+    }
+    if collection_name:
+        params["collection_name"] = collection_name
 
     log.info("Searching MIT API with params: %s", params)
     try:
