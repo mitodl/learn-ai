@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.7.0
+Version 0.7.0 (Released May 21, 2025)
 -------------
 
 - Adjust chatbot system prompts to tell the LLM its name is Tim (#196)
