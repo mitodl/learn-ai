@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+Version 0.7.0
+-------------
+
+- Adjust chatbot system prompts to tell the LLM its name is Tim (#196)
+- Add langsmith integration to the README (#195)
+- Rename the imported realm file name. (#197)
+- config: Bypass SSL redirect for healthcheck endpoints
+
 Version 0.6.4 (Released May 21, 2025)
 -------------
 
