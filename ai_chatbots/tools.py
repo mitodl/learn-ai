@@ -199,16 +199,23 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
 
 
 class SearchRelatedResourceContentFilesToolSchema(pydantic.BaseModel):
-    """Schema for searching MIT contentfiles related to courses within a program."""
+    """
+    Schema for searching MIT content files related to courses within a program.
+    This can also be used if the user asks for
+    information specific to one course in a program
+    """
 
     q: str = Field(
         description=(
-            "Query content related to courses within a program that "
+            "Query content related to specific course(s) in a program that "
             "might answer the user's question."
         )
     )
     state: Annotated[dict, InjectedState] = Field(
-        description=("The agent state with a related_resources param")
+        description=(
+            "The agent state with a related_resources param to query "
+            "content related to specific course(s) in a program"
+        )
     )
 
 
@@ -224,6 +231,30 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     state: Annotated[dict, InjectedState] = Field(
         description="The agent state, including video transcript block id"
     )
+
+
+def _content_file_search(url, params):
+    log.info("Searching MIT API with params: %s", params)
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        raw_results = response.json().get("results", [])
+        # Simplify the response to only include the main properties
+        simplified_results = []
+        for result in raw_results:
+            simplified_result = {
+                "chunk_content": result.get("chunk_content"),
+                "run_title": result.get("run_title"),
+            }
+            simplified_results.append(simplified_result)
+        full_output = {
+            "results": simplified_results,
+            "metadata": {"parameters": params},
+        }
+        return json.dumps(full_output)
+    except requests.exceptions.RequestException:
+        log.exception("Error querying MIT API")
+        return json.dumps({"error": "An error occurred while searching"})
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
@@ -248,26 +279,7 @@ def search_content_files(
         params["collection_name"] = collection_name
 
     log.info("Searching MIT API with params: %s", params)
-    try:
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {
-                "chunk_content": result.get("chunk_content"),
-                "run_title": result.get("run_title"),
-            }
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"parameters": params},
-        }
-        return json.dumps(full_output)
-    except requests.exceptions.RequestException:
-        log.exception("Error querying MIT API")
-        return json.dumps({"error": "An error occurred while searching"})
+    return _content_file_search(url, params)
 
 
 @tool(args_schema=SearchRelatedResourceContentFilesToolSchema)
@@ -288,28 +300,7 @@ def search_related_course_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
-
-    log.info("Searching MIT API with params: %s", params)
-    try:
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {
-                "chunk_content": result.get("chunk_content"),
-                "run_title": result.get("run_title"),
-            }
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"parameters": params},
-        }
-        return json.dumps(full_output)
-    except requests.exceptions.RequestException:
-        log.exception("Error querying MIT API")
-        return json.dumps({"error": "An error occurred while searching"})
+    return _content_file_search(url, params)
 
 
 @tool(args_schema=VideoGPTToolSchema)
