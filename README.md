@@ -10,6 +10,7 @@ This application provides backend API endpoints to access various AI chatbots.
 2. [Configuration](#configuration)
 3. [Committing & Formatting](#committing--formatting)
 4. [Sample Requests](#sample-requests)
+5. [Langsmith Integration](#langsmith-integration)
 
 ## Initial Setup
 
@@ -82,3 +83,33 @@ curl 'http://ai.open.odl.local:8002/http/recommendation_agent/' \
   --data-raw '{"message":"I am curious about AI applications for business"}' \
   --verbose
 ```
+
+## Langsmith Integration
+
+[Langsmith](https://smith.langchain.com) can be used to manage the AI agent prompts and monitor their usage, costs, and outputs.
+To enable this functionality, you need to perform the following steps:
+
+1. Create a free Langsmith account and obtain an API key.
+2. Add the following to your backend environment variables:
+   ```
+   LANGSMITH_TRACING=true
+   LANGSMITH_API_KEY=<your_api_key>
+   LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+   LANGSMITH_PROJECT=<any_project_name_you_want>
+   ```
+
+On the langsmith UI, there is a "Prompts" menu button on the left side that will load a list of
+them. Each environment will have its own set of prompts (each prompt will have a "\_dev/rc/prod"
+suffix). If you click on one for details, there will be an "Edit in Playground" button at top
+right that will let you make/test changes. The prompts are cached in redis so if changes are
+made and you want them to take effect right away, you can run a new `clear_prompt_cache` management
+command.
+
+If you need to update a prompt, you have 2 options:
+
+- Update it directly from the LangSmith prompt UI
+- Use the "update_prompt" management command (ex: `./manage.py update_prompt --prompt syllabus`). If the
+  prompt already exists in LangSmith and has a different value, you will need to manually confirm
+  the change. This may happen if someone had editied the prompt in the Langsmith UI, in which
+  case you should consult with the editor, merge the changes together into the hardcoded `prompts.py`
+  value, and then run the management command again.
