@@ -44,6 +44,7 @@ pytestmark = pytest.mark.django_db
 def mock_settings(settings):
     """Langsmith API should be blank for most tests"""
     os.environ["LANGSMITH_API_KEY"] = ""
+    os.environ["LANGSMITH_TRACING"] = ""
     settings.LANGSMITH_API_KEY = ""
     return settings
 
