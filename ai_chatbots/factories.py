@@ -12,7 +12,7 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.messages.ai import AIMessage, AIMessageChunk
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from ai_chatbots import models
@@ -145,6 +145,7 @@ class BaseMessageFactory(factory.Factory):
     """Factory for generating BaseMessage instances."""
 
     content = factory.Faker("sentence")
+    id = factory.Faker("uuid4")
 
     class Meta:
         model = BaseMessage
@@ -177,6 +178,13 @@ class ToolMessageFactory(BaseMessageFactory):
 
     class Meta:
         model = ToolMessage
+
+
+class AIMessageFactory(BaseMessageFactory):
+    """Factory for generating HumantMessage instances."""
+
+    class Meta:
+        model = AIMessage
 
 
 class AIMessageChunkFactory(BaseMessageFactory):

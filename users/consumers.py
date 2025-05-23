@@ -21,7 +21,7 @@ class UserMetaHttpConsumer(AsyncHttpConsumer):
         if user and not user.is_anonymous:
             user = user.to_json()
         else:
-            log.info("Anon user, no session")
+            log.debug("Anon user, no session")
             user = json.dumps({"is_anonymous": True})
 
         await self.send_headers(
@@ -52,7 +52,6 @@ class UserMetaHttpConsumer(AsyncHttpConsumer):
             await self.disconnect()
 
     async def send_chunk(self, chunk: str, *, more_body: bool = True):
-        log.info(chunk)
         await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):
