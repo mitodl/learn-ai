@@ -223,7 +223,10 @@ async def test_get_completion(
             __aiter__=mocker.Mock(
                 return_value=MockAsyncIterator(
                     [
-                        (AIMessageChunkFactory.create(content=val),)
+                        (
+                            AIMessageChunkFactory.create(content=val),
+                            {"langgraph_node": "agent"},
+                        )
                         for val in expected_return_value
                     ]
                 )
@@ -261,29 +264,36 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
     chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer, thread_id="foo")
     agent = chatbot.create_agent_graph()
-    for node in ("agent", "tools"):
+    for node in ("agent", "tools", "pre_model_hook"):
         assert node in agent.nodes
     graph = agent.get_graph()
     tool = graph.nodes["tools"].data.tools_by_name["search_courses"]
     assert tool.args_schema == SearchToolSchema
     assert tool.func.__name__ == "search_courses"
     edges = graph.edges
-    assert len(edges) == 4
-    tool_agent_edge = edges[1]
+    assert len(edges) == 5
+    summary_edge = edges[1]
+    for test_condition in (
+        summary_edge.source == "pre_model_hook",
+        summary_edge.target == "agent",
+        not summary_edge.conditional,
+    ):
+        assert test_condition
+    tool_agent_edge = edges[2]
     for test_condition in (
         tool_agent_edge.source == "tools",
-        tool_agent_edge.target == "agent",
+        tool_agent_edge.target == "pre_model_hook",
         not tool_agent_edge.conditional,
     ):
         assert test_condition
-    agent_tool_edge = edges[2]
+    agent_tool_edge = edges[3]
     for test_condition in (
         agent_tool_edge.source == "agent",
         agent_tool_edge.target == "tools",
         agent_tool_edge.conditional,
     ):
         assert test_condition
-    agent_end_edge = edges[3]
+    agent_end_edge = edges[4]
     for test_condition in (
         agent_end_edge.source == "agent",
         agent_end_edge.target == "__end__",
@@ -301,6 +311,7 @@ async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
         tools=chatbot.tools,
         checkpointer=chatbot.checkpointer,
         state_schema=SyllabusAgentState,
+        pre_model_hook=ANY,
         state_modifier=chatbot.instructions,
     )
 
@@ -493,10 +504,10 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     settings.AI_DEFAULT_RECOMMENDATION_MODEL = model_name
     chatbot = ResourceRecommendationBot("user1", mock_checkpointer)
     if use_proxy:
-        mock_create_proxy_user.assert_called_once_with("user1")
+        mock_create_proxy_user.assert_any_call("user1")
         assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
         assert isinstance(chatbot.proxy, LiteLLMProxy)
-        mock_llm.assert_called_once_with(
+        mock_llm.assert_any_call(
             model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
             **chatbot.proxy.get_api_kwargs(),
             **chatbot.proxy.get_additional_kwargs(chatbot),
@@ -505,7 +516,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         mock_create_proxy_user.assert_not_called()
         assert chatbot.proxy_prefix == ""
         assert chatbot.proxy is None
-        mock_llm.assert_called_once_with(
+        mock_llm.assert_any_call(
             model=model_name,
             **{},
             **{},
@@ -635,6 +646,7 @@ async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
         tools=chatbot.tools,
         checkpointer=chatbot.checkpointer,
         state_schema=VideoGPTAgentState,
+        pre_model_hook=ANY,
         state_modifier=chatbot.instructions,
     )
 

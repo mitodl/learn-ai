@@ -83,8 +83,23 @@ ANSWER QUESTIONS.  If no results are returned, say you could not find any releva
 information."""
 
 
+# The following prompts are similar or identical to the default ones in
+# langmem.short_term.summarization
+PROMPT_SUMMARY_INITIAL = """Create a summary of the conversation above.
+If there are any tool results, include the full output of the latest one in
+the summary.
+"""
+PROMPT_SUMMARY_EXISTING = """This is summary of the conversation so far:
+{existing_summary}
+\n\nExtend this summary by taking into account the new messages above:"""
+PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
+
+
 PROMPT_MAPPING = {
     "recommendation": PROMPT_RECOMMENDATION,
     "syllabus": PROMPT_SYLLABUS,
     "video_gpt": PROMPT_VIDEO_GPT,
+    "summary_initial": PROMPT_SUMMARY_INITIAL,
+    "summary_existing": PROMPT_SUMMARY_EXISTING,
+    "summary_final": PROMPT_SUMMARY_FINAL,
 }
