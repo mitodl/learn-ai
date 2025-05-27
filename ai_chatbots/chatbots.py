@@ -6,7 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
@@ -18,6 +18,8 @@ from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.messages.utils import count_tokens_approximately
+from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tools.base import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
@@ -36,7 +38,7 @@ from openai import BadRequestError
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
-from ai_chatbots.api import get_search_tool_metadata
+from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
 from ai_chatbots.tools import (
@@ -59,6 +61,7 @@ class BaseChatbot(ABC):
     # For LiteLLM tracking purposes
     TASK_NAME = "BASE_TASK"
     JOB_ID = "BASECHAT_JOB"
+    STATE_CLASS = AgentState
 
     def __init__(  # noqa: PLR0913
         self,
@@ -146,12 +149,12 @@ class BaseChatbot(ABC):
         agent_node = "agent"
         tools_node = "tools"
 
-        def tool_calling_llm(state: MessagesState) -> MessagesState:
+        def tool_calling_llm(state: AgentState) -> AgentState:
             """Call the LLM, injecting system prompt"""
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
                 state["messages"].insert(0, SystemMessage(self.instructions))
-            return MessagesState(messages=[self.llm.invoke(state["messages"])])
+            return self.STATE_CLASS(messages=[self.llm.invoke(state["messages"])])
 
         agent_graph = StateGraph(MessagesState)
         # Add the agent node that first calls the LLM
@@ -230,7 +233,10 @@ class BaseChatbot(ABC):
                 stream_mode="messages",
             )
             async for chunk in response_generator:
-                if isinstance(chunk[0], AIMessageChunk):
+                if (
+                    isinstance(chunk[0], AIMessageChunk)
+                    and chunk[1].get("langgraph_node") != "pre_model_hook"
+                ):
                     full_response += chunk[0].content
                     yield chunk[0].content
         except BadRequestError as error:
@@ -266,7 +272,98 @@ class BaseChatbot(ABC):
         raise NotImplementedError
 
 
-class RecommendationAgentState(AgentState):
+class SummaryState(AgentState):
+    """
+    AgentState with context field to keep track of previous summary information
+    """
+
+    context: dict[str, Any]
+
+
+class SummarizingChatbot(BaseChatbot):
+    """
+    Chatbot that summarizes chat history after every n tokens.  The initial prompts are
+    based on the original langmem.short_term.summarization prompts.
+    """
+
+    STATE_CLASS = SummaryState
+    MAX_TOKENS = 5000
+
+    INITIAL_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
+        [
+            ("placeholder", "{messages}"),
+            (
+                "user",
+                get_system_prompt("summary_initial", PROMPT_MAPPING, get_django_cache),
+            ),
+        ]
+    )
+
+    EXISTING_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
+        [
+            ("placeholder", "{messages}"),
+            (
+                "user",
+                get_system_prompt("summary_existing", PROMPT_MAPPING, get_django_cache),
+            ),
+        ]
+    )
+
+    FINAL_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
+        [
+            # if exists
+            ("placeholder", "{system_message}"),
+            (
+                "system",
+                get_system_prompt("summary_final", PROMPT_MAPPING, get_django_cache),
+            ),
+            ("placeholder", "{messages}"),
+        ]
+    )
+
+    def create_agent_graph(self) -> CompiledGraph:
+        """
+        Generate a standard react agent graph for the summarizing agent.
+        Use the custom SummarizingAgentState to summarize the chat history
+        after MAX_TOKENS have been reached.
+
+        https://github.com/langchain-ai/langgraph/blob/main/docs/docs/how-tos/create-react-agent-manage-message-history.ipynb
+        """
+
+        summary_llm = ChatLiteLLM(
+            model=f"{self.proxy_prefix}{settings.AI_DEFAULT_SUMMARY_MODEL}",
+            **(self.proxy.get_api_kwargs() if self.proxy else {}),
+            **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
+        )
+
+        # Summary should be 1/2 the size of max_tokens, to allow room for other messages
+        max_summary_tokens = min(settings.AI_MAX_TOKEN_BIND, int(self.MAX_TOKENS / 2))
+
+        summarization_node = CustomSummarizationNode(
+            token_counter=count_tokens_approximately,
+            model=summary_llm.bind(max_tokens=max_summary_tokens),
+            max_tokens=int(self.MAX_TOKENS),
+            max_tokens_before_summary=self.MAX_TOKENS,
+            max_summary_tokens=max_summary_tokens,
+            output_messages_key="llm_input_messages",
+            initial_summary_prompt=self.INITIAL_SUMMARY_PROMPT,
+            existing_summary_prompt=self.EXISTING_SUMMARY_PROMPT,
+            final_prompt=self.FINAL_SUMMARY_PROMPT,
+        )
+
+        log.debug("Instructions: \n%s\n\n", self.instructions)
+
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.checkpointer,
+            pre_model_hook=summarization_node,
+            state_schema=self.STATE_CLASS,
+            state_modifier=self.instructions,
+        )
+
+
+class RecommendationAgentState(SummaryState):
     """
     State for the recommendation bot. Passes search url
     to the associated tool function.
@@ -275,7 +372,7 @@ class RecommendationAgentState(AgentState):
     search_url: Annotated[list[str], add]
 
 
-class ResourceRecommendationBot(BaseChatbot):
+class ResourceRecommendationBot(SummarizingChatbot):
     """
     Chatbot that searches for learning resources in the MIT Learn catalog,
     then recommends the best results to the user based on their query.
@@ -284,6 +381,8 @@ class ResourceRecommendationBot(BaseChatbot):
     PROMPT_TEMPLATE = "recommendation"
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
+    STATE_CLASS = RecommendationAgentState
+    MAX_TOKENS = settings.AI_DEFAULT_RECOMMENDATION_MAX_TOKENS
 
     def __init__(  # noqa: PLR0913
         self,
@@ -318,22 +417,8 @@ class ResourceRecommendationBot(BaseChatbot):
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
 
-    def create_agent_graph(self) -> CompiledGraph:
-        """
-        Generate a standard react agent graph for the recommendation agent.
-        Use the custom RecommendationAgentState to pass search_url
-        to the associated tool function.
-        """
-        return create_react_agent(
-            self.llm,
-            tools=self.tools,
-            checkpointer=self.checkpointer,
-            state_schema=RecommendationAgentState,
-            state_modifier=self.instructions,
-        )
 
-
-class SyllabusAgentState(AgentState):
+class SyllabusAgentState(SummaryState):
     """
     State for the syllabus bot. Passes course_id and
     collection_name to the associated tool function.
@@ -344,12 +429,14 @@ class SyllabusAgentState(AgentState):
     related_resources: Annotated[list[str], add]
 
 
-class SyllabusBot(BaseChatbot):
+class SyllabusBot(SummarizingChatbot):
     """Service class for the AI syllabus agent"""
 
     PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
+    STATE_CLASS = SyllabusAgentState
+    MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
 
     def __init__(  # noqa: PLR0913
         self,
@@ -382,20 +469,6 @@ class SyllabusBot(BaseChatbot):
         if self.enable_related_resources:
             tools.append(search_related_course_content_files)
         return tools
-
-    def create_agent_graph(self) -> CompiledGraph:
-        """
-        Generate a standard react agent graph for the syllabus agent.
-        Use the custom SyllabusAgentState to pass course_id and collection_name
-        to the associated tool function.
-        """
-        return create_react_agent(
-            self.llm,
-            tools=self.tools,
-            checkpointer=self.checkpointer,
-            state_schema=SyllabusAgentState,
-            state_modifier=self.instructions,
-        )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -583,7 +656,7 @@ def get_matching_content(api_results: json, edx_module_id: str):
     return ""
 
 
-class VideoGPTAgentState(AgentState):
+class VideoGPTAgentState(SummaryState):
     """
     State for the video GPT bot. Passes transcript_asset_id
     to the associated tool function.
@@ -592,26 +665,14 @@ class VideoGPTAgentState(AgentState):
     transcript_asset_id: Annotated[list[str], add]
 
 
-class VideoGPTBot(BaseChatbot):
+class VideoGPTBot(SummarizingChatbot):
     """Service class for the AI video chat agent"""
 
     PROMPT_TEMPLATE = "video_gpt"
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
-
-    INSTRUCTIONS = """You are an assistant helping users answer questions related
-to a video transcript.
-Your job:
-1. Use the available function to gather relevant information about the user's question.
-2. Provide a clear, user-friendly summary of the information retrieved by the tool to
-answer the user's question.
-3. Do not specify the answer is from a transcript, instead say it's from video.
-Always use the tool results to answer questions, and answer only based on the tool
-output. Do not include the xblock video id in the query parameter.
-VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
-ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
-information.
-"""
+    STATE_CLASS = VideoGPTAgentState
+    MAX_TOKENS = settings.AI_DEFAULT_VIDEO_GPT_MAX_TOKENS
 
     def __init__(  # noqa: PLR0913
         self,
@@ -638,20 +699,6 @@ information.
     def create_tools(self):
         """Create tools required for the agent"""
         return [get_video_transcript_chunk]
-
-    def create_agent_graph(self) -> CompiledGraph:
-        """
-        Generate a standard react agent graph for the video gpt agent.
-        Use the custom VideoGPTAgentState to pass transcript_asset_id
-        to the associated tool function.
-        """
-        return create_react_agent(
-            self.llm,
-            tools=self.tools,
-            checkpointer=self.checkpointer,
-            state_schema=VideoGPTAgentState,
-            state_modifier=self.instructions,
-        )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""

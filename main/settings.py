@@ -31,11 +31,12 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.6.2"
+VERSION = "0.7.0"
 
 log = logging.getLogger()
 
-CELERY_BROKER_URL = get_string("CELERY_BROKER_URL", get_string("REDISCLOUD_URL", None))
+REDIS_URL = get_string("REDIS_URL", get_string("REDISCLOUD_URL", None))
+CELERY_BROKER_URL = get_string("CELERY_BROKER_URL", REDIS_URL)
 ENVIRONMENT = get_string("MITOL_ENVIRONMENT", "dev")
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
@@ -69,6 +70,12 @@ DEBUG = get_bool("DEBUG", False)  # noqa: FBT003
 ALLOWED_HOSTS = ["*"]
 
 SECURE_SSL_REDIRECT = get_bool("MITOL_SECURE_SSL_REDIRECT", True)  # noqa: FBT003
+SECURE_REDIRECT_EXEMPT = [
+    "^health/startup/$",
+    "^health/liveness/$",
+    "^health/readiness/$",
+    "^health/full/$",
+]
 
 SITE_ID = 1
 APP_BASE_URL = get_string("MITOL_APP_BASE_URL", None)
@@ -105,7 +112,46 @@ INSTALLED_APPS = (
     "openapi",
     "users",
     "ai_chatbots",
+    "health_check",
+    "health_check.cache",
+    "health_check.contrib.migrations",
+    "health_check.contrib.celery_ping",
+    "health_check.contrib.redis",
+    "health_check.contrib.db_heartbeat",
 )
+
+HEALTH_CHECK = {
+    "SUBSETS": {
+        # The 'startup' subset includes checks that must pass before the application can
+        # start.
+        "startup": [
+            "MigrationsHealthCheck",  # Ensures database migrations are applied.
+            "CacheBackend",  # Verifies the cache backend is operational.
+            "RedisHealthCheck",  # Confirms Redis is reachable and functional.
+            "DatabaseHeartBeatCheck",  # Checks the database connection is alive.
+        ],
+        # The 'liveness' subset includes checks to determine if the application is
+        # running.
+        "liveness": ["DatabaseHeartBeatCheck"],  # Minimal check to ensure the app is
+        # alive.
+        # The 'readiness' subset includes checks to determine if the application is
+        # ready to serve requests.
+        "readiness": [
+            "CacheBackend",  # Ensures the cache is ready for use.
+            "RedisHealthCheck",  # Confirms Redis is ready for use.
+            "DatabaseHeartBeatCheck",  # Verifies the database is ready for queries.
+        ],
+        # The 'full' subset includes all available health checks for a comprehensive
+        # status report.
+        "full": [
+            "MigrationsHealthCheck",  # Ensures database migrations are applied.
+            "CacheBackend",  # Verifies the cache backend is operational.
+            "RedisHealthCheck",  # Confirms Redis is reachable and functional.
+            "DatabaseHeartBeatCheck",  # Checks the database connection is alive.
+            "CeleryPingHealthCheck",  # Verifies Celery workers are responsive.
+        ],
+    }
+}
 
 if not get_bool("RUN_DATA_MIGRATIONS", default=False):
     MIGRATION_MODULES = {"data_fixtures": None}
@@ -362,7 +408,6 @@ LOGGING = {
 }
 
 STATUS_TOKEN = get_string("STATUS_TOKEN", "")
-HEALTH_CHECK = ["CELERY", "REDIS", "POSTGRES", "OPEN_SEARCH"]
 
 GA_TRACKING_ID = get_string("GA_TRACKING_ID", "")
 GA_G_TRACKING_ID = get_string("GA_G_TRACKING_ID", "")
@@ -616,9 +661,16 @@ AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o")
 AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
 )
+AI_DEFAULT_RECOMMENDATION_MAX_TOKENS = get_int(
+    "AI_DEFAULT_RECOMMENDATION_MAX_TOKENS", 7500
+)
+AI_DEFAULT_SUMMARY_MODEL = get_string("AI_DEFAULT_SUMMARY_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_SYLLABUS_MODEL = get_string("AI_DEFAULT_SYLLABUS_MODEL", AI_DEFAULT_MODEL)
+# AI agents that return lengthy tool/search results need larger token limits
+AI_DEFAULT_SYLLABUS_MAX_TOKENS = get_int("AI_DEFAULT_SYLLABUS_MAX_TOKENS", 16384)
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
+AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
@@ -627,6 +679,7 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
     name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
+AI_MAX_TOKEN_BIND = get_int(name="AI_MAX_TOKEN_BIND", default=16384)
 AI_PROMPT_CACHE_DURATION = get_int(
     name="AI_PROMPT_CACHE_DURATION", default=60 * 60 * 24 * 28
 )  # 28 days

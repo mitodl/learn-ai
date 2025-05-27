@@ -234,7 +234,7 @@ class VideoGPTToolSchema(pydantic.BaseModel):
 
 
 def _content_file_search(url, params):
-    log.info("Searching MIT API with params: %s", params)
+    log.debug("Searching MIT API with params: %s", params)
     try:
         response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
@@ -277,7 +277,6 @@ def search_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
-
     log.info("Searching MIT API with params: %s", params)
     return _content_file_search(url, params)
 
@@ -318,7 +317,7 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
         "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
     }
 
-    log.info("Searching MIT API with params: %s", params)
+    log.debug("Searching MIT API with params: %s", params)
     try:
         response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()

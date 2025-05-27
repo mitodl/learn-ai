@@ -1,6 +1,29 @@
 Release Notes
 =============
 
+Version 0.7.0 (Released May 21, 2025)
+-------------
+
+- Adjust chatbot system prompts to tell the LLM its name is Tim (#196)
+- Add langsmith integration to the README (#195)
+- Rename the imported realm file name. (#197)
+- config: Bypass SSL redirect for healthcheck endpoints
+
+Version 0.6.4 (Released May 21, 2025)
+-------------
+
+- feat: Add healthcheck plugin (#188)
+
+Version 0.6.3 (Released May 14, 2025)
+-------------
+
+- Update tutor version (#189)
+- Langsmith tracing and logging (#169)
+- Update dependency ruff to v0.11.9 (#185)
+- Update dependency open-learning-ai-tutor to ^0.0.9 (#184)
+- Update dependency next to v15.3.2 (#183)
+- Update dependency eslint-config-next to v15.3.2 (#182)
+
 Version 0.6.2 (Released May 13, 2025)
 -------------
 

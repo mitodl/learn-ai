@@ -52,6 +52,7 @@ urlpatterns = (
         re_path(r"^hijack/", include("hijack.urls", namespace="hijack")),
         re_path(r"", include("openapi.urls")),
         re_path(r"^$", index, name="learn-ai-index"),
+        re_path(r"^health/", include("health_check.urls")),
     ]
     + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
