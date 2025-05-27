@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+Version 0.8.0
+-------------
+
+- Summarize chat sessions beyond a certain token limit (#193)
+
 Version 0.7.0 (Released May 21, 2025)
 -------------
 
