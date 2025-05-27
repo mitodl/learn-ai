@@ -3582,13 +3582,13 @@ orjson = ">=3.10.1"
 
 [[package]]
 name = "langmem"
-version = "0.0.25"
+version = "0.0.27"
 description = "Prebuilt utilities for memory management and retrieval."
 optional = false
 python-versions = ">=3.10"
 files = [
-    {file = "langmem-0.0.25-py3-none-any.whl", hash = "sha256:907705bdb95fc81adb9a99d8e1621249cfb9cff6ea69ce8c34a68bed14d932fc"},
-    {file = "langmem-0.0.25.tar.gz", hash = "sha256:85a9669a83875dd28b7624dad874e0a5659ffdc55bd978d7da0b949d36558f2e"},
+    {file = "langmem-0.0.27-py3-none-any.whl", hash = "sha256:25e9f06ad7c420442cf4b62caff6f805b124dfb2e2cc9cacc464d7a455fbafda"},
+    {file = "langmem-0.0.27.tar.gz", hash = "sha256:729c1eb77c4cd8d9f2285f908a68a1e622ef01f074eeeb8cbbc7343f296efc53"},
 ]
 
 [package.dependencies]
@@ -7908,4 +7908,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "409e757bf94fe13d9ea9e06cc7ef37750b9ce29241eacdcdcdfa627d5f2b5a3f"
+content-hash = "1b345ec46c6d55698d9b6cee8c75ae97552d64752dc068230ec2e7b88f0c3790"
