@@ -169,7 +169,7 @@ def decode_apisix_headers(request, model="users_user"):
 
         return None
 
-    log.info("decode_apisix_headers: Got %s", apisix_result)
+    log.debug("decode_apisix_headers: Got %s", apisix_result)
 
     return {
         modelKey: apisix_result[data_mapping[modelKey]]
@@ -189,7 +189,7 @@ def get_user_from_apisix_headers(request):
 
     global_id = decoded_headers.get("global_id", None)
 
-    log.info("get_user_from_apisix_headers: Authenticating %s", global_id)
+    log.debug("get_user_from_apisix_headers: Authenticating %s", global_id)
 
     user, created = User.objects.filter(global_id=global_id).get_or_create(
         defaults={
@@ -201,14 +201,14 @@ def get_user_from_apisix_headers(request):
     )
 
     if created:
-        log.info(
+        log.debug(
             "get_user_from_apisix_headers: User %s not found, created new",
             global_id,
         )
         user.set_unusable_password()
         user.save()
     else:
-        log.info(
+        log.debug(
             "get_user_from_apisix_headers: Found existing user for %s: %s",
             global_id,
             user,
@@ -220,7 +220,7 @@ def get_user_from_apisix_headers(request):
     profile_data = decode_apisix_headers(request, "users_userprofile")
 
     if profile_data:
-        log.info(
+        log.debug(
             "get_user_from_apisix_headers: Setting up additional profile for %s",
             global_id,
         )
