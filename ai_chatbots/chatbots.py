@@ -6,7 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, TypedDict
 from uuid import uuid4
 
 import posthog
@@ -14,13 +14,17 @@ import requests
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
+from langchain.tools.render import render_text_description
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.utils import count_tokens_approximately
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts.chat import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools.base import BaseTool
+from langchain_ollama import ChatOllama
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
@@ -35,7 +39,6 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
-from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
@@ -45,6 +48,22 @@ from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
 from ai_chatbots.utils import get_django_cache
 
 log = logging.getLogger(__name__)
+
+
+class ToolCallRequest(TypedDict):
+    """A typed dict that shows the inputs into the invoke_tool function."""
+
+    name: str
+    arguments: dict[str, Any]
+
+
+def invoke_tool(
+    tool_call_request: ToolCallRequest, config: Optional[RunnableConfig] = None
+):
+    tool_name_to_tool = {tool.name: tool for tool in tools}
+    name = tool_call_request["name"]
+    requested_tool = tool_name_to_tool[name]
+    return requested_tool.invoke(tool_call_request["arguments"], config=config)
 
 
 class BaseChatbot(ABC):
@@ -107,8 +126,12 @@ class BaseChatbot(ABC):
         Set it up to use a proxy, with required proxy kwargs, if applicable.
         Bind the LLM to any tools if they are present.
         """
-        llm = ChatLiteLLM(
+
+        from langchain_core.prompts import ChatPromptTemplate
+
+        llm = ChatOllama(
             model=f"{self.proxy_prefix}{self.model}",
+            base_url="http://docker.for.mac.host.internal:11434",
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
@@ -119,6 +142,25 @@ class BaseChatbot(ABC):
         # Bind tools to the LLM if any
         if self.tools:
             llm = llm.bind_tools(self.tools)
+
+            rendered_tools = render_text_description(self.tools)
+            system_prompt = f"""\
+                You are an assistant that has access to the following set of tools.
+                Here are the names and descriptions for each tool:
+                {rendered_tools}
+                Given the user input, return the name and input of the tool to use.
+                Return your response as a JSON blob with 'name' and 'arguments' keys.
+                The `arguments` should be a dictionary, with keys corresponding
+                to the argument names and the values corresponding
+                to the requested values.
+                """
+
+            prompt = ChatPromptTemplate.from_messages(
+                [("system", system_prompt), ("user", "{input}")]
+            )
+
+            llm = prompt | llm | JsonOutputParser() | invoke_tool
+
         return llm
 
     def create_agent_graph(self) -> CompiledGraph:
