@@ -195,10 +195,7 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
     )
 
     course_id: Optional[str] = Field(
-        description=(
-            "The course ID to search for content files related to the course."
-            "Do not include the course ID in the q parameter."
-        )
+        description=("The course_id to use if not provided in the agent state. "),
     )
 
     state: Annotated[dict, InjectedState] = Field(
