@@ -60,7 +60,9 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
             }
             return json.dumps(metadata)
         except json.JSONDecodeError:
-            log.exception("Error parsing tool metadata, not valid JSON")
+            log.exception(
+                "Error parsing tool metadata, not valid JSON: %s", msg_content
+            )
             return json.dumps(
                 {"error": "Error parsing tool metadata", "content": msg_content}
             )

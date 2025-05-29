@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 class SearchToolSchema(pydantic.BaseModel):
-    """Schema for searching MIT learning resources.
+    """Schema to search for MIT learning resources.
 
     Attributes:
         q: The search query string
@@ -128,7 +128,6 @@ def search_courses(
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
     """
-
     params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
 
     valid_params = {
@@ -139,7 +138,7 @@ def search_courses(
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
-    log.debug("Searching MIT API at %s with params: %s", search_url, params)
+    log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
         response = requests.get(search_url, params=params, timeout=30)
         response.raise_for_status()
@@ -148,6 +147,7 @@ def search_courses(
         main_properties = [
             "title",
             "id",
+            "readable_id",
             "description",
             "offered_by",
             "free",
@@ -160,6 +160,7 @@ def search_courses(
             simplified_result["url"] = (
                 f"{settings.AI_MIT_SEARCH_DETAIL_URL}{result.pop('id')}"
             )
+            simplified_result["course_id"] = result.pop("readable_id", None)
             # Instructors and level will be in the runs data if present
             next_date = result.get("next_start_date", None)
             raw_runs = result.get("runs", [])
@@ -192,6 +193,14 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
             "Query to find course information that might answer the user's question."
         )
     )
+
+    course_id: Optional[str] = Field(
+        description=(
+            "The course ID to search for content files related to the course."
+            "Do not include the course ID in the q parameter."
+        )
+    )
+
     state: Annotated[dict, InjectedState] = Field(
         description="The agent state, including course_id and collection_name params"
     )
@@ -212,15 +221,17 @@ class VideoGPTToolSchema(pydantic.BaseModel):
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
-def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
+def search_content_files(
+    q: str, state: Annotated[dict, InjectedState], course_id: str | None = None
+) -> str:
     """
     Query the MIT contentfile vector endpoint API, and return results as a
     JSON string, along with metadata about the query parameters used.
     """
 
     url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state["course_id"][-1]
-    collection_name = state["collection_name"][-1]
+    course_id = state.get("course_id", [None])[-1] or course_id
+    collection_name = state.get("collection_name", [None])[-1]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -228,7 +239,7 @@ def search_content_files(q: str, state: Annotated[dict, InjectedState]) -> str:
     }
     if collection_name:
         params["collection_name"] = collection_name
-    log.debug("Searching MIT API with params: %s", params)
+    log.debug("Searching MIT content API with params: %s", params)
     try:
         response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
