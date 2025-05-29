@@ -164,6 +164,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedChatMessageList'
           description: ''
+  /api/v0/get_transcript_edx_module_id/:
+    get:
+      operationId: get_transcript_edx_module_id_retrieve
+      description: API view to get the transcript block ID from edx block for a cotentfile.
+      tags:
+      - get_transcript_edx_module_id
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v0/llm_models/:
     get:
       operationId: llm_models_list
