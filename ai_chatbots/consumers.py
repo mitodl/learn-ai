@@ -414,9 +414,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
-        enable_related_resources = bool(
-            serializer.validated_data.get("related_resources")
-        )
+        enable_related_courses = bool(serializer.validated_data.get("related_courses"))
 
         return SyllabusBot(
             self.user_id,
@@ -425,18 +423,18 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
-            enable_related_resources=enable_related_resources,
+            enable_related_courses=enable_related_courses,
         )
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
-        related_resources = data.get("related_resources", [])
+        related_courses = data.get("related_courses", [])
         params = {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
         }
-        if related_resources:
-            params["related_resources"] = related_resources
+        if related_courses:
+            params["related_courses"] = related_courses
         return params
 
     def prepare_response(

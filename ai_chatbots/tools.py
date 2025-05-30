@@ -198,23 +198,23 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
     )
 
 
-class SearchRelatedResourceContentFilesToolSchema(pydantic.BaseModel):
+class SearchRelatedCourseContentFilesToolSchema(pydantic.BaseModel):
     """
-    Schema for searching MIT content files related to courses within a program.
-    This can also be used if the user asks for
-    information specific to one course in a program
+    Search for information on courses within a program.
+    This can be used if the user asks for
+    information specific to one course or many courses in a program
     """
 
     q: str = Field(
         description=(
-            "Query content related to specific course(s) in a program that "
+            "Query content related to course(s) in a program that "
             "might answer the user's question."
         )
     )
     state: Annotated[dict, InjectedState] = Field(
         description=(
-            "The agent state with a related_resources param to query "
-            "content related to specific course(s) in a program"
+            "The agent state with a related_courses param to query "
+            "content related to course(s) in a program"
         )
     )
 
@@ -281,7 +281,7 @@ def search_content_files(
     return _content_file_search(url, params)
 
 
-@tool(args_schema=SearchRelatedResourceContentFilesToolSchema)
+@tool(args_schema=SearchRelatedCourseContentFilesToolSchema)
 def search_related_course_content_files(
     q: str, state: Annotated[dict, InjectedState]
 ) -> str:
@@ -291,10 +291,10 @@ def search_related_course_content_files(
     """
     url = settings.AI_MIT_SYLLABUS_URL
     collection_name = state["collection_name"][-1]
-    related_resources = state["related_resources"]
+    related_courses = state["related_courses"]
     params = {
         "q": q,
-        "resource_readable_id": related_resources,
+        "resource_readable_id": related_courses,
         "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
     }
     if collection_name:

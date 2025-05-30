@@ -426,7 +426,7 @@ class SyllabusAgentState(SummaryState):
 
     course_id: Annotated[list[str], add]
     collection_name: Annotated[list[str], add]
-    related_resources: Annotated[list[str], add]
+    related_courses: Annotated[list[str], add]
 
 
 class SyllabusBot(SummarizingChatbot):
@@ -448,9 +448,9 @@ class SyllabusBot(SummarizingChatbot):
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
-        enable_related_resources: Optional[bool] = False,
+        enable_related_courses: Optional[bool] = False,
     ):
-        self.enable_related_resources = enable_related_resources
+        self.enable_related_courses = enable_related_courses
         super().__init__(
             user_id,
             name=name,
@@ -460,13 +460,12 @@ class SyllabusBot(SummarizingChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
-
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
         """Create tools required by the agent"""
         tools = [search_content_files]
-        if self.enable_related_resources:
+        if self.enable_related_courses:
             tools.append(search_related_course_content_files)
         return tools
 
