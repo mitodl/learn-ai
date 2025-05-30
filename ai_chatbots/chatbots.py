@@ -41,7 +41,11 @@ from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
-from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
+from ai_chatbots.tools import (
+    get_video_transcript_chunk,
+    search_content_files,
+    search_related_course_content_files,
+)
 from ai_chatbots.utils import get_django_cache
 
 log = logging.getLogger(__name__)
@@ -422,6 +426,7 @@ class SyllabusAgentState(SummaryState):
 
     course_id: Annotated[list[str], add]
     collection_name: Annotated[list[str], add]
+    related_courses: Annotated[list[str], add]
 
 
 class SyllabusBot(SummarizingChatbot):
@@ -443,7 +448,9 @@ class SyllabusBot(SummarizingChatbot):
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
+        enable_related_courses: Optional[bool] = False,
     ):
+        self.enable_related_courses = enable_related_courses
         super().__init__(
             user_id,
             name=name,
@@ -457,7 +464,10 @@ class SyllabusBot(SummarizingChatbot):
 
     def create_tools(self):
         """Create tools required by the agent"""
-        return [search_content_files]
+        tools = [search_content_files]
+        if self.enable_related_courses:
+            tools.append(search_related_course_content_files)
+        return tools
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""

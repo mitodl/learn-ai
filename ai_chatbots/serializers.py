@@ -50,6 +50,10 @@ class SyllabusChatRequestSerializer(ChatRequestSerializer):
     collection_name = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
+    related_courses = serializers.ListField(
+        required=False,
+        child=serializers.CharField(),
+    )
 
 
 class VideoGPTRequestSerializer(ChatRequestSerializer):
