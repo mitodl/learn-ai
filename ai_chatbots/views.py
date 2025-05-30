@@ -160,9 +160,9 @@ class GetTranscriptBlockId(ApiView):
                 status=200,
             )
 
-        except requests.RequestException as e:
+        except requests.RequestException:
             return Response(
-                {"error": f"{e!s}"},
+                {"error": "Failed to retrieve contentfile"},
                 status=500,
             )
 
