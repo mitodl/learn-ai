@@ -147,6 +147,7 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
     retained_attributes = [
         "title",
         "id",
+        "readable_id",
         "description",
         "offered_by",
         "free",
