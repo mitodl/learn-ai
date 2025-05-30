@@ -13,6 +13,7 @@ from ai_chatbots.factories import (
 )
 from ai_chatbots.models import LLMModel
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
+from ai_chatbots.views import get_transcript_block_id
 from main.factories import UserFactory
 from main.test_utils import assert_json_equal
 
@@ -177,3 +178,14 @@ def test_llm_model_viewset_enabled_only(client):
     assert disabled_model.litellm_id not in [
         model["litellm_id"] for model in response.json()
     ]
+
+
+def test_get_transcript_block_id():
+    """Test that get_transcript_block_id returns the transcript block ID correctly"""
+    contentfile = {
+        "edx_module_id": "block-v1:MITxT+3.012Sx+3T2024+type@video+block@ab8c1a02e9804e75aff98835dd03c28d",
+        "content": '<video url_name="ab8c1a02e9804e75aff98835dd03c28d" sub="" transcripts="{&quot;en&quot;: &quot;df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt&quot;}" display_name="State of Matter and Bonding" download_track="true" download_video="true" edx_video_id="df9493c5-4765-4b0c-a7bb-7ea732fea90e" html5_sources="[]" youtube_id_1_0="">\n  <video_asset client_video_id="3012_State_of_Matter_and_Bonding.mp4" duration="0.0" image="">\n    <encoded_video profile="hls" url="https://d3tsb3m56iwvoq.cloudfront.net/transcoded/51371d122b294c0ab27df648cf6068ca/video__index.m3u8" file_size="0" bitrate="0"/>\n    <transcripts>\n      <transcript language_code="en" file_format="srt" provider="Custom"/>\n    </transcripts>\n  </video_asset>\n  <transcript language="en" src="df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"/>\n</video>',
+    }
+
+    expected_block_id = "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+    assert get_transcript_block_id(contentfile) == expected_block_id
