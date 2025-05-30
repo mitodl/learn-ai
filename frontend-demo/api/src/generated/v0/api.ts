@@ -1517,13 +1517,24 @@ export const GetTranscriptEdxModuleIdApiAxiosParamCreator = function (
   return {
     /**
      * API view to get the transcript block ID from edx block for a cotentfile.
+     * @param {string} edx_module_id edx_module_id of the video content file
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     getTranscriptEdxModuleIdRetrieve: async (
+      edx_module_id: string,
       options: RawAxiosRequestConfig = {},
     ): Promise<RequestArgs> => {
-      const localVarPath = `/api/v0/get_transcript_edx_module_id/`
+      // verify required parameter 'edx_module_id' is not null or undefined
+      assertParamExists(
+        "getTranscriptEdxModuleIdRetrieve",
+        "edx_module_id",
+        edx_module_id,
+      )
+      const localVarPath = `/api/v0/get_transcript_edx_module_id/`.replace(
+        `{${"edx_module_id"}}`,
+        encodeURIComponent(String(edx_module_id)),
+      )
       // use dummy base URL string because the URL constructor only accepts absolute URLs.
       const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
       let baseOptions
@@ -1568,16 +1579,19 @@ export const GetTranscriptEdxModuleIdApiFp = function (
   return {
     /**
      * API view to get the transcript block ID from edx block for a cotentfile.
+     * @param {string} edx_module_id edx_module_id of the video content file
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     async getTranscriptEdxModuleIdRetrieve(
+      edx_module_id: string,
       options?: RawAxiosRequestConfig,
     ): Promise<
       (axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>
     > {
       const localVarAxiosArgs =
         await localVarAxiosParamCreator.getTranscriptEdxModuleIdRetrieve(
+          edx_module_id,
           options,
         )
       const index = configuration?.serverIndex ?? 0
@@ -1609,17 +1623,36 @@ export const GetTranscriptEdxModuleIdApiFactory = function (
   return {
     /**
      * API view to get the transcript block ID from edx block for a cotentfile.
+     * @param {GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     getTranscriptEdxModuleIdRetrieve(
+      requestParameters: GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest,
       options?: RawAxiosRequestConfig,
     ): AxiosPromise<void> {
       return localVarFp
-        .getTranscriptEdxModuleIdRetrieve(options)
+        .getTranscriptEdxModuleIdRetrieve(
+          requestParameters.edx_module_id,
+          options,
+        )
         .then((request) => request(axios, basePath))
     },
   }
+}
+
+/**
+ * Request parameters for getTranscriptEdxModuleIdRetrieve operation in GetTranscriptEdxModuleIdApi.
+ * @export
+ * @interface GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest
+ */
+export interface GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest {
+  /**
+   * edx_module_id of the video content file
+   * @type {string}
+   * @memberof GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieve
+   */
+  readonly edx_module_id: string
 }
 
 /**
@@ -1631,13 +1664,20 @@ export const GetTranscriptEdxModuleIdApiFactory = function (
 export class GetTranscriptEdxModuleIdApi extends BaseAPI {
   /**
    * API view to get the transcript block ID from edx block for a cotentfile.
+   * @param {GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}
    * @memberof GetTranscriptEdxModuleIdApi
    */
-  public getTranscriptEdxModuleIdRetrieve(options?: RawAxiosRequestConfig) {
+  public getTranscriptEdxModuleIdRetrieve(
+    requestParameters: GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
     return GetTranscriptEdxModuleIdApiFp(this.configuration)
-      .getTranscriptEdxModuleIdRetrieve(options)
+      .getTranscriptEdxModuleIdRetrieve(
+        requestParameters.edx_module_id,
+        options,
+      )
       .then((request) => request(this.axios, this.basePath))
   }
 }

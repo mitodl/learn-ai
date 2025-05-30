@@ -6,10 +6,7 @@ from django.conf import settings
 from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import (
-    OpenApiParameter,
-    extend_schema,
-)
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -110,6 +107,20 @@ class LLMModelViewSet(ReadOnlyModelViewSet):
     ordering_fields = ["provider", "name", "litellm_id"]
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="edx_module_id",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description="edx_module_id of the video content file",
+        )
+    ],
+    responses={
+        200: OpenApiResponse(description="Transcript block ID"),
+        500: OpenApiResponse(description="Error retrieving transcript block ID"),
+    },
+)
 class GetTranscriptBlockId(ApiView):
     """
     API view to get the transcript block ID from edx block for a cotentfile.
@@ -169,7 +180,7 @@ def get_transcript_block_id(contentfile):
         msg = "Contentfile has no content."
         raise ValueError(msg)
 
-    soup = BeautifulSoup(xml_content)
+    soup = BeautifulSoup(xml_content, "html.parser")
 
     video_tag = soup.find("video")
 
