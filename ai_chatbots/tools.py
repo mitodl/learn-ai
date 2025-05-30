@@ -160,7 +160,6 @@ def search_courses(
             simplified_result["url"] = (
                 f"{settings.AI_MIT_SEARCH_DETAIL_URL}{result.pop('id')}"
             )
-            simplified_result["course_id"] = result.pop("readable_id", None)
             # Instructors and level will be in the runs data if present
             next_date = result.get("next_start_date", None)
             raw_runs = result.get("runs", [])
@@ -196,6 +195,7 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
 
     readable_id: Optional[str] = Field(
         description=("The readable_id of the learning resource."),
+        default=None,
     )
 
     state: Annotated[dict, InjectedState] = Field(
