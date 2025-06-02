@@ -143,6 +143,8 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
     else:
         existing_system_message = None
 
+    # if there are no messages to summarize, or the last message
+    # is a tool call, do not invoke the summarization model.
     if not messages or isinstance(messages[-1], ToolMessage):
         return SummarizationResult(
             running_summary=running_summary,
@@ -229,6 +231,7 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
             )
         log.debug("messages to summarize: %s", messages_to_summarize)
         summary_response = model.invoke(summary_messages.messages)
+        log.debug("Summarization response: %s", summary_response.content)
         summarized_message_ids = summarized_message_ids | {
             message.id for message in messages_to_summarize
         }
