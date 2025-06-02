@@ -23,7 +23,6 @@ from langmem.short_term.summarization import (
     DEFAULT_EXISTING_SUMMARY_PROMPT,
     DEFAULT_FINAL_SUMMARY_PROMPT,
     DEFAULT_INITIAL_SUMMARY_PROMPT,
-    SummarizationNode,
     SummarizationResult,
     TokenCounter,
 )
@@ -134,11 +133,15 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         max_tokens_before_summary = max_tokens
 
     max_tokens_to_summarize = max_tokens
+    # Adjust the remaining token budget to account for the summary to be added
+    max_remaining_tokens = max_tokens - max_summary_tokens
     # First handle system message if present
     if messages and isinstance(messages[0], SystemMessage):
         existing_system_message = messages[0]
         # remove the system message from the list of messages to summarize
         messages = messages[1:]
+        # adjust remaining token budget for the system msg to be re-added
+        max_remaining_tokens -= token_counter([existing_system_message])
     else:
         existing_system_message = None
 
@@ -170,13 +173,16 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
                 total_summarized_messages = i + 1
                 break
 
+    # We will use this to ensure that the total number of resulting tokens
+    # will fit into max_tokens window.
+    total_n_tokens = token_counter(messages[total_summarized_messages:])
+
     # Go through messages to count tokens and find cutoff point
     n_tokens = 0
     idx = max(0, total_summarized_messages - 1)
     # map tool call IDs to their corresponding tool messages
     tool_call_id_to_tool_message: dict[str, ToolMessage] = {}
     should_summarize = False
-    # Iterate through all but the most recent message
     for i in range(total_summarized_messages, len(messages)):
         message = messages[i]
         if message.id is None:
@@ -190,20 +196,21 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         # Store tool messages by their tool_call_id for later reference
         if isinstance(message, ToolMessage) and message.tool_call_id:
             tool_call_id_to_tool_message[message.tool_call_id] = message
-        
 
         n_tokens += token_counter([message])
 
-        # Check if we've reached max_tokens_to_summarize and 
+        # Check if we've reached max_tokens_to_summarize and
         # final message is a valid type to end summarization on
-        # (not a tool message or AI tool call)
-        if n_tokens >= max_tokens_before_summary and \
-            not should_summarize and not isinstance(message, ToolMessage) and \
-            (
-                not isinstance(message, AIMessage) or not message.tool_calls
-            ):
-                should_summarize = True
-                idx = i
+        # (not a tool message or AI tool)
+        if (
+            n_tokens >= max_tokens_before_summary
+            and total_n_tokens - n_tokens <= max_remaining_tokens
+            and not should_summarize
+            and not isinstance(message, ToolMessage)
+            and (not isinstance(message, AIMessage) or not message.tool_calls)
+        ):
+            should_summarize = True
+            idx = i
 
     if not should_summarize:
         messages_to_summarize = []

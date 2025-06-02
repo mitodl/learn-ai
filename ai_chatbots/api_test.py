@@ -598,21 +598,21 @@ def test_last_ai_with_tool_calls(is_tool_call):
         running_summary=None,
         model=model,
         token_counter=len,
-        max_tokens_before_summary=6,
-        max_tokens=6,
-        max_summary_tokens=3,
+        max_tokens_before_summary=2,
+        max_tokens=2,
+        max_summary_tokens=1,
     )
 
     # Check that the AI message with tool calls was summarized together with the tool messages
-    assert len(result.messages) == (7 if is_tool_call else 1)
+    assert len(result.messages) == (7 if is_tool_call else 2)
     assert result.messages[0].type == ("human" if is_tool_call else "system")
-    assert result.messages[-1].type == ("tool" if is_tool_call else "system")
+    assert result.messages[-1].type == ("tool" if is_tool_call else "human")
 
     if is_tool_call:
         assert result.running_summary is None
     else:
         assert result.running_summary.summarized_message_ids == {
-            msg.id for msg in messages
+            msg.id for msg in messages[:-1]
         }
 
 
@@ -653,8 +653,10 @@ def test_duplicate_message_ids():
 
     # Second summarization with a duplicate ID
     messages2 = [
+        AIMessage(content="Response 1", id="2"),  # Duplicate ID
+        HumanMessage(content="Message 2", id="3"),  # Duplicate ID
         AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="1"),  # Duplicate ID
+        HumanMessage(content="Message 3", id="5"),
     ]
 
     with pytest.raises(ValueError, match="has already been summarized"):
@@ -663,7 +665,7 @@ def test_duplicate_message_ids():
             running_summary=result.running_summary,
             model=model,
             token_counter=len,
-            max_tokens=5,
+            max_tokens=6,
             max_summary_tokens=1,
         )
 
