@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
+    AIMessage,
     AnyMessage,
     HumanMessage,
     RemoveMessage,
@@ -22,6 +23,7 @@ from langmem.short_term.summarization import (
     DEFAULT_EXISTING_SUMMARY_PROMPT,
     DEFAULT_FINAL_SUMMARY_PROMPT,
     DEFAULT_INITIAL_SUMMARY_PROMPT,
+    SummarizationNode,
     SummarizationResult,
     TokenCounter,
 )
@@ -188,22 +190,25 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         # Store tool messages by their tool_call_id for later reference
         if isinstance(message, ToolMessage) and message.tool_call_id:
             tool_call_id_to_tool_message[message.tool_call_id] = message
+        
 
         n_tokens += token_counter([message])
 
-        # Check if we've reached max_tokens_to_summarize
-        if n_tokens >= max_tokens_before_summary and not should_summarize:
-            should_summarize = True
-            idx = i
+        # Check if we've reached max_tokens_to_summarize and 
+        # final message is a valid type to end summarization on
+        # (not a tool message or AI tool call)
+        if n_tokens >= max_tokens_before_summary and \
+            not should_summarize and not isinstance(message, ToolMessage) and \
+            (
+                not isinstance(message, AIMessage) or not message.tool_calls
+            ):
+                should_summarize = True
+                idx = i
 
     if not should_summarize:
         messages_to_summarize = []
     else:
-        log.debug(
-            f"{total_summarized_messages} summarized messages out of {len(messages)} messages, idx is {idx}"
-        )
-        # Summarize all but most recent message that hasn't already been summarized
-        messages_to_summarize = messages[total_summarized_messages:-1]
+        messages_to_summarize = messages[total_summarized_messages : idx + 1]
 
     if messages_to_summarize:
         if running_summary:
@@ -333,7 +338,9 @@ class CustomSummarizationNode(RunnableCallable):
         previous_summary = context.get("running_summary")
         log.debug("Previous summary:\n\n%s\n\n", previous_summary or "N/A")
         summarization_result = summarize_messages(
-            messages,
+            # If we are returning here from a tool call, don't include the last tool
+            # message or the preceding AI message that called it.
+            messages[:-2] if isinstance(last_message, ToolMessage) else messages,
             running_summary=previous_summary,
             model=self.model,
             max_tokens=self.max_tokens,
