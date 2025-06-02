@@ -111,9 +111,9 @@ def test_summarize_first_time():
         AIMessage(content="Response 2", id="4"),
         HumanMessage(content="Message 3", id="5"),
         AIMessage(content="Response 3", id="6"),
-        # these messages will be added to the result post-summarization
         HumanMessage(content="Message 4", id="7"),
         AIMessage(content="Response 4", id="8"),
+        # this message should be added to the result post-summarization
         HumanMessage(content="Latest message", id="9"),
     ]
 
@@ -132,20 +132,21 @@ def test_summarize_first_time():
     assert len(model.invoke_calls) == 1
 
     # Check that the result has the expected structure:
-    # - First message should be a summary
-    # - Last 3 messages should be the last 3 original messages
-    assert len(result.messages) == 4
+    # - First message should be a summary of all but last human message
+    # - Last message should be the last human message
+    assert len(result.messages) == 2
     assert result.messages[0].type == "system"
     assert "summary" in result.messages[0].content.lower()
-    assert result.messages[-3:] == messages[-3:]
+    assert result.messages[-1] == messages[-1]
 
     # Check the summary value
     summary_value = result.running_summary
     assert summary_value is not None
     assert summary_value.summary == "This is a summary of the conversation."
-    assert summary_value.summarized_message_ids == {msg.id for msg in messages[:-3]}
+    assert summary_value.summarized_message_ids == {msg.id for msg in messages[:-1]}
 
     # Test subsequent invocation (no new summary needed)
+    messages.append(factories.HumanMessageFactory.create())
     result = summarize_messages(
         messages,
         running_summary=summary_value,
@@ -154,13 +155,13 @@ def test_summarize_first_time():
         max_tokens=6,
         max_summary_tokens=max_summary_tokens,
     )
-    assert len(result.messages) == 4
+    assert len(result.messages) == 3
     assert result.messages[0].type == "system"
     assert (
         result.messages[0].content
         == "Summary of the conversation so far: This is a summary of the conversation."
     )
-    assert result.messages[-3:] == messages[-3:]
+    assert result.messages[-1:] == messages[-1:]
 
 
 def test_max_tokens_before_summary():
@@ -250,9 +251,9 @@ def test_with_system_message():
         AIMessage(content="Response 2", id="4"),
         HumanMessage(content="Message 3", id="5"),
         AIMessage(content="Response 3", id="6"),
-        # these messages will be added to the result post-summarization
         HumanMessage(content="Message 4", id="7"),
         AIMessage(content="Response 4", id="8"),
+        # this message will be added to the result post-summarization
         HumanMessage(content="Latest message", id="9"),
     ]
 
@@ -271,7 +272,7 @@ def test_with_system_message():
 
     # Check that model was called
     assert len(model.invoke_calls) == 1
-    assert model.invoke_calls[0] == messages[1:7] + [
+    assert model.invoke_calls[0] == messages[1:-1] + [
         HumanMessage(content="Create a summary of the conversation above:")
     ]
 
@@ -279,11 +280,11 @@ def test_with_system_message():
     # - System message should be preserved
     # - Second message should be a summary of messages 2-5
     # - Last 3 messages should be the last 3 original messages
-    assert len(result.messages) == 5
+    assert len(result.messages) == 3
     assert result.messages[0].type == "system"
     assert result.messages[1].type == "system"  # Summary message
     assert "summary" in result.messages[1].content.lower()
-    assert result.messages[2:] == messages[-3:]
+    assert result.messages[-1] == messages[-1]
 
 
 def test_approximate_token_counter():
@@ -627,7 +628,7 @@ def test_missing_message_ids():
             running_summary=None,
             model=MockChatModel(responses=[]),
             max_tokens=10,
-            max_summary_tokens=1,
+            max_summary_tokens=10,
         )
 
 

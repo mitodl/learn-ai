@@ -8,6 +8,7 @@ from uuid import uuid4
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
     AnyMessage,
+    HumanMessage,
     RemoveMessage,
     SystemMessage,
     ToolMessage,
@@ -131,21 +132,16 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         max_tokens_before_summary = max_tokens
 
     max_tokens_to_summarize = max_tokens
-    # Adjust the remaining token budget to account for the summary to be added
-    max_remaining_tokens = max_tokens - max_summary_tokens
     # First handle system message if present
     if messages and isinstance(messages[0], SystemMessage):
         existing_system_message = messages[0]
         # remove the system message from the list of messages to summarize
         messages = messages[1:]
-        # adjust remaining token budget for the system msg to be re-added
-        max_remaining_tokens -= token_counter([existing_system_message])
     else:
         existing_system_message = None
 
-    # if there are no messages to summarize, or the last message
-    # is a tool call, do not invoke the summarization model.
-    if not messages or isinstance(messages[-1], ToolMessage):
+    # Summarize only when last message is a human message
+    if not messages or (messages and not isinstance(messages[-1], HumanMessage)):
         return SummarizationResult(
             running_summary=running_summary,
             messages=(
@@ -172,16 +168,13 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
                 total_summarized_messages = i + 1
                 break
 
-    # We will use this to ensure that the total number of resulting tokens
-    # will fit into max_tokens window.
-    total_n_tokens = token_counter(messages[total_summarized_messages:])
-
     # Go through messages to count tokens and find cutoff point
     n_tokens = 0
     idx = max(0, total_summarized_messages - 1)
     # map tool call IDs to their corresponding tool messages
     tool_call_id_to_tool_message: dict[str, ToolMessage] = {}
     should_summarize = False
+    # Iterate through all but the most recent message
     for i in range(total_summarized_messages, len(messages)):
         message = messages[i]
         if message.id is None:
@@ -199,19 +192,18 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         n_tokens += token_counter([message])
 
         # Check if we've reached max_tokens_to_summarize
-        # and the remaining messages fit within the max_remaining_tokens budget
-        if (
-            n_tokens >= max_tokens_before_summary
-            and total_n_tokens - n_tokens <= max_remaining_tokens
-            and not should_summarize
-        ):
+        if n_tokens >= max_tokens_before_summary and not should_summarize:
             should_summarize = True
             idx = i
 
     if not should_summarize:
         messages_to_summarize = []
     else:
-        messages_to_summarize = messages[total_summarized_messages : idx + 1]
+        log.debug(
+            f"{total_summarized_messages} summarized messages out of {len(messages)} messages, idx is {idx}"
+        )
+        # Summarize all but most recent message that hasn't already been summarized
+        messages_to_summarize = messages[total_summarized_messages:-1]
 
     if messages_to_summarize:
         if running_summary:
@@ -338,17 +330,10 @@ class CustomSummarizationNode(RunnableCallable):
             raise ValueError(error)
 
         last_message = messages[-1] if messages else None
-        log.debug(
-            "SummarizationNode called with %d messages, last message: %s",
-            len(messages),
-            last_message if last_message else "N/A",
-        )
         previous_summary = context.get("running_summary")
         log.debug("Previous summary:\n\n%s\n\n", previous_summary or "N/A")
         summarization_result = summarize_messages(
-            # If we are returning here from a tool call, don't include the last tool
-            # message or the preceding AI message that called it.
-            messages[:-2] if isinstance(last_message, ToolMessage) else messages,
+            messages,
             running_summary=previous_summary,
             model=self.model,
             max_tokens=self.max_tokens,
