@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
-    AIMessage,
     AnyMessage,
     RemoveMessage,
     SystemMessage,
@@ -144,7 +143,7 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
     else:
         existing_system_message = None
 
-    if not messages:
+    if not messages or isinstance(messages[-1], ToolMessage):
         return SummarizationResult(
             running_summary=running_summary,
             messages=(
@@ -211,15 +210,6 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         messages_to_summarize = []
     else:
         messages_to_summarize = messages[total_summarized_messages : idx + 1]
-
-    # If the last message is an AI message with tool calls,
-    # wait until the next user message to summarize.
-    if (
-        messages_to_summarize
-        and isinstance(messages_to_summarize[-1], AIMessage)
-        and messages_to_summarize[-1].tool_calls
-    ):
-        messages_to_summarize = []
 
     if messages_to_summarize:
         if running_summary:
