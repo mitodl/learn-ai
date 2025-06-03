@@ -3,6 +3,7 @@
 import logging
 from enum import Enum
 
+import requests
 from django.conf import settings
 from django.core.cache import BaseCache, caches
 from named_enum import ExtendedEnum
@@ -37,3 +38,12 @@ def get_django_cache() -> BaseCache:
     if settings.CELERY_BROKER_URL:
         return caches["redis"]
     return caches["default"]
+
+
+def request_with_token(url, params, timeout: int = 30):
+    return requests.get(
+        url,
+        params=params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=timeout,
+    )
