@@ -59,14 +59,14 @@ psycopg-pool = "^3.2.4"
 pygithub = "^2.0.0"
 redis = "^5.0.0"
 requests = "^2.31.0"
-ruff = "0.11.9"
+ruff = "0.11.11"
 sentry-sdk = "^2.13.0"
 social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "0.46.2"
 ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
-langmem = "^0.0.25"
+langmem = "^0.0.27"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

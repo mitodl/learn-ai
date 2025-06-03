@@ -9,6 +9,7 @@ from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
+    HumanMessage,
     RemoveMessage,
     SystemMessage,
     ToolMessage,
@@ -16,12 +17,12 @@ from langchain_core.messages import (
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.prompt_values import ChatPromptValue
 from langchain_core.prompts import ChatPromptTemplate
+from langgraph.utils.runnable import RunnableCallable
 from langmem.short_term import RunningSummary
 from langmem.short_term.summarization import (
     DEFAULT_EXISTING_SUMMARY_PROMPT,
     DEFAULT_FINAL_SUMMARY_PROMPT,
     DEFAULT_INITIAL_SUMMARY_PROMPT,
-    SummarizationNode,
     SummarizationResult,
     TokenCounter,
 )
@@ -60,7 +61,9 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
             }
             return json.dumps(metadata)
         except json.JSONDecodeError:
-            log.exception("Error parsing tool metadata, not valid JSON")
+            log.exception(
+                "Error parsing tool metadata, not valid JSON: %s", msg_content
+            )
             return json.dumps(
                 {"error": "Error parsing tool metadata", "content": msg_content}
             )
@@ -142,7 +145,8 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
     else:
         existing_system_message = None
 
-    if not messages:
+    # Summarize only when last message is a human message
+    if not messages or (messages and not isinstance(messages[-1], HumanMessage)):
         return SummarizationResult(
             running_summary=running_summary,
             messages=(
@@ -179,7 +183,6 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
     # map tool call IDs to their corresponding tool messages
     tool_call_id_to_tool_message: dict[str, ToolMessage] = {}
     should_summarize = False
-    n_tokens_to_summarize = 0
     for i in range(total_summarized_messages, len(messages)):
         message = messages[i]
         if message.id is None:
@@ -196,14 +199,16 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
 
         n_tokens += token_counter([message])
 
-        # Check if we've reached max_tokens_to_summarize
-        # and the remaining messages fit within the max_remaining_tokens budget
+        # Check if we've reached max_tokens_to_summarize and
+        # final message is a valid type to end summarization on
+        # (not a tool message or AI tool)
         if (
             n_tokens >= max_tokens_before_summary
             and total_n_tokens - n_tokens <= max_remaining_tokens
             and not should_summarize
+            and not isinstance(message, ToolMessage)
+            and (not isinstance(message, AIMessage) or not message.tool_calls)
         ):
-            n_tokens_to_summarize = n_tokens
             should_summarize = True
             idx = i
 
@@ -211,21 +216,6 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         messages_to_summarize = []
     else:
         messages_to_summarize = messages[total_summarized_messages : idx + 1]
-
-    # If the last message is an AI message with tool calls,
-    # include subsequent corresponding tool messages in the summary as well,
-    # to avoid issues w/ the LLM provider
-    if (
-        messages_to_summarize
-        and isinstance(messages_to_summarize[-1], AIMessage)
-        and (tool_calls := messages_to_summarize[-1].tool_calls)
-    ):
-        # Add any matching tool messages from our dictionary
-        for tool_call in tool_calls:
-            if tool_call["id"] in tool_call_id_to_tool_message:
-                tool_message = tool_call_id_to_tool_message[tool_call["id"]]
-                n_tokens_to_summarize += token_counter([tool_message])
-                messages_to_summarize.append(tool_message)
 
     if messages_to_summarize:
         if running_summary:
@@ -245,6 +235,7 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
             )
         log.debug("messages to summarize: %s", messages_to_summarize)
         summary_response = model.invoke(summary_messages.messages)
+        log.debug("Summarization response: %s", summary_response.content)
         summarized_message_ids = summarized_message_ids | {
             message.id for message in messages_to_summarize
         }
@@ -293,12 +284,42 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         )
 
 
-class CustomSummarizationNode(SummarizationNode):
+class CustomSummarizationNode(RunnableCallable):
     """
     Customized implementation of langmem.short_term.SummarizationNode.  The original
     has a bug causing the most recent user question and answer to be lost when the
     summary was updated.
     """
+
+    def __init__(  # noqa: PLR0913
+        self,
+        *,
+        model: LanguageModelLike,
+        max_tokens: int,
+        max_tokens_before_summary: int | None = None,
+        max_summary_tokens: int = 256,
+        token_counter: TokenCounter = count_tokens_approximately,
+        initial_summary_prompt: ChatPromptTemplate = DEFAULT_INITIAL_SUMMARY_PROMPT,
+        existing_summary_prompt: ChatPromptTemplate = DEFAULT_EXISTING_SUMMARY_PROMPT,
+        final_prompt: ChatPromptTemplate = DEFAULT_FINAL_SUMMARY_PROMPT,
+        input_messages_key: str = "messages",
+        output_messages_key: str = "summarized_messages",
+        name: str = "summarization",
+    ) -> None:
+        """
+        Initialize the CustomSummarizationNode.
+        """
+        super().__init__(self._func, name=name, trace=False)
+        self.model = model
+        self.max_tokens = max_tokens
+        self.max_tokens_before_summary = max_tokens_before_summary
+        self.max_summary_tokens = max_summary_tokens
+        self.token_counter = token_counter
+        self.initial_summary_prompt = initial_summary_prompt
+        self.existing_summary_prompt = existing_summary_prompt
+        self.final_prompt = final_prompt
+        self.input_messages_key = input_messages_key
+        self.output_messages_key = output_messages_key
 
     def _func(self, node_input: dict[str, Any] | BaseModel) -> dict[str, Any]:
         """

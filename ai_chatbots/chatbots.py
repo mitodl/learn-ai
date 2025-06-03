@@ -44,7 +44,6 @@ from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
-from ai_chatbots.tools import get_video_transcript_chunk, search_content_files
 from ai_chatbots.utils import get_django_cache
 
 log = logging.getLogger(__name__)
@@ -447,7 +446,7 @@ class ResourceRecommendationBot(SummarizingChatbot):
 
     def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
-        return [tools.search_courses]
+        return [tools.search_courses, tools.search_content_files]
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -499,7 +498,7 @@ class SyllabusBot(SummarizingChatbot):
 
     def create_tools(self):
         """Create tools required by the agent"""
-        return [search_content_files]
+        return [tools.search_content_files]
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -729,7 +728,7 @@ class VideoGPTBot(SummarizingChatbot):
 
     def create_tools(self):
         """Create tools required for the agent"""
-        return [get_video_transcript_chunk]
+        return [tools.get_video_transcript_chunk]
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
