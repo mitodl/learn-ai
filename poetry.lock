@@ -1758,13 +1758,13 @@ email = ["email-validator (>=2.1,<3.0)"]
 
 [[package]]
 name = "e2b"
-version = "1.3.5"
+version = "1.5.2"
 description = "E2B SDK that give agents cloud environments"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b-1.3.5-py3-none-any.whl", hash = "sha256:d2f54e1782b0bdf7f87e4855fdf952ba78848ba7b3b2dde984fe8101f0b95724"},
-    {file = "e2b-1.3.5.tar.gz", hash = "sha256:dff2cfdec5ebea715b545f940934c9f42e200ef1e869e4c726e5cadf630efc1e"},
+    {file = "e2b-1.5.2-py3-none-any.whl", hash = "sha256:8cf755f2ff04098daa7ac778f768eee1df730a6181637fe124210345999890b3"},
+    {file = "e2b-1.5.2.tar.gz", hash = "sha256:29ed891ae04ffafff1744c57eff55901200f15030d34ac3fe76d6672e2bf7845"},
 ]
 
 [package.dependencies]
@@ -1778,18 +1778,18 @@ typing-extensions = ">=4.1.0"
 
 [[package]]
 name = "e2b-code-interpreter"
-version = "1.2.1"
+version = "1.5.1"
 description = "E2B Code Interpreter - Stateful code execution"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b_code_interpreter-1.2.1-py3-none-any.whl", hash = "sha256:9d60e8b3756fc3c04c04285e2106dcb19305a18a01894aeb4b06d2c400e03e2e"},
-    {file = "e2b_code_interpreter-1.2.1.tar.gz", hash = "sha256:bb01075b6ddb9c1a10774da521e8aa32e7fac710d23b9d8fbe8224d0e04b866b"},
+    {file = "e2b_code_interpreter-1.5.1-py3-none-any.whl", hash = "sha256:c8ee6f77bcb9c53422df336abbd37d5bf6318c3967b87444b39e3428a54c5e08"},
+    {file = "e2b_code_interpreter-1.5.1.tar.gz", hash = "sha256:e39485dd2ffb148a902e8c05c8f573feeb7ca87f8498f02a4db65630e76364e1"},
 ]
 
 [package.dependencies]
 attrs = ">=21.3.0"
-e2b = ">=1.3.5,<2.0.0"
+e2b = ">=1.4.0,<2.0.0"
 httpx = ">=0.20.0,<1.0.0"
 
 [[package]]
@@ -4292,21 +4292,21 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.0.10"
+version = "0.2.1"
 description = "AI powered tutor"
 optional = false
-python-versions = "<4.0,>=3.12"
+python-versions = "~=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.0.10-py3-none-any.whl", hash = "sha256:c1250bf84879a08136020a4b231af1762f952988af43dd0b6a351c544e75e24c"},
-    {file = "open_learning_ai_tutor-0.0.10.tar.gz", hash = "sha256:8a83038ee31c9dc2678c43df49945d5cf6ebffc65f6942b81bb260820a63430f"},
+    {file = "open_learning_ai_tutor-0.2.1-py3-none-any.whl", hash = "sha256:489ea0d8f3f773936d4b2fc156fda83b371eb7a276413e69b0640a799a6e98be"},
+    {file = "open_learning_ai_tutor-0.2.1.tar.gz", hash = "sha256:5db3e7bd3085e07127a35b22fbadb9b7fe38f884ab963638525031c6c28bba08"},
 ]
 
 [package.dependencies]
-e2b-code-interpreter = ">=1.1.0,<2.0.0"
-langchain = ">=0.3.20,<0.4.0"
-langchain-core = ">=0.3.45,<0.4.0"
-langchain-experimental = ">=0.3.4,<0.4.0"
-langgraph = ">=0.3.10,<0.4.0"
+e2b-code-interpreter = ">=1.1.0,<2"
+langchain = ">=0.3.20,<0.4"
+langchain-core = ">=0.3.45,<0.4"
+langchain-experimental = ">=0.3.4,<0.4"
+langgraph = ">=0.3.10,<0.4"
 langsmith = "0.3.32"
 
 [[package]]
@@ -7908,4 +7908,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "881ab9617a5a996bfe03fd0bfbf60ee08a43e4a7e86ea853d8312afe29f236f1"
+content-hash = "066b83d4ce1ec07d61542455282a9f4aa8cb1aa42e18a3bb7cb2200c989b03fe"
