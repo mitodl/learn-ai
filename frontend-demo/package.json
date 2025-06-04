@@ -18,7 +18,7 @@
     "@emotion/cache": "^11.13.5",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
-    "@mitodl/open-api-axios": "^2025.6.3",
+    "@mitodl/mit-learn-api-axios": "^2025.6.3",
     "@mitodl/smoot-design": "^6.4.0",
     "@mui/lab": "^6.0.1-beta.34",
     "@mui/material": "^6.1.8",
