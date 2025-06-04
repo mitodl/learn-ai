@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query"
 import { getAPISettings } from "../settings"
-import { LearningResourcesApi } from "@mitodl/mitxonline-api-axios/v1"
-import type { LearningResourcesApiLearningResourcesRetrieveRequest } from "@mitodl/mitxonline-api-axios/v1"
+import { LearningResourcesApi } from "@mitodl/open-api-axios/v1"
+import type { LearningResourcesApiLearningResourcesRetrieveRequest } from "@mitodl/open-api-axios/v1"
 
 const learningResources = new LearningResourcesApi(...getAPISettings())
 const keys = {
