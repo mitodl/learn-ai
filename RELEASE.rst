@@ -1,6 +1,17 @@
 Release Notes
 =============
 
+Version 0.9.1
+-------------
+
+- Syllabus bot for programs (#206)
+- More summary prompt tweaking (#208)
+- Use learn auth key for requests (#192)
+- Enable the recommendation bot to search for specific resource details (#205)
+- Tweak the syllabus/video_gpt system prompts, to avoid LLM confusion over the resource in question. (#204)
+- fix(deps): update dependency ruff to v0.11.11 (#201)
+- fix(deps): update dependency langmem to ^0.0.27 (#200)
+
 Version 0.8.0 (Released May 28, 2025)
 -------------
 
