@@ -8,13 +8,11 @@ import { useRequestOpts, useSearchParamSettings } from "./util"
 
 import { useQuery } from "@tanstack/react-query"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
-import { contenfilesQueries } from "@/services/learn"
 
 import Alert from "@mui/lab/Alert"
 import { useMemo } from "react"
 
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
-import { ContentFile } from "@mitodl/open-api-axios/v1"
 import { CircularProgress } from "@mui/material"
 import MetadataDisplay from "./MetadataDisplay"
 import { Button } from "@mitodl/smoot-design"
@@ -23,76 +21,6 @@ const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
   { role: "assistant", content: "What do you want to know about this video?" },
 ]
-
-/**
- * Given a video contentfile object, attempt to extract the transcript block ID.
- *
- * This relies on the contentfile's properties:
- *  - `edx_module_id`: the block ID of the video
- *  - `content`: the XML content of the video block
- *
- * The edx_module_id for the video looks like:
- *  block-v1:COURSE_ID+type@video+block@@VIDEO_FILENAME
- *
- * The desired transcript block ID looks like:
- *  asset-v1:COURSE_ID+type@asset+block@@TRANSCRIPT_FILENAME
- *
- * We extract the TRANSCRIPT_FILENAME from the video block XML, then do some
- * surgery on the video's edx_module_id.
- *
- * This is all a bit hacky, but neither Learn nor OpenEdx expose a
- * video <-->transcript relationship between the global( block-v1..., asset-v1...)
- * ids as far as I can tell.
- *
- * Using OpenEdx staff APIs, we could get the transcript filename without XML
- * parsing via v2/block_metadata/<block_id>.
- */
-const getTranscriptBlockId = (contentfile: ContentFile) => {
-  /**
-   * NOTE: DOMParser is not available on the NextJS server.
-   * This doesn't really matter for us since out build is static.
-   * However, it does cause a warning in dev mode (which does use the server)
-   * if DOMParser is accessed on first-render. Here, it won't be.
-   */
-  const domParser = new DOMParser()
-  const videoBlockId = contentfile.edx_module_id
-  if (!videoBlockId) {
-    throw new Error("No video block ID found.")
-  }
-  if (!contentfile.content) {
-    throw new Error("Contentfile has no content.")
-  }
-
-  const xml = domParser.parseFromString(contentfile.content, "text/xml")
-  const videoTag = xml.querySelector("video")
-  if (!videoTag) {
-    throw new Error("No video tag found in content.")
-  }
-  const transcriptsAttr = videoTag.getAttribute("transcripts")
-  if (!transcriptsAttr) {
-    throw new Error(
-      "No transcripts found in video tag. Video may not have transcript or may use YouTube transcripts.",
-    )
-  }
-  const transcripts = JSON.parse(transcriptsAttr)
-  const englishTranscriptId = transcripts["en"]
-  if (!englishTranscriptId) {
-    throw new Error("No English transcript found.")
-  }
-
-  /**
-   * videoBlockId       = block-v1:MITxT+3.012Sx+3T2024+type@video+block@....
-   * transcriptIdPrefix = asset-v1:MITxT+3.012Sx+3T2024+type@asset+block
-   */
-  const transcriptIdPrefix = videoBlockId
-    .replace("block-v1:", "asset-v1:")
-    .replace("video+block", "asset+block")
-    .split("@")
-    .slice(0, 2)
-    .join("@")
-
-  return `${transcriptIdPrefix}@${englishTranscriptId}`
-}
 
 // https://learn.mit.edu/?resource=2812
 const DEFAULT_VERTICAL =
@@ -107,27 +35,26 @@ const VideoCntent = () => {
     video_unit: DEFAULT_VIDEO,
   })
 
-  const videoContenfiles = useQuery({
-    ...contenfilesQueries.listing({ edxModuleIds: [settings.video_unit] }),
+  const getTranscriptBlockId = async (edxModuleId: string) => {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_MITOL_API_BASE_URL}/api/v0/get_transcript_edx_module_id/?edx_module_id=${encodeURIComponent(edxModuleId)}`,
+    )
+    return response.json()
+  }
+
+  const transcriptIdQueryResult = useQuery({
+    queryKey: ["transcriptBlockId", settings.video_unit],
+    queryFn: () => getTranscriptBlockId(settings.video_unit),
     enabled: !!settings.video_unit,
   })
   const { id: transcriptBlockId, error: transcriptError } = useMemo(() => {
-    const results = videoContenfiles.data?.results ?? []
-    if (videoContenfiles.isLoading) return { id: null, error: null }
-    if (videoContenfiles.isError) {
-      return { id: null, error: "Error loading video content." }
+    if (transcriptIdQueryResult.isLoading) return { id: null, error: null }
+    if (transcriptIdQueryResult.data.error) {
+      return { id: null, error: transcriptIdQueryResult.data.error }
     }
-    if (results.length !== 1) {
-      return { id: null, error: "Expected exactly 1 contentfile match." }
-    }
-    try {
-      const id = getTranscriptBlockId(results[0])
-      return { id, error: null }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Unknown Error"
-      return { id: null, error: errMsg }
-    }
-  }, [videoContenfiles])
+
+    return { id: transcriptIdQueryResult.data.transcript_block_id, error: null }
+  }, [transcriptIdQueryResult])
 
   const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
     apiUrl: VIDEO_GPT_URL,
@@ -206,7 +133,9 @@ const VideoCntent = () => {
               unitFilterType="video"
               unitLabel="Video"
             />
-            {videoContenfiles.isLoading && <Typography>Loading...</Typography>}
+            {transcriptIdQueryResult.isLoading && (
+              <Typography>Loading...</Typography>
+            )}
             {transcriptError && (
               <Alert severity="error">{transcriptError}</Alert>
             )}

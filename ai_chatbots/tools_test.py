@@ -120,6 +120,7 @@ def test_search_content_files(  # noqa: PLR0913
     """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SYLLABUS_URL = search_url
     settings.AI_MIT_CONTENT_SEARCH_LIMIT = limit
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     expected_params = {
         "q": "main topics",
         "limit": limit,
@@ -130,6 +131,9 @@ def test_search_content_files(  # noqa: PLR0913
         search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
     )
     mock_get_resources.assert_called_once_with(
-        search_url, params=expected_params, timeout=30
+        search_url,
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
     )
     assert len(results["results"]) == len(search_results["results"])

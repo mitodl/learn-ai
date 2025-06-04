@@ -1,6 +1,6 @@
 """Standard urls for ai_chatbots app"""
 
-from django.urls import include, re_path
+from django.urls import include, path, re_path
 from rest_framework.routers import SimpleRouter
 
 from ai_chatbots import views
@@ -19,6 +19,15 @@ router.register(
 router.register(r"llm_models", views.LLMModelViewSet, basename="llm_models")
 
 app_name = "ai"
+v0_urls = [
+    *router.urls,
+    path(
+        r"get_transcript_edx_module_id/",
+        views.GetTranscriptBlockId.as_view(),
+        name="get_transcript_edx_module_id",
+    ),
+]
+
 urlpatterns = [
-    re_path(r"^api/v0/", include((router.urls, "v0"))),
+    re_path(r"^api/v0/", include((v0_urls, "v0"))),
 ]

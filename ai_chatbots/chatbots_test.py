@@ -147,6 +147,7 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
     retained_attributes = [
         "title",
         "id",
+        "readable_id",
         "description",
         "offered_by",
         "free",
@@ -342,6 +343,7 @@ async def test_syllabus_bot_tool(
 ):
     """The SyllabusBot tool should call the correct tool"""
     settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     retained_attributes = [
         "run_title",
         "chunk_content",
@@ -373,6 +375,7 @@ async def test_syllabus_bot_tool(
     mock_post.assert_called_once_with(
         settings.AI_MIT_SYLLABUS_URL,
         params=search_parameters,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
     assert_json_equal(json.loads(results), expected_results)
@@ -716,6 +719,7 @@ async def test_video_gpt_bot_tool(
 ):
     """The VideoGPTBot should call the correct tool"""
     settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 2
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     retained_attributes = [
         "chunk_content",
     ]
@@ -749,6 +753,7 @@ async def test_video_gpt_bot_tool(
     mock_post.assert_called_once_with(
         settings.AI_MIT_VIDEO_TRANSCRIPT_URL,
         params=search_parameters,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
     assert_json_equal(json.loads(results), expected_results)

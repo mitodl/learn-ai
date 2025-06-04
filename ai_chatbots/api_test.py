@@ -563,7 +563,9 @@ def test_subsequent_summarization_with_new_messages_approximate_token_counter():
     assert len(updated_summary_value.summarized_message_ids) == len(messages2) - 3
 
 
-def test_last_ai_with_tool_calls():
+@pytest.mark.parametrize("is_tool_call", [True, False])
+def test_last_ai_with_tool_calls(is_tool_call):
+    """Summarization should be skipped if last message is a tool call."""
     model = MockChatModel(responses=[AIMessage(content="Summary without tool calls.")])
 
     messages = [
@@ -584,6 +586,12 @@ def test_last_ai_with_tool_calls():
         HumanMessage(content="Message 2", id="6"),
     ]
 
+    if is_tool_call:
+        # If the last message is a tool call, we should not summarize
+        messages.append(
+            ToolMessage(content="Call tool 3", tool_call_id="3", name="tool_3", id="7")
+        )
+
     # Call the summarizer
     result = summarize_messages(
         messages,
@@ -591,30 +599,35 @@ def test_last_ai_with_tool_calls():
         model=model,
         token_counter=len,
         max_tokens_before_summary=2,
-        max_tokens=6,
+        max_tokens=2,
         max_summary_tokens=1,
     )
 
     # Check that the AI message with tool calls was summarized together with the tool messages
-    assert len(result.messages) == 3
-    assert result.messages[0].type == "system"  # Summary
-    assert result.messages[-2:] == messages[-2:]
-    assert result.running_summary.summarized_message_ids == {
-        msg.id for msg in messages[:-2]
-    }
+    assert len(result.messages) == (7 if is_tool_call else 2)
+    assert result.messages[0].type == ("human" if is_tool_call else "system")
+    assert result.messages[-1].type == ("tool" if is_tool_call else "human")
+
+    if is_tool_call:
+        assert result.running_summary is None
+    else:
+        assert result.running_summary.summarized_message_ids == {
+            msg.id for msg in messages[:-1]
+        }
 
 
 def test_missing_message_ids():
     messages = [
         HumanMessage(content="Message 1", id="1"),
         AIMessage(content="Response"),  # Missing ID
+        HumanMessage(content="Message 2", id="1"),
     ]
     with pytest.raises(ValueError, match="Messages are required to have ID field"):
         summarize_messages(
             messages,
             running_summary=None,
             model=MockChatModel(responses=[]),
-            max_tokens=10,
+            max_tokens=1,
             max_summary_tokens=1,
         )
 
@@ -640,8 +653,10 @@ def test_duplicate_message_ids():
 
     # Second summarization with a duplicate ID
     messages2 = [
+        AIMessage(content="Response 1", id="2"),  # Duplicate ID
+        HumanMessage(content="Message 2", id="3"),  # Duplicate ID
         AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="1"),  # Duplicate ID
+        HumanMessage(content="Message 3", id="5"),
     ]
 
     with pytest.raises(ValueError, match="has already been summarized"):
@@ -650,7 +665,7 @@ def test_duplicate_message_ids():
             running_summary=result.running_summary,
             model=model,
             token_counter=len,
-            max_tokens=5,
+            max_tokens=6,
             max_summary_tokens=1,
         )
 

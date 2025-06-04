@@ -10,7 +10,6 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
-import requests
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
@@ -41,12 +40,7 @@ from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
-from ai_chatbots.tools import (
-    get_video_transcript_chunk,
-    search_content_files,
-    search_related_course_content_files,
-)
-from ai_chatbots.utils import get_django_cache
+from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
 
@@ -409,7 +403,7 @@ class ResourceRecommendationBot(SummarizingChatbot):
 
     def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
-        return [tools.search_courses]
+        return [tools.search_courses, tools.search_content_files]
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -464,10 +458,10 @@ class SyllabusBot(SummarizingChatbot):
 
     def create_tools(self):
         """Create tools required by the agent"""
-        tools = [search_content_files]
+        bot_tools = [tools.search_content_files]
         if self.enable_related_courses:
-            tools.append(search_related_course_content_files)
-        return tools
+            bot_tools.append(tools.search_related_course_content_files)
+        return bot_tools
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -623,7 +617,8 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
 
     api_url = settings.AI_MIT_CONTENTFILE_URL
     params = {"edx_module_id": block_siblings}
-    response = requests.get(api_url, params=params, timeout=10)
+
+    response = request_with_token(api_url, params, timeout=10)
 
     response = response.json()
 
@@ -697,7 +692,7 @@ class VideoGPTBot(SummarizingChatbot):
 
     def create_tools(self):
         """Create tools required for the agent"""
-        return [get_video_transcript_chunk]
+        return [tools.get_video_transcript_chunk]
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""

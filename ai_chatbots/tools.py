@@ -12,13 +12,13 @@ from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
-from ai_chatbots.utils import enum_zip
+from ai_chatbots.utils import enum_zip, request_with_token
 
 log = logging.getLogger(__name__)
 
 
 class SearchToolSchema(pydantic.BaseModel):
-    """Schema for searching MIT learning resources.
+    """Schema to search for MIT learning resources.
 
     Attributes:
         q: The search query string
@@ -129,7 +129,6 @@ def search_courses(
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
     """
-
     params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
 
     valid_params = {
@@ -140,7 +139,7 @@ def search_courses(
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
-    log.debug("Searching MIT API at %s with params: %s", search_url, params)
+    log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
         response = requests.get(search_url, params=params, timeout=30)
         response.raise_for_status()
@@ -149,6 +148,7 @@ def search_courses(
         main_properties = [
             "title",
             "id",
+            "readable_id",
             "description",
             "offered_by",
             "free",
@@ -186,15 +186,21 @@ def search_courses(
 
 
 class SearchContentFilesToolSchema(pydantic.BaseModel):
-    """Schema for searching MIT contentfiles for a specific course."""
+    """
+    Schema for searching MIT contentfiles related to a particular learning resource.
+    """
 
     q: str = Field(
-        description=(
-            "Query to find course information that might answer the user's question."
-        )
+        description=("Query to find requested information about a learning resource.")
     )
+
+    readable_id: Optional[str] = Field(
+        description=("The readable_id of the learning resource."),
+        default=None,
+    )
+
     state: Annotated[dict, InjectedState] = Field(
-        description=("The agent state, including course_id, and collection_name")
+        "Agent state, which may include course_id (readable_id) and collection_name"
     )
 
 
@@ -236,7 +242,7 @@ class VideoGPTToolSchema(pydantic.BaseModel):
 def _content_file_search(url, params):
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = request_with_token(url, params, timeout=30)
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -259,16 +265,15 @@ def _content_file_search(url, params):
 
 @tool(args_schema=SearchContentFilesToolSchema)
 def search_content_files(
-    q: str,
-    state: Annotated[dict, InjectedState],
+    q: str, state: Annotated[dict, InjectedState], readable_id: str | None = None
 ) -> str:
     """
-    Query the MIT contentfile vector endpoint API, and return results as a
-    JSON string, along with metadata about the query parameters used.
+    Search for detailed information about a particular MIT learning resource.
+    The resource is identified by its readable_id or course_id.
     """
 
     url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state["course_id"][-1]
+    course_id = state.get("course_id", [None])[-1] or readable_id
     collection_name = state["collection_name"][-1]
     params = {
         "q": q,
@@ -319,7 +324,7 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
 
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = request_with_token(url, params, timeout=30)
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
