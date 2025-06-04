@@ -109,6 +109,7 @@ def test_request_exception(mocker):
     ("search_url", "limit"),
     [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
 )
+@pytest.mark.parametrize("no_collection_name", [True, False])
 def test_search_content_files(  # noqa: PLR0913
     settings,
     mock_get_resources,
@@ -116,6 +117,7 @@ def test_search_content_files(  # noqa: PLR0913
     search_results,
     search_url,
     limit,
+    no_collection_name,
 ):
     """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SYLLABUS_URL = search_url
@@ -127,6 +129,10 @@ def test_search_content_files(  # noqa: PLR0913
         "resource_readable_id": syllabus_agent_state["course_id"][-1],
         "collection_name": syllabus_agent_state["collection_name"][-1],
     }
+    if no_collection_name:
+        expected_params.pop("collection_name")
+        syllabus_agent_state.pop("collection_name")
+
     results = json.loads(
         search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
     )
