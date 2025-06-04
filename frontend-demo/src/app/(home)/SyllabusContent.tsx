@@ -107,7 +107,7 @@ const SyllabusContent = () => {
     extraBody: {
       model: settings.syllabus_model,
       course_id: resource.data?.readable_id,
-      related_resources: resource.data?.children.map(
+      related_resources: resource.data?.children?.map(
         (child) => child.readable_id,
       ),
     },
