@@ -555,7 +555,7 @@ class TutorBot(BaseChatbot):
         response = ""
 
         try:
-            new_history, new_intent_history, new_assessment_history = message_tutor(
+            response_generator = message_tutor(
                 self.problem,
                 self.problem_set,
                 self.llm,
@@ -565,6 +565,15 @@ class TutorBot(BaseChatbot):
                 intent_history,
                 tools=tutor_tools,
             )
+
+            async for chunk in response_generator:
+                if (
+                    isinstance(chunk[0], AIMessageChunk)
+                    and chunk[1].get("langgraph_node") != "pre_model_hook"
+                ):
+                    full_response += chunk[0].content
+                    yield chunk[0].content
+
 
             metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
             json_output = tutor_output_to_json(
