@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
-import type { PaginatedContentFileList } from "@mitodl/open-api-axios/v1"
+import type { PaginatedContentFileList } from "@mitodl/mit-learn-api-axios/v1"
 import axios from "axios"
 
 type ContentListOptions = {
@@ -21,7 +21,7 @@ const queries = {
       queryKey: keys.contentfilesListing(opts),
       /**
        * TODO:
-       * There's a bug in @mitodl/open-api-axios... it thinks /contentfiles/ listing
+       * There's a bug in @mitodl/mit-learn-api-axios... it thinks /contentfiles/ listing
        * API requires a path parameter.
        *
        * For now, use axios.get instead.

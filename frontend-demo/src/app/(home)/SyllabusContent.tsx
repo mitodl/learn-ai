@@ -9,7 +9,7 @@ import SelectModel from "./SelectModel"
 import { useRequestOpts, useSearchParamSettings } from "./util"
 import { useQuery, UseQueryResult } from "@tanstack/react-query"
 import { learningResourcesQueries } from "@/services/learn"
-import { LearningResource } from "@mitodl/open-api-axios/v1"
+import { LearningResource } from "@mitodl/mit-learn-api-axios/v1"
 import { useEffect, useState } from "react"
 import CircularProgress from "@mui/material/CircularProgress"
 import MetadataDisplay from "./MetadataDisplay"
@@ -102,12 +102,14 @@ const SyllabusContent = () => {
     ...learningResourcesQueries.retrieve({ id: resourceId }),
     enabled: !!resourceId,
   })
-
   const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
     apiUrl: SYLLABUS_GPT_URL,
     extraBody: {
       model: settings.syllabus_model,
       course_id: resource.data?.readable_id,
+      related_resources: Array.isArray(resource.data?.children)
+        ? resource.data.children.map((child) => child.readable_id)
+        : undefined,
     },
   })
 

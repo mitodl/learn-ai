@@ -1309,13 +1309,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/open-api-axios@npm:^2025.4.8":
-  version: 2025.4.8
-  resolution: "@mitodl/open-api-axios@npm:2025.4.8"
+"@mitodl/mit-learn-api-axios@npm:^2025.6.3":
+  version: 2025.6.3
+  resolution: "@mitodl/mit-learn-api-axios@npm:2025.6.3"
   dependencies:
     "@types/node": "npm:^22.0.0"
     axios: "npm:^1.6.5"
-  checksum: 10c0/f35475d40381af218500c53875d9e63a78426ac0c71d4024377248311578648aafad30615b3f91cd73718467a7a3f2557b06ec777735a45ef9c95a7840c6dfe2
+  checksum: 10c0/d4043fbcb58754dad6499e1fab0e6f45af2c7fd688297b7fa62e7aa5aff0ae0fd31abdd77a609c07cc4ee2bba8435c7759e93aace13ed83a941e95f26d8cd672
   languageName: node
   linkType: hard
 
@@ -10374,7 +10374,7 @@ __metadata:
     "@emotion/react": "npm:^11.11.1"
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
-    "@mitodl/open-api-axios": "npm:^2025.4.8"
+    "@mitodl/mit-learn-api-axios": "npm:^2025.6.3"
     "@mitodl/smoot-design": "npm:^6.4.0"
     "@mui/lab": "npm:^6.0.1-beta.34"
     "@mui/material": "npm:^6.1.8"

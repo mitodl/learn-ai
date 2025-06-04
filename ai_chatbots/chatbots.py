@@ -420,6 +420,7 @@ class SyllabusAgentState(SummaryState):
 
     course_id: Annotated[list[str], add]
     collection_name: Annotated[list[str], add]
+    related_courses: Annotated[list[str], add]
 
 
 class SyllabusBot(SummarizingChatbot):
@@ -441,7 +442,9 @@ class SyllabusBot(SummarizingChatbot):
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
+        enable_related_courses: Optional[bool] = False,
     ):
+        self.enable_related_courses = enable_related_courses
         super().__init__(
             user_id,
             name=name,
@@ -455,7 +458,10 @@ class SyllabusBot(SummarizingChatbot):
 
     def create_tools(self):
         """Create tools required by the agent"""
-        return [tools.search_content_files]
+        bot_tools = [tools.search_content_files]
+        if self.enable_related_courses:
+            bot_tools.append(tools.search_related_course_content_files)
+        return bot_tools
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
