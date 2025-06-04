@@ -1309,13 +1309,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/open-api-axios@npm:^2025.4.8":
-  version: 2025.4.8
-  resolution: "@mitodl/open-api-axios@npm:2025.4.8"
+"@mitodl/mitxonline-api-axios@npm:^2025.6.3":
+  version: 2025.6.3
+  resolution: "@mitodl/mitxonline-api-axios@npm:2025.6.3"
   dependencies:
-    "@types/node": "npm:^22.0.0"
+    "@types/node": "npm:^20.11.19"
     axios: "npm:^1.6.5"
-  checksum: 10c0/f35475d40381af218500c53875d9e63a78426ac0c71d4024377248311578648aafad30615b3f91cd73718467a7a3f2557b06ec777735a45ef9c95a7840c6dfe2
+  checksum: 10c0/793f883ffc384fd52d6ef4bb757cf82cd2f86aafa5e02943d38620cfd735ee2cee15bef39bbee0cb906e92dfeb62c786f909e0e0125eb186bc535d107848e798
   languageName: node
   linkType: hard
 
@@ -2382,6 +2382,15 @@ __metadata:
   dependencies:
     undici-types: "npm:~6.21.0"
   checksum: 10c0/d49c4d00403b1c2348cf0701b505fd636d80aabe18102105998dc62fdd36dcaf911e73c7a868c48c21c1022b825c67b475b65b1222d84b704d8244d152bb7f86
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^20.11.19":
+  version: 20.17.57
+  resolution: "@types/node@npm:20.17.57"
+  dependencies:
+    undici-types: "npm:~6.19.2"
+  checksum: 10c0/c04f3b6c4f335ad50bd3af62cd9e64a86c355cb6b363cb0e618511db4c6801c8539781c3786076eca6f56e999d6c7fc4748e43393a107aad57e65e3ffd1f73bf
   languageName: node
   linkType: hard
 
@@ -10359,6 +10368,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"undici-types@npm:~6.19.2":
+  version: 6.19.8
+  resolution: "undici-types@npm:6.19.8"
+  checksum: 10c0/078afa5990fba110f6824823ace86073b4638f1d5112ee26e790155f481f2a868cc3e0615505b6f4282bdf74a3d8caad715fd809e870c2bb0704e3ea6082f344
+  languageName: node
+  linkType: hard
+
 "undici-types@npm:~6.21.0":
   version: 6.21.0
   resolution: "undici-types@npm:6.21.0"
@@ -10374,7 +10390,7 @@ __metadata:
     "@emotion/react": "npm:^11.11.1"
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
-    "@mitodl/open-api-axios": "npm:^2025.4.8"
+    "@mitodl/mitxonline-api-axios": "npm:^2025.6.3"
     "@mitodl/smoot-design": "npm:^6.4.0"
     "@mui/lab": "npm:^6.0.1-beta.34"
     "@mui/material": "npm:^6.1.8"

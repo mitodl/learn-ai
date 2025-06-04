@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
-import type { PaginatedContentFileList } from "@mitodl/open-api-axios/v1"
+import type { PaginatedContentFileList } from "@mitodl/mitxonline-api-axios/v1"
 import axios from "axios"
 
 type ContentListOptions = {
