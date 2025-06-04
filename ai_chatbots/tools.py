@@ -274,7 +274,7 @@ def search_content_files(
 
     url = settings.AI_MIT_SYLLABUS_URL
     course_id = state.get("course_id", [None])[-1] or readable_id
-    collection_name = state["collection_name"][-1]
+    collection_name = state.get("collection_name", [None])[-1]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -295,7 +295,7 @@ def search_related_course_content_files(
     JSON string, along with metadata about the query parameters used.
     """
     url = settings.AI_MIT_SYLLABUS_URL
-    collection_name = state["collection_name"][-1]
+    collection_name = state.get("collection_name", [None])[-1]
     related_courses = state["related_courses"]
     params = {
         "q": q,
