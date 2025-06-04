@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
@@ -29,6 +28,7 @@ from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
 from open_learning_ai_tutor.utils import (
+    filter_out_system_messages,
     json_to_intent_list,
     json_to_messages,
     tutor_output_to_json,
@@ -560,10 +560,10 @@ class TutorBot(BaseChatbot):
             intent_history = []
             assessment_history = []
 
-        response = ""
-
+        full_response = ""
+        new_history = []
         try:
-            new_history, new_intent_history, new_assessment_history = message_tutor(
+            generator, new_intent_history, new_assessment_history = message_tutor(
                 self.problem,
                 self.problem_set,
                 self.llm,
@@ -574,38 +574,33 @@ class TutorBot(BaseChatbot):
                 tools=tutor_tools,
             )
 
+            async for chunk in generator:
+                # the generator yields message chuncks for a streaming resopnse
+                # then finally yields the full response as the last chunk
+                if (
+                    chunk[0] == "messages"
+                    and chunk[1]
+                    and isinstance(chunk[1][0], AIMessageChunk)
+                ):
+                    full_response += chunk[1][0].content
+                    yield chunk[1][0].content
+
+                elif chunk[0] == "values":
+                    new_history = filter_out_system_messages(chunk[1]["messages"])
+
             metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
             json_output = tutor_output_to_json(
                 new_history, new_intent_history, new_assessment_history, metadata
             )
             await create_tutorbot_output(self.thread_id, json_output)
-            response = new_history[-1].content
-            yield replace_math_tags(response)
+
             await self.send_posthog_event(
-                message, response, await self.get_tool_metadata()
+                message, full_response, await self.get_tool_metadata()
             )
 
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
-
-
-INLINE_MATH_REGEX = re.compile(r"\\\((.*?)\\\)")
-DISPLAY_MATH_REGEX = re.compile(r"\\\[(.*?)\\\]", re.DOTALL)
-
-
-# react-markdown expects Mathjax deliminators to be $...$ or $$...$$
-# the prompt for the tutorbot asks for Mathjax tags with $ format but
-# the LLM does not get it right all the time
-# this function replaces the Mathjax tags with the correct format
-# eventually we will probably be able to remove this as LLMs get better
-def replace_math_tags(input_string):
-    r"""
-    Replace instances of \(...\) and \[...\] Mathjax tags with $...$
-    and $$...$$ tags.
-    """
-    input_string = re.sub(INLINE_MATH_REGEX, r"$\1$", input_string)
-    return re.sub(DISPLAY_MATH_REGEX, r"$$\1$$", input_string)
 
 
 def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):

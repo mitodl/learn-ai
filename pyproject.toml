@@ -44,7 +44,6 @@ langgraph-checkpoint-postgres = "^2.0.13"
 litellm = "^1.53.5"
 markdown2 = "^2.5.2"
 named-enum = "^1.4.0"
-open-learning-ai-tutor = "^0.0.10"
 opentelemetry-api = ">=1.31.0"
 opentelemetry-exporter-otlp = ">=1.31.0"
 opentelemetry-instrumentation-celery = ">=0.52b0"
@@ -68,6 +67,7 @@ ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langmem = "^0.0.27"
 beautifulsoup4 = "^4.13.4"
+open-learning-ai-tutor = "^0.2.3"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"
