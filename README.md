@@ -121,6 +121,8 @@ If you need to update a prompt, you have 2 options:
 
 Interaction between users and AI agents is handled via [Django Channels](https://channels.readthedocs.io/en/latest/) (which allows for asynchronous communication), in particular the [AsyncHttpConsumer](https://channels.readthedocs.io/en/latest/topics/consumers.html#asynchttpconsumer) class. `AsyncHttpConsumer` can handle streaming responses asynchronously so as not to block other requests.
 
+These consumer classes can be considered roughly equivalent to Django views. The corresponding url assignment for each consumer is defined in the `routing.py` file instead of `urls.py`
+
 The bulk of the relevant code for this is in the `ai_chatbots.consumers` module. Each chatbot agent has a corresponding consumer class that inherits from the BaseBotHttpConsumer class which provides common functionality. The most important functions are as follows:
 
 - `create_chatbot`: not implemented in the base class; instantiates a chatbot agent of the appropriate type.
@@ -165,7 +167,7 @@ The current chatbot classes that inherit from this base class are:
 
 #### Agent graphs
 
-The `BaseChatbot class explicittly defines a sample graph made up of an LLM node, tool node, and the edges connecting them. It is intended only as a reference to provide some guidance on how to construct your own.
+The `BaseChatbot` class explicittly defines a sample graph made up of an LLM node, tool node, and the edges connecting them. It is intended only as a reference to provide some guidance on how to construct your own.
 
 Most of the implemented chatbots (Recommendation, Syllabus, VideoGPT)
 make use of langrgaph's [create_react_agent](https://langchain-ai.github.io/langgraph/reference/agents/#langgraph.prebuilt.chat_agent_executor.create_react_agent) helper function which creates an agent graph that calls tools in a loop as needed, and provides the option for a "pre_model_hook" that can call functions or nodes before each call to the main LLM node.
