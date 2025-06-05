@@ -167,7 +167,7 @@ The current chatbot classes that inherit from this base class are:
 
 #### Agent graphs
 
-The `BaseChatbot` class explicittly defines a sample graph made up of an LLM node, tool node, and the edges connecting them. It is intended only as a reference to provide some guidance on how to construct your own.
+The `BaseChatbot` class explicitly defines a sample graph made up of an LLM node, tool node, and the edges connecting them. It is intended only as a reference to provide some guidance on how to construct your own.
 
 Most of the implemented chatbots (Recommendation, Syllabus, VideoGPT)
 make use of langrgaph's [create_react_agent](https://langchain-ai.github.io/langgraph/reference/agents/#langgraph.prebuilt.chat_agent_executor.create_react_agent) helper function which creates an agent graph that calls tools in a loop as needed, and provides the option for a "pre_model_hook" that can call functions or nodes before each call to the main LLM node.
