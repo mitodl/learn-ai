@@ -1505,17 +1505,17 @@ Django = ">=4.2"
 
 [[package]]
 name = "django-guardian"
-version = "2.4.0"
-description = "Implementation of per object permissions for Django."
+version = "3.0.0"
+description = "Per object permissions for Django"
 optional = false
-python-versions = ">=3.5"
+python-versions = ">=3.9"
 files = [
-    {file = "django-guardian-2.4.0.tar.gz", hash = "sha256:c58a68ae76922d33e6bdc0e69af1892097838de56e93e78a8361090bcd9f89a0"},
-    {file = "django_guardian-2.4.0-py3-none-any.whl", hash = "sha256:440ca61358427e575323648b25f8384739e54c38b3d655c81d75e0cd0d61b697"},
+    {file = "django_guardian-3.0.0-py3-none-any.whl", hash = "sha256:f3ebe3cc7f486e267041b780c3429ad5db72c909df40c2f74adb1b059582a3cd"},
+    {file = "django_guardian-3.0.0.tar.gz", hash = "sha256:0c79d55c4af2cfc14fbd19539846a1ebfed2a38198b7697e0f5177b7f654e1cd"},
 ]
 
 [package.dependencies]
-Django = ">=2.2"
+django = ">=3.2"
 
 [[package]]
 name = "django-health-check"
@@ -7908,4 +7908,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "5d34df44d4579f9dd65dbbb83025a1a578cdeced98fd98b8eba06cb3c4111937"
+content-hash = "11e3a86f822a7d53f0e43442c8c1b9c87d9355ae90d730a49f576d0d06774cf0"
