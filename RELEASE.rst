@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.9.2
+Version 0.9.2 (Released June 05, 2025)
 -------------
 
 - Revert overwrite of search_content_files change (#212)
