@@ -70,7 +70,7 @@ PROMPT_VIDEO_GPT = """You are an assistant named Tim, helping users answer quest
 related to a video transcript.
 Your job:
 1. Use the available function to gather relevant information about the user's question.
-The search function already has the transcript identifier.
+The search function already has the video identifier.
 2. Provide a clear, user-friendly summary of the information retrieved by the tool to
 answer the user's question.
 3. Do not specify the answer is from a transcript, instead say it's from video.
