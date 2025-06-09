@@ -1,15 +1,19 @@
+import { useEffect, useState } from "react"
 import { RECOMMENDATION_GPT_URL } from "@/services/ai/urls"
 import AiChatDisplay from "./StyledAiChatDisplay"
 import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
+import TextareaAutosize from "@mui/material/TextareaAutosize"
+
 import SelectModel from "./SelectModel"
 import React from "react"
 import { useRequestOpts, useSearchParamSettings } from "./util"
 import SelectSearchURL from "./SelectSearchUrl"
 import MetadataDisplay from "./MetadataDisplay"
 import { Button } from "@mitodl/smoot-design"
-import SelectPrompt from "./SelectPrompt"
+import { promptQueries } from "@/services/ai"
+import { useQuery } from "@tanstack/react-query"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -21,8 +25,18 @@ const RecommendationContent: React.FC = () => {
   const [settings, setSettings] = useSearchParamSettings({
     rec_model: "",
     search_url: "",
-    systemPrompt: "",
+    systemPrompt: "initial",
   })
+
+  const promptResult = useQuery(promptQueries.get("recommendation"))
+  const [promptText, setPromptText] = useState(settings.systemPrompt)
+  useEffect(() => {
+    const nextValue =
+      promptText || promptText || promptResult.data?.prompt_value || ""
+    if (settings.systemPrompt !== nextValue) {
+      setSettings({ systemPrompt: nextValue })
+    }
+  }, [promptText, setSettings, settings.systemPrompt])
 
   const { requestOpts, requestNewThread, chatSuffix } = useRequestOpts({
     apiUrl: RECOMMENDATION_GPT_URL,
@@ -34,13 +48,6 @@ const RecommendationContent: React.FC = () => {
   })
 
   const chatId = `recommendation-gpt-${chatSuffix}`
-  //const prompt = useQuery(promptQueries.get("recommendation"))
-
-  // React.useEffect(() => {
-  //   if (prompt.data?.prompt_value && !settings.system_prompt) {
-  //     setSettings({ system_prompt: prompt.data.prompt_value })
-  //   }
-  // }, [prompt.data, settings.system_prompt, setSettings])
 
   return (
     <>
@@ -82,12 +89,16 @@ const RecommendationContent: React.FC = () => {
               value={settings.search_url}
               onChange={(e) => setSettings({ search_url: e.target.value })}
             />
-            <SelectPrompt
-              value={settings.systemPrompt}
-              onChange={(e) => setSettings({ systemPrompt: e.target.value })}
+            <TextareaAutosize
+              aria-label="System Prompt"
               minRows={6}
-              maxRows={22}
-              style={{ width: "100%" }}
+              maxRows={10}
+              value={
+                promptText === "initial"
+                  ? promptResult.data?.prompt_value
+                  : promptText || ""
+              }
+              onChange={(e) => setPromptText(e.target.value)}
             />
             <Button variant="secondary" onClick={requestNewThread}>
               Start new thread
