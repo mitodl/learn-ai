@@ -9,6 +9,7 @@ import { useRequestOpts, useSearchParamSettings } from "./util"
 import SelectSearchURL from "./SelectSearchUrl"
 import MetadataDisplay from "./MetadataDisplay"
 import { Button } from "@mitodl/smoot-design"
+import SelectPrompt from "./SelectPrompt"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -20,6 +21,7 @@ const RecommendationContent: React.FC = () => {
   const [settings, setSettings] = useSearchParamSettings({
     rec_model: "",
     search_url: "",
+    systemPrompt: "",
   })
 
   const { requestOpts, requestNewThread, chatSuffix } = useRequestOpts({
@@ -27,10 +29,18 @@ const RecommendationContent: React.FC = () => {
     extraBody: {
       model: settings.rec_model,
       search_url: settings.search_url,
+      instructions: settings.systemPrompt,
     },
   })
 
   const chatId = `recommendation-gpt-${chatSuffix}`
+  //const prompt = useQuery(promptQueries.get("recommendation"))
+
+  // React.useEffect(() => {
+  //   if (prompt.data?.prompt_value && !settings.system_prompt) {
+  //     setSettings({ system_prompt: prompt.data.prompt_value })
+  //   }
+  // }, [prompt.data, settings.system_prompt, setSettings])
 
   return (
     <>
@@ -71,6 +81,13 @@ const RecommendationContent: React.FC = () => {
             <SelectSearchURL
               value={settings.search_url}
               onChange={(e) => setSettings({ search_url: e.target.value })}
+            />
+            <SelectPrompt
+              value={settings.systemPrompt}
+              onChange={(e) => setSettings({ systemPrompt: e.target.value })}
+              minRows={6}
+              maxRows={22}
+              style={{ width: "100%" }}
             />
             <Button variant="secondary" onClick={requestNewThread}>
               Start new thread

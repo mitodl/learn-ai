@@ -222,16 +222,6 @@ def get_transcript_block_id(contentfile):
     return f"{transcript_id_prefix}@{english_transcript_id}"
 
 
-@extend_schema(
-    parameters=[
-        OpenApiParameter(
-            name="prompt_name",
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.PATH,
-            description="name of the system prompt",
-        )
-    ]
-)
 class SystemPromptViewSet(GenericViewSet):
     """
     API endpoint to retrieve chatbot system prompts.
@@ -272,6 +262,16 @@ class SystemPromptViewSet(GenericViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="prompt_name",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.PATH,
+                description="name of the system prompt",
+            )
+        ]
+    )
     def retrieve(self, request, *args, **kwargs):  # noqa: ARG002
         """Return a specific system prompt."""
         instance = self.get_object()
