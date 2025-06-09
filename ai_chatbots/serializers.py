@@ -6,6 +6,13 @@ from rest_framework import serializers
 from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 
 
+class SystemPromptSerializer(serializers.Serializer):
+    """Serializer for system prompts"""
+
+    prompt_name = serializers.CharField()
+    prompt_value = serializers.CharField()
+
+
 class ChatRequestSerializer(serializers.Serializer):
     """Serializer for chatbot requests"""
 

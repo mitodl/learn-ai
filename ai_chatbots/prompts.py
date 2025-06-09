@@ -99,10 +99,15 @@ tool messages and any previous summaries in this new summary.
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
 
-PROMPT_MAPPING = {
+CHATBOT_PROMPT_MAPPING = {
     "recommendation": PROMPT_RECOMMENDATION,
     "syllabus": PROMPT_SYLLABUS,
     "video_gpt": PROMPT_VIDEO_GPT,
+}
+
+
+SYSTEM_PROMPT_MAPPING = {
+    **CHATBOT_PROMPT_MAPPING,
     "summary_initial": PROMPT_SUMMARY_INITIAL,
     "summary_existing": PROMPT_SUMMARY_EXISTING,
     "summary_final": PROMPT_SUMMARY_FINAL,
