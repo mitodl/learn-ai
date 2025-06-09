@@ -1986,13 +1986,20 @@ export const PromptsApiAxiosParamCreator = function (
   return {
     /**
      * Return a list of system prompts.
+     * @param {string} prompt_name name of the system prompt
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     promptsList: async (
+      prompt_name: string,
       options: RawAxiosRequestConfig = {},
     ): Promise<RequestArgs> => {
-      const localVarPath = `/api/v0/prompts/`
+      // verify required parameter 'prompt_name' is not null or undefined
+      assertParamExists("promptsList", "prompt_name", prompt_name)
+      const localVarPath = `/api/v0/prompts/`.replace(
+        `{${"prompt_name"}}`,
+        encodeURIComponent(String(prompt_name)),
+      )
       // use dummy base URL string because the URL constructor only accepts absolute URLs.
       const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
       let baseOptions
@@ -2024,7 +2031,7 @@ export const PromptsApiAxiosParamCreator = function (
     },
     /**
      * Return a specific system prompt.
-     * @param {string} prompt_name
+     * @param {string} prompt_name name of the system prompt
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
@@ -2079,10 +2086,12 @@ export const PromptsApiFp = function (configuration?: Configuration) {
   return {
     /**
      * Return a list of system prompts.
+     * @param {string} prompt_name name of the system prompt
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     async promptsList(
+      prompt_name: string,
       options?: RawAxiosRequestConfig,
     ): Promise<
       (
@@ -2090,8 +2099,10 @@ export const PromptsApiFp = function (configuration?: Configuration) {
         basePath?: string,
       ) => AxiosPromise<Array<SystemPrompt>>
     > {
-      const localVarAxiosArgs =
-        await localVarAxiosParamCreator.promptsList(options)
+      const localVarAxiosArgs = await localVarAxiosParamCreator.promptsList(
+        prompt_name,
+        options,
+      )
       const index = configuration?.serverIndex ?? 0
       const operationBasePath =
         operationServerMap["PromptsApi.promptsList"]?.[index]?.url
@@ -2105,7 +2116,7 @@ export const PromptsApiFp = function (configuration?: Configuration) {
     },
     /**
      * Return a specific system prompt.
-     * @param {string} prompt_name
+     * @param {string} prompt_name name of the system prompt
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
@@ -2146,14 +2157,16 @@ export const PromptsApiFactory = function (
   return {
     /**
      * Return a list of system prompts.
+     * @param {PromptsApiPromptsListRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     promptsList(
+      requestParameters: PromptsApiPromptsListRequest,
       options?: RawAxiosRequestConfig,
     ): AxiosPromise<Array<SystemPrompt>> {
       return localVarFp
-        .promptsList(options)
+        .promptsList(requestParameters.prompt_name, options)
         .then((request) => request(axios, basePath))
     },
     /**
@@ -2174,13 +2187,27 @@ export const PromptsApiFactory = function (
 }
 
 /**
+ * Request parameters for promptsList operation in PromptsApi.
+ * @export
+ * @interface PromptsApiPromptsListRequest
+ */
+export interface PromptsApiPromptsListRequest {
+  /**
+   * name of the system prompt
+   * @type {string}
+   * @memberof PromptsApiPromptsList
+   */
+  readonly prompt_name: string
+}
+
+/**
  * Request parameters for promptsRetrieve operation in PromptsApi.
  * @export
  * @interface PromptsApiPromptsRetrieveRequest
  */
 export interface PromptsApiPromptsRetrieveRequest {
   /**
-   *
+   * name of the system prompt
    * @type {string}
    * @memberof PromptsApiPromptsRetrieve
    */
@@ -2196,13 +2223,17 @@ export interface PromptsApiPromptsRetrieveRequest {
 export class PromptsApi extends BaseAPI {
   /**
    * Return a list of system prompts.
+   * @param {PromptsApiPromptsListRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}
    * @memberof PromptsApi
    */
-  public promptsList(options?: RawAxiosRequestConfig) {
+  public promptsList(
+    requestParameters: PromptsApiPromptsListRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
     return PromptsApiFp(this.configuration)
-      .promptsList(options)
+      .promptsList(requestParameters.prompt_name, options)
       .then((request) => request(this.axios, this.basePath))
   }
 

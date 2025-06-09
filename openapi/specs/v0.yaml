@@ -232,6 +232,13 @@ paths:
     get:
       operationId: prompts_list
       description: Return a list of system prompts.
+      parameters:
+      - in: path
+        name: prompt_name
+        schema:
+          type: string
+        description: name of the system prompt
+        required: true
       tags:
       - prompts
       security:
@@ -254,6 +261,7 @@ paths:
         name: prompt_name
         schema:
           type: string
+        description: name of the system prompt
         required: true
       tags:
       - prompts
