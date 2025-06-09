@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.9.3
+Version 0.9.3 (Released June 09, 2025)
 -------------
 
 - fix(deps): update dependency django-guardian to v3 (#203)
