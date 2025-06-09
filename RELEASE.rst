@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.9.3 (Released June 09, 2025)
+-------------
+
+- fix(deps): update dependency django-guardian to v3 (#203)
+- Change default env values for bot models, search url (#210)
+
 Version 0.9.2 (Released June 05, 2025)
 -------------
 
