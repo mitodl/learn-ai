@@ -17,7 +17,7 @@ router.register(
     basename="chat_session_messages",
 )
 router.register(r"llm_models", views.LLMModelViewSet, basename="llm_models")
-router.register(r"prompts", views.AgentPromptViewSet, basename="prompts")
+router.register(r"prompts", views.SystemPromptViewSet, basename="prompts")
 
 app_name = "ai"
 v0_urls = [

@@ -222,7 +222,7 @@ def get_transcript_block_id(contentfile):
     return f"{transcript_id_prefix}@{english_transcript_id}"
 
 
-class AgentPromptViewSet(GenericViewSet):
+class SystemPromptViewSet(GenericViewSet):
     """
     API endpoint to retrieve chatbot system prompts.
     """
