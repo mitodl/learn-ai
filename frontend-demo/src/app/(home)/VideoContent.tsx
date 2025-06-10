@@ -41,8 +41,7 @@ const VideoContent = () => {
   const promptResult = useQuery(promptQueries.get("video_gpt"))
   const [promptText, setPromptText] = useState(settings.video_prompt)
   useEffect(() => {
-    const nextValue =
-      promptText || promptText || promptResult.data?.prompt_value || ""
+    const nextValue = promptText || promptResult.data?.prompt_value || ""
     if (nextValue === promptResult.data?.prompt_value) {
       // If the prompt is identical to the default, don't send it in the request.
       setSettings({ video_prompt: "" })
@@ -163,10 +162,11 @@ const VideoContent = () => {
             )}
             {me.data?.is_staff ? (
               <>
-                <FormLabel>System Prompt</FormLabel>
+                <FormLabel htmlFor="video-prompt-ta">System Prompt</FormLabel>
                 <TextareaAutosize
-                  minRows={6}
-                  maxRows={10}
+                  id="video-prompt-ta"
+                  minRows={5}
+                  maxRows={15}
                   value={promptText || promptResult.data?.prompt_value || ""}
                   onChange={(e) => setPromptText(e.target.value)}
                 />

@@ -198,10 +198,13 @@ const SyllabusContent = () => {
             />
             {me.data?.is_staff ? (
               <>
-                <FormLabel>System Prompt</FormLabel>
+                <FormLabel htmlFor="syllabus-prompt-ta">
+                  System Prompt
+                </FormLabel>
                 <TextareaAutosize
-                  minRows={6}
-                  maxRows={10}
+                  id="syllabus-prompt-ta"
+                  minRows={5}
+                  maxRows={15}
                   value={promptText || promptResult.data?.prompt_value || ""}
                   onChange={(e) => setPromptText(e.target.value)}
                 />
