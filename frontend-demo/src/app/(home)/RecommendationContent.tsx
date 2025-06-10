@@ -40,7 +40,12 @@ const RecommendationContent: React.FC = () => {
     } else if (settings.rec_prompt !== promptText) {
       setSettings({ rec_prompt: nextValue })
     }
-  }, [promptText, setSettings, settings.rec_prompt])
+  }, [
+    promptText,
+    setSettings,
+    settings.rec_prompt,
+    promptResult.data?.prompt_value,
+  ])
 
   const { requestOpts, requestNewThread, chatSuffix } = useRequestOpts({
     apiUrl: RECOMMENDATION_GPT_URL,
@@ -93,14 +98,16 @@ const RecommendationContent: React.FC = () => {
               value={settings.search_url}
               onChange={(e) => setSettings({ search_url: e.target.value })}
             />
-            <FormLabel>System Prompt</FormLabel>
             {me.data?.is_staff ? (
-              <TextareaAutosize
-                minRows={6}
-                maxRows={10}
-                value={promptText || promptResult.data?.prompt_value || ""}
-                onChange={(e) => setPromptText(e.target.value)}
-              />
+              <>
+                <FormLabel>System Prompt</FormLabel>
+                <TextareaAutosize
+                  minRows={6}
+                  maxRows={10}
+                  value={promptText || promptResult.data?.prompt_value || ""}
+                  onChange={(e) => setPromptText(e.target.value)}
+                />
+              </>
             ) : (
               <></>
             )}

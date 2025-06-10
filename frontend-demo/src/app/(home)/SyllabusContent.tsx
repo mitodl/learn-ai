@@ -111,7 +111,12 @@ const SyllabusContent = () => {
     } else if (settings.syllabus_prompt !== promptText) {
       setSettings({ syllabus_prompt: nextValue })
     }
-  }, [promptText, setSettings, settings.syllabus_prompt])
+  }, [
+    promptText,
+    setSettings,
+    settings.syllabus_prompt,
+    promptResult.data?.prompt_value,
+  ])
 
   const resourceId = Number.isFinite(+settings.syllabus_resource)
     ? +settings.syllabus_resource
@@ -191,14 +196,16 @@ const SyllabusContent = () => {
               error={!!resourceParseError || resource.isError}
               helperText={getResourceHelpText(resourceParseError, resource)}
             />
-            <FormLabel>System Prompt</FormLabel>
             {me.data?.is_staff ? (
-              <TextareaAutosize
-                minRows={6}
-                maxRows={10}
-                value={promptText || promptResult.data?.prompt_value || ""}
-                onChange={(e) => setPromptText(e.target.value)}
-              />
+              <>
+                <FormLabel>System Prompt</FormLabel>
+                <TextareaAutosize
+                  minRows={6}
+                  maxRows={10}
+                  value={promptText || promptResult.data?.prompt_value || ""}
+                  onChange={(e) => setPromptText(e.target.value)}
+                />
+              </>
             ) : (
               <></>
             )}

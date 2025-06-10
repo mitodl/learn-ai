@@ -13,7 +13,7 @@ import Alert from "@mui/lab/Alert"
 import { useEffect, useMemo, useState } from "react"
 
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
-import { CircularProgress, TextareaAutosize } from "@mui/material"
+import { CircularProgress, FormLabel, TextareaAutosize } from "@mui/material"
 import MetadataDisplay from "./MetadataDisplay"
 import { Button } from "@mitodl/smoot-design"
 import { promptQueries, userQueries } from "@/services/ai"
@@ -49,7 +49,12 @@ const VideoContent = () => {
     } else if (settings.video_prompt !== nextValue) {
       setSettings({ video_prompt: nextValue })
     }
-  }, [promptText, setSettings, settings.video_prompt])
+  }, [
+    promptText,
+    setSettings,
+    settings.video_prompt,
+    promptResult.data?.prompt_value,
+  ])
 
   const getTranscriptBlockId = async (edxModuleId: string) => {
     const response = await fetch(
@@ -157,13 +162,15 @@ const VideoContent = () => {
               <Alert severity="error">{transcriptError}</Alert>
             )}
             {me.data?.is_staff ? (
-              <TextareaAutosize
-                aria-label="System Prompt"
-                minRows={6}
-                maxRows={10}
-                value={promptText || promptResult.data?.prompt_value || ""}
-                onChange={(e) => setPromptText(e.target.value)}
-              />
+              <>
+                <FormLabel>System Prompt</FormLabel>
+                <TextareaAutosize
+                  minRows={6}
+                  maxRows={10}
+                  value={promptText || promptResult.data?.prompt_value || ""}
+                  onChange={(e) => setPromptText(e.target.value)}
+                />
+              </>
             ) : (
               <></>
             )}
