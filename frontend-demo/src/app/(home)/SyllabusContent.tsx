@@ -5,6 +5,7 @@ import Link from "@mui/material/Link"
 import Typography from "@mui/material/Typography"
 import Grid from "@mui/material/Grid2"
 import TextField from "@mui/material/TextField"
+import TextareaAutosize from "@mui/material/TextareaAutosize"
 import SelectModel from "./SelectModel"
 import { useRequestOpts, useSearchParamSettings } from "./util"
 import { useQuery, UseQueryResult } from "@tanstack/react-query"
@@ -14,6 +15,8 @@ import { useEffect, useState } from "react"
 import CircularProgress from "@mui/material/CircularProgress"
 import MetadataDisplay from "./MetadataDisplay"
 import { Button } from "@mitodl/smoot-design"
+import { promptQueries, userQueries } from "@/services/ai"
+import { FormLabel } from "@mui/material"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
   {
@@ -81,6 +84,7 @@ const SyllabusContent = () => {
   const [settings, setSettings] = useSearchParamSettings({
     syllabus_model: "",
     syllabus_resource: DEFAULT_RESOURCE,
+    syllabus_prompt: "",
   })
   const [resourceParseError, setResourceParseError] = useState<string | null>(
     null,
@@ -95,6 +99,20 @@ const SyllabusContent = () => {
       setSettings({ syllabus_resource: nextValue })
     }
   }, [resourceText, setSettings, settings.syllabus_resource])
+
+  const me = useQuery(userQueries.me())
+  const promptResult = useQuery(promptQueries.get("syllabus"))
+  const [promptText, setPromptText] = useState(settings.syllabus_prompt)
+  useEffect(() => {
+    const nextValue = promptText || promptResult.data?.prompt_value || ""
+    if (nextValue === promptResult.data?.prompt_value) {
+      // If the prompt is identical to the default, don't send it in the request.
+      setSettings({ syllabus_prompt: "" })
+    } else if (settings.syllabus_prompt !== promptText) {
+      setSettings({ syllabus_prompt: nextValue })
+    }
+  }, [promptText, setSettings, settings.syllabus_prompt])
+
   const resourceId = Number.isFinite(+settings.syllabus_resource)
     ? +settings.syllabus_resource
     : -1
@@ -110,6 +128,7 @@ const SyllabusContent = () => {
       related_resources: Array.isArray(resource.data?.children)
         ? resource.data.children.map((child) => child.readable_id)
         : undefined,
+      instructions: settings.syllabus_prompt,
     },
   })
 
@@ -172,6 +191,17 @@ const SyllabusContent = () => {
               error={!!resourceParseError || resource.isError}
               helperText={getResourceHelpText(resourceParseError, resource)}
             />
+            <FormLabel>System Prompt</FormLabel>
+            {me.data?.is_staff ? (
+              <TextareaAutosize
+                minRows={6}
+                maxRows={10}
+                value={promptText || promptResult.data?.prompt_value || ""}
+                onChange={(e) => setPromptText(e.target.value)}
+              />
+            ) : (
+              <></>
+            )}
             <Button variant="secondary" onClick={requestNewThread}>
               Start new thread
             </Button>

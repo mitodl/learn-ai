@@ -10,12 +10,13 @@ import { useQuery } from "@tanstack/react-query"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
 
 import Alert from "@mui/lab/Alert"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
-import { CircularProgress } from "@mui/material"
+import { CircularProgress, TextareaAutosize } from "@mui/material"
 import MetadataDisplay from "./MetadataDisplay"
 import { Button } from "@mitodl/smoot-design"
+import { promptQueries, userQueries } from "@/services/ai"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -28,12 +29,27 @@ const DEFAULT_VERTICAL =
 const DEFAULT_VIDEO =
   "block-v1:MITxT+3.012Sx+3T2024+type@video+block@ab8c1a02e9804e75aff98835dd03c28d"
 
-const VideoCntent = () => {
+const VideoContent = () => {
   const [settings, setSettings] = useSearchParamSettings({
     video_model: "",
     video_vertical: DEFAULT_VERTICAL,
     video_unit: DEFAULT_VIDEO,
+    video_prompt: "",
   })
+
+  const me = useQuery(userQueries.me())
+  const promptResult = useQuery(promptQueries.get("video_gpt"))
+  const [promptText, setPromptText] = useState(settings.video_prompt)
+  useEffect(() => {
+    const nextValue =
+      promptText || promptText || promptResult.data?.prompt_value || ""
+    if (nextValue === promptResult.data?.prompt_value) {
+      // If the prompt is identical to the default, don't send it in the request.
+      setSettings({ video_prompt: "" })
+    } else if (settings.video_prompt !== nextValue) {
+      setSettings({ video_prompt: nextValue })
+    }
+  }, [promptText, setSettings, settings.video_prompt])
 
   const getTranscriptBlockId = async (edxModuleId: string) => {
     const response = await fetch(
@@ -62,6 +78,7 @@ const VideoCntent = () => {
       model: settings.video_model,
       transcript_asset_id: transcriptBlockId,
       edx_module_id: settings.video_unit,
+      instructions: settings.video_prompt,
     },
   })
   const isReady = !!transcriptBlockId
@@ -139,6 +156,17 @@ const VideoCntent = () => {
             {transcriptError && (
               <Alert severity="error">{transcriptError}</Alert>
             )}
+            {me.data?.is_staff ? (
+              <TextareaAutosize
+                aria-label="System Prompt"
+                minRows={6}
+                maxRows={10}
+                value={promptText || promptResult.data?.prompt_value || ""}
+                onChange={(e) => setPromptText(e.target.value)}
+              />
+            ) : (
+              <></>
+            )}
             <Button variant="secondary" onClick={requestNewThread}>
               Start new thread
             </Button>
@@ -152,4 +180,4 @@ const VideoCntent = () => {
   )
 }
 
-export default VideoCntent
+export default VideoContent
