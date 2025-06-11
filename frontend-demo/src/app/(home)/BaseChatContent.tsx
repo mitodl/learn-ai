@@ -61,8 +61,9 @@ const BaseChatContent: React.FC<BaseChatContentProps> = ({
 
   useEffect(() => {
     const nextValue = promptText || promptResult.data?.prompt_value || ""
-    if (nextValue === promptResult.data?.prompt_value) {
-      // If the prompt is identical to the default, don't send it in the request.
+    if (nextValue === promptResult.data?.prompt_value || !me.data?.is_staff) {
+      // If the prompt is identical to the default, or user is not staff,
+      // don't send it in the request.
       setSettings({ [promptSettingKey]: "" })
     } else if (settings[promptSettingKey] !== promptText) {
       setSettings({ [promptSettingKey]: nextValue })
