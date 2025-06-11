@@ -39,7 +39,7 @@ from typing_extensions import TypedDict
 from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
-from ai_chatbots.prompts import PROMPT_MAPPING
+from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
@@ -74,7 +74,9 @@ class BaseChatbot(ABC):
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = (
             instructions
-            or get_system_prompt(self.PROMPT_TEMPLATE, PROMPT_MAPPING, get_django_cache)
+            or get_system_prompt(
+                self.PROMPT_TEMPLATE, SYSTEM_PROMPT_MAPPING, get_django_cache
+            )
             if self.PROMPT_TEMPLATE
             else None
         )
@@ -288,7 +290,9 @@ class SummarizingChatbot(BaseChatbot):
             ("placeholder", "{messages}"),
             (
                 "user",
-                get_system_prompt("summary_initial", PROMPT_MAPPING, get_django_cache),
+                get_system_prompt(
+                    "summary_initial", SYSTEM_PROMPT_MAPPING, get_django_cache
+                ),
             ),
         ]
     )
@@ -298,7 +302,9 @@ class SummarizingChatbot(BaseChatbot):
             ("placeholder", "{messages}"),
             (
                 "user",
-                get_system_prompt("summary_existing", PROMPT_MAPPING, get_django_cache),
+                get_system_prompt(
+                    "summary_existing", SYSTEM_PROMPT_MAPPING, get_django_cache
+                ),
             ),
         ]
     )
@@ -309,7 +315,9 @@ class SummarizingChatbot(BaseChatbot):
             ("placeholder", "{system_message}"),
             (
                 "system",
-                get_system_prompt("summary_final", PROMPT_MAPPING, get_django_cache),
+                get_system_prompt(
+                    "summary_final", SYSTEM_PROMPT_MAPPING, get_django_cache
+                ),
             ),
             ("placeholder", "{messages}"),
         ]

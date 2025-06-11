@@ -12,6 +12,7 @@ from ai_chatbots.factories import (
     UserChatSessionFactory,
 )
 from ai_chatbots.models import LLMModel
+from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
 from main.factories import UserFactory
@@ -189,3 +190,36 @@ def test_get_transcript_block_id():
 
     expected_block_id = "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
     assert get_transcript_block_id(contentfile) == expected_block_id
+
+
+def test_list_all_prompts(client):
+    """Test getting all system prompts."""
+    response = client.get("/api/v0/prompts/")
+    assert response.status_code == 200
+
+    results = response.json()
+    assert len(results) == 3
+
+    prompt_names = [item["prompt_name"] for item in results]
+    assert sorted(prompt_names) == sorted(CHATBOT_PROMPT_MAPPING.keys())
+
+    for item in results:
+        prompt_name = item["prompt_name"]
+        assert item["prompt_value"] == CHATBOT_PROMPT_MAPPING.get(prompt_name)
+
+
+@pytest.mark.parametrize("prompt_name", CHATBOT_PROMPT_MAPPING.keys())
+def test_get_specific_prompt(client, prompt_name):
+    """Test getting a specific system prompt."""
+    response = client.get(f"/api/v0/prompts/{prompt_name}/")
+    assert response.status_code == 200
+
+    result = response.json()
+    assert result["prompt_name"] == prompt_name
+    assert result["prompt_value"] == CHATBOT_PROMPT_MAPPING.get(prompt_name)
+
+
+def test_invalid_prompt_name(client):
+    """A non-existent prompt returns 404."""
+    response = client.get("/api/v0/prompts/invalid_prompt/")
+    assert response.status_code == 404

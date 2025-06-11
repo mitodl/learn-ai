@@ -24,7 +24,8 @@ def test_langsmith_prompt_create(mocker):
         "open_learning_ai_tutor.prompts.LangsmithClient.push_prompt"
     )
     prompt = langsmith_prompt_template(
-        chatbots.ResourceRecommendationBot.PROMPT_TEMPLATE, prompts.PROMPT_MAPPING
+        chatbots.ResourceRecommendationBot.PROMPT_TEMPLATE,
+        prompts.SYSTEM_PROMPT_MAPPING,
     )
     assert prompt.messages[0].prompt.template == prompts.PROMPT_RECOMMENDATION
     mock_pull.assert_called_once_with("recommendation_dev")
@@ -75,7 +76,9 @@ def test_get_system_prompt_no_cache(mocker, has_cache):
         return_value=ChatPromptTemplate([("system", prompts.PROMPT_SYLLABUS)]),
     )
     prompt = get_system_prompt(
-        chatbots.SyllabusBot.PROMPT_TEMPLATE, prompts.PROMPT_MAPPING, get_test_cache
+        chatbots.SyllabusBot.PROMPT_TEMPLATE,
+        prompts.SYSTEM_PROMPT_MAPPING,
+        get_test_cache,
     )
     assert mock_pull.call_count == (0 if has_cache else 1)
     assert prompt == prompts.PROMPT_SYLLABUS
@@ -91,7 +94,9 @@ def test_get_system_prompt_no_langsmith(mocker):
         "open_learning_ai_tutor.prompts.LangsmithClient.pull_prompt"
     )
     prompt = get_system_prompt(
-        chatbots.SyllabusBot.PROMPT_TEMPLATE, prompts.PROMPT_MAPPING, get_django_cache
+        chatbots.SyllabusBot.PROMPT_TEMPLATE,
+        prompts.SYSTEM_PROMPT_MAPPING,
+        get_django_cache,
     )
     assert prompt == prompts.PROMPT_SYLLABUS
     mock_pull.assert_not_called()

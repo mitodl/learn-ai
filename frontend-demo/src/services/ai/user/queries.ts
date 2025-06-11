@@ -9,6 +9,8 @@ const keys = {
 type UserResponse = {
   username?: string
   anonymous?: boolean
+  is_staff?: boolean
+  is_superuser?: boolean
 }
 
 const queries = {

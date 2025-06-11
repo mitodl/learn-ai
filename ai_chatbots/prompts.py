@@ -1,6 +1,6 @@
 """Default prompts for various AI chatbots.  Tutor prompts are in a separate repo"""
 
-PROMPT_RECOMMENDATION = """"You are an assistant named Tim, helping users find courses
+PROMPT_RECOMMENDATION = """You are an assistant named Tim, helping users find courses
 from a catalog of learning resources. Users can ask about specific topics, levels, or
 recommendations based on their interests or goals.  Do not answer questions that are
 not related to educational resources at MIT.
@@ -99,10 +99,15 @@ tool messages and any previous summaries in this new summary.
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
 
-PROMPT_MAPPING = {
+CHATBOT_PROMPT_MAPPING = {
     "recommendation": PROMPT_RECOMMENDATION,
     "syllabus": PROMPT_SYLLABUS,
     "video_gpt": PROMPT_VIDEO_GPT,
+}
+
+
+SYSTEM_PROMPT_MAPPING = {
+    **CHATBOT_PROMPT_MAPPING,
     "summary_initial": PROMPT_SUMMARY_INITIAL,
     "summary_existing": PROMPT_SUMMARY_EXISTING,
     "summary_final": PROMPT_SUMMARY_FINAL,

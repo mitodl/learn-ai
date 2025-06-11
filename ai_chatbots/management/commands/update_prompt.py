@@ -15,7 +15,7 @@ from open_learning_ai_tutor.prompts import (
     prompt_env_key,
 )
 
-from ai_chatbots.prompts import PROMPT_MAPPING
+from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache
 
 
@@ -58,7 +58,7 @@ class Command(BaseCommand):
 
         if not prompt_value and not prompt_file_value:
             for mapping in (
-                PROMPT_MAPPING,
+                SYSTEM_PROMPT_MAPPING,
                 TUTOR_PROMPT_MAPPING,
                 assessment_prompt_mapping,
                 intent_prompt_mapping,

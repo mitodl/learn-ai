@@ -7,7 +7,7 @@ from open_learning_ai_tutor.prompts import (
     prompt_env_key,
 )
 
-from ai_chatbots.prompts import PROMPT_MAPPING
+from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache
 
 all_prompt_keys = [
@@ -15,7 +15,7 @@ all_prompt_keys = [
     for key in (
         list(intent_prompt_mapping.keys())
         + list(assessment_prompt_mapping.keys())
-        + list(PROMPT_MAPPING.keys())
+        + list(SYSTEM_PROMPT_MAPPING.keys())
         + ["tutor_initial_assessment", "tutor_problem"]
     )
 ]

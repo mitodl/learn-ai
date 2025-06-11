@@ -228,6 +228,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/LLMModel'
           description: ''
+  /api/v0/prompts/:
+    get:
+      operationId: prompts_list
+      description: Return a list of system prompts.
+      tags:
+      - prompts
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemPrompt'
+          description: ''
+  /api/v0/prompts/{prompt_name}/:
+    get:
+      operationId: prompts_retrieve
+      description: Return a specific system prompt.
+      parameters:
+      - in: path
+        name: prompt_name
+        schema:
+          type: string
+        description: name of the system prompt
+        required: true
+      tags:
+      - prompts
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemPrompt'
+          description: ''
   /http/recommendation_agent/:
     post:
       operationId: RecommendationAgentV0
@@ -404,6 +443,17 @@ components:
         title:
           type: string
           maxLength: 255
+    SystemPrompt:
+      type: object
+      description: Serializer for system prompts
+      properties:
+        prompt_name:
+          type: string
+        prompt_value:
+          type: string
+      required:
+      - prompt_name
+      - prompt_value
     UserChatSession:
       type: object
       description: Serializer for user chat sessions
