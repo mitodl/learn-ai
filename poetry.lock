@@ -1758,13 +1758,13 @@ email = ["email-validator (>=2.1,<3.0)"]
 
 [[package]]
 name = "e2b"
-version = "1.3.5"
+version = "1.5.1"
 description = "E2B SDK that give agents cloud environments"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b-1.3.5-py3-none-any.whl", hash = "sha256:d2f54e1782b0bdf7f87e4855fdf952ba78848ba7b3b2dde984fe8101f0b95724"},
-    {file = "e2b-1.3.5.tar.gz", hash = "sha256:dff2cfdec5ebea715b545f940934c9f42e200ef1e869e4c726e5cadf630efc1e"},
+    {file = "e2b-1.5.1-py3-none-any.whl", hash = "sha256:f000259b9aeaf802a174e4514d5c536d82c2c39970161a969a8c7b45510047c3"},
+    {file = "e2b-1.5.1.tar.gz", hash = "sha256:db1e7dfec60534fd2b94638a8a76cfed8b2a44be203758e7d61e04a5c607801a"},
 ]
 
 [package.dependencies]
@@ -1778,18 +1778,18 @@ typing-extensions = ">=4.1.0"
 
 [[package]]
 name = "e2b-code-interpreter"
-version = "1.2.1"
+version = "1.5.1"
 description = "E2B Code Interpreter - Stateful code execution"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b_code_interpreter-1.2.1-py3-none-any.whl", hash = "sha256:9d60e8b3756fc3c04c04285e2106dcb19305a18a01894aeb4b06d2c400e03e2e"},
-    {file = "e2b_code_interpreter-1.2.1.tar.gz", hash = "sha256:bb01075b6ddb9c1a10774da521e8aa32e7fac710d23b9d8fbe8224d0e04b866b"},
+    {file = "e2b_code_interpreter-1.5.1-py3-none-any.whl", hash = "sha256:c8ee6f77bcb9c53422df336abbd37d5bf6318c3967b87444b39e3428a54c5e08"},
+    {file = "e2b_code_interpreter-1.5.1.tar.gz", hash = "sha256:e39485dd2ffb148a902e8c05c8f573feeb7ca87f8498f02a4db65630e76364e1"},
 ]
 
 [package.dependencies]
 attrs = ">=21.3.0"
-e2b = ">=1.3.5,<2.0.0"
+e2b = ">=1.4.0,<2.0.0"
 httpx = ">=0.20.0,<1.0.0"
 
 [[package]]
@@ -4311,7 +4311,7 @@ langsmith = "0.3.32"
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor.git"
 reference = "ab/stream-response"
-resolved_reference = "2593344d4a72a5ba4012524b5e9c4f9a4ad3dba0"
+resolved_reference = "383facdcce6e1e0c1dfcfefb97dad2050327bbb5"
 
 [[package]]
 name = "openai"
