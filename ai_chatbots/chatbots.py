@@ -25,14 +25,6 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from openai import BadRequestError
-from typing_extensions import TypedDict
-
-from ai_chatbots import tools
-from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
-from ai_chatbots.models import TutorBotOutput
-from ai_chatbots.prompts import PROMPT_MAPPING
-from ai_chatbots.utils import get_django_cache, request_with_token
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
@@ -42,6 +34,14 @@ from open_learning_ai_tutor.utils import (
     json_to_messages,
     tutor_output_to_json,
 )
+from openai import BadRequestError
+from typing_extensions import TypedDict
+
+from ai_chatbots import tools
+from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
+from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.prompts import PROMPT_MAPPING
+from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
 
@@ -554,7 +554,7 @@ class TutorBot(BaseChatbot):
             assessment_history = []
 
         full_response = ""
-        new_history = None
+        new_history = []
         try:
             generator, new_intent_history, new_assessment_history = message_tutor(
                 self.problem,
