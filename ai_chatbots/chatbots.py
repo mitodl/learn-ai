@@ -25,14 +25,6 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from open_learning_ai_tutor.message_tutor import message_tutor
-from open_learning_ai_tutor.prompts import get_system_prompt
-from open_learning_ai_tutor.tools import tutor_tools
-from open_learning_ai_tutor.utils import (
-    json_to_intent_list,
-    json_to_messages,
-    tutor_output_to_json,
-)
 from openai import BadRequestError
 from typing_extensions import TypedDict
 
@@ -41,6 +33,14 @@ from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
+from open_learning_ai_tutor.message_tutor import message_tutor
+from open_learning_ai_tutor.prompts import get_system_prompt
+from open_learning_ai_tutor.tools import tutor_tools
+from open_learning_ai_tutor.utils import (
+    json_to_intent_list,
+    json_to_messages,
+    tutor_output_to_json,
+)
 
 log = logging.getLogger(__name__)
 
@@ -226,7 +226,7 @@ class BaseChatbot(ABC):
                 self.config,
                 stream_mode="messages",
             )
-            async for chunk in response_generator:
+            for chunk in response_generator:
                 if (
                     isinstance(chunk[0], AIMessageChunk)
                     and chunk[1].get("langgraph_node") != "pre_model_hook"
@@ -552,39 +552,37 @@ class TutorBot(BaseChatbot):
             intent_history = []
             assessment_history = []
 
-        response = ""
-
+        full_response = ""
         try:
-            response_generator = message_tutor(
-                self.problem,
-                self.problem_set,
-                self.llm,
-                [HumanMessage(content=message)],
-                chat_history,
-                assessment_history,
-                intent_history,
-                tools=tutor_tools,
+            generator = message_tutor(
+                    self.problem,
+                    self.problem_set,
+                    self.llm,
+                    [HumanMessage(content=message)],
+                    chat_history,
+                    assessment_history,
+                    intent_history,
+                    tools=tutor_tools,
             )
-
-            async for chunk in response_generator:
+            
+            async for chunk in generator:
+                print(chunk[1])
                 if (
-                    isinstance(chunk[0], AIMessageChunk)
-                    and chunk[1].get("langgraph_node") != "pre_model_hook"
+                        chunk[0] == 'messages' and chunk[1] and isinstance(chunk[1][0], AIMessageChunk)
                 ):
-                    full_response += chunk[0].content
-                    yield chunk[0].content
+                        full_response += chunk[1][0].content
+                        yield chunk[1][0].content
 
-
-            metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
-            json_output = tutor_output_to_json(
-                new_history, new_intent_history, new_assessment_history, metadata
-            )
-            await create_tutorbot_output(self.thread_id, json_output)
-            response = new_history[-1].content
-            yield replace_math_tags(response)
-            await self.send_posthog_event(
-                message, response, await self.get_tool_metadata()
-            )
+            #metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
+            #json_output = tutor_output_to_json(
+            #    new_history, new_intent_history, new_assessment_history, metadata
+            #)
+            #await create_tutorbot_output(self.thread_id, json_output)
+            #response = new_history[-1].content
+            #yield replace_math_tags(response)
+            #await self.send_posthog_event(
+               # message, response, await self.get_tool_metadata()
+            #)
 
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
