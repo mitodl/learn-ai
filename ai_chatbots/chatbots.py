@@ -227,7 +227,7 @@ class BaseChatbot(ABC):
                 self.config,
                 stream_mode="messages",
             )
-            for chunk in response_generator:
+            async for chunk in response_generator:
                 if (
                     isinstance(chunk[0], AIMessageChunk)
                     and chunk[1].get("langgraph_node") != "pre_model_hook"
