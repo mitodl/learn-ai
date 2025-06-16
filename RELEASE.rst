@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.10.0
+--------------
+
+- AI system prompts endpoint (#218)
+- 1-word change to video prompt (#215)
+- fix(deps): update dependency requests to v2.32.4 [security] (#219)
+- fix(deps): update dependency django to v4.2.22 [security] (#217)
+- Add architecture overview to readme (#214)
+
 Version 0.9.3 (Released June 09, 2025)
 -------------
 
