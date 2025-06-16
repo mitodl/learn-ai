@@ -6,6 +6,13 @@ from rest_framework import serializers
 from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 
 
+class SystemPromptSerializer(serializers.Serializer):
+    """Serializer for system prompts"""
+
+    prompt_name = serializers.CharField()
+    prompt_value = serializers.CharField()
+
+
 class ChatRequestSerializer(serializers.Serializer):
     """Serializer for chatbot requests"""
 
@@ -25,7 +32,7 @@ class ChatRequestSerializer(serializers.Serializer):
     def validate_instructions(self, value):
         """Ensure that the user has permission"""
         user = self.context.get("user")
-        if not user or (not user.is_staff and not user.is_superuser):
+        if value and (not user or (not user.is_staff and not user.is_superuser)):
             err_msg = "You do not have permission to adjust the instructions."
             raise serializers.ValidationError(err_msg)
         return value

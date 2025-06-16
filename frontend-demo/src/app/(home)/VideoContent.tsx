@@ -1,21 +1,13 @@
+import { useMemo } from "react"
 import { VIDEO_GPT_URL } from "@/services/ai/urls"
-import AiChatDisplay from "./StyledAiChatDisplay"
-import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
-import Typography from "@mui/material/Typography"
-import Grid from "@mui/material/Grid2"
-import SelectModel from "./SelectModel"
-import { useRequestOpts, useSearchParamSettings } from "./util"
-
+import { type AiChatProps } from "@mitodl/smoot-design/ai"
+import { useSearchParamSettings } from "./util"
 import { useQuery } from "@tanstack/react-query"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
-
 import Alert from "@mui/lab/Alert"
-import { useMemo } from "react"
-
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
-import { CircularProgress } from "@mui/material"
-import MetadataDisplay from "./MetadataDisplay"
-import { Button } from "@mitodl/smoot-design"
+import Typography from "@mui/material/Typography"
+import BaseChatContent from "./BaseChatContent"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -28,11 +20,12 @@ const DEFAULT_VERTICAL =
 const DEFAULT_VIDEO =
   "block-v1:MITxT+3.012Sx+3T2024+type@video+block@ab8c1a02e9804e75aff98835dd03c28d"
 
-const VideoCntent = () => {
+const VideoContent = () => {
   const [settings, setSettings] = useSearchParamSettings({
     video_model: "",
     video_vertical: DEFAULT_VERTICAL,
     video_unit: DEFAULT_VIDEO,
+    video_prompt: "",
   })
 
   const getTranscriptBlockId = async (edxModuleId: string) => {
@@ -56,100 +49,58 @@ const VideoCntent = () => {
     return { id: transcriptIdQueryResult.data.transcript_block_id, error: null }
   }, [transcriptIdQueryResult])
 
-  const { requestOpts, chatSuffix, requestNewThread } = useRequestOpts({
-    apiUrl: VIDEO_GPT_URL,
-    extraBody: {
-      model: settings.video_model,
-      transcript_asset_id: transcriptBlockId,
-      edx_module_id: settings.video_unit,
-    },
-  })
   const isReady = !!transcriptBlockId
-  const chatId = `video-gpt-${chatSuffix}`
+
   return (
-    <>
-      <Typography variant="h3">VideoGPT</Typography>
-      <AiChatProvider
-        chatId={chatId}
-        initialMessages={INITIAL_MESSAGES}
-        requestOpts={requestOpts}
-      >
-        <Grid container spacing={2} sx={{ padding: 2 }}>
-          <Grid
-            size={{ xs: 12, md: 8 }}
-            sx={{ position: "relative", minHeight: "600px" }}
-            inert={!isReady}
-          >
-            <AiChatDisplay
-              entryScreenEnabled={false}
-              conversationStarters={CONVERSATION_STARTERS}
-            />
-            {!isReady && (
-              <CircularProgress
-                color="primary"
-                sx={{
-                  position: "absolute",
-                  zIndex: 1000,
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                }}
-              />
-            )}
-          </Grid>
-          <Grid
-            size={{ xs: 12, md: 4 }}
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "16px",
+    <BaseChatContent
+      title="VideoGPT"
+      apiUrl={VIDEO_GPT_URL}
+      chatIdPrefix="video-gpt"
+      conversationStarters={CONVERSATION_STARTERS}
+      initialMessages={INITIAL_MESSAGES}
+      promptQueryKey="video_gpt"
+      promptSettingKey="video_prompt"
+      modelSettingKey="video_model"
+      isReady={isReady}
+      extraBody={{
+        model: settings.video_model,
+        transcript_asset_id: transcriptBlockId,
+        edx_module_id: settings.video_unit,
+        instructions: settings.video_prompt,
+      }}
+      settings={settings}
+      setSettings={setSettings}
+      sidebarContent={
+        <>
+          <OpenEdxLoginAlert />
+          <OpenedxUnitSelectionForm
+            selectedVertical={settings.video_vertical}
+            selectedUnit={settings.video_unit}
+            defaultUnit={settings.video_unit}
+            defaultVertical={settings.video_vertical}
+            onSubmit={(values) => {
+              setSettings({
+                video_unit: values.unit,
+                video_vertical: values.vertical,
+              })
             }}
-          >
-            <OpenEdxLoginAlert />
-            <SelectModel
-              value={settings.video_model}
-              onChange={(e) => {
-                setSettings({ video_model: e.target.value })
-                requestNewThread()
-              }}
-            />
-            <OpenedxUnitSelectionForm
-              selectedVertical={settings.video_vertical}
-              selectedUnit={settings.video_unit}
-              defaultUnit={settings.video_unit}
-              defaultVertical={settings.video_vertical}
-              onSubmit={(values) => {
-                setSettings({
-                  video_unit: values.unit,
-                  video_vertical: values.vertical,
-                })
-              }}
-              onReset={() => {
-                setSettings({
-                  video_unit: null,
-                  video_vertical: null,
-                })
-              }}
-              unitFilterType="video"
-              unitLabel="Video"
-            />
-            {transcriptIdQueryResult.isLoading && (
-              <Typography>Loading...</Typography>
-            )}
-            {transcriptError && (
-              <Alert severity="error">{transcriptError}</Alert>
-            )}
-            <Button variant="secondary" onClick={requestNewThread}>
-              Start new thread
-            </Button>
-          </Grid>
-          <Grid size={{ xs: 12 }}>
-            <MetadataDisplay />
-          </Grid>
-        </Grid>
-      </AiChatProvider>
-    </>
+            onReset={() => {
+              setSettings({
+                video_unit: null,
+                video_vertical: null,
+              })
+            }}
+            unitFilterType="video"
+            unitLabel="Video"
+          />
+          {transcriptIdQueryResult.isLoading && (
+            <Typography>Loading...</Typography>
+          )}
+          {transcriptError && <Alert severity="error">{transcriptError}</Alert>}
+        </>
+      }
+    />
   )
 }
 
-export default VideoCntent
+export default VideoContent

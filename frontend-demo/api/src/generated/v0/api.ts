@@ -263,6 +263,25 @@ export interface SyllabusAgentV0Request {
   thread_id?: string
 }
 /**
+ * Serializer for system prompts
+ * @export
+ * @interface SystemPrompt
+ */
+export interface SystemPrompt {
+  /**
+   *
+   * @type {string}
+   * @memberof SystemPrompt
+   */
+  prompt_name: string
+  /**
+   *
+   * @type {string}
+   * @memberof SystemPrompt
+   */
+  prompt_value: string
+}
+/**
  * Serializer for user chat sessions
  * @export
  * @interface UserChatSession
@@ -1953,6 +1972,253 @@ export class LlmModelsApi extends BaseAPI {
   ) {
     return LlmModelsApiFp(this.configuration)
       .llmModelsRetrieve(requestParameters.litellm_id, options)
+      .then((request) => request(this.axios, this.basePath))
+  }
+}
+
+/**
+ * PromptsApi - axios parameter creator
+ * @export
+ */
+export const PromptsApiAxiosParamCreator = function (
+  configuration?: Configuration,
+) {
+  return {
+    /**
+     * Return a list of system prompts.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    promptsList: async (
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      const localVarPath = `/api/v0/prompts/`
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+    /**
+     * Return a specific system prompt.
+     * @param {string} prompt_name name of the system prompt
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    promptsRetrieve: async (
+      prompt_name: string,
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      // verify required parameter 'prompt_name' is not null or undefined
+      assertParamExists("promptsRetrieve", "prompt_name", prompt_name)
+      const localVarPath = `/api/v0/prompts/{prompt_name}/`.replace(
+        `{${"prompt_name"}}`,
+        encodeURIComponent(String(prompt_name)),
+      )
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+  }
+}
+
+/**
+ * PromptsApi - functional programming interface
+ * @export
+ */
+export const PromptsApiFp = function (configuration?: Configuration) {
+  const localVarAxiosParamCreator = PromptsApiAxiosParamCreator(configuration)
+  return {
+    /**
+     * Return a list of system prompts.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async promptsList(
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (
+        axios?: AxiosInstance,
+        basePath?: string,
+      ) => AxiosPromise<Array<SystemPrompt>>
+    > {
+      const localVarAxiosArgs =
+        await localVarAxiosParamCreator.promptsList(options)
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["PromptsApi.promptsList"]?.[index]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+    /**
+     * Return a specific system prompt.
+     * @param {string} prompt_name name of the system prompt
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async promptsRetrieve(
+      prompt_name: string,
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<SystemPrompt>
+    > {
+      const localVarAxiosArgs = await localVarAxiosParamCreator.promptsRetrieve(
+        prompt_name,
+        options,
+      )
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["PromptsApi.promptsRetrieve"]?.[index]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+  }
+}
+
+/**
+ * PromptsApi - factory interface
+ * @export
+ */
+export const PromptsApiFactory = function (
+  configuration?: Configuration,
+  basePath?: string,
+  axios?: AxiosInstance,
+) {
+  const localVarFp = PromptsApiFp(configuration)
+  return {
+    /**
+     * Return a list of system prompts.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    promptsList(
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<Array<SystemPrompt>> {
+      return localVarFp
+        .promptsList(options)
+        .then((request) => request(axios, basePath))
+    },
+    /**
+     * Return a specific system prompt.
+     * @param {PromptsApiPromptsRetrieveRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    promptsRetrieve(
+      requestParameters: PromptsApiPromptsRetrieveRequest,
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<SystemPrompt> {
+      return localVarFp
+        .promptsRetrieve(requestParameters.prompt_name, options)
+        .then((request) => request(axios, basePath))
+    },
+  }
+}
+
+/**
+ * Request parameters for promptsRetrieve operation in PromptsApi.
+ * @export
+ * @interface PromptsApiPromptsRetrieveRequest
+ */
+export interface PromptsApiPromptsRetrieveRequest {
+  /**
+   * name of the system prompt
+   * @type {string}
+   * @memberof PromptsApiPromptsRetrieve
+   */
+  readonly prompt_name: string
+}
+
+/**
+ * PromptsApi - object-oriented interface
+ * @export
+ * @class PromptsApi
+ * @extends {BaseAPI}
+ */
+export class PromptsApi extends BaseAPI {
+  /**
+   * Return a list of system prompts.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof PromptsApi
+   */
+  public promptsList(options?: RawAxiosRequestConfig) {
+    return PromptsApiFp(this.configuration)
+      .promptsList(options)
+      .then((request) => request(this.axios, this.basePath))
+  }
+
+  /**
+   * Return a specific system prompt.
+   * @param {PromptsApiPromptsRetrieveRequest} requestParameters Request parameters.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof PromptsApi
+   */
+  public promptsRetrieve(
+    requestParameters: PromptsApiPromptsRetrieveRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
+    return PromptsApiFp(this.configuration)
+      .promptsRetrieve(requestParameters.prompt_name, options)
       .then((request) => request(this.axios, this.basePath))
   }
 }

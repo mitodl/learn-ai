@@ -7,19 +7,24 @@ from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from open_learning_ai_tutor.prompts import get_system_prompt
 from rest_framework import mixins, viewsets
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
-from rest_framework.viewsets import ReadOnlyModelViewSet
+from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
 
 from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 from ai_chatbots.permissions import IsThreadOwner
+from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
     LLMModelSerializer,
+    SystemPromptSerializer,
     UserChatSessionSerializer,
 )
+from ai_chatbots.utils import get_django_cache
 from main.constants import VALID_HTTP_METHODS
 from main.views import DefaultPagination
 
@@ -215,3 +220,60 @@ def get_transcript_block_id(contentfile):
     transcript_id_prefix = "@".join(parts[:2])
 
     return f"{transcript_id_prefix}@{english_transcript_id}"
+
+
+class SystemPromptViewSet(GenericViewSet):
+    """
+    API endpoint to retrieve chatbot system prompts.
+    """
+
+    serializer_class = SystemPromptSerializer
+    permission_classes = (AllowAny,)
+    lookup_field = "prompt_name"
+
+    def get_queryset(self):
+        """Return all available chatbot prompts."""
+        return [
+            {
+                "prompt_name": name,
+                "prompt_value": get_system_prompt(
+                    name, CHATBOT_PROMPT_MAPPING, get_django_cache
+                ),
+            }
+            for name in CHATBOT_PROMPT_MAPPING
+        ]
+
+    def get_object(self):
+        """Return a specific system prompt."""
+        prompt_name = self.kwargs.get(self.lookup_field)
+        if prompt_name not in CHATBOT_PROMPT_MAPPING:
+            raise NotFound
+
+        return {
+            "prompt_name": prompt_name,
+            "prompt_value": get_system_prompt(
+                prompt_name, CHATBOT_PROMPT_MAPPING, get_django_cache
+            ),
+        }
+
+    def list(self, request, *args, **kwargs):  # noqa: ARG002
+        """Return a list of system prompts."""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="prompt_name",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.PATH,
+                description="name of the system prompt",
+            )
+        ]
+    )
+    def retrieve(self, request, *args, **kwargs):  # noqa: ARG002
+        """Return a specific system prompt."""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

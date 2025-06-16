@@ -1,17 +1,12 @@
 import { ASSESSMENT_GPT_URL } from "@/services/ai/urls"
-import AiChatDisplay from "./StyledAiChatDisplay"
-import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
-import Typography from "@mui/material/Typography"
-import Grid from "@mui/material/Grid2"
-import SelectModel from "./SelectModel"
-import { useRequestOpts, useSearchParamSettings } from "./util"
+import { type AiChatProps } from "@mitodl/smoot-design/ai"
+import { useSearchParamSettings } from "./util"
 import { useV2Block } from "@/services/openedx"
 import OpenEdxLoginAlert from "./OpenedxLoginAlert"
 import OpenedxUnitSelectionForm from "./OpenedxUnitSelectionForm"
-import CircularProgress from "@mui/material/CircularProgress"
-import MetadataDisplay from "./MetadataDisplay"
 import { MathJaxContext } from "better-react-mathjax"
-import { Button } from "@mitodl/smoot-design"
+import AiChatDisplay from "./StyledAiChatDisplay"
+import BaseChatContent from "./BaseChatContent"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -30,6 +25,7 @@ const AssessmentContent = () => {
     tutor_vertical: DEFAULT_VERTICAL,
     tutor_sibling_context: "true",
     tutor_unit: DEFAULT_UNIT,
+    tutor_prompt: "",
   })
 
   const vertical = useV2Block({
@@ -40,97 +36,64 @@ const AssessmentContent = () => {
     (key) => key !== vertical.data?.root,
   )
 
-  const { requestOpts, requestNewThread, chatSuffix } = useRequestOpts({
-    apiUrl: ASSESSMENT_GPT_URL,
-    extraBody: {
-      model: settings.tutor_model,
-      block_siblings: siblings,
-      edx_module_id: settings.tutor_unit,
-    },
-  })
   const isReady = vertical.isSuccess
 
-  const chatId = `assessment-gpt-${chatSuffix}`
   return (
-    <>
-      <Typography variant="h3">AssessmentGPT</Typography>
-      <AiChatProvider
-        chatId={chatId}
-        initialMessages={INITIAL_MESSAGES}
-        requestOpts={requestOpts}
-      >
-        <Grid container spacing={2} sx={{ padding: 2 }}>
-          <Grid
-            size={{ xs: 12, md: 8 }}
-            sx={{ position: "relative", minHeight: "600px" }}
-            inert={!isReady}
-          >
-            <MathJaxContext>
-              <AiChatDisplay
-                entryScreenEnabled={false}
-                conversationStarters={CONVERSATION_STARTERS}
-                useMathJax={true}
-              />
-            </MathJaxContext>
-            {!isReady && (
-              <CircularProgress
-                color="primary"
-                sx={{
-                  position: "absolute",
-                  zIndex: 1000,
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                }}
-              />
-            )}
-          </Grid>
-          <Grid
-            size={{ xs: 12, md: 4 }}
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "16px",
+    <BaseChatContent
+      title="AssessmentGPT"
+      apiUrl={ASSESSMENT_GPT_URL}
+      chatIdPrefix="assessment-gpt"
+      conversationStarters={CONVERSATION_STARTERS}
+      initialMessages={INITIAL_MESSAGES}
+      promptQueryKey=""
+      promptSettingKey=""
+      modelSettingKey="tutor_model"
+      isReady={isReady}
+      extraBody={{
+        model: settings.tutor_model,
+        block_siblings: siblings,
+        edx_module_id: settings.tutor_unit,
+      }}
+      settings={settings}
+      setSettings={setSettings}
+      showSystemPrompt={false}
+      sidebarContent={
+        <>
+          <OpenEdxLoginAlert />
+          <OpenedxUnitSelectionForm
+            selectedVertical={settings.tutor_vertical}
+            selectedUnit={settings.tutor_unit}
+            defaultUnit={settings.tutor_unit}
+            defaultVertical={settings.tutor_vertical}
+            onSubmit={(values) => {
+              setSettings({
+                tutor_unit: values.unit,
+                tutor_vertical: values.vertical,
+              })
             }}
-          >
-            <OpenEdxLoginAlert />
-            <SelectModel
-              value={settings.tutor_model}
-              onChange={(e) => {
-                setSettings({ tutor_model: e.target.value })
-                requestNewThread()
-              }}
-            />
-            <OpenedxUnitSelectionForm
-              selectedVertical={settings.tutor_vertical}
-              selectedUnit={settings.tutor_unit}
-              defaultUnit={settings.tutor_unit}
-              defaultVertical={settings.tutor_vertical}
-              onSubmit={(values) => {
-                setSettings({
-                  tutor_unit: values.unit,
-                  tutor_vertical: values.vertical,
-                })
-              }}
-              onReset={() => {
-                setSettings({
-                  tutor_unit: null,
-                  tutor_vertical: null,
-                })
-              }}
-              unitFilterType="problem"
-              unitLabel="Problem"
-            />
-            <Button variant="secondary" onClick={requestNewThread}>
-              Start new thread
-            </Button>
-          </Grid>
-          <Grid size={{ xs: 12 }}>
-            <MetadataDisplay />
-          </Grid>
-        </Grid>
-      </AiChatProvider>
-    </>
+            onReset={() => {
+              setSettings({
+                tutor_unit: null,
+                tutor_vertical: null,
+              })
+            }}
+            unitFilterType="problem"
+            unitLabel="Problem"
+          />
+        </>
+      }
+      chatDisplayProps={{
+        useMathJax: true,
+      }}
+    >
+      <MathJaxContext>
+        <AiChatDisplay
+          entryScreenEnabled={false}
+          conversationStarters={CONVERSATION_STARTERS}
+          useMathJax={true}
+        />
+      </MathJaxContext>
+    </BaseChatContent>
   )
 }
 
