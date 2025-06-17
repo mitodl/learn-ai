@@ -6,6 +6,19 @@ from rest_framework import serializers
 from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 
 
+class TruncatedCharField(serializers.CharField):
+    """
+    A CharField that cuts off the value of the string if it is longer than the
+    max_length param.
+    """
+
+    def to_internal_value(self, value):
+        value = super().to_representation(value)
+        if self.max_length and value and len(value) > self.max_length:
+            return value[: self.max_length]
+        return value
+
+
 class SystemPromptSerializer(serializers.Serializer):
     """Serializer for system prompts"""
 
@@ -16,7 +29,9 @@ class SystemPromptSerializer(serializers.Serializer):
 class ChatRequestSerializer(serializers.Serializer):
     """Serializer for chatbot requests"""
 
-    message = serializers.CharField(required=True, allow_blank=False)
+    message = TruncatedCharField(
+        required=True, allow_blank=False, max_length=settings.AI_MAX_MESSAGE_LENGTH
+    )
     model = serializers.CharField(required=False, allow_blank=True)
     temperature = serializers.FloatField(
         min_value=0.0,
