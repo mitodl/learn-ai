@@ -4295,19 +4295,23 @@ name = "open-learning-ai-tutor"
 version = "0.0.10"
 description = "AI powered tutor"
 optional = false
-python-versions = "<4.0,>=3.12"
-files = [
-    {file = "open_learning_ai_tutor-0.0.10-py3-none-any.whl", hash = "sha256:c1250bf84879a08136020a4b231af1762f952988af43dd0b6a351c544e75e24c"},
-    {file = "open_learning_ai_tutor-0.0.10.tar.gz", hash = "sha256:8a83038ee31c9dc2678c43df49945d5cf6ebffc65f6942b81bb260820a63430f"},
-]
+python-versions = "^3.12"
+files = []
+develop = false
 
 [package.dependencies]
-e2b-code-interpreter = ">=1.1.0,<2.0.0"
-langchain = ">=0.3.20,<0.4.0"
-langchain-core = ">=0.3.45,<0.4.0"
-langchain-experimental = ">=0.3.4,<0.4.0"
-langgraph = ">=0.3.10,<0.4.0"
+e2b-code-interpreter = "^1.1.0"
+langchain = "^0.3.20"
+langchain-core = "^0.3.45"
+langchain-experimental = "^0.3.4"
+langgraph = "^0.3.10"
 langsmith = "0.3.32"
+
+[package.source]
+type = "git"
+url = "https://github.com/mitodl/open-learning-ai-tutor.git"
+reference = "ab/remove-problems"
+resolved_reference = "316817f0dd33e909b2d091ff039bdb0b93ef6696"
 
 [[package]]
 name = "openai"
@@ -7908,4 +7912,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.3"
-content-hash = "881ab9617a5a996bfe03fd0bfbf60ee08a43e4a7e86ea853d8312afe29f236f1"
+content-hash = "3973dbcf080b32a4cf79624aa746fde1108505d24f0bb8d18349fbee058912af"
