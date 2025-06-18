@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.10.0
+Version 0.10.0 (Released June 18, 2025)
 --------------
 
 - AI system prompts endpoint (#218)
