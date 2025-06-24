@@ -27,12 +27,11 @@ from langmem.short_term.summarization import (
     TokenCounter,
 )
 from pydantic import BaseModel
-from typing_extensions import TypedDict
 
 log = logging.getLogger(__name__)
 
 
-def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
+def get_search_tool_metadata(thread_id: str, latest_state: dict) -> str:
     """
     Return the metadata for a bot search tool.
     """

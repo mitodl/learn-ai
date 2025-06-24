@@ -34,7 +34,6 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
-from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
@@ -205,7 +204,7 @@ class BaseChatbot(ABC):
         self,
         message: str,
         *,
-        extra_state: Optional[TypedDict] = None,
+        extra_state: Optional[dict] = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
@@ -539,7 +538,7 @@ class TutorBot(BaseChatbot):
         self,
         message: str,
         *,
-        extra_state: Optional[TypedDict] = None,  # noqa: ARG002
+        extra_state: Optional[dict] = None,  # noqa: ARG002
         debug: bool = settings.AI_DEBUG,  # noqa: ARG002
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
