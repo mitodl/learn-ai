@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.10.1
+Version 0.10.1 (Released June 24, 2025)
 --------------
 
 - Stream tutor messages (#220)
