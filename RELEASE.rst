@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.10.1
+--------------
+
+- Stream tutor messages (#220)
+- chore(deps): update dependency pytest-asyncio to v1 (#202)
+- fix(deps): update dependency django-anymail to v13 (#139)
+
 Version 0.10.0 (Released June 18, 2025)
 --------------
 
