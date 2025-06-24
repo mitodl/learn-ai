@@ -12,13 +12,13 @@ import posthog
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
-from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tools.base import BaseTool
+from langchain_litellm import ChatLiteLLM
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
@@ -34,7 +34,6 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
-from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
@@ -205,7 +204,7 @@ class BaseChatbot(ABC):
         self,
         message: str,
         *,
-        extra_state: Optional[TypedDict] = None,
+        extra_state: Optional[dict] = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
@@ -539,7 +538,7 @@ class TutorBot(BaseChatbot):
         self,
         message: str,
         *,
-        extra_state: Optional[TypedDict] = None,  # noqa: ARG002
+        extra_state: Optional[dict] = None,  # noqa: ARG002
         debug: bool = settings.AI_DEBUG,  # noqa: ARG002
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""

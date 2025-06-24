@@ -7,9 +7,9 @@ from uuid import uuid4
 
 import pytest
 from django.conf import settings
-from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
+from langchain_litellm import ChatLiteLLM
 from open_learning_ai_tutor.constants import Intent
 from open_learning_ai_tutor.utils import (
     filter_out_system_messages,
