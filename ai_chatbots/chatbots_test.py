@@ -8,10 +8,13 @@ from uuid import uuid4
 import pytest
 from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
 from open_learning_ai_tutor.constants import Intent
-from open_learning_ai_tutor.utils import tutor_output_to_json
+from open_learning_ai_tutor.utils import (
+    filter_out_system_messages,
+    tutor_output_to_json,
+)
 from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
@@ -23,7 +26,6 @@ from ai_chatbots.chatbots import (
     VideoGPTBot,
     get_history,
     get_problem_from_edx_block,
-    replace_math_tags,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -563,35 +565,67 @@ async def test_tutor_bot_intitiation(mocker, model, temperature):
 async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer):
     """Test that the tutor bot get_completion method returns expected values."""
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
-    output = (
+
+    final_message = [
+        "values",
+        {
+            "messages": [
+                SystemMessage(
+                    content="problem prompt",
+                    additional_kwargs={},
+                    response_metadata={},
+                ),
+                HumanMessage(
+                    content="what should i try first",
+                    additional_kwargs={},
+                    response_metadata={},
+                ),
+                AIMessage(
+                    content="Let's start by thinking about the problem.",
+                    additional_kwargs={},
+                    response_metadata={},
+                ),
+            ]
+        },
+    ]
+    generator_return_values = [
         [
-            HumanMessage(
-                content="what should i try first",
-                additional_kwargs={},
-                response_metadata={},
-            ),
-            AIMessage(
-                content="Let's start by thinking about the problem.",
-                additional_kwargs={},
-                response_metadata={},
-            ),
+            "messages",
+            [AIMessageChunkFactory.create(content="Let's start by thinking ")],
+            {"langgraph_node": "agent"},
         ],
         [
-            [Intent.P_HYPOTHESIS],
+            "messages",
+            [AIMessageChunkFactory.create(content="about the problem. ")],
+            {"langgraph_node": "agent"},
         ],
-        [
-            HumanMessage(
-                content='Student: "what should i try first"',
-                additional_kwargs={},
-                response_metadata={},
-            ),
-            AIMessage(
-                content='{"justification": "test", "selection": "g"}',
-                additional_kwargs={},
-                response_metadata={},
-            ),
-        ],
+        final_message,
+    ]
+
+    mock_stream = mocker.Mock(
+        __aiter__=mocker.Mock(return_value=MockAsyncIterator(generator_return_values))
     )
+    intents = [
+        [Intent.P_HYPOTHESIS],
+    ]
+    assessment_history = [
+        HumanMessage(
+            content='Student: "what should i try first"',
+            additional_kwargs={},
+            response_metadata={},
+        ),
+        AIMessage(
+            content='{"justification": "test", "selection": "g"}',
+            additional_kwargs={},
+            response_metadata={},
+        ),
+    ]
+    output = (
+        mock_stream,
+        intents,
+        assessment_history,
+    )
+
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block",
         return_value=("problem_xml", "problem_set_xml"),
@@ -611,13 +645,15 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
     results = ""
     async for chunk in chatbot.get_completion(user_msg):
         results += str(chunk)
-    assert results == "Let's start by thinking about the problem."
+    assert results == "Let's start by thinking about the problem. "
 
     history = await get_history(thread_id)
     assert history.thread_id == thread_id
     metadata = {"edx_module_id": "block1", "tutor_model": chatbot.model}
-
-    assert history.chat_json == tutor_output_to_json(*output, metadata)
+    new_history = filter_out_system_messages(final_message[1]["messages"])
+    assert history.chat_json == tutor_output_to_json(
+        new_history, intents, assessment_history, metadata
+    )
     mock_posthog.Posthog.return_value.capture.assert_called_once_with(
         "anonymous",
         event="TUTOR_JOB",
@@ -775,34 +811,3 @@ async def test_bad_request(mocker, mock_checkpointer):
     async for _ in chatbot.get_completion("hello"):
         chatbot.agent.astream.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
-
-
-def test_math_replacements():
-    """Test math replacement for tutor bot"""
-    input_text = r"""Hello \(E=mc^2\) and \(a^2 + b^2 = c^2\). Also
-
-\[
-F = ma
-\]
-
-and
-
-\[ PV = NkT \]
-
-Bye now.
-"""
-
-    expected_output = r"""Hello $E=mc^2$ and $a^2 + b^2 = c^2$. Also
-
-$$
-F = ma
-$$
-
-and
-
-$$ PV = NkT $$
-
-Bye now.
-"""
-    output_text = replace_math_tags(input_text)
-    assert output_text == expected_output
