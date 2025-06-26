@@ -6,6 +6,7 @@ import os
 import deepeval
 import pandas as pd
 from asgiref.sync import async_to_sync
+from deepeval.evaluate.types import EvaluationResult
 from deepeval.metrics import (
     AnswerRelevancyMetric,
     ContextualRecallMetric,
@@ -101,17 +102,19 @@ class Command(BaseCommand):
             ),
         ]
 
+        # Send results to confident.ai if API key is set
         confident_api_key = os.environ.get("CONFIDENT_AI_API_KEY", "")
         if confident_api_key:
             deepeval.login_with_confident_api_key(confident_api_key)
 
-        test_cases = []
         if not options["bots"]:
             bot_names = test_cases_per_bot.keys()
         else:
             bot_names = options["bots"].split(",")
         models = options["models"].split(",")
         self.stdout.write(f"Bots: {', '.join(bot_names)}, models: {', '.join(models)}")
+
+        test_cases = []
         for bot_name in bot_names:
             for case in test_cases_per_bot[bot_name]:
                 for m in models:
@@ -185,7 +188,9 @@ class Command(BaseCommand):
         # Generate readable report
         self._generate_report(results, models, bot_names)
 
-    def summarize_per_bot_model(self, df, models, bot_names):
+    def summarize_per_bot_model(
+        self, df, models: list[str], bot_names: list[str]
+    ) -> None:
         """Summarize results per bot and model."""
         self.stdout.write("\n📊 SUMMARY BY BOT AND MODEL")
         self.stdout.write("-" * 50)
@@ -240,7 +245,7 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write("    No test cases defined for this bot")
 
-    def model_comparison(self, df):
+    def model_comparison(self, df: pd.DataFrame) -> None:
         """Compare models based on their average scores."""
         self.stdout.write("\n\n🔄 MODEL COMPARISON")
         self.stdout.write("-" * 50)
@@ -255,7 +260,7 @@ class Command(BaseCommand):
             for i, (model, score) in enumerate(metric_scores.items()):
                 self.stdout.write(f"  {i+1}. {model}: {score:.3f}")
 
-    def overall_performance(self, df):
+    def overall_performance(self, df: pd.DataFrame) -> None:
         """Calculate and display overall performance of each model."""
         self.stdout.write("\n\n🏆 OVERALL PERFORMANCE")
         self.stdout.write("-" * 50)
@@ -265,7 +270,9 @@ class Command(BaseCommand):
         for i, (model, avg_score) in enumerate(overall_avg.items()):
             self.stdout.write(f"  {i+1}. {model}: {avg_score:.3f}")
 
-    def detailed_results(self, df, models, bot_names):
+    def detailed_results(
+        self, df: pd.DataFrame, models: list[str], bot_names: list[str]
+    ) -> None:
         """Display detailed results for each bot and model."""
         self.stdout.write("\n\n📋 DETAILED RESULTS")
         self.stdout.write("-" * 50)
@@ -303,7 +310,9 @@ class Command(BaseCommand):
                                     # Show failure reason
                                     self.stdout.write(f"         └─ {row["reason"]!s}")
 
-    def _generate_report(self, results, models, bot_names):
+    def _generate_report(
+        self, results: EvaluationResult, models: list[str], bot_names: list[str]
+    ) -> None:
         """Generate a readable evaluation report."""
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write("RAG EVALUATION REPORT")
@@ -340,8 +349,3 @@ class Command(BaseCommand):
         self.detailed_results(df, models, bot_names)
 
         self.stdout.write("\n" + "=" * 80)
-
-
-# async def get_tutor_output(chatbot, case):
-#     async for chunk in chatbot.get_completion(case.get("question")):
-#         yield chunk
