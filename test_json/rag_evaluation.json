@@ -1,0 +1,62 @@
+{
+  "recommendation": [
+    {
+      "question": "What are some free basic courses about data science?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_output": "Here are some free courses related to data science that you might find interesting:\n1. Collaborative Data Science for Healthcare\n - Description of course.\nData Analysis for Social Scientists: Description of course.",
+      "expected_tools": ["search_courses"]
+    }
+  ],
+  "syllabus": [
+    {
+      "question": "Who are the instructors for this course?",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "The intructors for this course are Prof. Deepto Chakrabarty, Dr. Peter Dourmashkin, Dr. Michelle Tomasik, Prof. Anna Frebel, and Prof. Vladan Vuletic",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How is this course graded?",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "The grading for this course is structured as follows:\nMidterm Exams: 45%\nFinal Exam: 25%\nProblem Sets: 10%\nClass Participation: 20%",
+      "expected_tools": ["search_content_files"]
+    }
+  ],
+  "video_gpt": [
+    {
+      "question": "What is this video about?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ],
+        "edx_module_id": [
+          "block-v1:MITxT+3.012Sx+3T2024+type@video+block@ab8c1a02e9804e75aff98835dd03c28d"
+        ]
+      },
+      "expected_output": "The video discusses the properties and behaviors of materials. Bonding, equilibrium states, crystalline and amorphous materials.States of matter—gases, liquids, and solids. Atomic arrangement, energy states.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    }
+  ],
+  "tutor": [
+    {
+      "question": "I'm not sure where to start, can you help me?",
+      "extra_init": {
+        "block_siblings": [
+          "block-v1:MITxT+3.012Sx+3T2024+type@problem+block@318c3d44596649c39fb10c25aa847862",
+          "block-v1:MITxT+3.012Sx+3T2024+type@drag-and-drop-v2+block@01a8ff4f311041b784ff392bddc46984",
+          "block-v1:MITxT+3.012Sx+3T2024+type@discussion+block@163eac2433bd42c98a68929ab70cc470"
+        ],
+        "edx_module_id": "block-v1:MITxT+3.012Sx+3T2024+type@problem+block@318c3d44596649c39fb10c25aa847862"
+      },
+      "expected_output": "Think about what the problem is asking. Do you have thoughts on how to calculate interplanar spacing in a tetragonal crystal structure?",
+      "expected_tools": []
+    }
+  ]
+}
