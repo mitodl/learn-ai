@@ -9,7 +9,7 @@ authors  = ["MIT ODL"]
 
 
 [tool.poetry.dependencies]
-python = "3.13.3"
+python = "3.13.5"
 Django = "4.2.23"
 boto3 = "^1.35.81"
 celery = "^5.3.1"
