@@ -22,7 +22,7 @@ django-bitfield = "^2.2.0"
 django-cache-memoize = "^0.2.0"
 django-filter = "^25.1"
 django-guardian = "^3.0.0"
-django-health-check = { git = "https://github.com/revsys/django-health-check", rev="9cfe2eaec5a15219513a36210b34875c03c64fe4" }  # pragma: allowlist secret
+django-health-check = { git = "https://github.com/revsys/django-health-check", rev="5267d8fd68b1ee307637d6ffca6d6d12cc744cdc" }  # pragma: allowlist secret
 django-hijack = "^3.4.1"
 django-ipware = "^7.0.0"
 django-oauth-toolkit = "^2.3.0"
