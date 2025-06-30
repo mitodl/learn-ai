@@ -6,20 +6,13 @@ This application provides backend API endpoints to access various AI chatbots.
 
 **SECTIONS**
 
-- [learn-ai](#learn-ai)
-  - [Initial Setup](#initial-setup)
-  - [Configuration](#configuration)
-    - [Frontend Configuration](#frontend-configuration)
-  - [Committing \& Formatting](#committing--formatting)
-  - [Sample Requests](#sample-requests)
-  - [Langsmith Integration](#langsmith-integration)
-  - [Architecture Overview](#architecture-overview)
-    - [Client-Server communication](#client-server-communication)
-    - [Chatbot Agents](#chatbot-agents)
-      - [Agent graphs](#agent-graphs)
-      - [Agent tools](#agent-tools)
-      - [Agent system prompts](#agent-system-prompts)
-  - [RAG Evaluation](#rag-evaluation)
+1. [Initial Setup](#initial-setup)
+2. [Configuration](#configuration)
+3. [Committing & Formatting](#committing--formatting)
+4. [Sample Requests](#sample-requests)
+5. [Langsmith Integration](#langsmith-integration)
+6. [Architecture Overview](#architecture-overview)
+7. [RAG Evaluation](#rag-evaluation)
 
 ## Initial Setup
 
