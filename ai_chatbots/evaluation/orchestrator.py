@@ -7,6 +7,7 @@ import deepeval
 from deepeval.evaluate.types import EvaluationResult
 from deepeval.metrics import (
     AnswerRelevancyMetric,
+    ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
     FaithfulnessMetric,
@@ -35,6 +36,7 @@ class EvaluationOrchestrator:
         """Create evaluation configuration with metrics."""
         if metric_thresholds is None:
             metric_thresholds = {
+                "ContextualPrecision": 0.7,
                 "ContextualRelevancy": 0.5,
                 "ContextualRecall": 0.7,
                 "Hallucination": 0.0,
@@ -43,6 +45,11 @@ class EvaluationOrchestrator:
             }
 
         metrics = [
+            ContextualPrecisionMetric(
+                threshold=metric_thresholds["ContextualPrecision"],
+                model=evaluation_model,
+                include_reason=True,
+            ),
             ContextualRelevancyMetric(
                 threshold=metric_thresholds["ContextualRelevancy"],
                 model=evaluation_model,

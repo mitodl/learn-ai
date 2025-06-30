@@ -8,6 +8,8 @@ import pytest
 from .base import EvaluationConfig
 from .orchestrator import EvaluationOrchestrator
 
+NUM_METRICS = 6
+
 
 class TestEvaluationOrchestrator:
     """Test cases for EvaluationOrchestrator."""
@@ -37,7 +39,7 @@ class TestEvaluationOrchestrator:
         assert isinstance(config, EvaluationConfig)
         assert config.models == models
         assert config.evaluation_model == evaluation_model
-        assert len(config.metrics) == 4  # Four default metrics
+        assert len(config.metrics) == NUM_METRICS
         # API key might be set by default in the environment
         assert config.confident_api_key is not None or config.confident_api_key is None
 
@@ -46,8 +48,10 @@ class TestEvaluationOrchestrator:
         models = ["gpt-4o"]
         evaluation_model = "gpt-4o"
         custom_thresholds = {
+            "ContextualPrecision": 0.9,
             "ContextualRelevancy": 0.8,
             "ContextualRecall": 0.9,
+            "Faithfulness": 0.8,
             "Hallucination": 0.1,
             "AnswerRelevancy": 0.8,
         }
@@ -58,7 +62,7 @@ class TestEvaluationOrchestrator:
 
         assert config.models == models
         assert config.evaluation_model == evaluation_model
-        assert len(config.metrics) == 4
+        assert len(config.metrics) == NUM_METRICS
 
     @patch.dict(os.environ, {"CONFIDENT_AI_API_KEY": "test-api-key"})
     def test_create_evaluation_config_with_api_key(self, orchestrator):
@@ -300,11 +304,13 @@ class TestEvaluationConfigIntegration:
         )
 
         # Verify metrics are properly instantiated
-        assert len(config.metrics) == 4
+        assert len(config.metrics) == NUM_METRICS
         metric_names = [metric.__class__.__name__ for metric in config.metrics]
         expected_names = [
+            "ContextualPrecisionMetric",
             "ContextualRelevancyMetric",
             "ContextualRecallMetric",
+            "FaithfulnessMetric",
             "HallucinationMetric",
             "AnswerRelevancyMetric",
         ]
