@@ -270,7 +270,9 @@ class TestEvaluationOrchestrator:
         # Track calls to evaluate_model
         evaluate_calls = []
 
-        async def mock_evaluate_model(model, test_cases):
+        async def mock_evaluate_model(
+            model, test_cases, instructions=None, prompt_label="default"
+        ):
             evaluate_calls.append(model)
             return [Mock()]
 

@@ -86,7 +86,7 @@ class TestRecommendationBotEvaluator:
         _ = evaluator.create_bot_instance("gpt-4", test_case)
 
         evaluator.bot_class.assert_called_once_with(
-            "eval", checkpointer=None, model="gpt-4", param="value"
+            "eval", checkpointer=None, model="gpt-4", instructions=None, param="value"
         )
 
     @pytest.mark.asyncio
@@ -374,7 +374,7 @@ class TestEvaluatorIntegration:
 
             # Create LLM test case
             llm_test_case = evaluator.create_llm_test_case(
-                test_cases[0], response, "gpt-4"
+                test_cases[0], response, "gpt-4", "default"
             )
-            assert llm_test_case.name == "recommendation-gpt-4"
+            assert llm_test_case.name == "recommendation-gpt-4-default"
             assert llm_test_case.input == "Test question"

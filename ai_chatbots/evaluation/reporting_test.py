@@ -30,6 +30,7 @@ class TestEvaluationReporter:
         test_result1.additional_metadata = {
             "bot_name": "recommendation",
             "model": "gpt-4",
+            "prompt_label": "default",
             "question": "What courses are available?",
         }
         test_result1.name = "recommendation-gpt-4"
@@ -54,6 +55,7 @@ class TestEvaluationReporter:
         test_result2.additional_metadata = {
             "bot_name": "syllabus",
             "model": "gpt-3.5",
+            "prompt_label": "#1",
             "question": "Who teaches this course?",
         }
         test_result2.name = "syllabus-gpt-3.5"
@@ -87,6 +89,7 @@ class TestEvaluationReporter:
         expected_columns = [
             "bot",
             "model",
+            "prompt_label",
             "test_case",
             "question",
             "metric",
@@ -109,6 +112,7 @@ class TestEvaluationReporter:
             {
                 "bot": "recommendation",
                 "model": "gpt-4",
+                "prompt_label": "default",
                 "metric": "ContextualRelevancy",
                 "score": 0.85,
                 "success": True,
@@ -117,6 +121,7 @@ class TestEvaluationReporter:
             {
                 "bot": "recommendation",
                 "model": "gpt-4",
+                "prompt_label": "default",
                 "metric": "AnswerRelevancy",
                 "score": 0.45,
                 "success": False,
@@ -125,6 +130,7 @@ class TestEvaluationReporter:
             {
                 "bot": "syllabus",
                 "model": "gpt-3.5",
+                "prompt_label": "#1",
                 "metric": "ContextualRelevancy",
                 "score": 0.75,
                 "success": True,
@@ -173,10 +179,10 @@ class TestEvaluationReporter:
     def test_overall_performance(self, reporter, mock_stdout):
         """Test overall performance calculation."""
         data = [
-            {"model": "gpt-4", "score": 0.85},
-            {"model": "gpt-4", "score": 0.45},
-            {"model": "gpt-3.5", "score": 0.75},
-            {"model": "gpt-3.5", "score": 0.65},
+            {"model": "gpt-4", "prompt_label": "default", "score": 0.85},
+            {"model": "gpt-4", "prompt_label": "#1", "score": 0.45},
+            {"model": "gpt-3.5", "prompt_label": "default", "score": 0.75},
+            {"model": "gpt-3.5", "prompt_label": "#1", "score": 0.65},
         ]
         df = pd.DataFrame(data)
 
@@ -197,6 +203,7 @@ class TestEvaluationReporter:
             {
                 "bot": "recommendation",
                 "model": "gpt-4",
+                "prompt_label": "default",
                 "question": "Test question",
                 "metric": "ContextualRelevancy",
                 "score": 0.85,
@@ -206,6 +213,7 @@ class TestEvaluationReporter:
             {
                 "bot": "recommendation",
                 "model": "gpt-4",
+                "prompt_label": "default",
                 "question": "Test question",
                 "metric": "AnswerRelevancy",
                 "score": 0.45,
@@ -244,8 +252,9 @@ class TestEvaluationReporter:
 
         # Check for report sections
         assert "RAG EVALUATION REPORT" in output_text
-        assert "SUMMARY BY BOT AND MODEL" in output_text
+        assert "SUMMARY BY BOT, MODEL, PROMPT" in output_text
         assert "MODEL COMPARISON" in output_text
+        assert "PROMPT COMPARISON" in output_text
         assert "OVERALL PERFORMANCE" in output_text
         assert "DETAILED RESULTS" in output_text
 
@@ -282,6 +291,7 @@ class TestSummaryReporter:
         test_result.additional_metadata = {
             "bot_name": "recommendation",
             "model": "gpt-4",
+            "prompt_label": "default",
         }
 
         metric1 = Mock()
@@ -351,7 +361,11 @@ class TestSummaryReporter:
         # Create 3 test results with 2 metrics each (6 total metrics)
         for i in range(3):
             test_result = Mock()
-            test_result.additional_metadata = {"bot_name": f"bot{i}", "model": "gpt-4"}
+            test_result.additional_metadata = {
+                "bot_name": f"bot{i}",
+                "model": "gpt-4",
+                "prompt_label": "default",
+            }
 
             # First metric passes, second fails
             metric1 = Mock()
@@ -393,6 +407,7 @@ class TestReportingIntegration:
         test_result.additional_metadata = {
             "bot_name": "recommendation",
             "model": "gpt-4",
+            "prompt_label": "default",
             "question": "What courses are available?",
         }
         test_result.name = "recommendation-gpt-4"
@@ -420,8 +435,9 @@ class TestReportingIntegration:
         # Check all major sections are present
         required_sections = [
             "RAG EVALUATION REPORT",
-            "SUMMARY BY BOT AND MODEL",
+            "SUMMARY BY BOT, MODEL, PROMPT",
             "MODEL COMPARISON",
+            "PROMPT COMPARISON",
             "OVERALL PERFORMANCE",
             "DETAILED RESULTS",
         ]

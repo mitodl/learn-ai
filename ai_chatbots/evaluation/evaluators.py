@@ -1,6 +1,6 @@
 """Bot-specific evaluators for RAG evaluation."""
 
-from typing import Any
+from typing import Any, Optional
 
 from langchain_core.messages import AIMessage
 
@@ -37,12 +37,20 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
         # Recommendation bot requires search_url in extra_state
         return "search_url" in extra_state
 
-    def create_bot_instance(self, model: str, test_case: TestCaseSpec):
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+    ):
         """Create recommendation bot instance."""
         metadata = test_case.metadata or {}
         extra_init = metadata.get("extra_init", {})
 
-        return self.bot_class("eval", checkpointer=None, model=model, **extra_init)
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            instructions=instructions,
+            **extra_init,
+        )
 
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
@@ -87,12 +95,20 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         # Syllabus bot requires course_id in extra_state
         return "course_id" in extra_state
 
-    def create_bot_instance(self, model: str, test_case: TestCaseSpec):
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+    ):
         """Create syllabus bot instance."""
         metadata = test_case.metadata or {}
         extra_init = metadata.get("extra_init", {})
 
-        return self.bot_class("eval", checkpointer=None, model=model, **extra_init)
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            instructions=instructions,
+            **extra_init,
+        )
 
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
@@ -137,12 +153,20 @@ class VideoGPTBotEvaluator(BaseBotEvaluator):
         # Video GPT bot requires transcript_asset_id in extra_state
         return "transcript_asset_id" in extra_state
 
-    def create_bot_instance(self, model: str, test_case: TestCaseSpec):
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+    ):
         """Create video GPT bot instance."""
         metadata = test_case.metadata or {}
         extra_init = metadata.get("extra_init", {})
 
-        return self.bot_class("eval", checkpointer=None, model=model, **extra_init)
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            instructions=instructions,
+            **extra_init,
+        )
 
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
@@ -187,12 +211,20 @@ class TutorBotEvaluator(BaseBotEvaluator):
         # Tutor bot requires edx_module_id in extra_init
         return "edx_module_id" in extra_init
 
-    def create_bot_instance(self, model: str, test_case: TestCaseSpec):
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+    ):
         """Create tutor bot instance."""
         metadata = test_case.metadata or {}
         extra_init = metadata.get("extra_init", {})
 
-        return self.bot_class("eval", checkpointer=None, model=model, **extra_init)
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            instructions=instructions,
+            **extra_init,
+        )
 
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
