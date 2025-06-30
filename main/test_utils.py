@@ -2,11 +2,14 @@
 
 import abc
 import json
+import re
 import traceback
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from django.conf import settings
 from django.http.response import HttpResponse
 from rest_framework.renderers import JSONRenderer
 
@@ -138,3 +141,19 @@ class PickleableMock(Mock):
     def __reduce__(self):
         """Required method for being pickleable"""  # noqa: D401
         return (Mock, ())
+
+
+def load_json_with_settings(file_path: str) -> dict:
+    """Load JSON file and replace {{settings.SETTING_NAME}} with actual Django setting values."""
+    with Path.open(file_path) as f:
+        content = f.read()
+
+    # Simple regex to find and replace {{settings.SETTING_NAME}} patterns
+    def replace_setting(match):
+        setting_name = match.group(1)
+        return str(getattr(settings, setting_name, match.group(0)))
+
+    # Replace all {{settings.SETTING_NAME}} patterns
+    content = re.sub(r"\{\{settings\.([A-Z_][A-Z0-9_]*)\}\}", replace_setting, content)
+
+    return json.loads(content)
