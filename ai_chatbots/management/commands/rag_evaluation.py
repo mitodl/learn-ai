@@ -4,6 +4,7 @@ from asgiref.sync import async_to_sync
 from django.core.management import BaseCommand
 
 from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
+from ai_chatbots.models import LLMModel
 
 
 class Command(BaseCommand):
@@ -18,7 +19,7 @@ class Command(BaseCommand):
             dest="models",
             required=False,
             help="Specify the models to test",
-            default="openai/gpt-4o-mini,openai/gpt-4o",
+            default="",
         )
         parser.add_argument(
             "--eval_model",
@@ -38,7 +39,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):  # noqa: ARG002
         """Run the command using the new evaluation framework."""
         # Parse command line arguments
-        models = options["models"].split(",")
+        models = [m for m in options["models"].split(",") if m] or (
+            # If you don't specify models, all the enabled models will be used;
+            # so make sure you have any necessary API keys set in your environment.
+            list(
+                LLMModel.objects.filter(enabled=True).values_list(
+                    "litellm_id", flat=True
+                )
+            )
+        )
         evaluation_model = options["eval_model"]
         bot_names = options["bots"].split(",") if options["bots"] else None
 

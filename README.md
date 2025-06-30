@@ -6,12 +6,20 @@ This application provides backend API endpoints to access various AI chatbots.
 
 **SECTIONS**
 
-1. [Initial Setup](#initial-setup)
-2. [Configuration](#configuration)
-3. [Committing & Formatting](#committing--formatting)
-4. [Sample Requests](#sample-requests)
-5. [Langsmith Integration](#langsmith-integration)
-6. [Architecture Overview](#architecture-overview)
+- [learn-ai](#learn-ai)
+  - [Initial Setup](#initial-setup)
+  - [Configuration](#configuration)
+    - [Frontend Configuration](#frontend-configuration)
+  - [Committing \& Formatting](#committing--formatting)
+  - [Sample Requests](#sample-requests)
+  - [Langsmith Integration](#langsmith-integration)
+  - [Architecture Overview](#architecture-overview)
+    - [Client-Server communication](#client-server-communication)
+    - [Chatbot Agents](#chatbot-agents)
+      - [Agent graphs](#agent-graphs)
+      - [Agent tools](#agent-tools)
+      - [Agent system prompts](#agent-system-prompts)
+  - [RAG Evaluation](#rag-evaluation)
 
 ## Initial Setup
 
@@ -208,3 +216,13 @@ The tools that you define for use by an agent graph should include the following
 #### Agent system prompts
 
 The default prompts used for each chatbot are specified either in Langsmith if enabled (see the [langsmith integration](#langsmith-integration) section above), otherwise the values in the `ai_chatbots/prompts` module are used. They are retrieved (and can be overridden) during the `__init__` call of each chatbot class.
+
+## RAG Evaluation
+
+A management command (`rag_evaluation`) has been provided to calculate various evaluation metrics on the chatbots. The command takes the following optional parameters:
+
+- `models`: Comma-delimited list of models that the chatbots will use to answer questions. If none are provided, it will use all the enabled `ai_chatbots.models.LLMModel` objects in the database, so make sure have all the necessary API keys in your environment.
+- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-4o-mini`.
+- `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated.
+
+Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.
