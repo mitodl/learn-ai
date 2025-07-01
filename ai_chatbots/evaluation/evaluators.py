@@ -212,17 +212,20 @@ class TutorBotEvaluator(BaseBotEvaluator):
         return "edx_module_id" in extra_init
 
     def create_bot_instance(
-        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+        self,
+        model: str,
+        test_case: TestCaseSpec,
+        instructions: Optional[str] = None,  # noqa: ARG002
     ):
         """Create tutor bot instance."""
         metadata = test_case.metadata or {}
         extra_init = metadata.get("extra_init", {})
 
+        # TutorBot doesn't accept instructions parameter, so we ignore it
         return self.bot_class(
             "eval",
             checkpointer=None,
             model=model,
-            instructions=instructions,
             **extra_init,
         )
 

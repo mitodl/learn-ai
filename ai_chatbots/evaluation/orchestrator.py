@@ -92,6 +92,7 @@ class EvaluationOrchestrator:
         *,
         bot_names: Optional[list[str]] = None,
         use_prompts: bool = True,
+        prompts_file: Optional[str] = None,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models."""
         # Set up DeepEval logging if API key is available
@@ -105,14 +106,13 @@ class EvaluationOrchestrator:
         # Load alternative prompts if enabled
         prompts_data = {}
         if use_prompts:
+            prompts_file = prompts_file or "test_json/rag_evaluation_prompts.json"
             try:
-                prompts_data = load_json_with_settings(
-                    "test_json/rag_evaluation_prompts.json"
-                )
-                self.stdout.write("Loaded alternative prompts for evaluation")
+                prompts_data = load_json_with_settings(prompts_file)
+                self.stdout.write(f"Loaded alternative prompts from {prompts_file}")
             except FileNotFoundError:
                 self.stdout.write(
-                    "Warning: prompt file not found, using default prompts only"
+                    f"Warning: {prompts_file} not found, using default prompts only"
                 )
                 use_prompts = False
 
@@ -179,7 +179,13 @@ class EvaluationOrchestrator:
 
         # Run DeepEval evaluation
         self.stdout.write(f"Running evaluation on {len(test_cases)} test cases")
-        results = deepeval.evaluate(test_cases=test_cases, metrics=config.metrics)
+
+        if not test_cases:
+            self.stdout.write("No test cases available - skipping evaluation")
+            # Create an empty results object to avoid errors
+            results = EvaluationResult(test_results=[])
+        else:
+            results = deepeval.evaluate(test_cases=test_cases, metrics=config.metrics)
 
         # Generate report
         self.reporter.generate_report(results, config.models, bot_names)

@@ -41,6 +41,13 @@ class Command(BaseCommand):
             action="store_true",
             help="Skip using alternative prompts, only use default prompts",
         )
+        parser.add_argument(
+            "--prompts-file",
+            dest="prompts_file",
+            required=False,
+            help="Specify the prompts file to use",
+            default=None,
+        )
 
     def handle(self, *args, **options):  # noqa: ARG002
         """Run the command using the new evaluation framework."""
@@ -57,6 +64,12 @@ class Command(BaseCommand):
         evaluation_model = options["eval_model"]
         bot_names = options["bots"].split(",") if options["bots"] else None
         use_prompts = not options["no_prompts"]
+        prompts_file = options["prompts_file"]
+        if prompts_file and not use_prompts:
+            self.stderr.write(
+                "Prompts file specified but --no-prompts is set. Ignoring prompts file."
+            )
+            prompts_file = None
 
         # Create evaluation orchestrator
         orchestrator = EvaluationOrchestrator(self.stdout)
@@ -75,4 +88,9 @@ class Command(BaseCommand):
                 return
 
         # Run evaluation
-        async_to_sync(orchestrator.run_evaluation)(config, bot_names, use_prompts)
+        async_to_sync(orchestrator.run_evaluation)(
+            config,
+            bot_names=bot_names,
+            use_prompts=use_prompts,
+            prompts_file=prompts_file,
+        )

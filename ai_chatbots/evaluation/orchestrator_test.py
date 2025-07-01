@@ -133,7 +133,7 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation
-            result = await orchestrator.run_evaluation(config, ["test_bot"])
+            result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify deepeval was configured
             mock_deepeval.login_with_confident_api_key.assert_called_once_with(
@@ -163,7 +163,7 @@ class TestEvaluationOrchestrator:
             mock_deepeval.evaluate.return_value = Mock()
             orchestrator.reporter.generate_report = Mock()
 
-            await orchestrator.run_evaluation(config, [])
+            await orchestrator.run_evaluation(config, bot_names=[])
 
             # Verify login was not called
             mock_deepeval.login_with_confident_api_key.assert_not_called()
@@ -194,7 +194,7 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation with no bot_names (should use all available)
-            await orchestrator.run_evaluation(config, None)
+            await orchestrator.run_evaluation(config, bot_names=None)
 
             # Verify all bots were processed
             assert len(mock_evaluators) == 4
@@ -214,7 +214,7 @@ class TestEvaluationOrchestrator:
             mock_deepeval.evaluate.return_value = Mock()
             orchestrator.reporter.generate_report = Mock()
 
-            await orchestrator.run_evaluation(config, ["unknown_bot"])
+            await orchestrator.run_evaluation(config, bot_names=["unknown_bot"])
 
             # Verify warning was written
             mock_stdout.write.assert_called()
@@ -245,7 +245,7 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation - should handle error gracefully
-            _ = await orchestrator.run_evaluation(config, ["test_bot"])
+            _ = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify error was logged
             mock_stdout.write.assert_called()
@@ -286,7 +286,7 @@ class TestEvaluationOrchestrator:
             mock_deepeval.evaluate.return_value = Mock()
             orchestrator.reporter.generate_report = Mock()
 
-            await orchestrator.run_evaluation(config, ["test_bot"])
+            await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify all models were evaluated
             assert set(evaluate_calls) == {"gpt-4", "gpt-3.5", "claude-3"}
