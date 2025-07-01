@@ -8,7 +8,7 @@ import pytest
 from .base import EvaluationConfig
 from .orchestrator import EvaluationOrchestrator
 
-NUM_METRICS = 6
+NUM_METRICS = 5
 
 
 class TestEvaluationOrchestrator:
@@ -51,7 +51,6 @@ class TestEvaluationOrchestrator:
             "ContextualPrecision": 0.9,
             "ContextualRelevancy": 0.8,
             "ContextualRecall": 0.9,
-            "Faithfulness": 0.8,
             "Hallucination": 0.1,
             "AnswerRelevancy": 0.8,
         }
@@ -245,13 +244,14 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation - should handle error gracefully
-            _ = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
+            result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify error was logged
             mock_stdout.write.assert_called()
 
-            # Verify evaluation still completed (with empty test cases)
-            mock_deepeval.evaluate.assert_called_once()
+            # Verify result is an empty EvaluationResult
+            assert result.test_results == []
+            mock_deepeval.evaluate.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("ai_chatbots.evaluation.orchestrator.deepeval")
@@ -312,7 +312,6 @@ class TestEvaluationConfigIntegration:
             "ContextualPrecisionMetric",
             "ContextualRelevancyMetric",
             "ContextualRecallMetric",
-            "FaithfulnessMetric",
             "HallucinationMetric",
             "AnswerRelevancyMetric",
         ]

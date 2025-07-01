@@ -10,7 +10,6 @@ from deepeval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
-    FaithfulnessMetric,
     HallucinationMetric,
 )
 from django.core.management.base import OutputWrapper
@@ -69,11 +68,6 @@ class EvaluationOrchestrator:
             ),
             AnswerRelevancyMetric(
                 threshold=metric_thresholds["AnswerRelevancy"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            FaithfulnessMetric(
-                threshold=metric_thresholds["Faithfulness"],
                 model=evaluation_model,
                 include_reason=True,
             ),
@@ -183,7 +177,7 @@ class EvaluationOrchestrator:
         if not test_cases:
             self.stdout.write("No test cases available - skipping evaluation")
             # Create an empty results object to avoid errors
-            results = EvaluationResult(test_results=[])
+            results = EvaluationResult(test_results=[], confident_link=None)
         else:
             results = deepeval.evaluate(test_cases=test_cases, metrics=config.metrics)
 

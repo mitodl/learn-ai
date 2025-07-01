@@ -36,10 +36,10 @@ class Command(BaseCommand):
             default="",
         )
         parser.add_argument(
-            "--no-prompts",
-            dest="no_prompts",
+            "--prompts",
+            dest="prompts",
             action="store_true",
-            help="Skip using alternative prompts, only use default prompts",
+            help="Include alternative prompts in addition to default prompts",
         )
         parser.add_argument(
             "--prompts-file",
@@ -63,13 +63,8 @@ class Command(BaseCommand):
         )
         evaluation_model = options["eval_model"]
         bot_names = options["bots"].split(",") if options["bots"] else None
-        use_prompts = not options["no_prompts"]
+        use_prompts = options["prompts"] or options["prompts_file"] is not None
         prompts_file = options["prompts_file"]
-        if prompts_file and not use_prompts:
-            self.stderr.write(
-                "Prompts file specified but --no-prompts is set. Ignoring prompts file."
-            )
-            prompts_file = None
 
         # Create evaluation orchestrator
         orchestrator = EvaluationOrchestrator(self.stdout)

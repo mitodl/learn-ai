@@ -12,7 +12,12 @@ class EvaluationReporter:
         self.stdout = stdout
 
     def generate_report(
-        self, results: EvaluationResult, models: list[str], bot_names: list[str]
+        self,
+        results: EvaluationResult,
+        models: list[str],
+        bot_names: list[str],
+        *,
+        use_prompts: bool = True,
     ) -> None:
         """Generate a comprehensive evaluation report."""
         self.stdout.write("\n" + "=" * 80)
@@ -25,7 +30,8 @@ class EvaluationReporter:
         # Generate report sections
         self.summarize_per_bot_model(df, models, bot_names)
         self.model_comparison(df)
-        self.prompt_comparison(df)
+        if use_prompts:
+            self.prompt_comparison(df)
         self.overall_performance(df)
         self.detailed_results(df, models, bot_names)
 
