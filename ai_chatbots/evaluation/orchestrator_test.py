@@ -291,6 +291,84 @@ class TestEvaluationOrchestrator:
             # Verify all models were evaluated
             assert set(evaluate_calls) == {"gpt-4", "gpt-3.5", "claude-3"}
 
+    @pytest.fixture
+    def mock_prompts_data(self):
+        """Mock prompts data for testing."""
+        return [
+            {"name": "alt_prompt_1", "text": "my prompt"},
+            {"name": "langsmith_prompt_1"},
+        ]
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.load_json_with_settings")
+    async def test_prompt_with_name_and_text(
+        self, mock_load_json, orchestrator, mock_prompts_data
+    ):
+        """Test prompt extraction when entry has both name and text."""
+        mock_load_json.return_value = {"test_bot": mock_prompts_data}
+
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+
+        orchestrator.reporter.generate_report = Mock()
+
+        with (
+            patch(
+                "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+                {"test_bot": (Mock(), Mock(return_value=mock_evaluator))},
+            ),
+            patch("ai_chatbots.evaluation.orchestrator.deepeval"),
+        ):
+            config = Mock(confident_api_key=None, models=["gpt-4"], metrics=[])
+            await orchestrator.run_evaluation(
+                config, bot_names=["test_bot"], use_prompts=True
+            )
+
+            # Find the call with alt_prompt_1
+            calls = mock_evaluator.evaluate_model.call_args_list
+            call = next(c for c in calls if c.kwargs["prompt_label"] == "alt_prompt_1")
+            assert call.kwargs["instructions"] == "my prompt"
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.load_json_with_settings")
+    @patch("ai_chatbots.evaluation.orchestrator.get_langsmith_prompt")
+    async def test_prompt_with_name_only(
+        self, mock_get_langsmith, mock_load_json, orchestrator, mock_prompts_data
+    ):
+        """Test prompt extraction when entry has only name, reqeuiring a call to langsmith for text."""
+        mock_load_json.return_value = {"test_bot": mock_prompts_data}
+        mock_get_langsmith.return_value = "mocked langsmith text"
+
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+
+        orchestrator.reporter.generate_report = Mock()
+
+        with (
+            patch(
+                "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+                {"test_bot": (Mock(), Mock(return_value=mock_evaluator))},
+            ),
+            patch("ai_chatbots.evaluation.orchestrator.deepeval"),
+        ):
+            config = Mock(confident_api_key=None, models=["gpt-4"], metrics=[])
+            await orchestrator.run_evaluation(
+                config, bot_names=["test_bot"], use_prompts=True
+            )
+
+            mock_get_langsmith.assert_called_with("langsmith_prompt_1")
+
+            # Find the call with langsmith_prompt_1
+            calls = mock_evaluator.evaluate_model.call_args_list
+            call = next(
+                c
+                for c in calls
+                if c.kwargs["prompt_label"] == mock_prompts_data[1]["name"]
+            )
+            assert call.kwargs["instructions"] == mock_get_langsmith.return_value
+
 
 class TestEvaluationConfigIntegration:
     """Integration tests for evaluation configuration."""
