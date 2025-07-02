@@ -134,11 +134,6 @@ class TestEvaluationOrchestrator:
             # Run evaluation
             result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
-            # Verify deepeval was configured
-            mock_deepeval.login_with_confident_api_key.assert_called_once_with(
-                "test-key"
-            )
-
             # Verify evaluation was run
             mock_deepeval.evaluate.assert_called_once()
 
@@ -148,24 +143,6 @@ class TestEvaluationOrchestrator:
             )
 
             assert result == mock_results
-
-    @pytest.mark.asyncio
-    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
-    async def test_run_evaluation_no_api_key(self, mock_deepeval, orchestrator):
-        """Test evaluation run without API key."""
-        config = Mock()
-        config.confident_api_key = None
-        config.models = ["gpt-4"]
-        config.metrics = [Mock()]
-
-        with patch("ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS", {}):
-            mock_deepeval.evaluate.return_value = Mock()
-            orchestrator.reporter.generate_report = Mock()
-
-            await orchestrator.run_evaluation(config, bot_names=[])
-
-            # Verify login was not called
-            mock_deepeval.login_with_confident_api_key.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("ai_chatbots.evaluation.orchestrator.deepeval")

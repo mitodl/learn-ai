@@ -430,7 +430,11 @@ def get_langsmith_prompt(prompt_name: str) -> str:
     """Get the text of a prompt from LangSmith by its name."""
     if settings.LANGSMITH_API_KEY:
         client = LangsmithClient(api_key=settings.LANGSMITH_API_KEY)
-        prompt_template = client.pull_prompt(prompt_name)
+        try:
+            prompt_template = client.pull_prompt(prompt_name)
+        except Exception:
+            log.exception("Error retrieving prompt '%s' from LangSmith", prompt_name)
+            return None
         if prompt_template:
             return prompt_template.messages[0].prompt.template
         else:

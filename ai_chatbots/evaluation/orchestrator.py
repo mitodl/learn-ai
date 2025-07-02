@@ -143,9 +143,14 @@ class EvaluationOrchestrator:
                         prompt_text = None
                     else:
                         prompt_label = prompt["name"]
-                        prompt_text = prompt.get(
-                            "text", get_langsmith_prompt(prompt_label)
+                        prompt_text = prompt.get("text") or get_langsmith_prompt(
+                            prompt_label
                         )
+                    if prompt_label != "default" and not prompt_text:
+                        self.stdout.write(
+                            f"No prompt text for '{prompt_label}', skipping"
+                        )
+                        continue
                     self.stdout.write(
                         f"Evaluating {bot_name} with {model} using {prompt_label}"
                     )
