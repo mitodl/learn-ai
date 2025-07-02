@@ -1,5 +1,6 @@
 """Unit tests for base evaluation framework."""
 
+from typing import Optional
 from unittest.mock import Mock
 
 import pytest
@@ -94,9 +95,11 @@ class ConcreteBotEvaluator(BaseBotEvaluator):
     def validate_test_case(self, test_case):
         return test_case.question is not None
 
-    def create_bot_instance(self, model: str, test_case: TestCaseSpec):
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+    ):
         """Create mock bot instance."""
-        _ = model, test_case  # Unused parameters for testing
+        _ = model, test_case, instructions  # Unused parameters for testing
         mock_bot = Mock()
         mock_bot.config = {"configurable": {"test": "config"}}
         return mock_bot
@@ -267,10 +270,12 @@ class TestConcreteBotEvaluator:
             0
         ].function.name = "test_tool"
 
-        llm_test_case = evaluator.create_llm_test_case(test_case, response, "gpt-4o")
+        llm_test_case = evaluator.create_llm_test_case(
+            test_case, response, "gpt-4o", "default"
+        )
 
         assert isinstance(llm_test_case, LLMTestCase)
-        assert llm_test_case.name == "test_bot-gpt-4o"
+        assert llm_test_case.name == "test_bot-gpt-4o-default"
         assert llm_test_case.input == "Test question"
         assert llm_test_case.actual_output == "Bot response"
         assert llm_test_case.expected_output == "Expected output"
@@ -278,6 +283,7 @@ class TestConcreteBotEvaluator:
         assert len(llm_test_case.expected_tools) == 1
         assert llm_test_case.additional_metadata["bot_name"] == "test_bot"
         assert llm_test_case.additional_metadata["model"] == "gpt-4o"
+        assert llm_test_case.additional_metadata["prompt_label"] == "default"
 
     @pytest.mark.asyncio
     async def test_evaluate_model(self, evaluator):

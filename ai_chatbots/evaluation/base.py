@@ -57,7 +57,9 @@ class BaseBotEvaluator(ABC):
         """Validate that a test case is properly formatted for this bot."""
 
     @abstractmethod
-    def create_bot_instance(self, model: str, test_case: TestCaseSpec):
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+    ):
         """Create a bot instance configured for the given test case."""
 
     @abstractmethod
@@ -71,6 +73,7 @@ class BaseBotEvaluator(ABC):
         test_case: TestCaseSpec,
         response: dict[str, Any],
         model: str,
+        prompt_label: str = "default",
     ) -> LLMTestCase:
         """Create DeepEval LLMTestCase from bot response."""
         # Extract tool information if available
@@ -79,10 +82,11 @@ class BaseBotEvaluator(ABC):
         tool_calls = self.extract_tool_calls(response)
 
         return LLMTestCase(
-            name=f"{self.bot_name}-{model}",
+            name=f"{self.bot_name}-{model}-{prompt_label}",
             additional_metadata={
                 "bot_name": self.bot_name,
                 "model": model,
+                "prompt_label": prompt_label,
                 **test_case.to_dict(),
             },
             input=test_case.question,
@@ -140,7 +144,11 @@ class BaseBotEvaluator(ABC):
         ]
 
     async def evaluate_model(
-        self, model: str, test_cases: list[TestCaseSpec]
+        self,
+        model: str,
+        test_cases: list[TestCaseSpec],
+        instructions: Optional[str] = None,
+        prompt_label: str = "default",
     ) -> list[LLMTestCase]:
         """Evaluate a single model against all test cases."""
         llm_test_cases = []
@@ -149,9 +157,15 @@ class BaseBotEvaluator(ABC):
             if not self.validate_test_case(test_case):
                 continue
 
-            chatbot = self.create_bot_instance(model, test_case)
+            chatbot = self.create_bot_instance(
+                model, test_case, instructions=instructions
+            )
             response = await self.collect_response(chatbot, test_case)
-            llm_test_case = self.create_llm_test_case(test_case, response, model)
+
+            # Add prompt info to test case metadata for better tracking
+            llm_test_case = self.create_llm_test_case(
+                test_case, response, model, prompt_label
+            )
             llm_test_cases.append(llm_test_case)
 
         return llm_test_cases

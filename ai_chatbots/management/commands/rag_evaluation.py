@@ -35,6 +35,19 @@ class Command(BaseCommand):
             help="Specify the bots to test",
             default="",
         )
+        parser.add_argument(
+            "--prompts",
+            dest="prompts",
+            action="store_true",
+            help="Include alternative prompts in addition to default prompts",
+        )
+        parser.add_argument(
+            "--prompts-file",
+            dest="prompts_file",
+            required=False,
+            help="Specify the prompts file to use",
+            default=None,
+        )
 
     def handle(self, *args, **options):  # noqa: ARG002
         """Run the command using the new evaluation framework."""
@@ -50,6 +63,8 @@ class Command(BaseCommand):
         )
         evaluation_model = options["eval_model"]
         bot_names = options["bots"].split(",") if options["bots"] else None
+        use_prompts = options["prompts"] or options["prompts_file"] is not None
+        prompts_file = options["prompts_file"]
 
         # Create evaluation orchestrator
         orchestrator = EvaluationOrchestrator(self.stdout)
@@ -68,4 +83,9 @@ class Command(BaseCommand):
                 return
 
         # Run evaluation
-        async_to_sync(orchestrator.run_evaluation)(config, bot_names)
+        async_to_sync(orchestrator.run_evaluation)(
+            config,
+            bot_names=bot_names,
+            use_prompts=use_prompts,
+            prompts_file=prompts_file,
+        )

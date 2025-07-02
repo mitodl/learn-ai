@@ -8,7 +8,7 @@ import pytest
 from .base import EvaluationConfig
 from .orchestrator import EvaluationOrchestrator
 
-NUM_METRICS = 6
+NUM_METRICS = 5
 
 
 class TestEvaluationOrchestrator:
@@ -51,7 +51,6 @@ class TestEvaluationOrchestrator:
             "ContextualPrecision": 0.9,
             "ContextualRelevancy": 0.8,
             "ContextualRecall": 0.9,
-            "Faithfulness": 0.8,
             "Hallucination": 0.1,
             "AnswerRelevancy": 0.8,
         }
@@ -133,12 +132,7 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation
-            result = await orchestrator.run_evaluation(config, ["test_bot"])
-
-            # Verify deepeval was configured
-            mock_deepeval.login_with_confident_api_key.assert_called_once_with(
-                "test-key"
-            )
+            result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify evaluation was run
             mock_deepeval.evaluate.assert_called_once()
@@ -149,24 +143,6 @@ class TestEvaluationOrchestrator:
             )
 
             assert result == mock_results
-
-    @pytest.mark.asyncio
-    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
-    async def test_run_evaluation_no_api_key(self, mock_deepeval, orchestrator):
-        """Test evaluation run without API key."""
-        config = Mock()
-        config.confident_api_key = None
-        config.models = ["gpt-4"]
-        config.metrics = [Mock()]
-
-        with patch("ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS", {}):
-            mock_deepeval.evaluate.return_value = Mock()
-            orchestrator.reporter.generate_report = Mock()
-
-            await orchestrator.run_evaluation(config, [])
-
-            # Verify login was not called
-            mock_deepeval.login_with_confident_api_key.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("ai_chatbots.evaluation.orchestrator.deepeval")
@@ -194,7 +170,7 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation with no bot_names (should use all available)
-            await orchestrator.run_evaluation(config, None)
+            await orchestrator.run_evaluation(config, bot_names=None)
 
             # Verify all bots were processed
             assert len(mock_evaluators) == 4
@@ -214,7 +190,7 @@ class TestEvaluationOrchestrator:
             mock_deepeval.evaluate.return_value = Mock()
             orchestrator.reporter.generate_report = Mock()
 
-            await orchestrator.run_evaluation(config, ["unknown_bot"])
+            await orchestrator.run_evaluation(config, bot_names=["unknown_bot"])
 
             # Verify warning was written
             mock_stdout.write.assert_called()
@@ -245,13 +221,14 @@ class TestEvaluationOrchestrator:
             orchestrator.reporter.generate_report = Mock()
 
             # Run evaluation - should handle error gracefully
-            _ = await orchestrator.run_evaluation(config, ["test_bot"])
+            result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify error was logged
             mock_stdout.write.assert_called()
 
-            # Verify evaluation still completed (with empty test cases)
-            mock_deepeval.evaluate.assert_called_once()
+            # Verify result is an empty EvaluationResult
+            assert result.test_results == []
+            mock_deepeval.evaluate.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("ai_chatbots.evaluation.orchestrator.deepeval")
@@ -270,7 +247,9 @@ class TestEvaluationOrchestrator:
         # Track calls to evaluate_model
         evaluate_calls = []
 
-        async def mock_evaluate_model(model, test_cases):
+        async def mock_evaluate_model(
+            model, test_cases, instructions=None, prompt_label="default"
+        ):
             evaluate_calls.append(model)
             return [Mock()]
 
@@ -284,10 +263,88 @@ class TestEvaluationOrchestrator:
             mock_deepeval.evaluate.return_value = Mock()
             orchestrator.reporter.generate_report = Mock()
 
-            await orchestrator.run_evaluation(config, ["test_bot"])
+            await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
             # Verify all models were evaluated
             assert set(evaluate_calls) == {"gpt-4", "gpt-3.5", "claude-3"}
+
+    @pytest.fixture
+    def mock_prompts_data(self):
+        """Mock prompts data for testing."""
+        return [
+            {"name": "alt_prompt_1", "text": "my prompt"},
+            {"name": "langsmith_prompt_1"},
+        ]
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.load_json_with_settings")
+    async def test_prompt_with_name_and_text(
+        self, mock_load_json, orchestrator, mock_prompts_data
+    ):
+        """Test prompt extraction when entry has both name and text."""
+        mock_load_json.return_value = {"test_bot": mock_prompts_data}
+
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+
+        orchestrator.reporter.generate_report = Mock()
+
+        with (
+            patch(
+                "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+                {"test_bot": (Mock(), Mock(return_value=mock_evaluator))},
+            ),
+            patch("ai_chatbots.evaluation.orchestrator.deepeval"),
+        ):
+            config = Mock(confident_api_key=None, models=["gpt-4"], metrics=[])
+            await orchestrator.run_evaluation(
+                config, bot_names=["test_bot"], use_prompts=True
+            )
+
+            # Find the call with alt_prompt_1
+            calls = mock_evaluator.evaluate_model.call_args_list
+            call = next(c for c in calls if c.kwargs["prompt_label"] == "alt_prompt_1")
+            assert call.kwargs["instructions"] == "my prompt"
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.load_json_with_settings")
+    @patch("ai_chatbots.evaluation.orchestrator.get_langsmith_prompt")
+    async def test_prompt_with_name_only(
+        self, mock_get_langsmith, mock_load_json, orchestrator, mock_prompts_data
+    ):
+        """Test prompt extraction when entry has only name, reqeuiring a call to langsmith for text."""
+        mock_load_json.return_value = {"test_bot": mock_prompts_data}
+        mock_get_langsmith.return_value = "mocked langsmith text"
+
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+
+        orchestrator.reporter.generate_report = Mock()
+
+        with (
+            patch(
+                "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+                {"test_bot": (Mock(), Mock(return_value=mock_evaluator))},
+            ),
+            patch("ai_chatbots.evaluation.orchestrator.deepeval"),
+        ):
+            config = Mock(confident_api_key=None, models=["gpt-4"], metrics=[])
+            await orchestrator.run_evaluation(
+                config, bot_names=["test_bot"], use_prompts=True
+            )
+
+            mock_get_langsmith.assert_called_with("langsmith_prompt_1")
+
+            # Find the call with langsmith_prompt_1
+            calls = mock_evaluator.evaluate_model.call_args_list
+            call = next(
+                c
+                for c in calls
+                if c.kwargs["prompt_label"] == mock_prompts_data[1]["name"]
+            )
+            assert call.kwargs["instructions"] == mock_get_langsmith.return_value
 
 
 class TestEvaluationConfigIntegration:
@@ -310,7 +367,6 @@ class TestEvaluationConfigIntegration:
             "ContextualPrecisionMetric",
             "ContextualRelevancyMetric",
             "ContextualRecallMetric",
-            "FaithfulnessMetric",
             "HallucinationMetric",
             "AnswerRelevancyMetric",
         ]

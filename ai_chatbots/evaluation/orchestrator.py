@@ -10,10 +10,12 @@ from deepeval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
-    FaithfulnessMetric,
     HallucinationMetric,
 )
 from django.core.management.base import OutputWrapper
+
+from ai_chatbots.api import get_langsmith_prompt
+from main.test_utils import load_json_with_settings
 
 from .base import EvaluationConfig
 from .evaluators import BOT_EVALUATORS
@@ -70,11 +72,6 @@ class EvaluationOrchestrator:
                 model=evaluation_model,
                 include_reason=True,
             ),
-            FaithfulnessMetric(
-                threshold=metric_thresholds["Faithfulness"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
         ]
 
         return EvaluationConfig(
@@ -84,10 +81,13 @@ class EvaluationOrchestrator:
             confident_api_key=os.environ.get("CONFIDENT_AI_API_KEY"),
         )
 
-    async def run_evaluation(
+    async def run_evaluation(  # noqa: C901, PLR0912
         self,
         config: EvaluationConfig,
+        *,
         bot_names: Optional[list[str]] = None,
+        use_prompts: bool = True,
+        prompts_file: Optional[str] = None,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models."""
         # Set up DeepEval logging if API key is available
@@ -97,6 +97,19 @@ class EvaluationOrchestrator:
         # Determine which bots to evaluate
         if not bot_names:
             bot_names = list(BOT_EVALUATORS.keys())
+
+        # Load alternative prompts if enabled
+        prompts_data = {}
+        if use_prompts:
+            prompts_file = prompts_file or "test_json/rag_evaluation_prompts.json"
+            try:
+                prompts_data = load_json_with_settings(prompts_file)
+                self.stdout.write(f"Loaded alternative prompts from {prompts_file}")
+            except FileNotFoundError:
+                self.stdout.write(
+                    f"Warning: {prompts_file} not found, using default prompts only"
+                )
+                use_prompts = False
 
         self.stdout.write(
             f"Evaluating bots: {', '.join(bot_names)}, "
@@ -117,30 +130,62 @@ class EvaluationOrchestrator:
             bot_test_cases = evaluator.load_test_cases()
             self.stdout.write(f"Loaded {len(bot_test_cases)} test cases for {bot_name}")
 
-            # Evaluate each model
+            # Get prompts for this bot (default + alternatives)
+            bot_prompts = [None]  # Default prompt (None means use bot's default)
+            if use_prompts and bot_name in prompts_data:
+                bot_prompts.extend(prompts_data[bot_name])
+
+            # Evaluate each model with each prompt
             for model in config.models:
-                self.stdout.write(f"Evaluating {bot_name} with {model}")
-
-                try:
-                    model_test_cases = await evaluator.evaluate_model(
-                        model, bot_test_cases
-                    )
-                    test_cases.extend(model_test_cases)
-
-                    # Log responses for debugging
-                    for test_case in model_test_cases:
-                        self.stdout.write(
-                            f"Response for '{test_case.input}': "
-                            f"{test_case.actual_output[:100]}..."
+                for prompt in bot_prompts:
+                    if prompt is None:
+                        prompt_label = "default"
+                        prompt_text = None
+                    else:
+                        prompt_label = prompt["name"]
+                        prompt_text = prompt.get("text") or get_langsmith_prompt(
+                            prompt_label
                         )
+                    if prompt_label != "default" and not prompt_text:
+                        self.stdout.write(
+                            f"No prompt text for '{prompt_label}', skipping"
+                        )
+                        continue
+                    self.stdout.write(
+                        f"Evaluating {bot_name} with {model} using {prompt_label}"
+                    )
 
-                except Exception as e:  # noqa: BLE001
-                    self.stdout.write(f"Error evaluating {bot_name} with {model}: {e}")
-                    continue
+                    try:
+                        model_test_cases = await evaluator.evaluate_model(
+                            model,
+                            bot_test_cases,
+                            instructions=prompt_text,
+                            prompt_label=prompt_label,
+                        )
+                        test_cases.extend(model_test_cases)
+
+                        # Log responses for debugging
+                        for test_case in model_test_cases:
+                            self.stdout.write(
+                                f"Response for '{test_case.input}' ({prompt_label}): "
+                                f"{test_case.actual_output[:100]}..."
+                            )
+
+                    except Exception as e:  # noqa: BLE001
+                        self.stdout.write(
+                            f"Error on {bot_name} with {model} and {prompt_label}: {e}"
+                        )
+                        continue
 
         # Run DeepEval evaluation
         self.stdout.write(f"Running evaluation on {len(test_cases)} test cases")
-        results = deepeval.evaluate(test_cases=test_cases, metrics=config.metrics)
+
+        if not test_cases:
+            self.stdout.write("No test cases available - skipping evaluation")
+            # Create an empty results object to avoid errors
+            results = EvaluationResult(test_results=[], confident_link=None)
+        else:
+            results = deepeval.evaluate(test_cases=test_cases, metrics=config.metrics)
 
         # Generate report
         self.reporter.generate_report(results, config.models, bot_names)
