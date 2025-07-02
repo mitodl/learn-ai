@@ -5,6 +5,7 @@ import logging
 from typing import Any, cast
 from uuid import uuid4
 
+from django.conf import settings
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
     AIMessage,
@@ -26,6 +27,7 @@ from langmem.short_term.summarization import (
     SummarizationResult,
     TokenCounter,
 )
+from langsmith import Client as LangsmithClient
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
@@ -422,3 +424,15 @@ class CustomSummarizationNode(RunnableCallable):
         )
 
         return state_update
+
+
+def get_langsmith_prompt(prompt_name: str) -> str:
+    """Get the text of a prompt from LangSmith by its name."""
+    if settings.LANGSMITH_API_KEY:
+        client = LangsmithClient(api_key=settings.LANGSMITH_API_KEY)
+        prompt_template = client.pull_prompt(prompt_name)
+        if prompt_template:
+            return prompt_template.messages[0].prompt.template
+        else:
+            log.warning("Prompt '%s' not found in LangSmith.", prompt_name)
+    return None

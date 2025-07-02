@@ -14,6 +14,7 @@ from deepeval.metrics import (
 )
 from django.core.management.base import OutputWrapper
 
+from ai_chatbots.api import get_langsmith_prompt
 from main.test_utils import load_json_with_settings
 
 from .base import EvaluationConfig
@@ -136,15 +137,15 @@ class EvaluationOrchestrator:
 
             # Evaluate each model with each prompt
             for model in config.models:
-                for prompt_idx, prompt in enumerate(bot_prompts):
+                for prompt in bot_prompts:
                     if prompt is None:
                         prompt_label = "default"
+                        prompt_text = None
                     else:
-                        # Custom prompts start from #1 (since default is at index 0)
-                        custom_prompt_idx = (
-                            prompt_idx  # This gives us 1, 2, 3... for custom prompts
+                        prompt_label = prompt["name"]
+                        prompt_text = prompt.get(
+                            "text", get_langsmith_prompt(prompt_label)
                         )
-                        prompt_label = f"#{custom_prompt_idx}"
                     self.stdout.write(
                         f"Evaluating {bot_name} with {model} using {prompt_label}"
                     )
@@ -153,7 +154,7 @@ class EvaluationOrchestrator:
                         model_test_cases = await evaluator.evaluate_model(
                             model,
                             bot_test_cases,
-                            instructions=prompt,
+                            instructions=prompt_text,
                             prompt_label=prompt_label,
                         )
                         test_cases.extend(model_test_cases)
