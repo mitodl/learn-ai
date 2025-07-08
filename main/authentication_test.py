@@ -1,8 +1,7 @@
 """Tests for authentication"""
-
+import zoneinfo
 from datetime import datetime, timedelta
 
-import pytz
 from django.conf import settings
 from rest_framework_jwt.settings import api_settings
 
@@ -76,7 +75,7 @@ def test_ignore_expired_jwt_authentication_valid(rf, user):
 def test_ignore_expired_jwt_authentication_expired(rf, user):
     """Tests that IgnoreExpiredJwtAuthentication returns None if token is expired"""
     payload = jwt_payload_handler(user)
-    payload["exp"] = datetime.now(tz=pytz.timezone(settings.TIME_ZONE)) - timedelta(
+    payload["exp"] = datetime.now(tz=zoneinfo.ZoneInfo(settings.TIME_ZONE)) - timedelta(
         seconds=100
     )
     token = jwt_encode_handler(payload)
