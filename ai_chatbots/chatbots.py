@@ -574,6 +574,15 @@ class TutorBot(BaseChatbot):
                 intent_history,
                 tools=tutor_tools,
             )
+            print("new_history")
+
+            print(new_history)
+            print("new_intent_history")
+
+            print(new_intent_history)
+            print("new_assessment_history")
+
+            print(new_assessment_history)
 
             async for chunk in generator:
                 # the generator yields message chuncks for a streaming resopnse
