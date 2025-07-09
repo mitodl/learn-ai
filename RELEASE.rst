@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.10.2
+Version 0.10.2 (Released July 09, 2025)
 --------------
 
 - change rc urls (#234)
