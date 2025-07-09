@@ -1,6 +1,20 @@
 Release Notes
 =============
 
+Version 0.10.2 (Released July 09, 2025)
+--------------
+
+- change rc urls (#234)
+- chore(deps): update dependency next to v15.3.3 [security] (#233)
+- Evaluate different prompts (#232)
+- RAG evaluation mgmt command (#223)
+- fix(deps): update dependency next to v15.3.4 (#230)
+- fix(deps): update dependency django to v4.2.23 (#229)
+- chore(deps): update redis docker tag to v7.4.4 (#228)
+- chore(deps): update dependency eslint-config-next to v15.3.4 (#227)
+- chore(deps): update codecov/codecov-action action to v5.4.3 (#226)
+- Limit message length (#224)
+
 Version 0.10.1 (Released June 24, 2025)
 --------------
 
