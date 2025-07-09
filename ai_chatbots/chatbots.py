@@ -24,14 +24,6 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from openai import BadRequestError
-from typing_extensions import TypedDict
-
-from ai_chatbots import tools
-from ai_chatbots.api import get_search_tool_metadata
-from ai_chatbots.models import TutorBotOutput
-from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
-from ai_chatbots.utils import get_django_cache, request_with_token
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.summarization import CustomSummarizationNode
@@ -42,6 +34,14 @@ from open_learning_ai_tutor.utils import (
     json_to_messages,
     tutor_output_to_json,
 )
+from openai import BadRequestError
+from typing_extensions import TypedDict
+
+from ai_chatbots import tools
+from ai_chatbots.api import get_search_tool_metadata
+from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
+from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
 
@@ -574,15 +574,6 @@ class TutorBot(BaseChatbot):
                 intent_history,
                 tools=tutor_tools,
             )
-            print("new_history")
-
-            print(new_history)
-            print("new_intent_history")
-
-            print(new_intent_history)
-            print("new_assessment_history")
-
-            print(new_assessment_history)
 
             async for chunk in generator:
                 # the generator yields message chuncks for a streaming resopnse
