@@ -4797,10 +4797,8 @@ version = "0.2.4"
 description = "AI powered tutor"
 optional = false
 python-versions = "~=3.12"
-files = [
-    {file = "open_learning_ai_tutor-0.2.4-py3-none-any.whl", hash = "sha256:46cf2d3551c17a2db115abc228425c41a87e9f55d0094090494d400ed8c101ea"},
-    {file = "open_learning_ai_tutor-0.2.4.tar.gz", hash = "sha256:875755254154dd7f646bb7cb5c75ad9b6839721961c8bd4f618d99d45ded8eaf"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 e2b-code-interpreter = ">=1.1.0,<2"
@@ -4809,6 +4807,12 @@ langchain-core = ">=0.3.45,<0.4"
 langchain-experimental = ">=0.3.4,<0.4"
 langgraph = ">=0.3.10,<0.4"
 langsmith = "0.3.32"
+
+[package.source]
+type = "git"
+url = "https://github.com/mitodl/open-learning-ai-tutor.git"
+reference = "ab/truncate-conversation"
+resolved_reference = "a90d93866e2aee94935f9b0d45e1aa7d01db46c7"
 
 [[package]]
 name = "openai"
@@ -8807,4 +8811,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "1b24fc408a50c6ca76500e94ad38e60d2270e968e9f0c373b90af1d84462f382"
+content-hash = "f9ebb89fd81fe14d66069f6d3c5060b5ebdeb27865c558a184f9a0d77fad547c"
