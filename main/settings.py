@@ -687,6 +687,9 @@ AI_MAX_TOKEN_BIND = get_int(name="AI_MAX_TOKEN_BIND", default=16384)
 AI_PROMPT_CACHE_DURATION = get_int(
     name="AI_PROMPT_CACHE_DURATION", default=60 * 60 * 24 * 28
 )  # 28 days
+AI_TUTOR_MAX_CONVERSATION_MEMORY = get_int(
+    name="AI_TUTOR_MAX_CONVERSATION_MEMORY", default=6
+)  # 6 back and forth messages prior to the current message
 AI_MAX_MESSAGE_LENGTH = get_int(
     name="AI_MAX_MESSAGE_LENGTH", default=6000
 )  # Maximum length of a message in characters
