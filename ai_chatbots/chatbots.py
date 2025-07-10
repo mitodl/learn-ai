@@ -429,6 +429,7 @@ class SyllabusAgentState(SummaryState):
     course_id: Annotated[list[str], add]
     collection_name: Annotated[list[str], add]
     related_courses: Annotated[list[str], add]
+    exclude_canvas: Annotated[list[bool], add]
 
 
 class SyllabusBot(SummarizingChatbot):
