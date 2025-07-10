@@ -239,12 +239,13 @@ async def test_syllabus_create_chatbot(
         },
     ],
 )
-def test_process_extra_state(request_params):
+def test_process_extra_state(syllabus_consumer, request_params):
     """Test that the process_extra_state function returns the expected values."""
-    consumer = consumers.SyllabusBotHttpConsumer()
-    assert consumer.process_extra_state(request_params) == {
+
+    assert syllabus_consumer.process_extra_state(request_params) == {
         "course_id": [request_params.get("course_id")],
         "collection_name": [request_params.get("collection_name", None)],
+        "exclude_canvas": ["True"],
     }
 
 
@@ -440,6 +441,7 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
         extra_state={
             "course_id": [payload["course_id"]],
             "collection_name": [payload["collection_name"]],
+            "exclude_canvas": ["True"],
         },
     )
     assert await UserChatSession.objects.filter(
