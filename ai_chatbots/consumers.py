@@ -428,11 +428,12 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
+        user = self.scope.get("user", None)
         related_courses = data.get("related_courses", [])
         params = {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
-            "exclude_canvas": [True],
+            "exclude_canvas": [str(not user or user.is_anonymous or not user.is_staff)],
         }
         if related_courses:
             params["related_courses"] = related_courses
@@ -474,7 +475,7 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
         """Process extra state parameters if any"""
         return {
             **super().process_extra_state(data),
-            "exclude_canvas": [False],
+            "exclude_canvas": [str(False)],
         }
 
 

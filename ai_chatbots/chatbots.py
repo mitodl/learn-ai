@@ -429,7 +429,9 @@ class SyllabusAgentState(SummaryState):
     course_id: Annotated[list[str], add]
     collection_name: Annotated[list[str], add]
     related_courses: Annotated[list[str], add]
-    exclude_canvas: Annotated[list[bool], add]
+    # str representation of a boolean value, because the
+    # langgraph JsonPlusSerializer can't handle booleans
+    exclude_canvas: Annotated[Optional[list[str]], add]
 
 
 class SyllabusBot(SummarizingChatbot):

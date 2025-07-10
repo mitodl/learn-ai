@@ -241,6 +241,9 @@ class VideoGPTToolSchema(pydantic.BaseModel):
 
 def _content_file_search(url, params, *, exclude_canvas=True):
     try:
+        # Convert the exclude_canvas parameter to a boolean if it is a string
+        if exclude_canvas and exclude_canvas == "False":
+            exclude_canvas = False
         response = request_with_token(url, params, timeout=30)
         response.raise_for_status()
         raw_results = response.json().get("results", [])
@@ -279,8 +282,7 @@ def search_content_files(
     url = settings.AI_MIT_SYLLABUS_URL
     course_id = state.get("course_id", [None])[-1] or readable_id
     collection_name = state.get("collection_name", [None])[-1]
-    exclude_canvas = state.get("exclude_canvas", [True])[-1]
-    log.info("EXCLUDE_CANVAS? %s", exclude_canvas)
+    exclude_canvas = state.get("exclude_canvas", ["True"])[-1]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -288,7 +290,6 @@ def search_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
-    log.info("Searching MIT API with params: %s", params)
     return _content_file_search(url, params, exclude_canvas=exclude_canvas)
 
 
