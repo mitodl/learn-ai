@@ -210,6 +210,7 @@ class SyllabusAgentStateFactory(factory.Factory):
     messages = [factory.SubFactory(HumanMessageFactory)]
     course_id = [factory.Faker("uuid4")]
     collection_name = [factory.Faker("word")]
+    exclude_canvas = ["True"]
 
     class Meta:
         model = SyllabusAgentState
