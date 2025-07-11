@@ -428,10 +428,12 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
+        user = self.scope.get("user", None)
         related_courses = data.get("related_courses", [])
         params = {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
+            "exclude_canvas": [str(not user or user.is_anonymous or not user.is_staff)],
         }
         if related_courses:
             params["related_courses"] = related_courses
@@ -458,6 +460,23 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             agent=self.ROOM_NAME,
             object_id=serializer.validated_data.get("course_id"),
         )
+
+
+class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
+    """
+    Async HTTP consumer for the Canvas syllabus bot.
+    Inherits from SyllabusBotHttpConsumer to reuse the logic.
+    """
+
+    ROOM_NAME = "CanvasSyllabusBot"
+    throttle_scope = "canvas_syllabus_bot"
+
+    def process_extra_state(self, data: dict) -> dict:
+        """Process extra state parameters if any"""
+        return {
+            **super().process_extra_state(data),
+            "exclude_canvas": [str(False)],
+        }
 
 
 class TutorBotHttpConsumer(BaseBotHttpConsumer):
