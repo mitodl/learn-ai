@@ -20,6 +20,17 @@ def mock_get_resources(mocker, search_results):
     )
 
 
+@pytest.fixture
+def mock_get_content_files(mocker, content_chunk_results):
+    """Mock resource requests.get for all tests."""
+    return mocker.patch(
+        "ai_chatbots.tools.requests.get",
+        return_value=mocker.Mock(
+            json=mocker.Mock(return_value=content_chunk_results), status_code=200
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "params",
     [
@@ -112,14 +123,14 @@ def test_request_exception(mocker):
 @pytest.mark.parametrize("no_collection_name", [True, False])
 def test_search_content_files(  # noqa: PLR0913
     settings,
-    mock_get_resources,
+    mock_get_content_files,
     syllabus_agent_state,
-    search_results,
+    content_chunk_results,
     search_url,
     limit,
     no_collection_name,
 ):
-    """Test that the search_courses tool returns expected results w/expected params."""
+    """Test that the search_content_files tool returns expected results w/expected params."""
     settings.AI_MIT_SYLLABUS_URL = search_url
     settings.AI_MIT_CONTENT_SEARCH_LIMIT = limit
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
@@ -136,10 +147,35 @@ def test_search_content_files(  # noqa: PLR0913
     results = json.loads(
         search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
     )
-    mock_get_resources.assert_called_once_with(
+    mock_get_content_files.assert_called_once_with(
         search_url,
         params=expected_params,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
-    assert len(results["results"]) == len(search_results["results"])
+    assert len(results["results"]) == len(content_chunk_results["results"])
+
+
+@pytest.mark.parametrize("exclude_canvas", [True, False])
+def test_search_canvas_content_files(
+    settings, mocker, syllabus_agent_state, content_chunk_results, exclude_canvas
+):
+    """Test that search_content_files returns canvas results only if exclude_canvas is False."""
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
+    for result in content_chunk_results["results"]:
+        result["platform"]["code"] = "canvas"
+    mocker.patch(
+        "ai_chatbots.tools.requests.get",
+        return_value=mocker.Mock(
+            json=mocker.Mock(return_value=content_chunk_results), status_code=200
+        ),
+    )
+    results = json.loads(
+        search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
+    )
+
+    assert len(results["results"]) == (
+        len(content_chunk_results["results"]) if not exclude_canvas else 0
+    )

@@ -239,13 +239,28 @@ async def test_syllabus_create_chatbot(
         },
     ],
 )
-def test_process_extra_state(syllabus_consumer, request_params):
+def test_syllabus_process_extra_state(syllabus_consumer, request_params):
     """Test that the process_extra_state function returns the expected values."""
 
     assert syllabus_consumer.process_extra_state(request_params) == {
         "course_id": [request_params.get("course_id")],
         "collection_name": [request_params.get("collection_name", None)],
         "exclude_canvas": ["True"],
+    }
+
+
+def test_canvas_process_extra_state(syllabus_consumer, async_user):
+    """Test that the canvas syllabus process_extra_state function returns False for exclude_canvas."""
+    consumer = consumers.CanvasSyllabusBotHttpConsumer()
+    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_syllabus_channel"
+
+    assert consumer.process_extra_state(
+        {"message": "hello", "course_id": "MITx+6.00.1x"}
+    ) == {
+        "course_id": ["MITx+6.00.1x"],
+        "collection_name": [None],
+        "exclude_canvas": ["False"],
     }
 
 
