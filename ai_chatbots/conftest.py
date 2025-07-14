@@ -108,6 +108,7 @@ def syllabus_agent_state():
         ],
         course_id=["MITx+10.00.2x", "MITx+6.00.1x"],
         collection_name=[None, "vector512"],
+        exclude_canvas=["True", "True"],
     )
 
 
