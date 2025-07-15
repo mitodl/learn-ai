@@ -1,6 +1,24 @@
 Release Notes
 =============
 
+Version 0.11.0
+--------------
+
+- New Canvas-specific syllabus bot endpoint (#238)
+- fix(deps): update dependency uvicorn to ^0.35.0 (#247)
+- fix(deps): update dependency starlette to v0.47.1 (#246)
+- fix(deps): update dependency ruff to v0.12.3 (#245)
+- chore(deps): update node.js to v22.17.0 (#244)
+- chore(deps): update nginx docker tag to v1.29.0 (#243)
+- fix(deps): update dependency next to v15.3.5 (#242)
+- fix(deps): update dependency langmem to ^0.0.28 (#241)
+- chore(deps): update redis docker tag to v7.4.5 (#240)
+- chore(deps): update dependency eslint-config-next to v15.3.5 (#239)
+- update open-learning-ai-tutor (#236)
+- fix(deps): update django-health-check digest to 5267d8f (#225)
+- fix(deps): update python docker tag to v3.13.5 (#231)
+- Remove pytz from unit test (#58)
+
 Version 0.10.2 (Released July 09, 2025)
 --------------
 
