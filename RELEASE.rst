@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.11.0
+Version 0.11.0 (Released July 15, 2025)
 --------------
 
 - New Canvas-specific syllabus bot endpoint (#238)
