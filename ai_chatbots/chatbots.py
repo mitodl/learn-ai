@@ -482,8 +482,10 @@ class SyllabusBot(SummarizingChatbot):
 
 
 @database_sync_to_async
-def create_tutorbot_output(thread_id, chat_json):
-    return TutorBotOutput.objects.create(thread_id=thread_id, chat_json=chat_json)
+def create_tutorbot_output(thread_id, chat_json, edx_module_id):
+    return TutorBotOutput.objects.create(
+        thread_id=thread_id, chat_json=chat_json, edx_module_id=edx_module_id
+    )
 
 
 @database_sync_to_async
@@ -595,7 +597,9 @@ class TutorBot(BaseChatbot):
             json_output = tutor_output_to_json(
                 new_history, new_intent_history, new_assessment_history, metadata
             )
-            await create_tutorbot_output(self.thread_id, json_output)
+            await create_tutorbot_output(
+                self.thread_id, json_output, self.edx_module_id
+            )
 
             await self.send_posthog_event(
                 message, full_response, await self.get_tool_metadata()
