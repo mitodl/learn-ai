@@ -84,6 +84,7 @@ class TutorBotOutput(models.Model):
 
     thread_id = models.TextField()
     chat_json = models.JSONField()
+    edx_module_id = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return f"{self.thread_id}"

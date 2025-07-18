@@ -654,6 +654,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
     assert history.chat_json == tutor_output_to_json(
         new_history, intents, assessment_history, metadata
     )
+    assert history.edx_module_id == "block1"
     mock_posthog.Posthog.return_value.capture.assert_called_once_with(
         "anonymous",
         event="TUTOR_JOB",
