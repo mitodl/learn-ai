@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.11.1
+--------------
+
+- add edx_module_id to tutorbot output (#251)
+- truncate conversation (#237)
+
 Version 0.11.0 (Released July 15, 2025)
 --------------
 
