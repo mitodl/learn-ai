@@ -149,6 +149,44 @@ services:
       - ./config/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml
       - ./config/apisix/debug.yaml:/usr/local/apisix/conf/debug.yaml
 
+  canvasmcp:
+    build:
+      context: https://github.com/DMontgomery40/mcp-canvas-lms.git
+    env_file:
+      - path: env/shared.env
+      - path: env/shared.local.env
+        required: false
+      - path: env/backend.env
+      - path: env/backend.local.env
+        required: false
+      # DEPRECATED: legacy .env file at the repo root
+      - path: .env
+        required: false
+    environment:
+      CANVAS_DOMAIN: ${CANVAS_DOMAIN}
+      CANVAS_API_TOKEN: ${CANVAS_API_TOKEN}
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  canvasmcp-gateway:
+    image: node:20
+    working_dir: /app
+    command: >
+      sh -c "npm install express &&
+      node canvas-mcp-bridge.js"
+    ports:
+      - "3001:3000"
+    environment:
+      CANVAS_DOMAIN: ${CANVAS_DOMAIN}
+      CANVAS_API_TOKEN: ${CANVAS_API_TOKEN}
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./canvas-mcp-bridge.js:/app/canvas-mcp-bridge.js:ro
+    restart: unless-stopped
+
 volumes:
   pgdata:
   # note: these are here instead of docker-compose.apps.yml because `extends` doesn't pull them in

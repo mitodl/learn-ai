@@ -625,6 +625,9 @@ CHANNEL_LAYERS = {
 }
 
 # AI settings
+AI_CANVAS_MCP_URL = get_string(
+    "AI_CANVAS_MCP_URL", "http://canvasmcp-gateway:3000/api/canvas/mcp/"
+)
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
 AI_MIT_SEARCH_VECTOR_URL = get_string(
     name="AI_MIT_SEARCH_VECTOR_URL",

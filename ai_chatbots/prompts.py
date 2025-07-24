@@ -98,11 +98,16 @@ tool messages and any previous summaries in this new summary.
 """
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
+PROMPT_CANVAS_STUDENT = (
+    """You are an assistant named Tim, helping students with canvas courses."""
+)
+
 
 CHATBOT_PROMPT_MAPPING = {
     "recommendation": PROMPT_RECOMMENDATION,
     "syllabus": PROMPT_SYLLABUS,
     "video_gpt": PROMPT_VIDEO_GPT,
+    "canvas_student": PROMPT_CANVAS_STUDENT,
 }
 
 

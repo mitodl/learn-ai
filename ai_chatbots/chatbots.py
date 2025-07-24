@@ -9,6 +9,7 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
+from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
@@ -19,6 +20,7 @@ from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tools.base import BaseTool
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
@@ -709,3 +711,61 @@ class VideoGPTBot(SummarizingChatbot):
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+
+class CanvasStudentAgentState(SummaryState):
+    """
+    State for the Canvas student bot. Passes relevant information
+    to the associated tool function.
+    """
+
+    user_id: Annotated[str, add]
+    course_id: Annotated[Optional[str], add]
+    assignment_id: Annotated[Optional[str], add]
+
+
+class CanvasStudentBot(BaseChatbot):
+    """
+    Chatbot that assists with Canvas student questions
+    """
+
+    PROMPT_TEMPLATE = "canvas_student"
+    TASK_NAME = "CANVAS_STUDENT_TASK"
+    JOB_ID = "CANVAS_STUDENT_JOB"
+
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        checkpointer: Optional[BaseCheckpointSaver] = None,
+        *,
+        name: str = "MIT Open Learning Canvas Student Chatbot",
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        instructions: Optional[str] = None,
+        thread_id: Optional[str] = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            checkpointer=checkpointer,
+            model=model or settings.AI_DEFAULT_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
+        )
+        self.agent = self.create_agent_graph()
+
+    def create_tools(self) -> list[BaseTool]:
+        """Create tools required by the agent"""
+        client = MultiServerMCPClient(
+            {
+                "canvas": {
+                    "url": settings.AI_CANVAS_MCP_URL,
+                    "transport": "streamable_http",
+                }
+            }
+        )
+        return async_to_sync(client.get_tools)()
+
+    async def get_tool_metadata(self):
+        return {}

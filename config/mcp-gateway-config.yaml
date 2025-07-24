@@ -1,0 +1,10 @@
+hostname: "0.0.0.0"
+port: 3000
+
+debug:
+  level: "debug"
+
+servers:
+  canvas:
+    command: "npx"
+    args: ["-y", "canvas-mcp-server"]

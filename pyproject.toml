@@ -68,6 +68,7 @@ uvicorn = {extras = ["standard"], version = "^0.34.0"}
 langmem = "^0.0.27"
 beautifulsoup4 = "^4.13.4"
 open-learning-ai-tutor = "^0.2.5"
+langchain-mcp-adapters = "^0.1.9"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"
