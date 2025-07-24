@@ -719,12 +719,12 @@ class CanvasStudentAgentState(SummaryState):
     to the associated tool function.
     """
 
-    user_id: Annotated[str, add]
-    course_id: Annotated[Optional[str], add]
-    assignment_id: Annotated[Optional[str], add]
+    user_id: int
+    course_id: int
+    assignment_id: int
 
 
-class CanvasStudentBot(BaseChatbot):
+class CanvasStudentBot(SummarizingChatbot):
     """
     Chatbot that assists with Canvas student questions
     """
@@ -732,6 +732,7 @@ class CanvasStudentBot(BaseChatbot):
     PROMPT_TEMPLATE = "canvas_student"
     TASK_NAME = "CANVAS_STUDENT_TASK"
     JOB_ID = "CANVAS_STUDENT_JOB"
+    STATE_CLASS = CanvasStudentAgentState
 
     def __init__(  # noqa: PLR0913
         self,

@@ -98,9 +98,11 @@ tool messages and any previous summaries in this new summary.
 """
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
-PROMPT_CANVAS_STUDENT = (
-    """You are an assistant named Tim, helping students with canvas courses."""
-)
+PROMPT_CANVAS_STUDENT = """You are an assistant named Tim, helping students with canvas
+courses. Always use the supplied values in the agent stateto determine parameters for
+the MCP tool functions (course_id, user_id, assignment_id, etc.).  Never use any values
+not supplied in the state.
+"""
 
 
 CHATBOT_PROMPT_MAPPING = {
