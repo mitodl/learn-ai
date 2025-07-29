@@ -1977,6 +1977,172 @@ export class LlmModelsApi extends BaseAPI {
 }
 
 /**
+ * ProblemSetListApi - axios parameter creator
+ * @export
+ */
+export const ProblemSetListApiAxiosParamCreator = function (
+  configuration?: Configuration,
+) {
+  return {
+    /**
+     * API view to get a list of problem sets for a given course.
+     * @param {string} run_readable_id run_readable_id of the course run
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    problemSetListRetrieve: async (
+      run_readable_id: string,
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      // verify required parameter 'run_readable_id' is not null or undefined
+      assertParamExists(
+        "problemSetListRetrieve",
+        "run_readable_id",
+        run_readable_id,
+      )
+      const localVarPath = `/api/v0/problem_set_list/`.replace(
+        `{${"run_readable_id"}}`,
+        encodeURIComponent(String(run_readable_id)),
+      )
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+  }
+}
+
+/**
+ * ProblemSetListApi - functional programming interface
+ * @export
+ */
+export const ProblemSetListApiFp = function (configuration?: Configuration) {
+  const localVarAxiosParamCreator =
+    ProblemSetListApiAxiosParamCreator(configuration)
+  return {
+    /**
+     * API view to get a list of problem sets for a given course.
+     * @param {string} run_readable_id run_readable_id of the course run
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async problemSetListRetrieve(
+      run_readable_id: string,
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>
+    > {
+      const localVarAxiosArgs =
+        await localVarAxiosParamCreator.problemSetListRetrieve(
+          run_readable_id,
+          options,
+        )
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["ProblemSetListApi.problemSetListRetrieve"]?.[index]
+          ?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+  }
+}
+
+/**
+ * ProblemSetListApi - factory interface
+ * @export
+ */
+export const ProblemSetListApiFactory = function (
+  configuration?: Configuration,
+  basePath?: string,
+  axios?: AxiosInstance,
+) {
+  const localVarFp = ProblemSetListApiFp(configuration)
+  return {
+    /**
+     * API view to get a list of problem sets for a given course.
+     * @param {ProblemSetListApiProblemSetListRetrieveRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    problemSetListRetrieve(
+      requestParameters: ProblemSetListApiProblemSetListRetrieveRequest,
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<void> {
+      return localVarFp
+        .problemSetListRetrieve(requestParameters.run_readable_id, options)
+        .then((request) => request(axios, basePath))
+    },
+  }
+}
+
+/**
+ * Request parameters for problemSetListRetrieve operation in ProblemSetListApi.
+ * @export
+ * @interface ProblemSetListApiProblemSetListRetrieveRequest
+ */
+export interface ProblemSetListApiProblemSetListRetrieveRequest {
+  /**
+   * run_readable_id of the course run
+   * @type {string}
+   * @memberof ProblemSetListApiProblemSetListRetrieve
+   */
+  readonly run_readable_id: string
+}
+
+/**
+ * ProblemSetListApi - object-oriented interface
+ * @export
+ * @class ProblemSetListApi
+ * @extends {BaseAPI}
+ */
+export class ProblemSetListApi extends BaseAPI {
+  /**
+   * API view to get a list of problem sets for a given course.
+   * @param {ProblemSetListApiProblemSetListRetrieveRequest} requestParameters Request parameters.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof ProblemSetListApi
+   */
+  public problemSetListRetrieve(
+    requestParameters: ProblemSetListApiProblemSetListRetrieveRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
+    return ProblemSetListApiFp(this.configuration)
+      .problemSetListRetrieve(requestParameters.run_readable_id, options)
+      .then((request) => request(this.axios, this.basePath))
+  }
+}
+
+/**
  * PromptsApi - axios parameter creator
  * @export
  */

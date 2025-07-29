@@ -115,6 +115,45 @@ class LLMModelViewSet(ReadOnlyModelViewSet):
 @extend_schema(
     parameters=[
         OpenApiParameter(
+            name="run_readable_id",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description="run_readable_id of the course run",
+        )
+    ],
+    responses={
+        200: OpenApiResponse(description="List of problem sets"),
+        500: OpenApiResponse(description="Error retrieving problem sets"),
+    },
+)
+class ProblemSetList(ApiView):
+    """
+    API view to get a list of problem sets for a given course.
+    """
+
+    http_method_names = ["get"]
+    permission_classes = (AllowAny,)
+
+    def get(self, request, *args, **kwargs):  # noqa: ARG002
+        run_readable_id = request.query_params.get("run_readable_id")
+        if not run_readable_id:
+            return Response(
+                {"error": "run_readable_id parameter is required."}, status=400
+            )
+
+        url = f"{settings.PROBLEM_SET_URL}/{run_readable_id}"
+        headers = {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            return Response(response.json(), status=200)
+        except requests.RequestException:
+            return Response({"error": "Something went wrong"}, status=500)
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
             name="edx_module_id",
             type=OpenApiTypes.STR,
             location=OpenApiParameter.PATH,

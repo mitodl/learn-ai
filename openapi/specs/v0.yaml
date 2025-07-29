@@ -228,6 +228,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/LLMModel'
           description: ''
+  /api/v0/problem_set_list/:
+    get:
+      operationId: problem_set_list_retrieve
+      description: API view to get a list of problem sets for a given course.
+      parameters:
+      - in: path
+        name: run_readable_id
+        schema:
+          type: string
+        description: run_readable_id of the course run
+        required: true
+      tags:
+      - problem_set_list
+      security:
+      - {}
+      responses:
+        '200':
+          description: List of problem sets
+        '500':
+          description: Error retrieving problem sets
   /api/v0/prompts/:
     get:
       operationId: prompts_list
