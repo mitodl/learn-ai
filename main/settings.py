@@ -654,6 +654,10 @@ AI_MIT_CONTENTFILE_URL = get_string(
     name="AI_MIT_CONTENTFILE_URL",
     default="https://api.learn.mit.edu/api/v1/contentfiles/",
 )
+AI_MIT_CONTENTFILE_URL = get_string(
+    name="AI_MIT_CONTENTFILE_URL",
+    default="https://api.rc.learn.mit.edu/api/v0/tutor/problems/",
+)
 LEARN_ACCESS_TOKEN = get_string(
     name="LEARN_ACCESS_TOKEN",
     default="",

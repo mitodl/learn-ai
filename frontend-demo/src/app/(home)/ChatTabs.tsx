@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation"
 import RecommendationContent from "./RecommendationContent"
 import SyllabusContent from "./SyllabusContent"
 import AssessmentContent from "./AssessmentContent"
+import CanvasAssessmentContent from "./CanvasAssessmentContent"
 import VideoContent from "./VideoContent"
 import { useEffect, useState } from "react"
 
@@ -15,6 +16,7 @@ export enum ChatTab {
   SyllabusGPT = "SyllabusGPT",
   VideoGPT = "VideoGPT",
   AssessmentGPT = "AssessmentGPT",
+  CanvasAssessmentGPT = "CanvasAssessmentGPT",
 }
 
 const ChatTabs = () => {
@@ -43,6 +45,7 @@ const ChatTabs = () => {
           <Tab label="SyllabusGPT" value={ChatTab.SyllabusGPT} />
           <Tab label="VideoGPT" value={ChatTab.VideoGPT} />
           <Tab label="AssessmentGPT" value={ChatTab.AssessmentGPT} />
+          <Tab label="CanvasAssessmentGPT" value={ChatTab.CanvasAssessmentGPT} />
         </TabList>
       </Box>
       <TabPanel value={ChatTab.RecommendationGPT}>
@@ -56,6 +59,9 @@ const ChatTabs = () => {
       </TabPanel>
       <TabPanel value={ChatTab.AssessmentGPT}>
         <AssessmentContent />
+      </TabPanel>
+      <TabPanel value={ChatTab.CanvasAssessmentGPT}>
+        <CanvasAssessmentContent />
       </TabPanel>
     </TabContext>
   )
