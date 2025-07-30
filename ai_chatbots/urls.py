@@ -27,6 +27,11 @@ v0_urls = [
         views.GetTranscriptBlockId.as_view(),
         name="get_transcript_edx_module_id",
     ),
+    path(
+        r"get_problem_set_list/",
+        views.GetProblemSetList.as_view(),
+        name="get_problem_set_list",
+    ),
 ]
 
 urlpatterns = [
