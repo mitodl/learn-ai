@@ -112,6 +112,31 @@ class LLMModelViewSet(ReadOnlyModelViewSet):
     ordering_fields = ["provider", "name", "litellm_id"]
 
 
+class GetProblemSetList(ApiView):
+    """
+    API view to get a list of problem sets for a given course.
+    """
+
+    http_method_names = ["get"]
+    permission_classes = (AllowAny,)
+
+    def get(self, request, *args, **kwargs):  # noqa: ARG002
+        run_readable_id = request.query_params.get("run_readable_id")
+        if not run_readable_id:
+            return Response(
+                {"error": "run_readable_id parameter is required."}, status=400
+            )
+
+        url = f"{settings.PROBLEM_SET_URL}/{run_readable_id}"
+        headers = {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            return Response(response.json(), status=200)
+        except requests.RequestException as e:
+            return Response({"error": str(e)}, status=500)
+
+
 @extend_schema(
     parameters=[
         OpenApiParameter(
