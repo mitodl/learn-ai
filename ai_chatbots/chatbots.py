@@ -24,6 +24,14 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
+from openai import BadRequestError
+from typing_extensions import TypedDict
+
+from ai_chatbots import tools
+from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
+from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
+from ai_chatbots.utils import get_django_cache, request_with_token
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
@@ -33,14 +41,6 @@ from open_learning_ai_tutor.utils import (
     json_to_messages,
     tutor_output_to_json,
 )
-from openai import BadRequestError
-from typing_extensions import TypedDict
-
-from ai_chatbots import tools
-from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
-from ai_chatbots.models import TutorBotOutput
-from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
-from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
 
@@ -484,7 +484,7 @@ class SyllabusBot(SummarizingChatbot):
 @database_sync_to_async
 def create_tutorbot_output(thread_id, chat_json, edx_module_id):
     return TutorBotOutput.objects.create(
-        thread_id=thread_id, chat_json=chat_json, edx_module_id=edx_module_id
+        thread_id=thread_id, chat_json=chat_json, edx_module_id=edx_module_id or ""
     )
 
 
@@ -513,6 +513,8 @@ class TutorBot(BaseChatbot):
         thread_id: Optional[str] = None,
         block_siblings: Optional[list[str]] = None,
         edx_module_id: Optional[str] = None,
+        run_readable_id: Optional[str] = None,
+        problem_set_title: Optional[str] = None,
     ):
         super().__init__(
             user_id,
@@ -525,9 +527,20 @@ class TutorBot(BaseChatbot):
 
         self.edx_module_id = edx_module_id
         self.block_siblings = block_siblings
-        self.problem, self.problem_set = get_problem_from_edx_block(
-            edx_module_id, block_siblings
-        )
+        self.run_readable_id = run_readable_id
+        self.problem_set_title = problem_set_title
+
+        if not self.edx_module_id:
+            self.problem_set = get_canvas_problem_set(
+                self.run_readable_id, self.problem_set_title
+            )
+
+            self.problem = ""
+
+        else:
+            self.problem, self.problem_set = get_problem_from_edx_block(
+                edx_module_id, block_siblings
+            )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
@@ -537,6 +550,8 @@ class TutorBot(BaseChatbot):
                 "block_siblings": self.block_siblings,
                 "problem": self.problem,
                 "problem_set": self.problem_set,
+                "problem_set_title": self.problem_set_title,
+                "run_readable_id": self.run_readable_id,
             }
         )
 
@@ -639,6 +654,28 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
     for sibling_module_id in block_siblings:
         problem_set += get_matching_content(response, sibling_module_id)
     return problem, problem_set
+
+
+def get_canvas_problem_set(run_readable_id: str, problem_set_title: str) -> str:
+    """
+    Make an call to the learn tutor probalem api to get the problem set and solution
+    using run_readable_id and problem_set_title
+
+    Args:
+        run_readable_id: The readable id of the run
+        problem_set_title: The title of the problem set
+
+    Returns:
+        problem_set: The problem set xml
+    """
+
+    api_url = f"{settings.PROBLEM_SET_URL}{run_readable_id}/{problem_set_title}/"
+
+    response = request_with_token(api_url, {}, timeout=10)
+
+    response = response.json()
+
+    return response
 
 
 def get_matching_content(api_results: json, edx_module_id: str):
