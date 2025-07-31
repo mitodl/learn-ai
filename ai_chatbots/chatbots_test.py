@@ -881,8 +881,24 @@ async def test_send_posthog_event_exception_handling(
     mock_log.assert_called_once_with("Error sending posthog event")
 
 
+@pytest.mark.parametrize(
+    ("model_name", "expected_provider", "expected_model"),
+    [
+        ("openai/gpt-4", "openai", "gpt-4"),
+        ("anthropic/claude-3", "anthropic", "claude-3"),
+        (
+            "together_ai/meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "together_ai/meta-llama",
+            "Llama-4-Scout-17B-16E-Instruct",
+        ),
+    ],
+)
 async def test_send_posthog_event_model_parsing(
-    posthog_settings, mocker, mock_checkpointer
+    mocker,
+    mock_checkpointer,
+    model_name,
+    expected_provider,
+    expected_model,
 ):
     """Test that send_posthog_event correctly parses different model formats"""
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
@@ -892,95 +908,69 @@ async def test_send_posthog_event_model_parsing(
     mock_messages_to_posthog.return_value = [{"role": "assistant", "content": "test"}]
     mock_token_counter.return_value = 5
 
-    test_cases = [
-        ("openai/gpt-4", "openai", "gpt-4"),
-        ("anthropic/claude-3", "anthropic", "claude-3"),
-        (
-            "together_ai/meta-llama/Llama-4-Scout-17B-16E-Instruct",
-            "together_ai/meta-llama",
-            "Llama-4-Scout-17B-16E-Instruct",
-        ),
-    ]
+    chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+    chatbot.model = model_name
 
-    for model_name, expected_provider, expected_model in test_cases:
-        chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
-        chatbot.model = model_name
+    await chatbot.send_posthog_event(
+        "test", "response", {}, [AIMessage(content="test")]
+    )
 
-        await chatbot.send_posthog_event(
-            "test", "response", {}, [AIMessage(content="test")]
-        )
+    hog_client = mock_posthog.Posthog.return_value
+    gen_call = hog_client.capture.call_args_list[-1]  # Get the latest generation call
+    gen_properties = gen_call[1]["properties"]
 
-        hog_client = mock_posthog.Posthog.return_value
-        gen_call = hog_client.capture.call_args_list[
-            -1
-        ]  # Get the latest generation call
-        gen_properties = gen_call[1]["properties"]
-
-        assert gen_properties["$ai_provider"] == expected_provider
-        assert gen_properties["$ai_model"] == expected_model
+    assert gen_properties["$ai_provider"] == expected_provider
+    assert gen_properties["$ai_model"] == expected_model
 
 
+@pytest.mark.parametrize(
+    "all_messages",
+    [
+        # Empty messages
+        [],
+        # Single message (output only)
+        [{"role": "assistant", "content": "response"}],
+        # Multiple messages (input + output)
+        [
+            {"role": "user", "content": "question"},
+            {"role": "assistant", "content": "response"},
+        ],
+        # Complex conversation
+        [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "q2"},
+            {"role": "assistant", "content": "a2"},
+        ],
+    ],
+)
 async def test_send_posthog_event_message_processing(
-    posthog_settings, mocker, mock_checkpointer
+    posthog_settings,
+    mocker,
+    mock_checkpointer,
+    all_messages,
 ):
     """Test that send_posthog_event correctly processes input and output messages"""
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
     mock_messages_to_posthog = mocker.patch("ai_chatbots.chatbots.messages_to_posthog")
     mock_token_counter = mocker.patch("ai_chatbots.chatbots.litellm.token_counter")
 
-    # Setup different message scenarios
-    test_cases = [
-        # Empty messages
-        ([], [], []),
-        # Single message (output only)
-        (
-            [{"role": "assistant", "content": "response"}],
-            [],
-            [{"role": "assistant", "content": "response"}],
-        ),
-        # Multiple messages (input + output)
-        (
-            [
-                {"role": "user", "content": "question"},
-                {"role": "assistant", "content": "response"},
-            ],
-            [{"role": "user", "content": "question"}],
-            [{"role": "assistant", "content": "response"}],
-        ),
-        # Complex conversation
-        (
-            [
-                {"role": "user", "content": "q1"},
-                {"role": "assistant", "content": "a1"},
-                {"role": "user", "content": "q2"},
-                {"role": "assistant", "content": "a2"},
-            ],
-            [
-                {"role": "user", "content": "q1"},
-                {"role": "assistant", "content": "a1"},
-                {"role": "user", "content": "q2"},
-            ],
-            [{"role": "assistant", "content": "a2"}],
-        ),
-    ]
-
     mock_token_counter.return_value = 10
+    mock_messages_to_posthog.return_value = all_messages
 
-    for all_messages, expected_input, expected_output in test_cases:
-        mock_messages_to_posthog.return_value = all_messages
+    chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
 
-        chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+    await chatbot.send_posthog_event("test", "response", {}, [])
 
-        await chatbot.send_posthog_event("test", "response", {}, [])
+    hog_client = mock_posthog.Posthog.return_value
+    gen_call = hog_client.capture.call_args_list[-1]  # Get the latest generation call
+    gen_properties = gen_call[1]["properties"]
 
-        hog_client = mock_posthog.Posthog.return_value
-        gen_call = hog_client.capture.call_args_list[
-            -1
-        ]  # Get the latest generation call
-        gen_properties = gen_call[1]["properties"]
+    expected_input = all_messages[:-1]
+    expected_output = all_messages[-1:]
 
-        assert gen_properties["$ai_input"] == expected_input
-        assert gen_properties["$ai_output_choices"] == expected_output
+    assert gen_properties["$ai_input"] == expected_input
+    assert gen_properties["$ai_output_choices"] == expected_output
 
 
 async def test_send_posthog_event_token_counting(
