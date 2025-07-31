@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useMemo, useEffect } from "react"
 import React from "react"
 import TextField from "@mui/material/TextField"
-import { useFormik, Field } from "formik"
+import { useFormik } from "formik"
 import MenuItem from "@mui/material/MenuItem"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
@@ -22,19 +22,13 @@ type CanvasProblemSelectionFormProps = {
   defaultRun: string
   problemSetList: string[] | []
   onChange: (values: { run: string; problem_set_title: string }) => void
-  onReset: () => void
 }
 
 const CanvasProblemSelectionForm: React.FC<CanvasProblemSelectionFormProps> = ({
-  selectedRun,
-  selectedProblemSet,
   defaultRun,
   problemSetList,
   onChange,
-  onReset,
 }) => {
-  const [editing, setEditing] = React.useState(false)
-
   const formik = useFormik({
     enableReinitialize: true,
     initialValues: {
@@ -42,7 +36,6 @@ const CanvasProblemSelectionForm: React.FC<CanvasProblemSelectionFormProps> = ({
       problem_set_title: problemSetList[0] || "",
     },
     onSubmit: (values) => {
-      setEditing(false)
       onChange(values)
     },
     validateOnChange: false,
@@ -116,19 +109,17 @@ const CanvasAssessmentContent = () => {
     enabled: !!settings.run,
   })
 
-  const { problemSetList: problemSetList, error: problemSetListError } =
-    useMemo(() => {
-      if (problemSetListResult.isLoading)
-        return { problemSetList: [], error: null }
-      if (problemSetListResult.data.error) {
-        return { problemSetList: [], error: problemSetListResult.data.error }
-      }
+  const { problemSetList: problemSetList } = useMemo(() => {
+    if (problemSetListResult.isLoading) return { problemSetList: [] }
+    if (problemSetListResult.data.error) {
+      return { problemSetList: [] }
+    }
 
-      return {
-        problemSetList: problemSetListResult.data.problem_set_titles,
-        error: null,
-      }
-    }, [settings.run, problemSetListResult])
+    return {
+      problemSetList: problemSetListResult.data.problem_set_titles,
+      error: null,
+    }
+  }, [settings.run, problemSetListResult])
 
   useEffect(() => {
     // Set problem_set_title to first item or "" whenever problemSetList changes
@@ -177,12 +168,6 @@ const CanvasAssessmentContent = () => {
               setSettings({
                 problem_set_title: values.problem_set_title,
                 run: values.run,
-              })
-            }}
-            onReset={() => {
-              setSettings({
-                run: null,
-                problem_set_title: null,
               })
             }}
           />
