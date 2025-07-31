@@ -1069,7 +1069,7 @@ def test_messages_to_posthog():
     ]
     expected_result = [
         {
-            "role": "user",
+            "role": "human",
             "content": "Hello",
         },
         {
@@ -1084,6 +1084,6 @@ def test_messages_to_posthog():
             "role": "system",
             "content": "System message",
         },
-        {"role": "unknown", "content": ""},
+        {"role": "remove", "content": ""},
     ]
     assert messages_to_posthog(messages) == expected_result
