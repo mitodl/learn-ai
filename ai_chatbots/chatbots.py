@@ -239,7 +239,6 @@ class BaseChatbot(ABC):
                         ),
                     },
                 )
-                log.info("SENT EVENT")
             except:  # noqa: E722
                 log.exception("Error sending posthog event")
 
