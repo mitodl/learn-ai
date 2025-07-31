@@ -251,15 +251,12 @@ async def test_get_completion(
     if debug:
         assert '<!-- {"metadata"' in results
     assert "".join([value.decode() for value in expected_return_value]) in results
-    mock_posthog.Posthog.return_value.capture.assert_called_once_with(
-        "anonymous",
-        event="RECOMMENDATION_JOB",
-        properties={
-            "question": user_msg,
-            "answer": ANY,
-            "metadata": "{}",
-            "user": "anonymous",
-        },
+    assert mock_posthog.Posthog.return_value.capture.call_count == 2
+    assert (
+        mock_posthog.Posthog.return_value.capture.call_args_list[0][1]["properties"][
+            "botName"
+        ]
+        == chatbot.JOB_ID
     )
 
 
@@ -402,34 +399,26 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
             }
         ],
     }
-    mock_state_history = mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
-        return_value=MockAsyncIterator(
-            [
-                AsyncMock(
-                    values={
-                        "messages": [
-                            SystemMessageFactory.create(),
-                            ToolMessageFactory.create(),
-                            HumanMessageFactory.create(),
-                            ToolMessageFactory.create(
-                                tool_call="search_contentfiles",
-                                tool_args={"q": "main topics"},
-                                content=json.dumps(mock_tool_content),
-                            ),
-                        ],
-                        "search_url": [
-                            "https://test.mit.edu/search0",
-                            "https://test.mit.edu/search1",
-                        ],
-                    }
-                )
-            ]
-        ),
+    mock_state_history = AsyncMock(
+        values={
+            "messages": [
+                SystemMessageFactory.create(),
+                ToolMessageFactory.create(),
+                HumanMessageFactory.create(),
+                ToolMessageFactory.create(
+                    tool_call="search_contentfiles",
+                    tool_args={"q": "main topics"},
+                    content=json.dumps(mock_tool_content),
+                ),
+            ],
+            "search_url": [
+                "https://test.mit.edu/search0",
+                "https://test.mit.edu/search1",
+            ],
+        }
     )
 
-    metadata = await chatbot.get_tool_metadata()
-    mock_state_history.assert_called_once()
+    metadata = await chatbot.get_tool_metadata(mock_state_history)
     assert metadata == json.dumps(
         {
             "metadata": {
@@ -449,46 +438,34 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
 async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns an empty dict JSON string"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
-    mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
-        return_value=MockAsyncIterator(
-            [
-                AsyncMock(
-                    values={
-                        "messages": [
-                            HumanMessageFactory.create(content="hello"),
-                        ]
-                    }
-                )
+    mock_history = AsyncMock(
+        values={
+            "messages": [
+                HumanMessageFactory.create(content="hello"),
             ]
-        ),
+        }
     )
-    metadata = await chatbot.get_tool_metadata()
+
+    metadata = await chatbot.get_tool_metadata(mock_history)
     assert metadata == "{}"
 
 
 async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected error response"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
-    mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
-        return_value=MockAsyncIterator(
-            [
-                AsyncMock(
-                    values={
-                        "messages": [
-                            ToolMessageFactory.create(
-                                tool_call="search_contentfiles",
-                                tool_args={"q": "main topics"},
-                                content="Could not connect to api",
-                            )
-                        ]
-                    }
+    mock_history = AsyncMock(
+        values={
+            "messages": [
+                ToolMessageFactory.create(
+                    tool_call="search_contentfiles",
+                    tool_args={"q": "main topics"},
+                    content="Could not connect to api",
                 )
             ]
-        ),
+        }
     )
-    metadata = await chatbot.get_tool_metadata()
+
+    metadata = await chatbot.get_tool_metadata(mock_history)
 
     assert metadata == json.dumps(
         {"error": "Error parsing tool metadata", "content": "Could not connect to api"}
@@ -655,10 +632,11 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
         new_history, intents, assessment_history, metadata
     )
     assert history.edx_module_id == "block1"
-    mock_posthog.Posthog.return_value.capture.assert_called_once_with(
+    mock_posthog.Posthog.return_value.capture.assert_any_call(
         "anonymous",
-        event="TUTOR_JOB",
+        event="$ai_generation",
         properties={
+            "botName": chatbot.JOB_ID,
             "question": user_msg,
             "answer": results,
             "metadata": json.dumps(
@@ -673,6 +651,15 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
                 }
             ),
             "user": "anonymous",
+            "distinct_id": "anonymous",
+            "$ai_input": ANY,
+            "$ai_input_tokens": ANY,
+            "$ai_output_choices": ANY,
+            "$ai_output_tokens": ANY,
+            "$ai_trace_id": thread_id,
+            "$ai_span_name": chatbot.JOB_ID,
+            "$ai_model": chatbot.model.split("/")[1],
+            "$ai_provider": chatbot.model.split("/")[0],
         },
     )
 
@@ -812,3 +799,252 @@ async def test_bad_request(mocker, mock_checkpointer):
     async for _ in chatbot.get_completion("hello"):
         chatbot.agent.astream.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
+
+
+async def test_send_posthog_event_success(posthog_settings, mocker, mock_checkpointer):
+    """Test that send_posthog_event sends events successfully when PostHog is configured"""
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
+    mock_messages_to_posthog = mocker.patch("ai_chatbots.chatbots.messages_to_posthog")
+    mock_token_counter = mocker.patch("ai_chatbots.chatbots.litellm.token_counter")
+
+    # Setup test data
+    mock_messages_to_posthog.return_value = [
+        {"role": "user", "content": "test question"},
+        {"role": "assistant", "content": "test response"},
+    ]
+    mock_token_counter.side_effect = [10, 20]  # input_tokens, output_tokens
+
+    chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+    chatbot.model = "openai/gpt-4"
+
+    message = "test question"
+    full_response = "test response"
+    metadata = {"test": "metadata"}
+    messages = [
+        HumanMessage(content="test question"),
+        AIMessage(content="test response"),
+    ]
+
+    # Call the method
+    await chatbot.send_posthog_event(message, full_response, metadata, messages)
+
+    # Verify PostHog client creation
+    mock_posthog.Posthog.assert_called_once_with(
+        posthog_settings.POSTHOG_PROJECT_API_KEY, host=posthog_settings.POSTHOG_API_HOST
+    )
+
+    # Verify messages transformation
+    mock_messages_to_posthog.assert_called_once_with(messages)
+
+    # Verify trace event capture
+    hog_client = mock_posthog.Posthog.return_value
+    trace_call = hog_client.capture.call_args_list[0]
+    assert trace_call[0][0] == "test_user"
+    assert trace_call[1]["event"] == "$ai_trace"
+    trace_properties = trace_call[1]["properties"]
+    assert trace_properties == {
+        "$ai_trace_id": chatbot.thread_id,
+        "$ai_span_name": chatbot.JOB_ID,
+        "botName": chatbot.JOB_ID,
+    }
+
+    # Verify generation event capture
+    gen_call = hog_client.capture.call_args_list[1]
+    assert gen_call[0][0] == "test_user"
+    assert gen_call[1]["event"] == "$ai_generation"
+    gen_properties = gen_call[1]["properties"]
+    assert gen_properties == {
+        "question": message,
+        "answer": full_response,
+        "metadata": metadata,
+        "user": "test_user",
+        "distinct_id": "test_user",
+        "$ai_trace_id": chatbot.thread_id,
+        "$ai_span_name": chatbot.JOB_ID,
+        "botName": chatbot.JOB_ID,
+        "$ai_model": "gpt-4",
+        "$ai_provider": "openai",
+        "$ai_input": [{"role": "user", "content": "test question"}],
+        "$ai_output_choices": [{"role": "assistant", "content": "test response"}],
+        "$ai_input_tokens": 10,
+        "$ai_output_tokens": 20,
+    }
+
+
+async def test_send_posthog_event_disabled(settings, mocker, mock_checkpointer):
+    """Test that send_posthog_event does nothing when PostHog is not configured"""
+    settings.POSTHOG_PROJECT_API_KEY = None
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
+
+    chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+
+    await chatbot.send_posthog_event("test", "response", {}, [])
+
+    # Verify PostHog is not called
+    mock_posthog.Posthog.assert_not_called()
+
+
+async def test_send_posthog_event_exception_handling(
+    posthog_settings, mocker, mock_checkpointer
+):
+    """Test that send_posthog_event handles exceptions gracefully"""
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
+    mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")
+
+    # Make PostHog client creation raise an exception
+    mock_posthog.Posthog.side_effect = Exception("PostHog error")
+
+    chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+
+    # Should not raise an exception
+    await chatbot.send_posthog_event("test", "response", {}, [])
+
+    # Verify exception was logged
+    mock_log.assert_called_once_with("Error sending posthog event")
+
+
+async def test_send_posthog_event_model_parsing(
+    posthog_settings, mocker, mock_checkpointer
+):
+    """Test that send_posthog_event correctly parses different model formats"""
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
+    mock_messages_to_posthog = mocker.patch("ai_chatbots.chatbots.messages_to_posthog")
+    mock_token_counter = mocker.patch("ai_chatbots.chatbots.litellm.token_counter")
+
+    mock_messages_to_posthog.return_value = [{"role": "assistant", "content": "test"}]
+    mock_token_counter.return_value = 5
+
+    test_cases = [
+        ("openai/gpt-4", "openai", "gpt-4"),
+        ("anthropic/claude-3", "anthropic", "claude-3"),
+        (
+            "together_ai/meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "together_ai/meta-llama",
+            "Llama-4-Scout-17B-16E-Instruct",
+        ),
+    ]
+
+    for model_name, expected_provider, expected_model in test_cases:
+        chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+        chatbot.model = model_name
+
+        await chatbot.send_posthog_event(
+            "test", "response", {}, [AIMessage(content="test")]
+        )
+
+        hog_client = mock_posthog.Posthog.return_value
+        gen_call = hog_client.capture.call_args_list[
+            -1
+        ]  # Get the latest generation call
+        gen_properties = gen_call[1]["properties"]
+
+        assert gen_properties["$ai_provider"] == expected_provider
+        assert gen_properties["$ai_model"] == expected_model
+
+
+async def test_send_posthog_event_message_processing(
+    posthog_settings, mocker, mock_checkpointer
+):
+    """Test that send_posthog_event correctly processes input and output messages"""
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
+    mock_messages_to_posthog = mocker.patch("ai_chatbots.chatbots.messages_to_posthog")
+    mock_token_counter = mocker.patch("ai_chatbots.chatbots.litellm.token_counter")
+
+    # Setup different message scenarios
+    test_cases = [
+        # Empty messages
+        ([], [], []),
+        # Single message (output only)
+        (
+            [{"role": "assistant", "content": "response"}],
+            [],
+            [{"role": "assistant", "content": "response"}],
+        ),
+        # Multiple messages (input + output)
+        (
+            [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "response"},
+            ],
+            [{"role": "user", "content": "question"}],
+            [{"role": "assistant", "content": "response"}],
+        ),
+        # Complex conversation
+        (
+            [
+                {"role": "user", "content": "q1"},
+                {"role": "assistant", "content": "a1"},
+                {"role": "user", "content": "q2"},
+                {"role": "assistant", "content": "a2"},
+            ],
+            [
+                {"role": "user", "content": "q1"},
+                {"role": "assistant", "content": "a1"},
+                {"role": "user", "content": "q2"},
+            ],
+            [{"role": "assistant", "content": "a2"}],
+        ),
+    ]
+
+    mock_token_counter.return_value = 10
+
+    for all_messages, expected_input, expected_output in test_cases:
+        mock_messages_to_posthog.return_value = all_messages
+
+        chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+
+        await chatbot.send_posthog_event("test", "response", {}, [])
+
+        hog_client = mock_posthog.Posthog.return_value
+        gen_call = hog_client.capture.call_args_list[
+            -1
+        ]  # Get the latest generation call
+        gen_properties = gen_call[1]["properties"]
+
+        assert gen_properties["$ai_input"] == expected_input
+        assert gen_properties["$ai_output_choices"] == expected_output
+
+
+async def test_send_posthog_event_token_counting(
+    posthog_settings, mocker, mock_checkpointer
+):
+    """Test that send_posthog_event correctly counts tokens for input and output"""
+    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
+    mock_messages_to_posthog = mocker.patch("ai_chatbots.chatbots.messages_to_posthog")
+    mock_token_counter = mocker.patch("ai_chatbots.chatbots.litellm.token_counter")
+
+    mock_messages_to_posthog.return_value = [
+        {"role": "user", "content": "test question"},
+        {"role": "assistant", "content": "test response"},
+    ]
+
+    # Setup token counter to return different values for different calls
+    input_tokens = 15
+    output_tokens = 25
+    mock_token_counter.side_effect = [input_tokens, output_tokens]
+
+    chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
+    chatbot.model = "gpt-4"
+
+    full_response = "test response"
+    await chatbot.send_posthog_event("test", full_response, {}, [])
+
+    # Verify token counter was called correctly
+    assert mock_token_counter.call_count == 2
+
+    # First call should be for input messages
+    input_call = mock_token_counter.call_args_list[0]
+    assert input_call[1]["model"] == "gpt-4"
+    assert input_call[1]["messages"] == [{"role": "user", "content": "test question"}]
+
+    # Second call should be for output text
+    output_call = mock_token_counter.call_args_list[1]
+    assert output_call[1]["model"] == "gpt-4"
+    assert output_call[1]["text"] == full_response
+
+    # Verify tokens are included in PostHog event
+    hog_client = mock_posthog.Posthog.return_value
+    gen_call = hog_client.capture.call_args_list[1]  # Generation event
+    gen_properties = gen_call[1]["properties"]
+    assert gen_properties["$ai_input_tokens"] == input_tokens
+    assert gen_properties["$ai_output_tokens"] == output_tokens
