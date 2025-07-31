@@ -146,6 +146,19 @@ class TutorChatRequestSerializer(ChatRequestSerializer):
     )
 
 
+class CanvasTutorChatRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the tutor chatbot.
+    """
+
+    problem_set_title = serializers.CharField(required=True, allow_blank=False)
+    run_readable_id = serializers.CharField(required=True, allow_blank=False)
+    object_id_field = serializers.SerializerMethodField()
+
+    def get_object_id_field(self, obj):
+        return f"{obj.get('run_readable_id', '')} - {obj.get('problem_set_title', '')}"
+
+
 class LLMModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = LLMModel

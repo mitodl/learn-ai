@@ -28,6 +28,7 @@ from ai_chatbots.constants import (
 )
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
+    CanvasTutorChatRequestSerializer,
     ChatRequestSerializer,
     RecommendationChatRequestSerializer,
     SyllabusChatRequestSerializer,
@@ -529,6 +530,59 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             dj_session_key=self.session_key,
             agent=self.ROOM_NAME,
             object_id=serializer.validated_data.get("edx_module_id"),
+        )
+
+
+class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the tutor bot.
+    """
+
+    serializer_class = CanvasTutorChatRequestSerializer
+    ROOM_NAME = TutorBot.__name__
+    throttle_scope = "tutor_bot"
+
+    def create_chatbot(
+        self,
+        serializer: CanvasTutorChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a TutorBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        model = serializer.validated_data.pop("model", None)
+        problem_set_title = serializer.validated_data.pop("problem_set_title", None)
+        run_readable_id = serializer.validated_data.pop("run_readable_id", None)
+
+        return TutorBot(
+            self.user_id,
+            checkpointer,
+            temperature=temperature,
+            model=model,
+            thread_id=self.thread_id,
+            problem_set_title=problem_set_title,
+            run_readable_id=run_readable_id,
+        )
+
+    def prepare_response(
+        self,
+        serializer: TutorChatRequestSerializer,
+        object_id_field: Optional[str] = None,
+    ) -> tuple[str, list[str]]:
+        """Set the edx_module_id as the default object id field"""
+        object_id_field = "object_id_field"
+        return super().prepare_response(serializer, object_id_field=object_id_field)
+
+    async def create_checkpointer(
+        self, thread_id: str, message: str, serializer: TutorChatRequestSerializer
+    ):
+        """Create a checkpointer instance"""
+        return await AsyncDjangoSaver.create_with_session(
+            thread_id=thread_id,
+            message=message,
+            user=self.scope.get("user", None),
+            dj_session_key=self.session_key,
+            agent=self.ROOM_NAME,
+            object_id=serializer.validated_data.get("object_id_field"),
         )
 
 
