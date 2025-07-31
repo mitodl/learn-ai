@@ -117,8 +117,6 @@ class BaseChatbot(ABC):
             model=f"{self.proxy_prefix}{self.model}",
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
-            # Enable usage tracking for cost calculation
-            stream_usage=True,
             **kwargs,
         )
         # Set the temperature if it's supported by the model
@@ -204,16 +202,17 @@ class BaseChatbot(ABC):
                 all_messages = messages_to_posthog(messages or [])
                 input_messages = all_messages[:-1] if all_messages else []
                 output_messages = [all_messages[-1]] if all_messages else []
-                # Upsert trace event
-                hog_client.capture(
-                    self.user_id,
-                    event="$ai_trace",
-                    properties={
-                        "$ai_trace_id": self.thread_id,
-                        "$ai_span_name": self.JOB_ID,
-                        "botName": self.JOB_ID,
-                    },
-                )
+                # Upsert trace event if only 1 human message (1st time)
+                if len([msg for msg in all_messages if msg["role"] == "human"]) <= 1:
+                    hog_client.capture(
+                        self.user_id,
+                        event="$ai_trace",
+                        properties={
+                            "$ai_trace_id": self.thread_id,
+                            "$ai_span_name": self.JOB_ID,
+                            "botName": self.JOB_ID,
+                        },
+                    )
                 # Capture AI generation event
                 hog_client.capture(
                     self.user_id,

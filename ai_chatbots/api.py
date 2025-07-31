@@ -448,18 +448,10 @@ def messages_to_posthog(messages: list[BaseMessage]) -> list[dict]:
     Standardize messages to a format Posthog can work with.
     """
     # Convert LangChain messages to the format Posthog expects.
-    formatted_messages = []
-    for message in messages:
-        content = message.content if hasattr(message, "content") else str(message)
-        if isinstance(message, HumanMessage):
-            role = "user"
-        elif isinstance(message, AIMessage):
-            role = "ai"
-        elif isinstance(message, SystemMessage):
-            role = "system"
-        elif isinstance(message, ToolMessage):
-            role = "tool"
-        else:
-            role = "unknown"
-        formatted_messages.append({"role": role, "content": content})
-    return formatted_messages
+    return [
+        {
+            "content": message.content if hasattr(message, "content") else str(message),
+            "role": message.type,
+        }
+        for message in messages
+    ]

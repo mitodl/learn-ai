@@ -69,28 +69,6 @@ async def mock_checkpointer(mocker):
 
 
 @pytest.fixture
-def mock_latest_state_history(mocker):
-    """Mock the CompiledGraph aget_state_history function"""
-    return mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
-        return_value=MockAsyncIterator(
-            [
-                SyllabusAgentState(
-                    messages=[
-                        HumanMessageFactory.create(content="Who am I"),
-                        ToolMessageFactory.create(),
-                        SystemMessageFactory.create(content="You are you"),
-                        HumanMessageFactory.create(content="Not a useful answer"),
-                    ],
-                    course_id=["mitx1.23"],
-                    collection_name=["vector512"],
-                )
-            ]
-        ),
-    )
-
-
-@pytest.fixture
 def posthog_settings(settings):
     """Mock the PostHog settings"""
     settings.POSTHOG_PROJECT_API_KEY = "testkey"
@@ -202,10 +180,10 @@ async def test_get_completion(
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
-        return_value=MockAsyncIterator(
-            [
-                ToolMessageFactory.create(content="Here "),
-            ]
+        return_value=AsyncMock(
+            values={
+                "messages": [SystemMessageFactory.create(content="Answer questions")],
+            }
         ),
     )
     user_msg = "I want to learn physics"
@@ -810,7 +788,7 @@ async def test_send_posthog_event_success(posthog_settings, mocker, mock_checkpo
     # Setup test data
     mock_messages_to_posthog.return_value = [
         {"role": "user", "content": "test question"},
-        {"role": "assistant", "content": "test response"},
+        {"role": "ai", "content": "test response"},
     ]
     mock_token_counter.side_effect = [10, 20]  # input_tokens, output_tokens
 
@@ -865,7 +843,7 @@ async def test_send_posthog_event_success(posthog_settings, mocker, mock_checkpo
         "$ai_model": "gpt-4",
         "$ai_provider": "openai",
         "$ai_input": [{"role": "user", "content": "test question"}],
-        "$ai_output_choices": [{"role": "assistant", "content": "test response"}],
+        "$ai_output_choices": [{"role": "ai", "content": "test response"}],
         "$ai_input_tokens": 10,
         "$ai_output_tokens": 20,
     }
