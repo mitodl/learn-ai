@@ -130,11 +130,11 @@ class GetProblemSetList(ApiView):
         url = f"{settings.PROBLEM_SET_URL}/{run_readable_id}"
         headers = {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             return Response(response.json(), status=200)
-        except requests.RequestException as e:
-            return Response({"error": str(e)}, status=500)
+        except requests.RequestException:
+            return Response({"error": "Something went wrong"}, status=500)
 
 
 @extend_schema(

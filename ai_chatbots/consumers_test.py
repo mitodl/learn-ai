@@ -52,6 +52,15 @@ def tutor_consumer(async_user):
 
 
 @pytest.fixture
+def canvas_tutor_consumer(async_user):
+    """Return a canvas tutor consumer."""
+    consumer = consumers.CanvasTutorBotHttpConsumer()
+    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_tutor_channel"
+    return consumer
+
+
+@pytest.fixture
 def video_gpt_consumer(async_user):
     """Return a video gpt consumer."""
     consumer = consumers.VideoGPTBotHttpConsumer()
@@ -597,6 +606,50 @@ async def test_tutor_agent_handle(
     }
 
     await tutor_consumer.handle(json.dumps(data))
+
+    mock_http_consumer_send.send_headers.assert_called_once()
+
+    mock_completion.assert_called_once_with(message, extra_state=None)
+    assert (
+        mock_http_consumer_send.send_body.call_count
+        == len(response.content.split(" ")) + 2
+    )
+    mock_http_consumer_send.send_body.assert_any_call(
+        body=response.content.split(" ")[0].encode("utf-8"),
+        more_body=True,
+    )
+    assert mock_http_consumer_send.send_headers.call_count == 1
+
+
+async def canvas_test_tutor_agent_handle(
+    mocker,
+    mock_http_consumer_send,
+    canvas_tutor_consumer,
+):
+    """Test the receive function of the recommendation agent."""
+    response = SystemMessageFactory.create()
+    user = canvas_tutor_consumer.scope["user"]
+    user.is_superuser = True
+    mocker.patch(
+        "ai_chatbots.chatbots.get_canvas_problem_set",
+        return_value="problem_set",
+    )
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.TutorBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(list(response.content.split(" ")))
+            )
+        ),
+    )
+    message = "What should i try next?"
+    data = {
+        "message": message,
+        "run_readable_id": "run1",
+        "problem_set_title": "Problem Set 1",
+    }
+
+    await canvas_tutor_consumer.handle(json.dumps(data))
 
     mock_http_consumer_send.send_headers.assert_called_once()
 
