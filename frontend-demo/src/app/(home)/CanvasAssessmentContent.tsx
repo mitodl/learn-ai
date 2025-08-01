@@ -10,6 +10,7 @@ import React from "react"
 import TextField from "@mui/material/TextField"
 import { useFormik } from "formik"
 import MenuItem from "@mui/material/MenuItem"
+import Button from "@mui/material/Button"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
@@ -17,8 +18,6 @@ const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
 ]
 const DEFAULT_COURSE_RUN = "14566-kaleba:20211202+canvas"
 type CanvasProblemSelectionFormProps = {
-  selectedRun: string
-  selectedProblemSet: string
   defaultRun: string
   problemSetList: string[] | []
   onChange: (values: { run: string; problem_set_title: string }) => void
@@ -33,10 +32,14 @@ const CanvasProblemSelectionForm: React.FC<CanvasProblemSelectionFormProps> = ({
     enableReinitialize: true,
     initialValues: {
       run: defaultRun,
-      problem_set_title: problemSetList[0] || "",
+      problem_set_title:
+        problemSetList && problemSetList.length > 0 ? problemSetList[0] : "",
     },
     onSubmit: (values) => {
-      onChange(values)
+      onChange({
+        run: values.run,
+        problem_set_title: "",
+      })
     },
     validateOnChange: false,
   })
@@ -52,15 +55,16 @@ const CanvasProblemSelectionForm: React.FC<CanvasProblemSelectionFormProps> = ({
         margin="normal"
         name="run"
         value={formik.values.run}
-        onChange={(e) => {
-          formik.handleChange(e)
-          // Call onChange with updated values so parent can update settings and trigger useQuery
-          onChange({
-            run: e.target.value,
-            problem_set_title: formik.values.problem_set_title,
-          })
-        }}
+        onChange={formik.handleChange}
       />
+      <Button
+        type="submit"
+        variant="contained"
+        color="primary"
+        sx={{ mt: 1, mb: 2 }}
+      >
+        Update Course Run
+      </Button>
       <TextField
         label="Problem Set"
         size="small"
@@ -160,9 +164,7 @@ const CanvasAssessmentContent = () => {
       sidebarContent={
         <>
           <CanvasProblemSelectionForm
-            selectedRun={settings.run}
-            selectedProblemSet={settings.problem_set_title}
-            defaultRun={DEFAULT_COURSE_RUN}
+            defaultRun={settings.run}
             problemSetList={problemSetList || []}
             onChange={(values) => {
               setSettings({
