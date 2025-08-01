@@ -199,15 +199,23 @@ class BaseChatbot(ABC):
                 hog_client = posthog.Posthog(
                     settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
                 )
-                # System prompt should be included as an input message
-                all_messages = [{"role": "system", "content": self.instructions}]
+                # Include System prompt as an input message for all but tutorbot
+                all_messages = (
+                    []
+                    if isinstance(self, TutorBot)
+                    else [{"role": "system", "content": self.instructions}]
+                )
                 all_messages.extend(messages_to_posthog(message_history))
+                #  Final tool message should also be included as output if present
+                tool_messages = [msg for msg in all_messages if msg["role"] == "tool"]
                 if all_messages[-1]["role"] == "human":
                     input_messages = all_messages
-                    output_messages = []
+                    output_messages = tool_messages[-1:] if tool_messages else []
                 else:
                     input_messages = all_messages[:-1]
-                    output_messages = [all_messages[-1]]
+                    output_messages = [all_messages[-1]] + (
+                        tool_messages[-1:] if tool_messages else []
+                    )
 
                 # Upsert trace event if only 1 human message (1st time)
                 # Necessary to set the trace name
