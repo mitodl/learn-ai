@@ -4811,7 +4811,7 @@ langsmith = "0.3.32"
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor.git"
 reference = "ab/canvas-prompt-variant"
-resolved_reference = "acfd444c44beb742f60f17217be2c91f8af220d9"
+resolved_reference = "e531d1dc4e63ddca87f49566ab8fb5819829472a"
 
 [[package]]
 name = "openai"
