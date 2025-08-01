@@ -611,7 +611,12 @@ class TutorBot(BaseChatbot):
                 elif chunk[0] == "values":
                     new_history = filter_out_system_messages(chunk[1]["messages"])
 
-            metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
+            metadata = {
+                "edx_module_id": self.edx_module_id,
+                "tutor_model": self.model,
+                "problem_set_title": self.problem_set_title,
+                "run_readable_id": self.run_readable_id,
+            }
             json_output = tutor_output_to_json(
                 new_history, new_intent_history, new_assessment_history, metadata
             )
