@@ -1527,6 +1527,137 @@ export class ChatSessionsApi extends BaseAPI {
 }
 
 /**
+ * GetProblemSetListApi - axios parameter creator
+ * @export
+ */
+export const GetProblemSetListApiAxiosParamCreator = function (
+  configuration?: Configuration,
+) {
+  return {
+    /**
+     * API view to get a list of problem sets for a given course.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    getProblemSetListRetrieve: async (
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      const localVarPath = `/api/v0/get_problem_set_list/`
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+  }
+}
+
+/**
+ * GetProblemSetListApi - functional programming interface
+ * @export
+ */
+export const GetProblemSetListApiFp = function (configuration?: Configuration) {
+  const localVarAxiosParamCreator =
+    GetProblemSetListApiAxiosParamCreator(configuration)
+  return {
+    /**
+     * API view to get a list of problem sets for a given course.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async getProblemSetListRetrieve(
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>
+    > {
+      const localVarAxiosArgs =
+        await localVarAxiosParamCreator.getProblemSetListRetrieve(options)
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["GetProblemSetListApi.getProblemSetListRetrieve"]?.[
+          index
+        ]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+  }
+}
+
+/**
+ * GetProblemSetListApi - factory interface
+ * @export
+ */
+export const GetProblemSetListApiFactory = function (
+  configuration?: Configuration,
+  basePath?: string,
+  axios?: AxiosInstance,
+) {
+  const localVarFp = GetProblemSetListApiFp(configuration)
+  return {
+    /**
+     * API view to get a list of problem sets for a given course.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    getProblemSetListRetrieve(
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<void> {
+      return localVarFp
+        .getProblemSetListRetrieve(options)
+        .then((request) => request(axios, basePath))
+    },
+  }
+}
+
+/**
+ * GetProblemSetListApi - object-oriented interface
+ * @export
+ * @class GetProblemSetListApi
+ * @extends {BaseAPI}
+ */
+export class GetProblemSetListApi extends BaseAPI {
+  /**
+   * API view to get a list of problem sets for a given course.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof GetProblemSetListApi
+   */
+  public getProblemSetListRetrieve(options?: RawAxiosRequestConfig) {
+    return GetProblemSetListApiFp(this.configuration)
+      .getProblemSetListRetrieve(options)
+      .then((request) => request(this.axios, this.basePath))
+  }
+}
+
+/**
  * GetTranscriptEdxModuleIdApi - axios parameter creator
  * @export
  */
