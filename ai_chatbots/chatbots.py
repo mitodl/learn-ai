@@ -199,9 +199,10 @@ class BaseChatbot(ABC):
                 hog_client = posthog.Posthog(
                     settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
                 )
-                # Output message should be the last message if there's at least 2
-                all_messages = messages_to_posthog(message_history)
-                if len(all_messages) <= 1:
+                # System prompt should be included as an input message
+                all_messages = [{"role": "system", "content": self.instructions}]
+                all_messages.extend(messages_to_posthog(message_history))
+                if all_messages[-1]["role"] == "human":
                     input_messages = all_messages
                     output_messages = []
                 else:
@@ -238,11 +239,11 @@ class BaseChatbot(ABC):
                         "$ai_input": input_messages,
                         "$ai_output_choices": output_messages,
                         "$ai_input_tokens": litellm.token_counter(
-                            model=self.model,
+                            model=model_parts[-1],
                             messages=input_messages,
                         ),
                         "$ai_output_tokens": litellm.token_counter(
-                            model=self.model, text=full_response
+                            model=model_parts[-1], text=full_response
                         ),
                     },
                 )

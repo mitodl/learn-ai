@@ -826,6 +826,8 @@ async def test_send_posthog_event_success(posthog_settings, mocker, mock_checkpo
         "botName": chatbot.JOB_ID,
     }
 
+    system_prompt = {"role": "system", "content": chatbot.instructions}
+
     # Verify generation event capture
     gen_call = hog_client.capture.call_args_list[1]
     assert gen_call[0][0] == "test_user"
@@ -842,7 +844,7 @@ async def test_send_posthog_event_success(posthog_settings, mocker, mock_checkpo
         "botName": chatbot.JOB_ID,
         "$ai_model": "gpt-4",
         "$ai_provider": "openai",
-        "$ai_input": [{"role": "user", "content": "test question"}],
+        "$ai_input": [system_prompt, {"role": "user", "content": "test question"}],
         "$ai_output_choices": [{"role": "ai", "content": "test response"}],
         "$ai_input_tokens": 10,
         "$ai_output_tokens": 20,
@@ -932,15 +934,15 @@ async def test_send_posthog_event_model_parsing(
         [{"role": "human", "content": "answer this question"}],
         # Multiple messages (input + output)
         [
-            {"role": "user", "content": "question"},
-            {"role": "assistant", "content": "response"},
+            {"role": "human", "content": "question"},
+            {"role": "ai", "content": "response"},
         ],
         # Complex conversation
         [
-            {"role": "user", "content": "q1"},
-            {"role": "assistant", "content": "a1"},
-            {"role": "user", "content": "q2"},
-            {"role": "assistant", "content": "a2"},
+            {"role": "human", "content": "q1"},
+            {"role": "ai", "content": "a1"},
+            {"role": "human", "content": "q2"},
+            {"role": "ai", "content": "a2"},
         ],
     ],
 )
@@ -960,14 +962,18 @@ async def test_send_posthog_event_message_processing(
 
     chatbot = ResourceRecommendationBot("test_user", mock_checkpointer)
 
-    await chatbot.send_posthog_event("test", "response", {}, [])
+    await chatbot.send_posthog_event("test", "response", {}, all_messages)
 
     hog_client = mock_posthog.Posthog.return_value
     gen_call = hog_client.capture.call_args_list[-1]  # Get the latest generation call
     gen_properties = gen_call[1]["properties"]
 
-    expected_input = all_messages[:-1] if len(all_messages) > 1 else all_messages
-    expected_output = all_messages[-1:] if len(all_messages) > 1 else []
+    all_messages.insert(0, {"role": "system", "content": chatbot.instructions})
+
+    expected_input = (
+        all_messages[:-1] if all_messages[-1]["role"] != "human" else all_messages
+    )
+    expected_output = all_messages[-1:] if all_messages[-1]["role"] != "human" else []
 
     assert gen_properties["$ai_input"] == expected_input
     assert gen_properties["$ai_output_choices"] == expected_output
@@ -995,6 +1001,9 @@ async def test_send_posthog_event_token_counting(
     chatbot.model = "gpt-4"
 
     full_response = "test response"
+
+    system_prompt = {"role": "system", "content": chatbot.instructions}
+
     await chatbot.send_posthog_event("test", full_response, {}, [])
 
     # Verify token counter was called correctly
@@ -1003,7 +1012,10 @@ async def test_send_posthog_event_token_counting(
     # First call should be for input messages
     input_call = mock_token_counter.call_args_list[0]
     assert input_call[1]["model"] == "gpt-4"
-    assert input_call[1]["messages"] == [{"role": "user", "content": "test question"}]
+    assert input_call[1]["messages"] == [
+        system_prompt,
+        {"role": "user", "content": "test question"},
+    ]
 
     # Second call should be for output text
     output_call = mock_token_counter.call_args_list[1]
