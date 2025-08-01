@@ -928,8 +928,8 @@ async def test_send_posthog_event_model_parsing(
     [
         # Empty messages
         [],
-        # Single message (output only)
-        [{"role": "assistant", "content": "response"}],
+        # Single message (input only)
+        [{"role": "human", "content": "answer this question"}],
         # Multiple messages (input + output)
         [
             {"role": "user", "content": "question"},
@@ -966,8 +966,8 @@ async def test_send_posthog_event_message_processing(
     gen_call = hog_client.capture.call_args_list[-1]  # Get the latest generation call
     gen_properties = gen_call[1]["properties"]
 
-    expected_input = all_messages[:-1]
-    expected_output = all_messages[-1:]
+    expected_input = all_messages[:-1] if len(all_messages) > 1 else all_messages
+    expected_output = all_messages[-1:] if len(all_messages) > 1 else []
 
     assert gen_properties["$ai_input"] == expected_input
     assert gen_properties["$ai_output_choices"] == expected_output

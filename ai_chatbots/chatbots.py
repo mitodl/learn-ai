@@ -188,21 +188,28 @@ class BaseChatbot(ABC):
         message: str,
         full_response: str,
         metadata: dict,
-        messages: list[BaseMessage],
+        message_history: list[BaseMessage],
     ) -> None:
         """
         Send a posthog event with the user message, AI response, and metadata
         """
-        if settings.POSTHOG_PROJECT_API_KEY:
+        if message and settings.POSTHOG_PROJECT_API_KEY:
             try:
                 model_parts = self.model.rsplit("/", 1)
                 hog_client = posthog.Posthog(
                     settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
                 )
-                all_messages = messages_to_posthog(messages or [])
-                input_messages = all_messages[:-1] if all_messages else []
-                output_messages = [all_messages[-1]] if all_messages else []
+                # Output message should be the last message if there's at least 2
+                all_messages = messages_to_posthog(message_history)
+                if len(all_messages) <= 1:
+                    input_messages = all_messages
+                    output_messages = []
+                else:
+                    input_messages = all_messages[:-1]
+                    output_messages = [all_messages[-1]]
+
                 # Upsert trace event if only 1 human message (1st time)
+                # Necessary to set the trace name
                 if len([msg for msg in all_messages if msg["role"] == "human"]) <= 1:
                     hog_client.capture(
                         self.user_id,
@@ -239,7 +246,7 @@ class BaseChatbot(ABC):
                         ),
                     },
                 )
-            except:  # noqa: E722
+            except Exception:
                 log.exception("Error sending posthog event")
 
     async def get_completion(
