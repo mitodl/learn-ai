@@ -8,6 +8,7 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
+    RemoveMessage,
     SystemMessage,
     ToolMessage,
 )
@@ -15,7 +16,11 @@ from langchain_core.messages.utils import count_tokens_approximately
 from langmem.short_term import RunningSummary, SummarizationResult
 
 from ai_chatbots import factories
-from ai_chatbots.api import CustomSummarizationNode, summarize_messages
+from ai_chatbots.api import (
+    CustomSummarizationNode,
+    messages_to_posthog,
+    summarize_messages,
+)
 from ai_chatbots.chatbots import SummaryState
 
 
@@ -1051,3 +1056,34 @@ def test_custom_summarization_node_no_messagest(mocker):
         ValueError, match="Missing required field `messages` in the input."
     ):
         summarization_node._func({"foo": []})  # noqa: SLF001
+
+
+def test_messages_to_posthog():
+    """Test that messages are correctly converted to PostHog format."""
+    messages = [
+        HumanMessage(content="Hello", id="1"),
+        AIMessage(content="Hi there!", id="2"),
+        ToolMessage(content="Tool call", tool_call_id="3", name="tool_1", id="3"),
+        SystemMessage(content="System message", id="4"),
+        RemoveMessage(id="5"),
+    ]
+    expected_result = [
+        {
+            "role": "human",
+            "content": "Hello",
+        },
+        {
+            "role": "ai",
+            "content": "Hi there!",
+        },
+        {
+            "role": "tool",
+            "content": "Tool call",
+        },
+        {
+            "role": "system",
+            "content": "System message",
+        },
+        {"role": "remove", "content": ""},
+    ]
+    assert messages_to_posthog(messages) == expected_result

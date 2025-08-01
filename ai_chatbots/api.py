@@ -10,6 +10,7 @@ from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
+    BaseMessage,
     HumanMessage,
     RemoveMessage,
     SystemMessage,
@@ -440,3 +441,17 @@ def get_langsmith_prompt(prompt_name: str) -> str:
         else:
             log.warning("Prompt '%s' not found in LangSmith.", prompt_name)
     return None
+
+
+def messages_to_posthog(messages: list[BaseMessage]) -> list[dict]:
+    """
+    Standardize messages to a format Posthog can work with.
+    """
+    # Convert LangChain messages to the format Posthog expects.
+    return [
+        {
+            "content": message.content if hasattr(message, "content") else str(message),
+            "role": message.type,
+        }
+        for message in messages
+    ]

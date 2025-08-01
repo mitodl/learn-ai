@@ -8,13 +8,15 @@ from operator import add
 from typing import Annotated, Any, Optional
 from uuid import uuid4
 
+import litellm
 import posthog
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
+from langchain.schema import BaseMessage
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.prompts.chat import ChatPromptTemplate
@@ -37,7 +39,11 @@ from openai import BadRequestError
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
-from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
+from ai_chatbots.api import (
+    CustomSummarizationNode,
+    get_search_tool_metadata,
+    messages_to_posthog,
+)
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
@@ -178,27 +184,78 @@ class BaseChatbot(ABC):
         return None
 
     async def send_posthog_event(
-        self, message: str, full_response: str, metadata: dict
+        self,
+        message: str,
+        full_response: str,
+        metadata: dict,
+        message_history: list[BaseMessage],
     ) -> None:
         """
         Send a posthog event with the user message, AI response, and metadata
         """
-        if settings.POSTHOG_PROJECT_API_KEY:
+        if message and settings.POSTHOG_PROJECT_API_KEY:
             try:
+                model_parts = self.model.rsplit("/", 1)
                 hog_client = posthog.Posthog(
                     settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
                 )
+                # Include System prompt as an input message for all but tutorbot
+                all_messages = (
+                    []
+                    if isinstance(self, TutorBot)
+                    else [{"role": "system", "content": self.instructions}]
+                )
+                all_messages.extend(messages_to_posthog(message_history))
+                #  Final tool message should also be included as output if present
+                tool_messages = [msg for msg in all_messages if msg["role"] == "tool"]
+                if all_messages[-1]["role"] == "human":
+                    input_messages = all_messages
+                    output_messages = tool_messages[-1:] if tool_messages else []
+                else:
+                    input_messages = all_messages[:-1]
+                    output_messages = [all_messages[-1]] + (
+                        tool_messages[-1:] if tool_messages else []
+                    )
+
+                # Upsert trace event if only 1 human message (1st time)
+                # Necessary to set the trace name
+                if len([msg for msg in all_messages if msg["role"] == "human"]) <= 1:
+                    hog_client.capture(
+                        self.user_id,
+                        event="$ai_trace",
+                        properties={
+                            "$ai_trace_id": self.thread_id,
+                            "$ai_span_name": self.JOB_ID,
+                            "botName": self.JOB_ID,
+                        },
+                    )
+                # Capture AI generation event
                 hog_client.capture(
                     self.user_id,
-                    event=self.JOB_ID,
+                    event="$ai_generation",
                     properties={
                         "question": message,
                         "answer": full_response,
                         "metadata": metadata,
                         "user": self.user_id,
+                        "distinct_id": self.user_id,
+                        "$ai_trace_id": self.thread_id,
+                        "$ai_span_name": self.JOB_ID,
+                        "botName": self.JOB_ID,
+                        "$ai_model": model_parts[-1],
+                        "$ai_provider": model_parts[0],
+                        "$ai_input": input_messages,
+                        "$ai_output_choices": output_messages,
+                        "$ai_input_tokens": litellm.token_counter(
+                            model=model_parts[-1],
+                            messages=input_messages,
+                        ),
+                        "$ai_output_tokens": litellm.token_counter(
+                            model=model_parts[-1], text=full_response
+                        ),
                     },
                 )
-            except:  # noqa: E722
+            except Exception:
                 log.exception("Error sending posthog event")
 
     async def get_completion(
@@ -255,13 +312,21 @@ class BaseChatbot(ABC):
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
-        metadata = await self.get_tool_metadata()
+        latest_state = await self.get_latest_history()
+        metadata = await self.get_tool_metadata(latest_state)
         if debug:
             yield f"\n\n<!-- {metadata} -->\n\n"
-        await self.send_posthog_event(message, full_response, metadata)
+        await self.send_posthog_event(
+            message,
+            full_response,
+            metadata,
+            latest_state.values.get("messages", [])
+            if latest_state
+            else [HumanMessage(message), AIMessage(full_response)],
+        )
 
     @abstractmethod
-    async def get_tool_metadata(self) -> str:
+    async def get_tool_metadata(self, latest_state) -> str:
         """
         Return metadata JSON about the response
         """
@@ -413,10 +478,9 @@ class ResourceRecommendationBot(SummarizingChatbot):
         """Create tools required by the agent"""
         return [tools.search_courses, tools.search_content_files]
 
-    async def get_tool_metadata(self) -> str:
+    async def get_tool_metadata(self, latest_state) -> str:
         """Return the metadata for the search tool"""
         thread_id = self.config["configurable"]["thread_id"]
-        latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
 
 
@@ -474,10 +538,9 @@ class SyllabusBot(SummarizingChatbot):
             bot_tools.append(tools.search_related_course_content_files)
         return bot_tools
 
-    async def get_tool_metadata(self) -> str:
+    async def get_tool_metadata(self, latest_state) -> str:
         """Return the metadata for the search tool"""
         thread_id = self.config["configurable"]["thread_id"]
-        latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
 
 
@@ -529,7 +592,7 @@ class TutorBot(BaseChatbot):
             edx_module_id, block_siblings
         )
 
-    async def get_tool_metadata(self) -> str:
+    async def get_tool_metadata(self, latest_state) -> str:  # noqa: ARG002
         """Return the metadata for the  tool"""
         return json.dumps(
             {
@@ -566,6 +629,7 @@ class TutorBot(BaseChatbot):
             assessment_history = []
 
         full_response = ""
+        full_history = []
         new_history = []
         try:
             generator, new_intent_history, new_assessment_history = message_tutor(
@@ -592,6 +656,7 @@ class TutorBot(BaseChatbot):
 
                 elif chunk[0] == "values":
                     new_history = filter_out_system_messages(chunk[1]["messages"])
+                    full_history.extend(chunk[1]["messages"])
 
             metadata = {"edx_module_id": self.edx_module_id, "tutor_model": self.model}
             json_output = tutor_output_to_json(
@@ -602,7 +667,10 @@ class TutorBot(BaseChatbot):
             )
 
             await self.send_posthog_event(
-                message, full_response, await self.get_tool_metadata()
+                message,
+                full_response,
+                await self.get_tool_metadata(None),
+                full_history,
             )
 
         except Exception:
@@ -704,8 +772,7 @@ class VideoGPTBot(SummarizingChatbot):
         """Create tools required for the agent"""
         return [tools.get_video_transcript_chunk]
 
-    async def get_tool_metadata(self) -> str:
+    async def get_tool_metadata(self, latest_state) -> str:
         """Return the metadata for the search tool"""
         thread_id = self.config["configurable"]["thread_id"]
-        latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
