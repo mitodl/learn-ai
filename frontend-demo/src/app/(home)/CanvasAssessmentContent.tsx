@@ -123,7 +123,7 @@ const CanvasAssessmentContent = () => {
       problemSetList: problemSetListResult.data.problem_set_titles,
       error: null,
     }
-  }, [settings.run, problemSetListResult])
+  }, [problemSetListResult])
 
   useEffect(() => {
     // Set problem_set_title to first item or "" whenever problemSetList changes
@@ -138,7 +138,7 @@ const CanvasAssessmentContent = () => {
         problem_set_title: "",
       })
     }
-  }, [problemSetList])
+  }, [problemSetList, settings.problem_set_title, setSettings])
 
   const isReady = !!problemSetList
 
