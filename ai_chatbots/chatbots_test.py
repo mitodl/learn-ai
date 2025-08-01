@@ -670,6 +670,8 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
                     ],
                     "problem": "problem_xml",
                     "problem_set": "problem_set_xml",
+                    "problem_set_title": None,
+                    "run_readable_id": None,
                 }
             ),
             "user": "anonymous",
