@@ -1536,13 +1536,24 @@ export const GetProblemSetListApiAxiosParamCreator = function (
   return {
     /**
      * API view to get a list of problem sets for a given course.
+     * @param {string} run_readable_id run_readable_id of the course run
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     getProblemSetListRetrieve: async (
+      run_readable_id: string,
       options: RawAxiosRequestConfig = {},
     ): Promise<RequestArgs> => {
-      const localVarPath = `/api/v0/get_problem_set_list/`
+      // verify required parameter 'run_readable_id' is not null or undefined
+      assertParamExists(
+        "getProblemSetListRetrieve",
+        "run_readable_id",
+        run_readable_id,
+      )
+      const localVarPath = `/api/v0/get_problem_set_list/`.replace(
+        `{${"run_readable_id"}}`,
+        encodeURIComponent(String(run_readable_id)),
+      )
       // use dummy base URL string because the URL constructor only accepts absolute URLs.
       const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
       let baseOptions
@@ -1585,16 +1596,21 @@ export const GetProblemSetListApiFp = function (configuration?: Configuration) {
   return {
     /**
      * API view to get a list of problem sets for a given course.
+     * @param {string} run_readable_id run_readable_id of the course run
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     async getProblemSetListRetrieve(
+      run_readable_id: string,
       options?: RawAxiosRequestConfig,
     ): Promise<
       (axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>
     > {
       const localVarAxiosArgs =
-        await localVarAxiosParamCreator.getProblemSetListRetrieve(options)
+        await localVarAxiosParamCreator.getProblemSetListRetrieve(
+          run_readable_id,
+          options,
+        )
       const index = configuration?.serverIndex ?? 0
       const operationBasePath =
         operationServerMap["GetProblemSetListApi.getProblemSetListRetrieve"]?.[
@@ -1624,17 +1640,33 @@ export const GetProblemSetListApiFactory = function (
   return {
     /**
      * API view to get a list of problem sets for a given course.
+     * @param {GetProblemSetListApiGetProblemSetListRetrieveRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     getProblemSetListRetrieve(
+      requestParameters: GetProblemSetListApiGetProblemSetListRetrieveRequest,
       options?: RawAxiosRequestConfig,
     ): AxiosPromise<void> {
       return localVarFp
-        .getProblemSetListRetrieve(options)
+        .getProblemSetListRetrieve(requestParameters.run_readable_id, options)
         .then((request) => request(axios, basePath))
     },
   }
+}
+
+/**
+ * Request parameters for getProblemSetListRetrieve operation in GetProblemSetListApi.
+ * @export
+ * @interface GetProblemSetListApiGetProblemSetListRetrieveRequest
+ */
+export interface GetProblemSetListApiGetProblemSetListRetrieveRequest {
+  /**
+   * run_readable_id of the course run
+   * @type {string}
+   * @memberof GetProblemSetListApiGetProblemSetListRetrieve
+   */
+  readonly run_readable_id: string
 }
 
 /**
@@ -1646,13 +1678,17 @@ export const GetProblemSetListApiFactory = function (
 export class GetProblemSetListApi extends BaseAPI {
   /**
    * API view to get a list of problem sets for a given course.
+   * @param {GetProblemSetListApiGetProblemSetListRetrieveRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}
    * @memberof GetProblemSetListApi
    */
-  public getProblemSetListRetrieve(options?: RawAxiosRequestConfig) {
+  public getProblemSetListRetrieve(
+    requestParameters: GetProblemSetListApiGetProblemSetListRetrieveRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
     return GetProblemSetListApiFp(this.configuration)
-      .getProblemSetListRetrieve(options)
+      .getProblemSetListRetrieve(requestParameters.run_readable_id, options)
       .then((request) => request(this.axios, this.basePath))
   }
 }

@@ -112,6 +112,20 @@ class LLMModelViewSet(ReadOnlyModelViewSet):
     ordering_fields = ["provider", "name", "litellm_id"]
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="run_readable_id",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description="run_readable_id of the course run",
+        )
+    ],
+    responses={
+        200: OpenApiResponse(description="List of problem sets"),
+        500: OpenApiResponse(description="Error retrieving problem sets"),
+    },
+)
 class GetProblemSetList(ApiView):
     """
     API view to get a list of problem sets for a given course.
