@@ -24,6 +24,7 @@ from ai_chatbots.chatbots import (
     TutorBot,
     VideoGPTAgentState,
     VideoGPTBot,
+    get_canvas_problem_set,
     get_history,
     get_problem_from_edx_block,
 )
@@ -536,15 +537,29 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         (None, None),
     ],
 )
-async def test_tutor_bot_intitiation(mocker, model, temperature):
+@pytest.mark.parametrize("variant", ["edx", "canvas"])
+async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
     """Test the tutor class instantiation."""
     name = "My tutor bot"
-    edx_module_id = "block1"
-    block_siblings = ["block1", "block2"]
-    mocker.patch(
-        "ai_chatbots.chatbots.get_problem_from_edx_block",
-        return_value=("problem_xml", "problem_set_xml"),
-    )
+    if variant == "edx":
+        edx_module_id = "block1"
+        block_siblings = ["block1", "block2"]
+        problem_set_title = None
+        run_readable_id = None
+        mocker.patch(
+            "ai_chatbots.chatbots.get_problem_from_edx_block",
+            return_value=("problem_xml", "problem_set_xml"),
+        )
+    else:
+        edx_module_id = None
+        block_siblings = None
+        problem_set_title = "Problem Set Title"
+        run_readable_id = "run_readable_id"
+        mocker.patch(
+            "ai_chatbots.chatbots.get_canvas_problem_set",
+            return_value="problem_set",
+        )
+
     chatbot = TutorBot(
         "user",
         name=name,
@@ -552,17 +567,24 @@ async def test_tutor_bot_intitiation(mocker, model, temperature):
         temperature=temperature,
         edx_module_id=edx_module_id,
         block_siblings=block_siblings,
+        problem_set_title=problem_set_title,
+        run_readable_id=run_readable_id,
     )
     assert chatbot.model == (model if model else settings.AI_DEFAULT_TUTOR_MODEL)
     assert chatbot.temperature == (
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
-    assert chatbot.problem == "problem_xml"
-    assert chatbot.problem_set == "problem_set_xml"
+    assert chatbot.problem == ("problem_xml" if variant == "edx" else "")
+    assert chatbot.problem_set == (
+        "problem_set_xml" if variant == "edx" else "problem_set"
+    )
     assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
 
 
-async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer):
+@pytest.mark.parametrize("variant", ["edx", "canvas"])
+async def test_tutor_get_completion(
+    posthog_settings, mocker, mock_checkpointer, variant
+):
     """Test that the tutor bot get_completion method returns expected values."""
     mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
 
@@ -626,19 +648,38 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
         assessment_history,
     )
 
-    mocker.patch(
-        "ai_chatbots.chatbots.get_problem_from_edx_block",
-        return_value=("problem_xml", "problem_set_xml"),
-    )
+    if variant == "edx":
+        mocker.patch(
+            "ai_chatbots.chatbots.get_problem_from_edx_block",
+            return_value=("problem_xml", "problem_set_xml"),
+        )
+    else:
+        mocker.patch(
+            "ai_chatbots.chatbots.get_canvas_problem_set",
+            return_value="problem_set",
+        )
     mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
     user_msg = "what should i try next?"
     thread_id = "TEST"
 
+    if variant == "canvas":
+        problem_set_title = "Problem Set Title"
+        run_readable_id = "Run Readable ID"
+        edx_module_id = None
+        block_siblings = None
+    else:
+        problem_set_title = None
+        run_readable_id = None
+        edx_module_id = "block1"
+        block_siblings = ["block1", "block2"]
+
     chatbot = TutorBot(
         "anonymous",
         mock_checkpointer,
-        edx_module_id="block1",
-        block_siblings=["block1", "block2"],
+        edx_module_id=edx_module_id,
+        block_siblings=block_siblings,
+        problem_set_title=problem_set_title,
+        run_readable_id=run_readable_id,
         thread_id=thread_id,
     )
 
@@ -649,12 +690,18 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
 
     history = await get_history(thread_id)
     assert history.thread_id == thread_id
-    metadata = {"edx_module_id": "block1", "tutor_model": chatbot.model}
+    metadata = {
+        "edx_module_id": edx_module_id,
+        "tutor_model": chatbot.model,
+        "problem_set_title": problem_set_title,
+        "run_readable_id": run_readable_id,
+    }
     new_history = filter_out_system_messages(final_message[1]["messages"])
     assert history.chat_json == tutor_output_to_json(
         new_history, intents, assessment_history, metadata
     )
-    assert history.edx_module_id == "block1"
+    assert history.edx_module_id == (edx_module_id or "")
+
     mock_posthog.Posthog.return_value.capture.assert_called_once_with(
         "anonymous",
         event="TUTOR_JOB",
@@ -663,13 +710,14 @@ async def test_tutor_get_completion(posthog_settings, mocker, mock_checkpointer)
             "answer": results,
             "metadata": json.dumps(
                 {
-                    "edx_module_id": "block1",
-                    "block_siblings": [
-                        "block1",
-                        "block2",
-                    ],
-                    "problem": "problem_xml",
-                    "problem_set": "problem_set_xml",
+                    "edx_module_id": edx_module_id,
+                    "block_siblings": block_siblings,
+                    "problem": "problem_xml" if variant == "edx" else "",
+                    "problem_set": "problem_set_xml"
+                    if variant == "edx"
+                    else "problem_set",
+                    "problem_set_title": problem_set_title,
+                    "run_readable_id": run_readable_id,
                 }
             ),
             "user": "anonymous",
@@ -719,6 +767,25 @@ def test_get_problem_from_edx_block(mocker):
     problem, problem_set = get_problem_from_edx_block(edx_module_id, block_siblings)
     assert problem == "<problem>problem 1</problem>"
     assert problem_set == "<problem>problem 1</problem><problem>problem 2</problem>"
+
+
+def test_get_canvas_problem_set(mocker):
+    """Test that the get_canvas_problem_set function returns the expected problem set and solution"""
+    run_readable_id = "a_run_readable_id"
+    problem_set_title = "A Problem Set Title"
+
+    problem_api_results = {
+        "problem_set": "test problem set",
+        "solution": "test solution",
+    }
+
+    mocker.patch(
+        "ai_chatbots.tools.requests.get",
+        return_value=mocker.Mock(json=mocker.Mock(return_value=problem_api_results)),
+    )
+
+    problem_set = get_canvas_problem_set(run_readable_id, problem_set_title)
+    assert problem_set == problem_api_results
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])

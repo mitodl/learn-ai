@@ -38,4 +38,9 @@ http_patterns = [
         consumers.TutorBotHttpConsumer.as_asgi(),
         name="tutor_agent_sse",
     ),
+    re_path(
+        r"http/canvas_tutor_agent/",
+        consumers.CanvasTutorBotHttpConsumer.as_asgi(),
+        name="canvas_tutor_agent_sse",
+    ),
 ]

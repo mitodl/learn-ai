@@ -4796,10 +4796,8 @@ version = "0.2.5"
 description = "AI powered tutor"
 optional = false
 python-versions = "~=3.12"
-files = [
-    {file = "open_learning_ai_tutor-0.2.5-py3-none-any.whl", hash = "sha256:4350ffd8d17fa656ae78b121aa1085f930460743d6d065540a583bf9440944e3"},
-    {file = "open_learning_ai_tutor-0.2.5.tar.gz", hash = "sha256:9df13921f4de66a5bd25b5530c6c8e390f0cd6fbb50c6f9f0597f35698243eb3"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 e2b-code-interpreter = ">=1.1.0,<2"
@@ -4808,6 +4806,12 @@ langchain-core = ">=0.3.45,<0.4"
 langchain-experimental = ">=0.3.4,<0.4"
 langgraph = ">=0.3.10,<0.4"
 langsmith = "0.3.32"
+
+[package.source]
+type = "git"
+url = "https://github.com/mitodl/open-learning-ai-tutor.git"
+reference = "ab/canvas-prompt-variant"
+resolved_reference = "e531d1dc4e63ddca87f49566ab8fb5819829472a"
 
 [[package]]
 name = "openai"
@@ -8806,4 +8810,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "5da7f55a8454b145d7d0a4b7b471521da51e262e63267cb469d38c497709d7ab"
+content-hash = "54612663de5c4b365d4db57ff8d12ff90b1793717f347b82a04615083e7137fe"
