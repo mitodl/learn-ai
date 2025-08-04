@@ -1,6 +1,21 @@
 Release Notes
 =============
 
+Version 0.11.2
+--------------
+
+- Canvas Tutorbot
+- fix(deps): update dependency ruff to v0.12.7 (#263)
+- fix(deps): update dependency next to v15.4.5 (#262)
+- chore(deps): update node.js to v22.18.0 (#261)
+- chore(deps): update dependency eslint-config-next to v15.4.5 (#260)
+- fix(deps): update react monorepo to v19.1.1 (#259)
+- fix(deps): update dependency django-oauth-toolkit to v3 (#14)
+- chore(deps): update actions/setup-python digest to a26af69 (#159)
+- chore(deps): update dependency eslint-plugin-jest to v29 (#248)
+- chore(deps): update dependency jest-extended to v6 (#249)
+- fix(deps): update dependency starlette to v0.47.2 [security] (#253)
+
 Version 0.11.1 (Released July 21, 2025)
 --------------
 
