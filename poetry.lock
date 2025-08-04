@@ -1972,13 +1972,13 @@ email = ["email-validator (>=2.1,<3.0)"]
 
 [[package]]
 name = "e2b"
-version = "1.5.6"
+version = "1.11.0"
 description = "E2B SDK that give agents cloud environments"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b-1.5.6-py3-none-any.whl", hash = "sha256:ca567af466bb370bef01cb2211ba231dbbe743137387c2a40cecf8819d6f9535"},
-    {file = "e2b-1.5.6.tar.gz", hash = "sha256:05da24b27d7a855edd374935c47a9e9faa9b4c3cc41a039a0ac3ee1cebedccf9"},
+    {file = "e2b-1.11.0-py3-none-any.whl", hash = "sha256:3027dd2e9aed1b90e4475c879238bd8a19cf1dc6fd5f042c5dc1a06027cd3b35"},
+    {file = "e2b-1.11.0.tar.gz", hash = "sha256:40023cf0d569d49b5d9688a21f84d41bbbf57fbb49984dcb74490f41ab5a5c6d"},
 ]
 
 [package.dependencies]
@@ -4792,13 +4792,13 @@ sympy = "*"
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.2.5"
+version = "0.2.6"
 description = "AI powered tutor"
 optional = false
 python-versions = "~=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.2.5-py3-none-any.whl", hash = "sha256:4350ffd8d17fa656ae78b121aa1085f930460743d6d065540a583bf9440944e3"},
-    {file = "open_learning_ai_tutor-0.2.5.tar.gz", hash = "sha256:9df13921f4de66a5bd25b5530c6c8e390f0cd6fbb50c6f9f0597f35698243eb3"},
+    {file = "open_learning_ai_tutor-0.2.6-py3-none-any.whl", hash = "sha256:2942281d0344a77a5e3ef4ae92bffa5ad13965e9e6f588bc247860b0b1b3ee53"},
+    {file = "open_learning_ai_tutor-0.2.6.tar.gz", hash = "sha256:80c78bc358eebf9417a132262a302b9444e572afafd6059fa3aa9626b392b4c9"},
 ]
 
 [package.dependencies]
@@ -8806,4 +8806,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "d6b2efef813aa29d150e4a4c70246fca65d5465fdb24a15b98aeba3b9e309e94"
+content-hash = "2457dab6bd8bd6689784653cf5c93441cf5a2a6214c53f32887cc2062dc984a4"
