@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+Version 0.11.3
+--------------
+
+- Track LLM costs in Posthog (#254)
+
 Version 0.11.2 (Released August 05, 2025)
 --------------
 
