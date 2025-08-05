@@ -34,10 +34,15 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
+from posthog.ai.langchain import CallbackHandler
 from typing_extensions import TypedDict
 
 from ai_chatbots import tools
-from ai_chatbots.api import CustomSummarizationNode, get_search_tool_metadata
+from ai_chatbots.api import (
+    CustomSummarizationNode,
+    TokenTrackingCallbackHandler,
+    get_search_tool_metadata,
+)
 from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
@@ -177,29 +182,33 @@ class BaseChatbot(ABC):
                 return state
         return None
 
-    async def send_posthog_event(
-        self, message: str, full_response: str, metadata: dict
-    ) -> None:
-        """
-        Send a posthog event with the user message, AI response, and metadata
-        """
-        if settings.POSTHOG_PROJECT_API_KEY:
-            try:
-                hog_client = posthog.Posthog(
-                    settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
-                )
-                hog_client.capture(
-                    self.user_id,
-                    event=self.JOB_ID,
-                    properties={
-                        "question": message,
-                        "answer": full_response,
-                        "metadata": metadata,
-                        "user": self.user_id,
-                    },
-                )
-            except:  # noqa: E722
-                log.exception("Error sending posthog event")
+    async def set_callbacks(
+        self, properties: Optional[dict] = None
+    ) -> list[CallbackHandler]:
+        """Set callbacks for the agent LLM"""
+        if settings.POSTHOG_PROJECT_API_KEY and settings.POSTHOG_API_HOST:
+            hog_client = posthog.Posthog(
+                settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
+            )
+            model_parts = self.model.rsplit("/", 1)
+            extra_props = properties or {}
+            callback_handler = TokenTrackingCallbackHandler(
+                model_name=self.model,
+                client=hog_client,
+                bot=self,
+                properties={
+                    "$ai_trace_id": self.thread_id,
+                    "$ai_span_name": self.JOB_ID,
+                    "$ai_model": model_parts[-1],
+                    "$ai_provider": model_parts[0],
+                    "distinct_id": self.user_id,
+                    "botName": self.JOB_ID,
+                    "user": self.user_id,
+                    **extra_props,
+                },
+            )
+            return [callback_handler]
+        return []
 
     async def get_completion(
         self,
@@ -219,6 +228,7 @@ class BaseChatbot(ABC):
             error = "Create agent before running"
             raise ValueError(error)
         try:
+            self.config["callbacks"] = await self.set_callbacks()
             state = {
                 "messages": [HumanMessage(message)],
                 **(extra_state or {}),
@@ -258,7 +268,6 @@ class BaseChatbot(ABC):
         metadata = await self.get_tool_metadata()
         if debug:
             yield f"\n\n<!-- {metadata} -->\n\n"
-        await self.send_posthog_event(message, full_response, metadata)
 
     @abstractmethod
     async def get_tool_metadata(self) -> str:
@@ -576,11 +585,13 @@ class TutorBot(BaseChatbot):
 
             intent_history = json_to_intent_list(json_history["intent_history"])
             assessment_history = json_to_messages(json_history["assessment_history"])
-
         else:
             chat_history = [HumanMessage(content=message)]
             intent_history = []
             assessment_history = []
+        self.llm.callbacks = await self.set_callbacks(
+            properties=json.loads(await self.get_tool_metadata())
+        )
 
         full_response = ""
         new_history = []
@@ -622,10 +633,6 @@ class TutorBot(BaseChatbot):
             )
             await create_tutorbot_output(
                 self.thread_id, json_output, self.edx_module_id
-            )
-
-            await self.send_posthog_event(
-                message, full_response, await self.get_tool_metadata()
             )
 
         except Exception:

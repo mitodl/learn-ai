@@ -199,8 +199,6 @@ async def test_get_completion(
     posthog_settings, mocker, mock_checkpointer, debug, search_results
 ):
     """Test that the ResourceRecommendationBot get_completion method returns expected values."""
-    posthog_settings.AI_DEBUG = debug
-    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
         return_value=MockAsyncIterator(
@@ -252,16 +250,6 @@ async def test_get_completion(
     if debug:
         assert '<!-- {"metadata"' in results
     assert "".join([value.decode() for value in expected_return_value]) in results
-    mock_posthog.Posthog.return_value.capture.assert_called_once_with(
-        "anonymous",
-        event="RECOMMENDATION_JOB",
-        properties={
-            "question": user_msg,
-            "answer": ANY,
-            "metadata": "{}",
-            "user": "anonymous",
-        },
-    )
 
 
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
@@ -586,8 +574,6 @@ async def test_tutor_get_completion(
     posthog_settings, mocker, mock_checkpointer, variant
 ):
     """Test that the tutor bot get_completion method returns expected values."""
-    mock_posthog = mocker.patch("ai_chatbots.chatbots.posthog", autospec=True)
-
     final_message = [
         "values",
         {
@@ -701,28 +687,6 @@ async def test_tutor_get_completion(
         new_history, intents, assessment_history, metadata
     )
     assert history.edx_module_id == (edx_module_id or "")
-
-    mock_posthog.Posthog.return_value.capture.assert_called_once_with(
-        "anonymous",
-        event="TUTOR_JOB",
-        properties={
-            "question": user_msg,
-            "answer": results,
-            "metadata": json.dumps(
-                {
-                    "edx_module_id": edx_module_id,
-                    "block_siblings": block_siblings,
-                    "problem": "problem_xml" if variant == "edx" else "",
-                    "problem_set": "problem_set_xml"
-                    if variant == "edx"
-                    else "problem_set",
-                    "problem_set_title": problem_set_title,
-                    "run_readable_id": run_readable_id,
-                }
-            ),
-            "user": "anonymous",
-        },
-    )
 
 
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
