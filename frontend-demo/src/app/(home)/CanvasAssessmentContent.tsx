@@ -13,9 +13,7 @@ import MenuItem from "@mui/material/MenuItem"
 import Button from "@mui/material/Button"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
-const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
-  { role: "assistant", content: "Hi, do you need any help?" },
-]
+const INITIAL_MESSAGES: AiChatProps["initialMessages"] = []
 const DEFAULT_COURSE_RUN = "14566-kaleba:20211202+canvas"
 type CanvasProblemSelectionFormProps = {
   defaultRun: string
