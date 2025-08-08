@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+Version 0.11.4
+--------------
+
+- Add gpt-5, 5-mini to the list of models that do not like the temperature variable (#268)
+
 Version 0.11.3 (Released August 07, 2025)
 --------------
 
