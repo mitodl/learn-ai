@@ -4792,13 +4792,13 @@ sympy = "*"
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.2.6"
+version = "0.2.7"
 description = "AI powered tutor"
 optional = false
 python-versions = "~=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.2.6-py3-none-any.whl", hash = "sha256:2942281d0344a77a5e3ef4ae92bffa5ad13965e9e6f588bc247860b0b1b3ee53"},
-    {file = "open_learning_ai_tutor-0.2.6.tar.gz", hash = "sha256:80c78bc358eebf9417a132262a302b9444e572afafd6059fa3aa9626b392b4c9"},
+    {file = "open_learning_ai_tutor-0.2.7-py3-none-any.whl", hash = "sha256:6c0fd9e82d685ffb0a1f10bb5733facdd8e6a804fa7db9378c46194b631a7198"},
+    {file = "open_learning_ai_tutor-0.2.7.tar.gz", hash = "sha256:de25fa06d3ff6b2188bded766a4cf5096607809d8bc93aebd2c74c9282cc97c7"},
 ]
 
 [package.dependencies]
