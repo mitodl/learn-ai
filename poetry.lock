@@ -1679,13 +1679,13 @@ dev = ["black", "flake8", "therapist", "tox", "twine"]
 
 [[package]]
 name = "django-debug-toolbar"
-version = "5.1.0"
+version = "6.0.0"
 description = "A configurable set of panels that display various debug information about the current request/response."
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "django_debug_toolbar-5.1.0-py3-none-any.whl", hash = "sha256:c0591e338ee9603bdfce5aebf8d18ca7341fdbb69595e2b0b34869be5857180e"},
-    {file = "django_debug_toolbar-5.1.0.tar.gz", hash = "sha256:8a3b9da4aeab8d384a366e20304bd939a451f0242523c5b7b402248ad474eed2"},
+    {file = "django_debug_toolbar-6.0.0-py3-none-any.whl", hash = "sha256:0cf2cac5c307b77d6e143c914e5c6592df53ffe34642d93929e5ef095ae56841"},
+    {file = "django_debug_toolbar-6.0.0.tar.gz", hash = "sha256:6eb9fa6f4a5884bf04004700ffb5a44043f1fff38784447fc52c1633448c8c14"},
 ]
 
 [package.dependencies]
@@ -8806,4 +8806,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "2457dab6bd8bd6689784653cf5c93441cf5a2a6214c53f32887cc2062dc984a4"
+content-hash = "d4ab176a6e841ef227f89111307910dae485b4d4c8311a6ae587dfc8d515317f"
