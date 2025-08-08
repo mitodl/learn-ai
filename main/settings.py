@@ -708,7 +708,8 @@ AI_BUDGET_DURATION = get_string(name="AI_BUDGET_DURATION", default="60m")
 AI_MAX_BUDGET = get_float(name="AI_MAX_BUDGET", default=0.05)
 AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10.0)
 AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
-    name="AI_UNSUPPORTED_TEMP_MODELS", default=["openai/o3-mini"]
+    name="AI_UNSUPPORTED_TEMP_MODELS",
+    default=["openai/o3-mini", "openai/gpt-5", "openai/gpt-5-mini"],
 )
 AI_PROMPT_CACHE_FUNCTION = get_string(
     name="AI_PROMPT_CACHE_FUNCTION", default="ai_chatbots.utils.get_django_cache"
