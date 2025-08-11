@@ -25,6 +25,25 @@ routes:
         allow_headers: "**"
         allow_credential: true
   - id: 2
+    name: "canvas_tutor_agent"
+    desc: "Protected route for canvas tutor agent - requires canvas_token header"
+    priority: 20
+    upstream_id: 1
+    uri: "/http/canvas_tutor_agent/"
+    plugins:
+      key-auth:
+        header: "canvas_token"
+        _meta:
+          disable: false
+      consumer-restriction:
+        whitelist:
+          - "canvas_agent"
+      cors:
+        allow_origins: "**"
+        allow_methods: "**"
+        allow_headers: "**"
+        allow_credential: true
+  - id: 3
     name: "passauth"
     desc: "Wildcard route that can use auth but doesn't require it."
     priority: 0
@@ -54,7 +73,7 @@ routes:
           set:
             Referrer-Policy: "origin"
     uri: "*"
-  - id: 3
+  - id: 4
     name: "logout-redirect"
     desc: "Strip trailing slash from logout redirect."
     priority: 10
@@ -63,7 +82,7 @@ routes:
     plugins:
       redirect:
         uri: "/logout"
-  - id: 4
+  - id: 5
     name: "reqauth"
     desc: "Routes that require authentication."
     priority: 10
