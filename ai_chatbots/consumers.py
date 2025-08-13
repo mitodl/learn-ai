@@ -535,7 +535,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
 
 class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
     """
-    Async HTTP consumer for the tutor bot.
+    Async HTTP consumer for the canvas tutor bot.
     """
 
     serializer_class = CanvasTutorChatRequestSerializer
@@ -584,6 +584,28 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
             agent=self.ROOM_NAME,
             object_id=serializer.validated_data.get("object_id_field"),
         )
+
+
+class DemoCanvasTutorBotHttpConsumer(CanvasTutorBotHttpConsumer):
+    """
+    Async HTTP consumer for the tutor bot. This is a demo version that
+    does not require authentication but is limited to demo runs.
+    """
+
+    def create_chatbot(
+        self,
+        serializer: CanvasTutorChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a TutorBot instance"""
+        run_readable_id = serializer.validated_data.get("run_readable_id", None)
+
+        if run_readable_id not in settings.CANVAS_TUTOR_DEMO_RUN_READABLE_IDS:
+            error = f"Invalid run_readable_id: {run_readable_id}. "
+            raise ValidationError(error)
+
+        else:
+            return super().create_chatbot(serializer, checkpointer)
 
 
 class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):

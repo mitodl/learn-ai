@@ -744,3 +744,8 @@ CONSUMER_THROTTLE_CLASSES = get_list_of_str(
     "CONSUMER_THROTTLE_CLASSES",
     ["main.consumer_throttles.UserScopedRateThrottle"],
 )
+
+CANVAS_TUTOR_DEMO_RUN_READABLE_IDS = get_list_of_str(
+    "CANVAS_TUTOR_DEMO_RUN_READABLE_IDS",
+    [],
+)
