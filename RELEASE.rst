@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.12.1
+--------------
+
+- update open-learning-ai-tutor (#273)
+- canvas tutor authentication (#272)
+
 Version 0.12.0 (Released August 11, 2025)
 --------------
 
