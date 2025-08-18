@@ -1972,13 +1972,13 @@ email = ["email-validator (>=2.1,<3.0)"]
 
 [[package]]
 name = "e2b"
-version = "1.11.0"
+version = "1.11.1"
 description = "E2B SDK that give agents cloud environments"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "e2b-1.11.0-py3-none-any.whl", hash = "sha256:3027dd2e9aed1b90e4475c879238bd8a19cf1dc6fd5f042c5dc1a06027cd3b35"},
-    {file = "e2b-1.11.0.tar.gz", hash = "sha256:40023cf0d569d49b5d9688a21f84d41bbbf57fbb49984dcb74490f41ab5a5c6d"},
+    {file = "e2b-1.11.1-py3-none-any.whl", hash = "sha256:1ecb123873788472731c101939a494ab852cbcce0f913df6f7ecb194ae932130"},
+    {file = "e2b-1.11.1.tar.gz", hash = "sha256:7f7b6f238208d0a23353bb0da01f91a924321b57c61b176506862cbc1493ce8c"},
 ]
 
 [package.dependencies]
@@ -1986,7 +1986,7 @@ attrs = ">=23.2.0"
 httpcore = ">=1.0.5,<2.0.0"
 httpx = ">=0.27.0,<1.0.0"
 packaging = ">=24.1"
-protobuf = ">=5.29.4,<6.0.0"
+protobuf = ">=4.21.0"
 python-dateutil = ">=2.8.2"
 typing-extensions = ">=4.1.0"
 
@@ -4792,13 +4792,13 @@ sympy = "*"
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.2.7"
+version = "0.2.8"
 description = "AI powered tutor"
 optional = false
 python-versions = "~=3.12"
 files = [
-    {file = "open_learning_ai_tutor-0.2.7-py3-none-any.whl", hash = "sha256:6c0fd9e82d685ffb0a1f10bb5733facdd8e6a804fa7db9378c46194b631a7198"},
-    {file = "open_learning_ai_tutor-0.2.7.tar.gz", hash = "sha256:de25fa06d3ff6b2188bded766a4cf5096607809d8bc93aebd2c74c9282cc97c7"},
+    {file = "open_learning_ai_tutor-0.2.8-py3-none-any.whl", hash = "sha256:e62cfda5a1ed7b98f6124eeaad6e8e346794bd93c49c8ca5ec4fa2cc25208dac"},
+    {file = "open_learning_ai_tutor-0.2.8.tar.gz", hash = "sha256:89ef98b0d1fd6b75b522e6a424556b54712af0860cc53600716cd0c80ce62f3f"},
 ]
 
 [package.dependencies]
@@ -8806,4 +8806,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "2457dab6bd8bd6689784653cf5c93441cf5a2a6214c53f32887cc2062dc984a4"
+content-hash = "e90f15ed4c313969228a45d407614db1cb67d382f6c616ac49039268df98ad31"
