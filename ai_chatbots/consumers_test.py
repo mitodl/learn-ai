@@ -43,6 +43,15 @@ def syllabus_consumer(async_user):
 
 
 @pytest.fixture
+def canvas_syllabus_consumer(async_user):
+    """Return a syllabus canvas consumer."""
+    consumer = consumers.CanvasSyllabusBotHttpConsumer()
+    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.channel_name = "test_syllabus_canvas_channel"
+    return consumer
+
+
+@pytest.fixture
 def tutor_consumer(async_user):
     """Return a tutor consumer."""
     consumer = consumers.TutorBotHttpConsumer()
@@ -258,19 +267,29 @@ def test_syllabus_process_extra_state(syllabus_consumer, request_params):
     }
 
 
-def test_canvas_process_extra_state(syllabus_consumer, async_user):
+def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     """Test that the canvas syllabus process_extra_state function returns False for exclude_canvas."""
-    consumer = consumers.CanvasSyllabusBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
-    consumer.channel_name = "test_syllabus_channel"
-
-    assert consumer.process_extra_state(
+    assert canvas_syllabus_consumer.process_extra_state(
         {"message": "hello", "course_id": "MITx+6.00.1x"}
     ) == {
         "course_id": ["MITx+6.00.1x"],
         "collection_name": [None],
         "exclude_canvas": ["False"],
     }
+
+
+def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
+    """The correct chatbot class should be assigned to self.chatbot"""
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={
+            "message": "test",
+            "course_id": "MITx+6.00.1x",
+            "model": "gpt-3.5-turbo",
+        }
+    )
+    serializer.is_valid()
+    bot = canvas_syllabus_consumer.create_chatbot(serializer, mocker.Mock())
+    assert bot.__class__ == consumers.CanvasSyllabusBot
 
 
 @pytest.mark.parametrize(
