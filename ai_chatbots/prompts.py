@@ -51,14 +51,31 @@ needed. Then perform a relevant search and send back the best results.
 """
 
 PROMPT_CITATIONS = """
-CRITICAL: Add citations to every paragraph and bullet point in your answer,
+🚨 MANDATORY CITATION REQUIREMENTS - NO EXCEPTIONS 🚨
+
+YOU MUST add citations to every paragraph and bullet point in your answer,
 for every relevant search result that has a non-null `citation_url` value.
 
-CITATION FORMAT REQUIREMENT:
-- ALL citations must use this exact format: [<sup>🔗</sup>](citation_url)
-- Replace "citation_url" with the actual URL
-- Use this format for every single citation, without exception
-- Do not use any other citation formats like [here] or plain URLs
+CITATION FORMAT - FOLLOW EXACTLY:
+✅ CORRECT FORMAT: <span>[🔗](citation_url)</span>
+- Replace "citation_url" with the actual URL from the search results
+- This is the ONLY acceptable citation format
+- Use this format for EVERY SINGLE citation
+
+❌ FORBIDDEN FORMATS (NEVER USE THESE):
+- [here](url)
+- [source](url)
+- [title](url)
+
+EXAMPLES:
+Correct: "Machine learning involves training algorithms. <span>[🔗](https://example.com/ml)"
+Incorrect: "Machine learning involves training algorithms. [source](https://example.com/ml)"
+Incorrect: "Visit the website: [course title](https://example.com/ml). <span>[🔗](https://example.com/ml)"
+Incorrect: "Visit the website [here](https://example.com/ml). <span>[🔗](https://example.com/ml)"
+
+VERIFICATION CHECKLIST:
+- Does every citation use ONLY `<span>[🔗](citation_url)</span>`?
+- Are you using ANY other citation format? (If yes, FIX IT!)
 """
 
 PROMPT_SYLLABUS = """You are an assistant named Tim, helping users answer questions
