@@ -1,5 +1,7 @@
 """Default prompts for various AI chatbots.  Tutor prompts are in a separate repo"""
 
+from django.conf import settings
+
 PROMPT_RECOMMENDATION = """You are an assistant named Tim, helping users find courses
 from a catalog of learning resources. Users can ask about specific topics, levels, or
 recommendations based on their interests or goals.  Do not answer questions that are
@@ -48,6 +50,16 @@ AI in their discipline - does this person want to study machine learning? More i
 needed. Then perform a relevant search and send back the best results.
 """
 
+PROMPT_CITATIONS = """
+CRITICAL: Add citations to every paragraph and bullet point in your answer,
+for every relevant search result that has a non-null `citation_url` value.
+
+CITATION FORMAT REQUIREMENT:
+- ALL citations must use this exact format: [<sup>🔗</sup>](citation_url)
+- Replace "citation_url" with the actual URL
+- Use this format for every single citation, without exception
+- Do not use any other citation formats like [here] or plain URLs
+"""
 
 PROMPT_SYLLABUS = """You are an assistant named Tim, helping users answer questions
 related to an MIT learning resource.
@@ -57,16 +69,27 @@ Your job:
 question.  The search function already has the resource identifier.
 2. Provide a clear, user-friendly summary of the information retrieved by the tool to
 answer the user's question.
-3. At the end of your answer, return a citation link for every search result that
-includes a url and that was used to justify the answer. ALWAYS use the following format
-for citations at the end of your answer:
 
-Citations:
-- [result.citation_title or "Citation 1"](result.citation_url)
-- [result.citation_title or "Citation 2"](result.citation_url)
-...etc
+{citations}
 
-Each citation link should open in a separate window.
+Always use the tool results to answer questions, and answer only based on the tool
+output. Do not include the course_id in the query parameter.  The tool always has
+access to the course id.
+VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
+ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
+information."""
+
+
+PROMPT_SYLLABUS_CANVAS = """You are an assistant named Tim, helping users answer
+questions related to an MIT learning resource.
+
+Your job:
+1. Use the available search function to gather relevant information about the user's
+question.  The search function already has the resource identifier.
+2. Provide a clear, user-friendly summary of the information retrieved by the tool to
+answer the user's question.
+
+{citations}
 
 Always use the tool results to answer questions, and answer only based on the tool
 output. Do not include the course_id in the query parameter.  The tool always has
@@ -109,10 +132,28 @@ tool messages and any previous summaries in this new summary.
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
 
+def parse_prompt(prompt_text: str, prompt_name) -> str:
+    """
+    Add citation instructions to prompt if specified by settings
+
+    Args:
+        prompt_text: The prompt string to parse.
+        prompt_name: The name of the prompt to check for citation instructions.
+
+    Returns:
+        The parsed prompt string.
+    """
+    citation_prompt = (
+        PROMPT_CITATIONS if prompt_name in settings.AI_CITED_PROMPTS else ""
+    )
+    return prompt_text.format(citations=citation_prompt)
+
+
 CHATBOT_PROMPT_MAPPING = {
-    "recommendation": PROMPT_RECOMMENDATION,
-    "syllabus": PROMPT_SYLLABUS,
-    "video_gpt": PROMPT_VIDEO_GPT,
+    "recommendation": parse_prompt(PROMPT_RECOMMENDATION, "recommendation"),
+    "syllabus": parse_prompt(PROMPT_SYLLABUS, "syllabus"),
+    "syllabus_canvas": parse_prompt(PROMPT_SYLLABUS_CANVAS, "syllabus_canvas"),
+    "video_gpt": parse_prompt(PROMPT_VIDEO_GPT, "video_gpt"),
 }
 
 

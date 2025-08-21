@@ -446,7 +446,7 @@ class SyllabusAgentState(SummaryState):
 class SyllabusBot(SummarizingChatbot):
     """Service class for the AI syllabus agent"""
 
-    PROMPT_TEMPLATE = "syllabus"
+    PROMPT_TEMPLATE = settings.AI_DEFAULT_SYLLABUS_PROMPT
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
@@ -488,6 +488,16 @@ class SyllabusBot(SummarizingChatbot):
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+
+class CanvasSyllabusBot(SyllabusBot):
+    """Service class for the Canvas syllabus agent"""
+
+    PROMPT_TEMPLATE = settings.AI_DEFAULT_CANVAS_SYLLABUS_PROMPT
+    TASK_NAME = "CANVAS_SYLLABUS_TASK"
+    JOB_ID = "CANVAS_SYLLABUS_JOB"
+    STATE_CLASS = SyllabusAgentState
+    MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
 
 
 @database_sync_to_async

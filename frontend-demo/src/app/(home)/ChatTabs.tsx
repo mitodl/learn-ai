@@ -6,6 +6,7 @@ import { Box } from "@mui/material"
 import { useSearchParams } from "next/navigation"
 import RecommendationContent from "./RecommendationContent"
 import SyllabusContent from "./SyllabusContent"
+import SyllabusCanvasContent from "./SyllabusCanvasContent"
 import AssessmentContent from "./AssessmentContent"
 import CanvasAssessmentContent from "./CanvasAssessmentContent"
 import VideoContent from "./VideoContent"
@@ -14,6 +15,7 @@ import { useEffect, useState } from "react"
 export enum ChatTab {
   RecommendationGPT = "RecommendationGPT",
   SyllabusGPT = "SyllabusGPT",
+  SyllabusCanvasGPT = "SyllabusCanvasGPT",
   VideoGPT = "VideoGPT",
   AssessmentGPT = "AssessmentGPT",
   CanvasAssessmentGPT = "CanvasAssessmentGPT",
@@ -43,6 +45,7 @@ const ChatTabs = () => {
         <TabList onChange={handleTabChange} aria-label="Home Page Tabs">
           <Tab label="RecommendationGPT" value={ChatTab.RecommendationGPT} />
           <Tab label="SyllabusGPT" value={ChatTab.SyllabusGPT} />
+          <Tab label="SyllabusCanvasGPT" value={ChatTab.SyllabusCanvasGPT} />
           <Tab label="VideoGPT" value={ChatTab.VideoGPT} />
           <Tab label="AssessmentGPT" value={ChatTab.AssessmentGPT} />
           <Tab
@@ -56,6 +59,9 @@ const ChatTabs = () => {
       </TabPanel>
       <TabPanel value={ChatTab.SyllabusGPT}>
         <SyllabusContent />
+      </TabPanel>
+      <TabPanel value={ChatTab.SyllabusCanvasGPT}>
+        <SyllabusCanvasContent />
       </TabPanel>
       <TabPanel value={ChatTab.VideoGPT}>
         <VideoContent />

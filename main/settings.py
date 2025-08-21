@@ -625,46 +625,14 @@ CHANNEL_LAYERS = {
 }
 
 # AI settings
+AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
+    name="AI_CHATBOTS_SESSION_EXPIRY_DAYS", default=10
+)
+AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
+    name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
+)
+AI_CITED_PROMPTS = get_list_of_str("AI_CITED_PROMPTS", default=[])
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
-AI_MIT_SEARCH_VECTOR_URL = get_string(
-    name="AI_MIT_SEARCH_VECTOR_URL",
-    default="https://api.learn.mit.edu/api/v0/vector_learning_resources_search/",
-)
-AI_MIT_SEARCH_ELASTIC_URL = get_string(
-    name="AI_MIT_SEARCH_ELASTIC_URL",
-    default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
-)
-AI_MIT_SEARCH_URL = get_string(
-    name="AI_MIT_SEARCH_URL",
-    default=AI_MIT_SEARCH_VECTOR_URL,
-)
-AI_MIT_SEARCH_DETAIL_URL = get_string(
-    name="AI_MIT_SEARCH_DETAIL_URL",
-    default="https://learn.mit.edu/?resource=",
-)
-AI_MIT_SYLLABUS_URL = get_string(
-    "AI_MIT_SYLLABUS_URL",
-    "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
-)
-AI_MIT_VIDEO_TRANSCRIPT_URL = get_string(
-    "AI_MIT_VIDEO_TRANSCRIPT_URL",
-    "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
-)
-AI_MIT_CONTENTFILE_URL = get_string(
-    name="AI_MIT_CONTENTFILE_URL",
-    default="https://api.learn.mit.edu/api/v1/contentfiles/",
-)
-PROBLEM_SET_URL = get_string(
-    name="PROBLEM_SET_URL",
-    default="https://api.learn.mit.edu/api/v0/tutor/problems/",
-)
-LEARN_ACCESS_TOKEN = get_string(
-    name="LEARN_ACCESS_TOKEN",
-    default="",
-)
-AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
-AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
-AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=5)
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o-mini")
 AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
@@ -676,27 +644,77 @@ AI_DEFAULT_SUMMARY_MODEL = get_string("AI_DEFAULT_SUMMARY_MODEL", AI_DEFAULT_MOD
 AI_DEFAULT_SYLLABUS_MODEL = get_string("AI_DEFAULT_SYLLABUS_MODEL", AI_DEFAULT_MODEL)
 # AI agents that return lengthy tool/search results need larger token limits
 AI_DEFAULT_SYLLABUS_MAX_TOKENS = get_int("AI_DEFAULT_SYLLABUS_MAX_TOKENS", 16384)
+AI_DEFAULT_SYLLABUS_PROMPT = get_string("AI_DEFAULT_SYLLABUS_PROMPT", "syllabus")
+AI_DEFAULT_CANVAS_SYLLABUS_PROMPT = get_string(
+    "AI_DEFAULT_CANVAS_SYLLABUS_PROMPT", "syllabus_canvas"
+)
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "openai/gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
-OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
-AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
-    name="AI_CHATBOTS_SESSION_EXPIRY_DAYS", default=10
-)
-AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
-    name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
-)
-AI_MAX_TOKEN_BIND = get_int(name="AI_MAX_TOKEN_BIND", default=16384)
-AI_PROMPT_CACHE_DURATION = get_int(
-    name="AI_PROMPT_CACHE_DURATION", default=60 * 60 * 24 * 28
-)  # 28 days
-AI_TUTOR_MAX_CONVERSATION_MEMORY = get_int(
-    name="AI_TUTOR_MAX_CONVERSATION_MEMORY", default=6
-)  # 6 back and forth messages prior to the current message
 AI_MAX_MESSAGE_LENGTH = get_int(
     name="AI_MAX_MESSAGE_LENGTH", default=6000
 )  # Maximum length of a message in characters
+AI_MAX_TOKEN_BIND = get_int(name="AI_MAX_TOKEN_BIND", default=16384)
+AI_MIT_CONTENTFILE_URL = get_string(
+    name="AI_MIT_CONTENTFILE_URL",
+    default="https://api.learn.mit.edu/api/v1/contentfiles/",
+)
+AI_MIT_SYLLABUS_URL = get_string(
+    "AI_MIT_SYLLABUS_URL",
+    "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
+)
+AI_MIT_VIDEO_TRANSCRIPT_URL = get_string(
+    "AI_MIT_VIDEO_TRANSCRIPT_URL",
+    "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
+)
+AI_PROMPT_CACHE_DURATION = get_int(
+    name="AI_PROMPT_CACHE_DURATION", default=60 * 60 * 24 * 28
+)  # 28 days
+AI_PROMPT_CACHE_FUNCTION = get_string(
+    name="AI_PROMPT_CACHE_FUNCTION", default="ai_chatbots.utils.get_django_cache"
+)
+AI_TUTOR_MAX_CONVERSATION_MEMORY = get_int(
+    name="AI_TUTOR_MAX_CONVERSATION_MEMORY", default=6
+)  # 6 back and forth messages prior to the current message
+AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
+    name="AI_UNSUPPORTED_TEMP_MODELS",
+    default=["openai/o3-mini", "openai/gpt-5", "openai/gpt-5-mini"],
+)
+LEARN_ACCESS_TOKEN = get_string(
+    name="LEARN_ACCESS_TOKEN",
+    default="",
+)
+PROBLEM_SET_URL = get_string(
+    name="PROBLEM_SET_URL",
+    default="https://api.learn.mit.edu/api/v0/tutor/problems/",
+)
+
+# AI search settings
+AI_MIT_SEARCH_DETAIL_URL = get_string(
+    name="AI_MIT_SEARCH_DETAIL_URL",
+    default="https://learn.mit.edu/?resource=",
+)
+AI_MIT_SEARCH_ELASTIC_URL = get_string(
+    name="AI_MIT_SEARCH_ELASTIC_URL",
+    default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
+)
+AI_MIT_SEARCH_VECTOR_URL = get_string(
+    name="AI_MIT_SEARCH_VECTOR_URL",
+    default="https://api.learn.mit.edu/api/v0/vector_learning_resources_search/",
+)
+AI_MIT_SEARCH_URL = get_string(
+    name="AI_MIT_SEARCH_URL",
+    default=AI_MIT_SEARCH_VECTOR_URL,
+)
+AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
+AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
+AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=5)
+
+# Provider keys
+OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
+LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
+
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
 AI_PROXY_URL = get_string(name="AI_PROXY_URL", default="")
@@ -707,14 +725,6 @@ AI_RPM_LIMIT = get_int(name="AI_RPM_LIMIT", default=10)
 AI_BUDGET_DURATION = get_string(name="AI_BUDGET_DURATION", default="60m")
 AI_MAX_BUDGET = get_float(name="AI_MAX_BUDGET", default=0.05)
 AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10.0)
-AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
-    name="AI_UNSUPPORTED_TEMP_MODELS",
-    default=["openai/o3-mini", "openai/gpt-5", "openai/gpt-5-mini"],
-)
-AI_PROMPT_CACHE_FUNCTION = get_string(
-    name="AI_PROMPT_CACHE_FUNCTION", default="ai_chatbots.utils.get_django_cache"
-)
-LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
 
 # APISIX middleware settings
 APISIX_USERDATA_MAP = {
@@ -747,5 +757,9 @@ CONSUMER_THROTTLE_CLASSES = get_list_of_str(
 
 CANVAS_TUTOR_DEMO_RUN_READABLE_IDS = get_list_of_str(
     "CANVAS_TUTOR_DEMO_RUN_READABLE_IDS",
+    [],
+)
+CANVAS_SYLLABUS_DEMO_READABLE_IDS = get_list_of_str(
+    "CANVAS_SYLLABUS_DEMO_READABLE_IDS",
     [],
 )

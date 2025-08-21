@@ -15,6 +15,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK
 
 from ai_chatbots.chatbots import (
+    CanvasSyllabusBot,
     ResourceRecommendationBot,
     SyllabusBot,
     TutorBot,
@@ -478,6 +479,49 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
             **super().process_extra_state(data),
             "exclude_canvas": [str(False)],
         }
+
+    def create_chatbot(
+        self,
+        serializer: SyllabusChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a SyllabusBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        instructions = serializer.validated_data.pop("instructions", None)
+        model = serializer.validated_data.pop("model", None)
+        enable_related_courses = bool(serializer.validated_data.get("related_courses"))
+
+        return CanvasSyllabusBot(
+            self.user_id,
+            checkpointer,
+            temperature=temperature,
+            instructions=instructions,
+            model=model,
+            thread_id=self.thread_id,
+            enable_related_courses=enable_related_courses,
+        )
+
+
+class DemoCanvasSyllabusBotHttpConsumer(CanvasSyllabusBotHttpConsumer):
+    """
+    Async HTTP consumer for the Canvas syllabus bot. This is a demo version that
+    does not require authentication but is limited to demo runs.
+    """
+
+    def create_chatbot(
+        self,
+        serializer: CanvasTutorChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a TutorBot instance"""
+        course_id = serializer.validated_data.get("course_id", None)
+
+        if course_id not in settings.CANVAS_SYLLABUS_DEMO_READABLE_IDS:
+            error = f"Invalid canvas readable_id: {course_id}. "
+            raise ValidationError(error)
+
+        else:
+            return super().create_chatbot(serializer, checkpointer)
 
 
 class TutorBotHttpConsumer(BaseBotHttpConsumer):
