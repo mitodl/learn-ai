@@ -278,7 +278,7 @@ def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     }
 
 
-def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
+async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
     """The correct chatbot class should be assigned to self.chatbot"""
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
@@ -288,6 +288,7 @@ def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
         }
     )
     serializer.is_valid()
+    await canvas_syllabus_consumer.prepare_response(serializer)
     bot = canvas_syllabus_consumer.create_chatbot(serializer, mocker.Mock())
     assert bot.__class__ == consumers.CanvasSyllabusBot
 
