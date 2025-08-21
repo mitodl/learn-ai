@@ -446,7 +446,7 @@ class SyllabusAgentState(SummaryState):
 class SyllabusBot(SummarizingChatbot):
     """Service class for the AI syllabus agent"""
 
-    PROMPT_TEMPLATE = settings.AI_DEFAULT_SYLLABUS_PROMPT
+    PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
@@ -493,7 +493,7 @@ class SyllabusBot(SummarizingChatbot):
 class CanvasSyllabusBot(SyllabusBot):
     """Service class for the Canvas syllabus agent"""
 
-    PROMPT_TEMPLATE = settings.AI_DEFAULT_CANVAS_SYLLABUS_PROMPT
+    PROMPT_TEMPLATE = "syllabus_canvas"
     TASK_NAME = "CANVAS_SYLLABUS_TASK"
     JOB_ID = "CANVAS_SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
