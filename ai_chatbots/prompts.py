@@ -57,24 +57,24 @@ YOU MUST add citations to every paragraph and bullet point in your answer,
 for every relevant search result that has a non-null `citation_url` value.
 
 CITATION FORMAT - FOLLOW EXACTLY:
-✅ CORRECT FORMAT: <span>[🔗](citation_url)</span>
+- CORRECT FORMAT is [^🔗^](citation_url)
 - Replace "citation_url" with the actual URL from the search results
-- This is the ONLY acceptable citation format
-- Use this format for EVERY SINGLE citation
+- This is the ONLY acceptable hyperlink format
+- Use this format for EVERY SINGLE citation or other link in your response
 
-❌ FORBIDDEN FORMATS (NEVER USE THESE):
+FORBIDDEN LINKS (NEVER USE THESE):
 - [here](url)
-- [source](url)
 - [title](url)
+REPEAT: NEVER USE THE ABOVE FOR LINKS!
 
 EXAMPLES:
-Correct: "Machine learning involves training algorithms. <span>[🔗](https://example.com/ml)"
-Incorrect: "Machine learning involves training algorithms. [source](https://example.com/ml)"
-Incorrect: "Visit the website: [course title](https://example.com/ml). <span>[🔗](https://example.com/ml)"
-Incorrect: "Visit the website [here](https://example.com/ml). <span>[🔗](https://example.com/ml)"
+CORRECT: "Machine learning involves training algorithms.[^🔗^](https://example.com/ml)"
+WRONG: "Machine learning involves training algorithms. [source](https://example.com/ml)"
+WRONG: "Visit the website: [course title](https://example.com/ml)[^🔗^](https://example.com/ml)"
+WRONG: "Visit the website [here](https://example.com/ml)[^🔗^](https://example.com/ml)"
 
 VERIFICATION CHECKLIST:
-- Does every citation use ONLY `<span>[🔗](citation_url)</span>`?
+- Does every citation use ONLY `[^🔗^](citation_url)`? (If no, FIX IT!)
 - Are you using ANY other citation format? (If yes, FIX IT!)
 """
 
