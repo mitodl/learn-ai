@@ -1343,9 +1343,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/smoot-design@npm:^6.11.0":
-  version: 6.11.0
-  resolution: "@mitodl/smoot-design@npm:6.11.0"
+"@mitodl/smoot-design@npm:6.17.0":
+  version: 6.17.0
+  resolution: "@mitodl/smoot-design@npm:6.17.0"
   dependencies:
     "@ai-sdk/react": "npm:1.2.12"
     "@emotion/cache": "npm:^11.14.0"
@@ -1358,6 +1358,7 @@ __metadata:
     rehype-mathjax: "npm:^7.1.0"
     rehype-raw: "npm:^7.0.0"
     remark-math: "npm:^6.0.0"
+    remark-supersub: "npm:^1.0.0"
     tiny-invariant: "npm:^1.3.1"
     zod: "npm:^3.23.8"
   peerDependencies:
@@ -1369,7 +1370,7 @@ __metadata:
     "@remixicon/react": ^4.2.0
     react: ^18 || ^19
     react-dom: ^18 || ^19
-  checksum: 10c0/5d219acfdb91c62eff92c5de8c71b64a88edc139c6717534fdcd4d773702a2f5befd4a6cdb2a26fc41e54f9b6e6fa2b567809bed3e5d690d165fd4a2deb75891
+  checksum: 10c0/a2a2113e7c4fa908ed261e95af49b9e6ede4b20844c39a888e397f1aeb760733583e15d7d486f260f87aff83da6e662d5b4939afc8d94022c468224b125e86d6
   languageName: node
   linkType: hard
 
@@ -9196,6 +9197,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"remark-supersub@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "remark-supersub@npm:1.0.0"
+  dependencies:
+    unist-util-visit: "npm:^4.0.0"
+  checksum: 10c0/db86fe4024c3d6bb92980a03724e17cf4a85dc8c97623a7dc0537609034785cbd1981c800beb17744914500a2f23392b203a6a723952b9775ffcdbfe568188c6
+  languageName: node
+  linkType: hard
+
 "require-directory@npm:^2.1.1":
   version: 2.1.1
   resolution: "require-directory@npm:2.1.1"
@@ -10535,7 +10545,7 @@ __metadata:
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
     "@mitodl/mit-learn-api-axios": "npm:^2025.6.3"
-    "@mitodl/smoot-design": "npm:^6.11.0"
+    "@mitodl/smoot-design": "npm:6.17.0"
     "@mui/lab": "npm:^6.0.1-beta.34"
     "@mui/material": "npm:^6.1.8"
     "@mui/material-nextjs": "npm:^6.1.8"
@@ -10673,6 +10683,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"unist-util-is@npm:^5.0.0":
+  version: 5.2.1
+  resolution: "unist-util-is@npm:5.2.1"
+  dependencies:
+    "@types/unist": "npm:^2.0.0"
+  checksum: 10c0/a2376910b832bb10653d2167c3cd85b3610a5fd53f5169834c08b3c3a720fae9043d75ad32d727eedfc611491966c26a9501d428ec62467edc17f270feb5410b
+  languageName: node
+  linkType: hard
+
 "unist-util-is@npm:^6.0.0":
   version: 6.0.0
   resolution: "unist-util-is@npm:6.0.0"
@@ -10719,6 +10738,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"unist-util-visit-parents@npm:^5.1.1":
+  version: 5.1.3
+  resolution: "unist-util-visit-parents@npm:5.1.3"
+  dependencies:
+    "@types/unist": "npm:^2.0.0"
+    unist-util-is: "npm:^5.0.0"
+  checksum: 10c0/f6829bfd8f2eddf63a32e2c302cd50978ef0c194b792c6fe60c2b71dfd7232415a3c5941903972543e9d34e6a8ea69dee9ccd95811f4a795495ed2ae855d28d0
+  languageName: node
+  linkType: hard
+
 "unist-util-visit-parents@npm:^6.0.0":
   version: 6.0.1
   resolution: "unist-util-visit-parents@npm:6.0.1"
@@ -10726,6 +10755,17 @@ __metadata:
     "@types/unist": "npm:^3.0.0"
     unist-util-is: "npm:^6.0.0"
   checksum: 10c0/51b1a5b0aa23c97d3e03e7288f0cdf136974df2217d0999d3de573c05001ef04cccd246f51d2ebdfb9e8b0ed2704451ad90ba85ae3f3177cf9772cef67f56206
+  languageName: node
+  linkType: hard
+
+"unist-util-visit@npm:^4.0.0":
+  version: 4.1.2
+  resolution: "unist-util-visit@npm:4.1.2"
+  dependencies:
+    "@types/unist": "npm:^2.0.0"
+    unist-util-is: "npm:^5.0.0"
+    unist-util-visit-parents: "npm:^5.1.1"
+  checksum: 10c0/56a1f49a4d8e321e75b3c7821d540a45165a031dd06324bb0e8c75e7737bc8d73bdddbf0b0ca82000f9708a4c36861c6ebe88d01f7cf00e925f5d75f13a3a017
   languageName: node
   linkType: hard
 
