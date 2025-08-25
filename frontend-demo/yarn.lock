@@ -1343,7 +1343,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mitodl/smoot-design@npm:6.17.0":
+"@mitodl/smoot-design@npm:^6.17.0":
   version: 6.17.0
   resolution: "@mitodl/smoot-design@npm:6.17.0"
   dependencies:
@@ -10545,7 +10545,7 @@ __metadata:
     "@emotion/styled": "npm:^11.11.0"
     "@faker-js/faker": "npm:^9.0.0"
     "@mitodl/mit-learn-api-axios": "npm:^2025.6.3"
-    "@mitodl/smoot-design": "npm:6.17.0"
+    "@mitodl/smoot-design": "npm:^6.17.0"
     "@mui/lab": "npm:^6.0.1-beta.34"
     "@mui/material": "npm:^6.1.8"
     "@mui/material-nextjs": "npm:^6.1.8"
