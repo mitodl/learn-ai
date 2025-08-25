@@ -46,9 +46,7 @@ const SyllabusCanvasContent = () => {
 
   // Sync readableIdText with settings when settings change (e.g., when navigating back to tab)
   useEffect(() => {
-    if (settings.syllabus_readable_id !== readableIdText) {
-      setReadableIdText(settings.syllabus_readable_id)
-    }
+    setReadableIdText(settings.syllabus_readable_id)
   }, [settings.syllabus_readable_id])
 
   const readableId = settings.syllabus_readable_id || DEFAULT_READABLE_ID
