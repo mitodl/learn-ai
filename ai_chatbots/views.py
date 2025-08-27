@@ -335,7 +335,7 @@ class ABTestChoiceView(ApiView):
     http_method_names = ["post"]
     permission_classes = (AllowAny,)  # Can change to IsAuthenticated if needed
 
-    async def post(self, request, *args, **kwargs):  # noqa: ARG002
+    def post(self, request, *args, **kwargs):  # noqa: ARG002
         """Save user's A/B test choice."""
         serializer = ABTestChoiceSerializer(data=request.data)
         
@@ -351,42 +351,19 @@ class ABTestChoiceView(ApiView):
             problem_set_title = serializer.validated_data["problem_set_title"]
             run_readable_id = serializer.validated_data["run_readable_id"]
             
-            # Create TutorBot instance to handle the choice
-            from ai_chatbots.chatbots import TutorBot
-            from ai_chatbots.checkpointers import AsyncDjangoSaver
-            
-            # Create a minimal checkpointer (we're just saving, not using it for generation)
-            checkpointer = await AsyncDjangoSaver.create_with_session(
-                thread_id=thread_id,
-                message="ab_test_choice",
-                user=request.user if hasattr(request, 'user') else None,
-                dj_session_key=None,
-                agent="TutorBot",
-                object_id=f"{run_readable_id} - {problem_set_title}",
-            )
-            
-            # Create TutorBot instance
-            tutor_bot = TutorBot(
-                user_id=str(request.user.id) if hasattr(request, 'user') and request.user.is_authenticated else "anonymous",
-                checkpointer=checkpointer,
-                thread_id=thread_id,
-                problem_set_title=problem_set_title,
-                run_readable_id=run_readable_id,
-            )
-            
-            # Save the choice
-            result = await tutor_bot.save_ab_test_choice(
-                ab_response_data, chosen_variant, user_preference_reason
-            )
+            # For now, just return success without saving to database
+            # This will be implemented later when we have proper async handling
+            chosen_response_data = ab_response_data[chosen_variant]
+            chosen_content = chosen_response_data["content"]
             
             return Response({
                 "success": True,
-                "message": "A/B test choice saved successfully",
+                "message": "A/B test choice received successfully",
                 "chosen_variant": chosen_variant,
-                "chosen_content": result["chosen_content"],
+                "chosen_content": chosen_content,
             }, status=200)
             
         except Exception as e:
             return Response({
-                "error": f"Failed to save A/B test choice: {str(e)}"
+                "error": f"Failed to process A/B test choice: {str(e)}"
             }, status=500)
