@@ -19,6 +19,7 @@ from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 from ai_chatbots.permissions import IsThreadOwner
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import (
+    ABTestChoiceSerializer,
     ChatMessageSerializer,
     LLMModelSerializer,
     SystemPromptSerializer,
@@ -316,3 +317,76 @@ class SystemPromptViewSet(GenericViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+@extend_schema(
+    request=ABTestChoiceSerializer,
+    responses={
+        200: OpenApiResponse(description="A/B test choice saved successfully"),
+        400: OpenApiResponse(description="Invalid request data"),
+        500: OpenApiResponse(description="Error saving choice"),
+    },
+)
+class ABTestChoiceView(ApiView):
+    """
+    API endpoint to save user's A/B test choice and update chat history.
+    """
+
+    http_method_names = ["post"]
+    permission_classes = (AllowAny,)  # Can change to IsAuthenticated if needed
+
+    async def post(self, request, *args, **kwargs):  # noqa: ARG002
+        """Save user's A/B test choice."""
+        serializer = ABTestChoiceSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        
+        try:
+            # Extract validated data
+            thread_id = serializer.validated_data["thread_id"]
+            chosen_variant = serializer.validated_data["chosen_variant"]
+            ab_response_data = serializer.validated_data["ab_response_data"]
+            user_preference_reason = serializer.validated_data.get("user_preference_reason", "")
+            problem_set_title = serializer.validated_data["problem_set_title"]
+            run_readable_id = serializer.validated_data["run_readable_id"]
+            
+            # Create TutorBot instance to handle the choice
+            from ai_chatbots.chatbots import TutorBot
+            from ai_chatbots.checkpointers import AsyncDjangoSaver
+            
+            # Create a minimal checkpointer (we're just saving, not using it for generation)
+            checkpointer = await AsyncDjangoSaver.create_with_session(
+                thread_id=thread_id,
+                message="ab_test_choice",
+                user=request.user if hasattr(request, 'user') else None,
+                dj_session_key=None,
+                agent="TutorBot",
+                object_id=f"{run_readable_id} - {problem_set_title}",
+            )
+            
+            # Create TutorBot instance
+            tutor_bot = TutorBot(
+                user_id=str(request.user.id) if hasattr(request, 'user') and request.user.is_authenticated else "anonymous",
+                checkpointer=checkpointer,
+                thread_id=thread_id,
+                problem_set_title=problem_set_title,
+                run_readable_id=run_readable_id,
+            )
+            
+            # Save the choice
+            result = await tutor_bot.save_ab_test_choice(
+                ab_response_data, chosen_variant, user_preference_reason
+            )
+            
+            return Response({
+                "success": True,
+                "message": "A/B test choice saved successfully",
+                "chosen_variant": chosen_variant,
+                "chosen_content": result["chosen_content"],
+            }, status=200)
+            
+        except Exception as e:
+            return Response({
+                "error": f"Failed to save A/B test choice: {str(e)}"
+            }, status=500)

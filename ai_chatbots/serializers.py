@@ -159,6 +159,21 @@ class CanvasTutorChatRequestSerializer(ChatRequestSerializer):
         return f"{obj.get('run_readable_id', '')} - {obj.get('problem_set_title', '')}"
 
 
+class ABTestChoiceSerializer(serializers.Serializer):
+    """
+    Serializer for A/B test choice submissions.
+    """
+    
+    thread_id = serializers.CharField(required=True, allow_blank=False)
+    chosen_variant = serializers.ChoiceField(choices=["control", "treatment"], required=True)
+    ab_response_data = serializers.JSONField(required=True)
+    user_preference_reason = serializers.CharField(required=False, allow_blank=True, default="")
+    
+    # Canvas-specific fields to identify the chatbot
+    problem_set_title = serializers.CharField(required=True, allow_blank=False)
+    run_readable_id = serializers.CharField(required=True, allow_blank=False)
+
+
 class LLMModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = LLMModel
