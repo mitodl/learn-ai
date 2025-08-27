@@ -166,6 +166,11 @@ The current chatbot classes that inherit from this base class are:
 - `VideoGPTBot` - answers questions about a specific EdX course video. The chatbot calls a tool which searches the MIT Learn contentfile vector search API, using a filter based on a provided edx module id and video transcript block id.
 - `TutorBot` - Provides assistance to users working though EdX course problem sets. The graph, tools, and prompts for this chatbot are primarily defined in an external repository - [open-learning-ai-tutor](https://github.com/mitodl/open-learning-ai-tutor/)
 
+When accessing the SyllabusBot and TutorBot via Canvas endpoints, a `canvas_token` auth header needs to be passed for each request.
+The value of this token locally is based on the environment variable `CANVAS_AI_TOKEN`.
+To retrieve the value from RC or prod if needed for testing, you can run this command:
+`kubectl describe apisixconsumer canvas-agent -n learn-ai`
+
 #### Agent graphs
 
 The `BaseChatbot` class explicitly defines a sample graph made up of an LLM node, tool node, and the edges connecting them. It is intended only as a reference to provide some guidance on how to construct your own.
