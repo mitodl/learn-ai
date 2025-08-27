@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.12.1"
+VERSION = "0.13.0"
 
 log = logging.getLogger()
 
