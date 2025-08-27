@@ -22,6 +22,11 @@ http_patterns = [
         name="canvas_syllabus_agent_sse",
     ),
     re_path(
+        r"http/demo_canvas_syllabus_agent/",
+        consumers.DemoCanvasSyllabusBotHttpConsumer.as_asgi(),
+        name="demo_canvas_syllabus_agent_sse",
+    ),
+    re_path(
         r"http/video_gpt_agent/",
         consumers.VideoGPTBotHttpConsumer.as_asgi(),
         name="video_gpt_agent_sse",

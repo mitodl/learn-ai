@@ -342,7 +342,12 @@ async def test_syllabus_bot_tool(
     raw_results = content_chunk_results.get("results")
     expected_results = {
         "results": [
-            {key: resource.get(key) for key in retained_attributes}
+            {
+                "citation_title": resource.get("title")
+                or resource.get("content_title"),
+                "citation_url": resource.get("url"),
+                **{key: resource.get(key) for key in retained_attributes},
+            }
             for resource in raw_results
         ],
         "metadata": {},
@@ -388,6 +393,8 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
             {
                 "run_title": "Main topics",
                 "chunk_content": "Here are the main topics",
+                "citation_title": None,
+                "citation_url": None,
             }
         ],
     }

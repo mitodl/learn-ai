@@ -1,5 +1,6 @@
 """Management command for updating a prompt's text content from the command line."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -110,6 +111,11 @@ class Command(BaseCommand):
         except LangSmithError as le:
             self.stderr.write(f"{le}\n\nError: Please check your Langsmith env values.")
             sys.exit(1)
+        cache.set(
+            prompt_key,
+            prompt_value,
+            os.environ.get("AI_PROMPT_CACHE_DURATION", 60 * 60 * 24 * 28),
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Successfully updated prompt '{prompt_key}' on LangSmith."

@@ -490,6 +490,16 @@ class SyllabusBot(SummarizingChatbot):
         return get_search_tool_metadata(thread_id, latest_state)
 
 
+class CanvasSyllabusBot(SyllabusBot):
+    """Service class for the Canvas syllabus agent"""
+
+    PROMPT_TEMPLATE = "syllabus_canvas"
+    TASK_NAME = "CANVAS_SYLLABUS_TASK"
+    JOB_ID = "CANVAS_SYLLABUS_JOB"
+    STATE_CLASS = SyllabusAgentState
+    MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
+
+
 @database_sync_to_async
 def create_tutorbot_output(thread_id, chat_json, edx_module_id):
     return TutorBotOutput.objects.create(

@@ -12,7 +12,7 @@ from ai_chatbots.factories import (
     UserChatSessionFactory,
 )
 from ai_chatbots.models import LLMModel
-from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
+from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING, parse_prompt
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
 from main.factories import UserFactory
@@ -198,14 +198,16 @@ def test_list_all_prompts(client):
     assert response.status_code == 200
 
     results = response.json()
-    assert len(results) == 3
+    assert len(results) == 4
 
     prompt_names = [item["prompt_name"] for item in results]
     assert sorted(prompt_names) == sorted(CHATBOT_PROMPT_MAPPING.keys())
 
     for item in results:
         prompt_name = item["prompt_name"]
-        assert item["prompt_value"] == CHATBOT_PROMPT_MAPPING.get(prompt_name)
+        assert item["prompt_value"] == parse_prompt(
+            CHATBOT_PROMPT_MAPPING.get(prompt_name), prompt_name
+        )
 
 
 @pytest.mark.parametrize("prompt_name", CHATBOT_PROMPT_MAPPING.keys())

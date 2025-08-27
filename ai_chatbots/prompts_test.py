@@ -98,5 +98,5 @@ def test_get_system_prompt_no_langsmith(mocker):
         prompts.SYSTEM_PROMPT_MAPPING,
         get_django_cache,
     )
-    assert prompt == prompts.PROMPT_SYLLABUS
+    assert prompt == prompts.SYSTEM_PROMPT_MAPPING["syllabus"]
     mock_pull.assert_not_called()
