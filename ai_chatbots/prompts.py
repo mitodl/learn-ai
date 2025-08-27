@@ -51,31 +51,23 @@ needed. Then perform a relevant search and send back the best results.
 """
 
 PROMPT_CITATIONS = """
-🚨 MANDATORY CITATION REQUIREMENTS - NO EXCEPTIONS 🚨
+🚨 CITATION REQUIREMENTS 🚨
 
-YOU MUST add citations to every paragraph and bullet point in your answer,
-for every relevant search result that has a non-null `citation_url` value.
+For every paragraph and bullet point in your answer,
+check if the relevant search results for that paragraph have a `citation_url` value.
+If no, YOU MUST NOT add a citation.
+If yes, YOU MUST add citations to the paragraph in the correct format, described below.
 
 CITATION FORMAT - FOLLOW EXACTLY:
-- CORRECT FORMAT is [^🔗^](citation_url)
-- Replace "citation_url" with the actual URL from the search results
+- CORRECT FORMAT is [^🔗^](url) where url == search_result.citation_url
 - This is the ONLY acceptable hyperlink format
-- Use this format for EVERY SINGLE citation or other link in your response
-
-FORBIDDEN LINKS (NEVER USE THESE):
-- [here](url)
-- [title](url)
-REPEAT: NEVER USE THE ABOVE FOR LINKS!
-
-EXAMPLES:
-CORRECT: "Machine learning involves training algorithms.[^🔗^](https://example.com/ml)"
-WRONG: "Machine learning involves training algorithms. [source](https://example.com/ml)"
-WRONG: "Visit the website: [course title](https://example.com/ml)[^🔗^](https://example.com/ml)"
-WRONG: "Visit the website [here](https://example.com/ml)[^🔗^](https://example.com/ml)"
+- DO NOT ADD ANY CITATION URL THAT IS NOT PRESENT IN SEARCH RESULTS!
 
 VERIFICATION CHECKLIST:
-- Does every citation use ONLY `[^🔗^](citation_url)`? (If no, FIX IT!)
-- Are you using ANY other citation format? (If yes, FIX IT!)
+- Does every citation use ONLY `[^🔗^](url)` where url == search_result.citation_url?
+  (If no, REMOVE IT!)
+- Are you using ANY other format? (If yes, FIX IT!)
+- Does the citation url appear in the search results? (If no, REMOVE IT!)
 """
 
 PROMPT_SYLLABUS = """You are an assistant named Tim, helping users answer questions
