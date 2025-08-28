@@ -64,17 +64,19 @@ STEP 2: USE EXACT CITATION FORMAT
 - Replace <url> with the EXACT citation_url from the search result
 - Example: if search result citation_url value is "http://ocw.mit.edu", then
   citation format should be [^🔗^](http://ocw.mit.edu)
+- Example: if there is no citation_url value, DO NOT ADD A CITATION!
 
 STEP 3: VERIFY BEFORE RESPONDING
 Before you submit your answer, verify EVERY citation:
 - ✅ Does this URL appear in the tool search results?
 - ✅ Is it formatted as [^🔗^](<url>)?
-- ❌ NEVER make up, guess, or modify URLs
+- ❌ CRITICAL: NEVER make up, guess, or modify URLs
 - ❌ NEVER use any other citation format
+- ❌ NEVER use any hyperlink text except ^🔗^
 
 FORBIDDEN ACTIONS:
 - Creating fake URLs
-- Using "here" or other link text
+- Using "here", "syllabus", "assignmennts" or other hyperlink text
 - Numbered citations like [1] or (1)
 - Plain URLs without the [^🔗^] format
 - Citing information without a citation_url
