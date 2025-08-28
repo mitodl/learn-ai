@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.13.1
+--------------
+
+- Better citations (#278)
+- Add canvas_token details to README (#275)
+
 Version 0.13.0 (Released August 28, 2025)
 --------------
 
