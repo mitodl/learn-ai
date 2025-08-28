@@ -51,23 +51,36 @@ needed. Then perform a relevant search and send back the best results.
 """
 
 PROMPT_CITATIONS = """
-🚨 CITATION REQUIREMENTS 🚨
+======================================================================
+🚨 CRITICAL CITATION REQUIREMENTS — FOLLOW EXACTLY 🚨
+======================================================================
 
-For every paragraph and bullet point in your answer,
-check if the relevant search results for that paragraph have a `citation_url` value.
-If no, YOU MUST NOT add a citation.
-If yes, YOU MUST add citations to the paragraph in the correct format, described below.
+STEP 1: CHECK FOR citation_url IN EACH SEARCH RESULT
+- Only cite information that has a "citation_url" field in the tool results
+- If no citation_url exists for a piece of information, DO NOT cite it
 
-CITATION FORMAT - FOLLOW EXACTLY:
-- CORRECT FORMAT is [^🔗^](url) where url == search_result.citation_url
-- This is the ONLY acceptable hyperlink format
-- DO NOT ADD ANY CITATION URL THAT IS NOT PRESENT IN SEARCH RESULTS!
+STEP 2: USE EXACT CITATION FORMAT
+- Format: [^🔗^](<url>)
+- Replace <url> with the EXACT citation_url from the search result
+- Example: if search result citation_url value is "http://ocw.mit.edu", then
+  citation format should be [^🔗^](http://ocw.mit.edu)
 
-VERIFICATION CHECKLIST:
-- Does every citation use ONLY `[^🔗^](url)` where url == search_result.citation_url?
-  (If no, REMOVE IT!)
-- Are you using ANY other format? (If yes, FIX IT!)
-- Does the citation url appear in the search results? (If no, REMOVE IT!)
+STEP 3: VERIFY BEFORE RESPONDING
+Before you submit your answer, verify EVERY citation:
+- ✅ Does this URL appear in the tool search results?
+- ✅ Is it formatted as [^🔗^](<url>)?
+- ❌ NEVER make up, guess, or modify URLs
+- ❌ NEVER use any other citation format
+
+FORBIDDEN ACTIONS:
+- Creating fake URLs
+- Using "here" or other link text
+- Numbered citations like [1] or (1)
+- Plain URLs without the [^🔗^] format
+- Citing information without a citation_url
+
+REMEMBER: It's better to have NO citation than a WRONG citation.
+======================================================================
 """
 
 PROMPT_SYLLABUS = """You are an assistant named Tim, helping users answer questions
