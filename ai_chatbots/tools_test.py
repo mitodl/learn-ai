@@ -155,11 +155,16 @@ def test_search_content_files(  # noqa: PLR0913
     )
     assert len(results["results"]) == len(content_chunk_results["results"])
     for idx, result in enumerate(results["results"]):
-        assert result["citation_url"] == content_chunk_results["results"][idx]["url"]
-        assert result["citation_title"] == (
-            content_chunk_results["results"][idx]["title"]
-            or content_chunk_results["results"][idx]["content_title"]
-        )
+        if content_chunk_results["results"][idx]["url"]:
+            assert (
+                result["citation_url"] == content_chunk_results["results"][idx]["url"]
+            )
+            assert result["citation_title"] == (
+                content_chunk_results["results"][idx]["title"]
+                or content_chunk_results["results"][idx]["content_title"]
+            )
+        else:
+            assert "citation_url" not in result
 
 
 @pytest.mark.parametrize("exclude_canvas", [True, False])
