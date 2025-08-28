@@ -153,10 +153,17 @@ class CanvasTutorChatRequestSerializer(ChatRequestSerializer):
 
     problem_set_title = serializers.CharField(required=True, allow_blank=False)
     run_readable_id = serializers.CharField(required=True, allow_blank=False)
-    object_id_field = serializers.SerializerMethodField()
+    object_id = serializers.SerializerMethodField()
 
-    def get_object_id_field(self, obj):
+    def get_object_id(self, obj):
         return f"{obj.get('run_readable_id', '')} - {obj.get('problem_set_title', '')}"
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        attrs["object_id"] = (
+            f"{attrs.get('run_readable_id', '')} - {attrs.get('problem_set_title', '')}"
+        )
+        return attrs
 
 
 class LLMModelSerializer(serializers.ModelSerializer):
