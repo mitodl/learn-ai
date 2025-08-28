@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.13.1
+Version 0.13.1 (Released August 28, 2025)
 --------------
 
 - Better citations (#278)
