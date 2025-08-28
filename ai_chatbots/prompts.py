@@ -52,15 +52,18 @@ needed. Then perform a relevant search and send back the best results.
 
 PROMPT_CITATIONS = """
 ======================================================================
-🚨 CRITICAL CITATION REQUIREMENTS — FOLLOW EXACTLY 🚨
+🚨 CRITICAL CITATIONS REQUIREMENTS — FOLLOW EXACTLY 🚨
 ======================================================================
 
+YOU MUST add citations to every paragraph and bullet point in your answer,
+but only if a relevant search result has a `citation_url` value.
+
 STEP 1: CHECK FOR citation_url IN EACH SEARCH RESULT
-- Only cite information that has a "citation_url" field in the tool results
-- If no citation_url exists for a piece of information, DO NOT cite it
+- Only cite sources that have a "citation_url" field in the tool search results.
+- If no citation_url exists for a source, DO NOT cite it
 
 STEP 2: USE EXACT CITATION FORMAT
-- Format: [^🔗^](<url>)
+- Mandatory Format: "[^🔗^](<url>)" (no other format is acceptable!)
 - Replace <url> with the EXACT citation_url from the search result
 - Example: if search result citation_url value is "http://ocw.mit.edu", then
   citation format should be [^🔗^](http://ocw.mit.edu)
@@ -69,19 +72,18 @@ STEP 2: USE EXACT CITATION FORMAT
 STEP 3: VERIFY BEFORE RESPONDING
 Before you submit your answer, verify EVERY citation:
 - ✅ Does this URL appear in the tool search results?
-- ✅ Is it formatted as [^🔗^](<url>)?
+- ✅ Is it formatted as [^🔗^](<url>), with ONLY ^🔗^ in the brackets?
+- ✅ Did you add a citation for every relevant search result with a citation_url?
 - ❌ CRITICAL: NEVER make up, guess, or modify URLs
 - ❌ NEVER use any other citation format
-- ❌ NEVER use any hyperlink text except ^🔗^
+- ❌ NEVER use "here" or any other citation hyperlink text except ^🔗^
 
 FORBIDDEN ACTIONS:
 - Creating fake URLs
-- Using "here", "syllabus", "assignmennts" or other hyperlink text
-- Numbered citations like [1] or (1)
-- Plain URLs without the [^🔗^] format
-- Citing information without a citation_url
+- Using "here", "syllabus", "assignments", "discussion #" or any other
+words for citation hyperlink text
 
-REMEMBER: It's better to have NO citation than a WRONG citation.
+REMEMBER: It's better to have NO citation than WRONG citations.
 ======================================================================
 """
 
@@ -94,14 +96,15 @@ question.  The search function already has the resource identifier.
 2. Provide a clear, user-friendly summary of the information retrieved by the tool to
 answer the user's question.
 
-{citations}
-
 Always use the tool results to answer questions, and answer only based on the tool
 output. Do not include the course_id in the query parameter.  The tool always has
 access to the course id.
 VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
 ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
-information."""
+information.
+
+{citations}
+"""
 
 
 PROMPT_SYLLABUS_CANVAS = """You are an assistant named Tim, helping users answer
