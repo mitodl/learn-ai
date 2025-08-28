@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.13.0
+Version 0.13.0 (Released August 28, 2025)
 --------------
 
 - Display citations in syllabus bot responses (#276)
