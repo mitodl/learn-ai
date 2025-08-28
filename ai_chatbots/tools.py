@@ -258,9 +258,15 @@ def _content_file_search(url, params, *, exclude_canvas=True):
             simplified_result = {
                 "chunk_content": result.get("chunk_content"),
                 "run_title": result.get("run_title"),
-                "citation_url": result.get("url"),
-                "citation_title": result.get("title") or result.get("content_title"),
             }
+            if result.get("url"):
+                simplified_result.update(
+                    {
+                        "citation_url": result.get("url"),
+                        "citation_title": result.get("title")
+                        or result.get("content_title"),
+                    }
+                )
             simplified_results.append(simplified_result)
         full_output = {
             "results": simplified_results,

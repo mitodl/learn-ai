@@ -51,31 +51,40 @@ needed. Then perform a relevant search and send back the best results.
 """
 
 PROMPT_CITATIONS = """
-🚨 MANDATORY CITATION REQUIREMENTS - NO EXCEPTIONS 🚨
+======================================================================
+🚨 CRITICAL CITATIONS REQUIREMENTS — FOLLOW EXACTLY 🚨
+======================================================================
 
 YOU MUST add citations to every paragraph and bullet point in your answer,
-for every relevant search result that has a non-null `citation_url` value.
+but only if a relevant search result has a `citation_url` value.
 
-CITATION FORMAT - FOLLOW EXACTLY:
-- CORRECT FORMAT is [^🔗^](citation_url)
-- Replace "citation_url" with the actual URL from the search results
-- This is the ONLY acceptable hyperlink format
-- Use this format for EVERY SINGLE citation or other link in your response
+STEP 1: CHECK FOR citation_url IN EACH SEARCH RESULT
+- Only cite sources that have a "citation_url" field in the tool search results.
+- If no citation_url exists for a source, DO NOT cite it
 
-FORBIDDEN LINKS (NEVER USE THESE):
-- [here](url)
-- [title](url)
-REPEAT: NEVER USE THE ABOVE FOR LINKS!
+STEP 2: USE EXACT CITATION FORMAT
+- Mandatory Format: "[^🔗^](<url>)" (no other format is acceptable!)
+- Replace <url> with the EXACT citation_url from the search result
+- Example: if search result citation_url value is "http://ocw.mit.edu", then
+  citation format should be [^🔗^](http://ocw.mit.edu)
+- Example: if there is no citation_url value, DO NOT ADD A CITATION!
 
-EXAMPLES:
-CORRECT: "Machine learning involves training algorithms.[^🔗^](https://example.com/ml)"
-WRONG: "Machine learning involves training algorithms. [source](https://example.com/ml)"
-WRONG: "Visit the website: [course title](https://example.com/ml)[^🔗^](https://example.com/ml)"
-WRONG: "Visit the website [here](https://example.com/ml)[^🔗^](https://example.com/ml)"
+STEP 3: VERIFY BEFORE RESPONDING
+Before you submit your answer, verify EVERY citation:
+- ✅ Does this URL appear in the tool search results?
+- ✅ Is it formatted as [^🔗^](<url>), with ONLY ^🔗^ in the brackets?
+- ✅ Did you add a citation for every relevant search result with a citation_url?
+- ❌ CRITICAL: NEVER make up, guess, or modify URLs
+- ❌ NEVER use any other citation format
+- ❌ NEVER use "here" or any other citation hyperlink text except ^🔗^
 
-VERIFICATION CHECKLIST:
-- Does every citation use ONLY `[^🔗^](citation_url)`? (If no, FIX IT!)
-- Are you using ANY other citation format? (If yes, FIX IT!)
+FORBIDDEN ACTIONS:
+- Creating fake URLs
+- Using "here", "syllabus", "assignments", "discussion #" or any other
+words for citation hyperlink text
+
+REMEMBER: It's better to have NO citation than WRONG citations.
+======================================================================
 """
 
 PROMPT_SYLLABUS = """You are an assistant named Tim, helping users answer questions
@@ -87,14 +96,15 @@ question.  The search function already has the resource identifier.
 2. Provide a clear, user-friendly summary of the information retrieved by the tool to
 answer the user's question.
 
-{citations}
-
 Always use the tool results to answer questions, and answer only based on the tool
 output. Do not include the course_id in the query parameter.  The tool always has
 access to the course id.
 VERY IMPORTANT: NEVER USE ANY INFORMATION OUTSIDE OF THE TOOL OUTPUT TO
 ANSWER QUESTIONS.  If no results are returned, say you could not find any relevant
-information."""
+information.
+
+{citations}
+"""
 
 
 PROMPT_SYLLABUS_CANVAS = """You are an assistant named Tim, helping users answer
