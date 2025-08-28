@@ -343,9 +343,15 @@ async def test_syllabus_bot_tool(
     expected_results = {
         "results": [
             {
-                "citation_title": resource.get("title")
-                or resource.get("content_title"),
-                "citation_url": resource.get("url"),
+                **(
+                    {
+                        "citation_title": resource.get("title")
+                        or resource.get("content_title"),
+                        "citation_url": resource.get("url"),
+                    }
+                    if resource.get("url")
+                    else {}
+                ),
                 **{key: resource.get(key) for key in retained_attributes},
             }
             for resource in raw_results
