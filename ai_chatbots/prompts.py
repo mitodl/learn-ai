@@ -80,6 +80,7 @@ Before you submit your answer, verify EVERY citation:
 - ❌ CRITICAL: NEVER make up, guess, or modify URLs
 - ❌ NEVER use any other citation format. Reformat links that do not match the [^🔗^](<url>) pattern
 - ❌ NEVER use "here" or any other citation hyperlink text except ^🔗^
+- ❌ DO NOT PROVIDE A LIST OF SOURCES LIKE "- [^🔗^](<url>)"
 - ❌ NEVER cite the same source more than once.
 
 FORBIDDEN ACTIONS:
