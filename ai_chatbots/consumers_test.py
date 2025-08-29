@@ -684,6 +684,17 @@ async def canvas_test_tutor_agent_handle(
     )
     assert mock_http_consumer_send.send_headers.call_count == 1
 
+    user_chat = await UserChatSession.objects.aget(
+        thread_id=canvas_tutor_consumer.thread_id,
+        user=canvas_tutor_consumer.scope["user"],
+        title=data["message"],
+        agent="TutorBot",
+    )
+
+    assert user_chat is not None
+
+    assert user_chat.object_id == "run1 - Problem Set 1"
+
 
 async def test_video_gpt_create_chatbot(
     mocker, mock_http_consumer_send, video_gpt_consumer, async_user

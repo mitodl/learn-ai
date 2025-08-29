@@ -613,7 +613,7 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
         object_id_field: Optional[str] = None,
     ) -> tuple[str, list[str]]:
         """Set the edx_module_id as the default object id field"""
-        object_id_field = "object_id_field"
+        object_id_field = "object_id"
         return super().prepare_response(serializer, object_id_field=object_id_field)
 
     async def create_checkpointer(
@@ -626,7 +626,7 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
             user=self.scope.get("user", None),
             dj_session_key=self.session_key,
             agent=self.ROOM_NAME,
-            object_id=serializer.validated_data.get("object_id_field"),
+            object_id=serializer.data.get("object_id"),
         )
 
 
