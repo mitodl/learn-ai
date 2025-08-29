@@ -55,12 +55,16 @@ PROMPT_CITATIONS = """
 🚨 CRITICAL CITATIONS REQUIREMENTS — FOLLOW EXACTLY 🚨
 ======================================================================
 
-YOU MUST add citations to every paragraph and bullet point in your answer,
-but only if a relevant search result has a `citation_url` value.
 
-STEP 1: CHECK FOR citation_url IN EACH SEARCH RESULT
-- Only cite sources that have a "citation_url" field in the tool search results.
-- If no citation_url exists for a source, DO NOT cite it
+Whenever you complete a section/paragraph of your response, you must
+check the citation_sources map from the tool results to determine if the
+sources you based that section on have citation urls.  If they do have
+citation url, you MUST add citation links to that section.
+
+STEP 1: CHECK FOR relevant sources in the citation_sources section of the tool output.
+- DO NOT CITE SOURCES THAT ARE NOT IN THE citation_sources SECTION
+- DO CITE RELEVANT SOURCES THAT ARE IN THE citation_sources SECTION
+- DO NOT CITE THE SAME SOURCE MORE THAN ONCE
 
 STEP 2: USE EXACT CITATION FORMAT
 - Mandatory Format: "[^🔗^](<url>)" (no other format is acceptable!)
@@ -71,12 +75,13 @@ STEP 2: USE EXACT CITATION FORMAT
 
 STEP 3: VERIFY BEFORE RESPONDING
 Before you submit your answer, verify EVERY citation:
-- ✅ Does this URL appear in the tool search results?
-- ✅ Is it formatted as [^🔗^](<url>), with ONLY ^🔗^ in the brackets?
-- ✅ Did you add a citation for every relevant search result with a citation_url?
+- ✅ Does this URL appear in the tool citation_sources section?
+- ✅ Is the citation formatted as [^🔗^](<url>), with ONLY ^🔗^ in the brackets?
+- ✅ Did you add a citation for every relevant source that has a citation_url?
 - ❌ CRITICAL: NEVER make up, guess, or modify URLs
 - ❌ NEVER use any other citation format
 - ❌ NEVER use "here" or any other citation hyperlink text except ^🔗^
+- ❌ NEVER cite the same source more than once.
 
 FORBIDDEN ACTIONS:
 - Creating fake URLs

@@ -154,17 +154,16 @@ def test_search_content_files(  # noqa: PLR0913
         timeout=30,
     )
     assert len(results["results"]) == len(content_chunk_results["results"])
-    for idx, result in enumerate(results["results"]):
+    assert len(results["citation_sources"]) == len(
+        [result for result in content_chunk_results["results"] if result["url"]]
+    )
+    for idx, result in enumerate(content_chunk_results["results"]):
         if content_chunk_results["results"][idx]["url"]:
-            assert (
-                result["citation_url"] == content_chunk_results["results"][idx]["url"]
-            )
-            assert result["citation_title"] == (
-                content_chunk_results["results"][idx]["title"]
-                or content_chunk_results["results"][idx]["content_title"]
-            )
-        else:
-            assert "citation_url" not in result
+            assert {
+                "id": result["resource_point_id"],
+                "citation_url": result.get("url"),
+                "citation_title": (result.get("title") or result["content_title"]),
+            } in results["citation_sources"]
 
 
 @pytest.mark.parametrize("exclude_canvas", [True, False])
@@ -189,4 +188,9 @@ def test_search_canvas_content_files(
 
     assert len(results["results"]) == (
         len(content_chunk_results["results"]) if not exclude_canvas else 0
+    )
+    assert len(results["citation_sources"]) == (
+        len([result for result in content_chunk_results["results"] if result["url"]])
+        if not exclude_canvas
+        else 0
     )

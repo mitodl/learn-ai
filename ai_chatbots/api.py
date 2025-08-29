@@ -62,6 +62,7 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
                         "parameters", []
                     ),
                     "search_results": content.get("results", []),
+                    "citation_sources": content.get("citation_sources", []),
                     "thread_id": thread_id,
                 }
             }
