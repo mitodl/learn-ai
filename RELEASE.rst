@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.13.2
+--------------
+
+- Better citations #3 (#281)
+- fix object_id (#280)
+
 Version 0.13.1 (Released August 28, 2025)
 --------------
 
