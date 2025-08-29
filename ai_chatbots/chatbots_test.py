@@ -343,18 +343,20 @@ async def test_syllabus_bot_tool(
     expected_results = {
         "results": [
             {
-                **(
-                    {
-                        "citation_title": resource.get("title")
-                        or resource.get("content_title"),
-                        "citation_url": resource.get("url"),
-                    }
-                    if resource.get("url")
-                    else {}
-                ),
+                "id": resource.get("resource_point_id"),
                 **{key: resource.get(key) for key in retained_attributes},
             }
             for resource in raw_results
+        ],
+        "citation_sources": [
+            {
+                "id": resource.get("resource_point_id"),
+                "citation_title": resource.get("title")
+                or resource.get("content_title"),
+                "citation_url": resource.get("url"),
+            }
+            for resource in raw_results
+            if resource.get("url")
         ],
         "metadata": {},
     }
@@ -397,11 +399,13 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
         },
         "results": [
             {
+                "id": "fake_id",
                 "run_title": "Main topics",
                 "chunk_content": "Here are the main topics",
-                "citation_title": None,
-                "citation_url": None,
             }
+        ],
+        "citation_sources": [
+            {"id": "fake_id", "citation_url": "http://www.ocw.mit.edu"}
         ],
     }
     mock_state_history = mocker.patch(
@@ -442,6 +446,7 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
                     "parameters", []
                 ),
                 "search_results": mock_tool_content.get("results", []),
+                "citation_sources": mock_tool_content.get("citation_sources", []),
                 "thread_id": chatbot.config["configurable"]["thread_id"],
             }
         }

@@ -249,6 +249,7 @@ def _content_file_search(url, params, *, exclude_canvas=True):
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
         simplified_results = []
+        citations = []
         for result in raw_results:
             platform = result.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
@@ -256,20 +257,23 @@ def _content_file_search(url, params, *, exclude_canvas=True):
             if exclude_canvas and (not platform or platform == "canvas"):
                 continue
             simplified_result = {
+                "id": result["resource_point_id"],
                 "chunk_content": result.get("chunk_content"),
                 "run_title": result.get("run_title"),
             }
+            simplified_results.append(simplified_result)
             if result.get("url"):
-                simplified_result.update(
+                citations.append(
                     {
+                        "id": result["resource_point_id"],
                         "citation_url": result.get("url"),
                         "citation_title": result.get("title")
                         or result.get("content_title"),
                     }
                 )
-            simplified_results.append(simplified_result)
         full_output = {
             "results": simplified_results,
+            "citation_sources": citations,
             "metadata": {"parameters": params},
         }
         return json.dumps(full_output)
