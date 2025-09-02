@@ -21,7 +21,7 @@ from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tools.base import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
-from langgraph.graph.graph import CompiledGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from open_learning_ai_tutor.message_tutor import message_tutor
@@ -126,7 +126,7 @@ class BaseChatbot(ABC):
             llm = llm.bind_tools(self.tools)
         return llm
 
-    def create_agent_graph(self) -> CompiledGraph:
+    def create_agent_graph(self) -> CompiledStateGraph:
         """
         Return a graph for the relevant LLM and tools.
 
@@ -138,7 +138,7 @@ class BaseChatbot(ABC):
                 self.llm,
                 tools=self.tools,
                 checkpointer=self.checkpointer,
-                state_modifier=self.instructions,
+                prompt=self.instructions,
             )
 
         The base implementation here accomplishes the same thing but a
@@ -332,7 +332,7 @@ class SummarizingChatbot(BaseChatbot):
         ]
     )
 
-    def create_agent_graph(self) -> CompiledGraph:
+    def create_agent_graph(self) -> CompiledStateGraph:
         """
         Generate a standard react agent graph for the summarizing agent.
         Use the custom SummarizingAgentState to summarize the chat history
@@ -370,7 +370,7 @@ class SummarizingChatbot(BaseChatbot):
             checkpointer=self.checkpointer,
             pre_model_hook=summarization_node,
             state_schema=self.STATE_CLASS,
-            state_modifier=self.instructions,
+            prompt=self.instructions,
         )
 
 

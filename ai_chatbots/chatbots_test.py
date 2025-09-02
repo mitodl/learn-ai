@@ -54,9 +54,9 @@ def mock_settings(settings):
 
 @pytest.fixture(autouse=True)
 def mock_openai_astream(mocker):
-    """Mock the CompiledGraph astream function"""
+    """Mock the CompiledStateGraph astream function"""
     return mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.astream",
+        "ai_chatbots.chatbots.CompiledStateGraph.astream",
         return_value="Here are some results",
     )
 
@@ -71,9 +71,9 @@ async def mock_checkpointer(mocker):
 
 @pytest.fixture
 def mock_latest_state_history(mocker):
-    """Mock the CompiledGraph aget_state_history function"""
+    """Mock the CompiledStateGraph aget_state_history function"""
     return mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
             [
                 SyllabusAgentState(
