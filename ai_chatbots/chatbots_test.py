@@ -348,16 +348,15 @@ async def test_syllabus_bot_tool(
             }
             for resource in raw_results
         ],
-        "citation_sources": [
-            {
-                "id": resource.get("resource_point_id"),
+        "citation_sources": {
+            resource.get("resource_point_id"): {
                 "citation_title": resource.get("title")
                 or resource.get("content_title"),
                 "citation_url": resource.get("url"),
             }
             for resource in raw_results
             if resource.get("url")
-        ],
+        },
         "metadata": {},
     }
 
