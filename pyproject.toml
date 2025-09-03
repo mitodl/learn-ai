@@ -12,6 +12,7 @@ authors  = ["MIT ODL"]
 python = "3.13.5"
 Django = "4.2.23"
 aiohttp = "^3.12.15"
+beautifulsoup4 = "^4.13.4"
 boto3 = "^1.35.81"
 celery = "^5.3.1"
 channels = {version = "^4.2.0"}
@@ -40,6 +41,7 @@ ipython = "^9.0.0"
 langchain = "^0.3.13"
 langchain-community = "^0.3.16"
 langchain-core = "^0.3.31"
+langchain-litellm = "^0.2.2"
 langchain-openai = "^0.3.0"
 langgraph = "^0.6.6"
 langgraph-checkpoint-postgres = "^2.0.13"
@@ -69,9 +71,8 @@ social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "0.47.2"
 ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.35.0"}
-beautifulsoup4 = "^4.13.4"
-open-learning-ai-tutor = { git = "https://github.com/mitodl/open-learning-ai-tutor",  rev="f054f8692d6f49451aecd0454763691835f7983f" }  # pragma: allowlist secret
-langchain-litellm = "^0.2.2"
+open-learning-ai-tutor = { git = "https://github.com/mitodl/open-learning-ai-tutor",  rev="25c47ea23a13a83348244e99d458909ff888ca9c" }  # pragma: allowlist secret
+
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"
