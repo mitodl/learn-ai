@@ -12,6 +12,8 @@ import { useFormik } from "formik"
 import MenuItem from "@mui/material/MenuItem"
 import Button from "@mui/material/Button"
 
+import ABTestMonitor from "@/components/ABTestMonitor"
+
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = []
 const INITIAL_MESSAGES: AiChatProps["initialMessages"] = [
   { role: "assistant", content: "Hi, do you need any help?" },
@@ -184,6 +186,10 @@ const CanvasAssessmentContent = () => {
           entryScreenEnabled={false}
           conversationStarters={CONVERSATION_STARTERS}
           useMathJax={true}
+        />
+        <ABTestMonitor
+          problemSetTitle={settings.problem_set_title}
+          runReadableId={settings.run}
         />
       </MathJaxContext>
     </BaseChatContent>
