@@ -145,7 +145,7 @@ class BaseMessageFactory(factory.Factory):
     """Factory for generating BaseMessage instances."""
 
     content = factory.Faker("sentence")
-    id = factory.Faker("uuid4")
+    id = factory.Faker("uuid4", cast_to=str)
 
     class Meta:
         model = BaseMessage

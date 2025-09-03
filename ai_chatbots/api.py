@@ -171,7 +171,7 @@ def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901
         summarized_message_ids = running_summary.summarized_message_ids
         # Adjust the summarization token budget to account for the previous summary
         max_tokens_to_summarize -= token_counter(
-            [SystemMessage(content=running_summary.summary, id=uuid4())]
+            [SystemMessage(content=running_summary.summary, id=str(uuid4()))]
         )
         # If we have an existing running summary, find how many messages have been
         # summarized so far based on the last summarized message ID.
@@ -417,7 +417,7 @@ class CustomSummarizationNode(RunnableCallable):
                 state_update[self.output_messages_key].insert(
                     1,
                     SystemMessage(
-                        id=uuid4(),
+                        id=str(uuid4()),
                         content=summarization_result.running_summary.summary or "",
                     ),
                 )

@@ -71,6 +71,7 @@ ulid-py = "^1.0.0"
 uvicorn = {extras = ["standard"], version = "^0.35.0"}
 beautifulsoup4 = "^4.13.4"
 open-learning-ai-tutor = { git = "https://github.com/mitodl/open-learning-ai-tutor",  rev="f054f8692d6f49451aecd0454763691835f7983f" }  # pragma: allowlist secret
+langchain-litellm = "^0.2.2"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.25"

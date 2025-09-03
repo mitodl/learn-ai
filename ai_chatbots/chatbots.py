@@ -12,13 +12,13 @@ import posthog
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
-from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tools.base import BaseTool
+from langchain_litellm import ChatLiteLLM
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
