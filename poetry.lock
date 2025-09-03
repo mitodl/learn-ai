@@ -4817,8 +4817,8 @@ langsmith = ">=0.4.21,<0.5.0"
 [package.source]
 type = "git"
 url = "https://github.com/mitodl/open-learning-ai-tutor"
-reference = "50bb904560a010ae4cd2b7afc6898910641f1a38"
-resolved_reference = "50bb904560a010ae4cd2b7afc6898910641f1a38"
+reference = "f054f8692d6f49451aecd0454763691835f7983f"
+resolved_reference = "f054f8692d6f49451aecd0454763691835f7983f"
 
 [[package]]
 name = "openai"
@@ -8817,4 +8817,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "55669e99a05dfd419c0147fb58ae32095e7518c8fbda8d1838f00d4ab170f0df"
+content-hash = "4f867226849764043cd39730660c1cb87336a96aabbdb1567c790623c4f4892a"
