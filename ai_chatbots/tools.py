@@ -249,7 +249,7 @@ def _content_file_search(url, params, *, exclude_canvas=True):
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
         simplified_results = []
-        citations = []
+        citations = {}
         for result in raw_results:
             platform = result.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
@@ -262,15 +262,12 @@ def _content_file_search(url, params, *, exclude_canvas=True):
                 "run_title": result.get("run_title"),
             }
             simplified_results.append(simplified_result)
-            if result.get("url"):
-                citations.append(
-                    {
-                        "id": result["resource_point_id"],
-                        "citation_url": result.get("url"),
-                        "citation_title": result.get("title")
-                        or result.get("content_title"),
-                    }
-                )
+            if result.get("url") and not citations.get(result["resource_point_id"]):
+                citations[result["resource_point_id"]] = {
+                    "citation_url": result.get("url"),
+                    "citation_title": result.get("title")
+                    or result.get("content_title"),
+                }
         full_output = {
             "results": simplified_results,
             "citation_sources": citations,
