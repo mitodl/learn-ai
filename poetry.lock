@@ -4814,12 +4814,14 @@ sympy = "*"
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.2.8"
+version = "0.2.9"
 description = "AI powered tutor"
 optional = false
 python-versions = "~=3.12"
-files = []
-develop = false
+files = [
+    {file = "open_learning_ai_tutor-0.2.9-py3-none-any.whl", hash = "sha256:1c076517bca466994b748fa08e8e30229d7790ffca0b42de2b380eb4988e072d"},
+    {file = "open_learning_ai_tutor-0.2.9.tar.gz", hash = "sha256:97b2d216214fc3850588e6f78bd3a92855d4ba19b216f903227bb9e504d3ced3"},
+]
 
 [package.dependencies]
 e2b-code-interpreter = ">=1.1.0,<2"
@@ -4828,12 +4830,6 @@ langchain-core = ">=0.3.45,<0.4"
 langchain-experimental = ">=0.3.4,<0.4"
 langgraph = ">=0.6.6,<0.7.0"
 langsmith = ">=0.4.21,<0.5.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/mitodl/open-learning-ai-tutor"
-reference = "25c47ea23a13a83348244e99d458909ff888ca9c"
-resolved_reference = "25c47ea23a13a83348244e99d458909ff888ca9c"
 
 [[package]]
 name = "openai"
@@ -8832,4 +8828,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "3.13.5"
-content-hash = "6721bdc0a939105c03cf5239f7b4f5ea7639ab8e67f9563feed7a1e6bd07e8ed"
+content-hash = "fa4aa241abb566e1fdfc505c6c7db69be682b7784036c65f9c602da2caf1ede7"
