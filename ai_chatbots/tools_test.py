@@ -155,15 +155,20 @@ def test_search_content_files(  # noqa: PLR0913
     )
     assert len(results["results"]) == len(content_chunk_results["results"])
     assert len(results["citation_sources"]) == len(
-        [result for result in content_chunk_results["results"] if result["url"]]
+        {
+            result["resource_point_id"]
+            for result in content_chunk_results["results"]
+            if result["url"]
+        }
     )
     for idx, result in enumerate(content_chunk_results["results"]):
         if content_chunk_results["results"][idx]["url"]:
-            assert {
-                "id": result["resource_point_id"],
+            assert results["citation_sources"][
+                content_chunk_results["results"][idx]["resource_point_id"]
+            ] == {
                 "citation_url": result.get("url"),
                 "citation_title": (result.get("title") or result["content_title"]),
-            } in results["citation_sources"]
+            }
 
 
 @pytest.mark.parametrize("exclude_canvas", [True, False])
@@ -190,7 +195,13 @@ def test_search_canvas_content_files(
         len(content_chunk_results["results"]) if not exclude_canvas else 0
     )
     assert len(results["citation_sources"]) == (
-        len([result for result in content_chunk_results["results"] if result["url"]])
+        len(
+            {
+                result["resource_point_id"]
+                for result in content_chunk_results["results"]
+                if result["url"]
+            }
+        )
         if not exclude_canvas
         else 0
     )

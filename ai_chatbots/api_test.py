@@ -1,7 +1,5 @@
 """Tests for ai_chatbots/api.py"""
 
-from uuid import uuid4
-
 import pytest
 from langchain_core.language_models import FakeMessagesListChatModel
 from langchain_core.messages import (
@@ -853,8 +851,8 @@ def test_summarization_node_same_key():
     # that passes the updated (ie., summarized) messages on the second turn
     model = MockChatModel(
         responses=[
-            AIMessage(content="First summary of the conversation.", id=uuid4()),
-            AIMessage(content="Updated summary including new messages.", id=uuid4()),
+            AIMessage(content="First summary of the conversation."),
+            AIMessage(content="Updated summary including new messages."),
         ]
     )
 
