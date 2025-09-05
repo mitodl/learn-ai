@@ -25,7 +25,6 @@ from ai_chatbots.chatbots import (
     VideoGPTAgentState,
     VideoGPTBot,
     get_canvas_problem_set,
-    get_history,
     get_problem_from_edx_block,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
@@ -662,6 +661,12 @@ async def test_tutor_get_completion(
             return_value="problem_set",
         )
     mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
+
+    # Mock the create_tutor_checkpoints function to verify it was called correctly
+    mock_create_checkpoints = mocker.patch(
+        "ai_chatbots.chatbots.create_tutor_checkpoints", return_value=[]
+    )
+
     user_msg = "what should i try next?"
     thread_id = "TEST"
 
@@ -691,8 +696,9 @@ async def test_tutor_get_completion(
         results += str(chunk)
     assert results == "Let's start by thinking about the problem. "
 
-    history = await get_history(thread_id)
-    assert history.thread_id == thread_id
+    # Verify that create_tutor_checkpoints was called with the expected arguments
+    # Since get_tutor_history returns None (no existing history), the chat_history
+    # will start with just the new conversation
     metadata = {
         "edx_module_id": edx_module_id,
         "tutor_model": chatbot.model,
@@ -700,10 +706,12 @@ async def test_tutor_get_completion(
         "run_readable_id": run_readable_id,
     }
     new_history = filter_out_system_messages(final_message[1]["messages"])
-    assert history.chat_json == tutor_output_to_json(
+    expected_json = tutor_output_to_json(
         new_history, intents, assessment_history, metadata
     )
-    assert history.edx_module_id == (edx_module_id or "")
+    mock_create_checkpoints.assert_called_once_with(
+        thread_id, expected_json, edx_module_id
+    )
 
 
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
