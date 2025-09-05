@@ -54,9 +54,9 @@ def mock_settings(settings):
 
 @pytest.fixture(autouse=True)
 def mock_openai_astream(mocker):
-    """Mock the CompiledGraph astream function"""
+    """Mock the CompiledStateGraph astream function"""
     return mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.astream",
+        "ai_chatbots.chatbots.CompiledStateGraph.astream",
         return_value="Here are some results",
     )
 
@@ -71,9 +71,9 @@ async def mock_checkpointer(mocker):
 
 @pytest.fixture
 def mock_latest_state_history(mocker):
-    """Mock the CompiledGraph aget_state_history function"""
+    """Mock the CompiledStateGraph aget_state_history function"""
     return mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
             [
                 SyllabusAgentState(
@@ -200,7 +200,7 @@ async def test_get_completion(
 ):
     """Test that the ResourceRecommendationBot get_completion method returns expected values."""
     mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
             [
                 ToolMessageFactory.create(content="Here "),
@@ -220,7 +220,7 @@ async def test_get_completion(
         expected_return_value.append(comment_metadata)
     chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
     mock_stream = mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.astream",
+        "ai_chatbots.chatbots.CompiledStateGraph.astream",
         return_value=mocker.Mock(
             __aiter__=mocker.Mock(
                 return_value=MockAsyncIterator(
@@ -264,28 +264,28 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     assert tool.func.__name__ == "search_courses"
     edges = graph.edges
     assert len(edges) == 5
-    summary_edge = edges[1]
+    summary_edge = edges[3]
     for test_condition in (
         summary_edge.source == "pre_model_hook",
         summary_edge.target == "agent",
         not summary_edge.conditional,
     ):
         assert test_condition
-    tool_agent_edge = edges[2]
+    tool_agent_edge = edges[4]
     for test_condition in (
         tool_agent_edge.source == "tools",
         tool_agent_edge.target == "pre_model_hook",
         not tool_agent_edge.conditional,
     ):
         assert test_condition
-    agent_tool_edge = edges[3]
+    agent_tool_edge = edges[2]
     for test_condition in (
         agent_tool_edge.source == "agent",
         agent_tool_edge.target == "tools",
         agent_tool_edge.conditional,
     ):
         assert test_condition
-    agent_end_edge = edges[4]
+    agent_end_edge = edges[1]
     for test_condition in (
         agent_end_edge.source == "agent",
         agent_end_edge.target == "__end__",
@@ -304,7 +304,7 @@ async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
         checkpointer=chatbot.checkpointer,
         state_schema=SyllabusAgentState,
         pre_model_hook=ANY,
-        state_modifier=chatbot.instructions,
+        prompt=chatbot.instructions,
     )
 
 
@@ -408,7 +408,7 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
         ],
     }
     mock_state_history = mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
             [
                 AsyncMock(
@@ -456,7 +456,7 @@ async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns an empty dict JSON string"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
     mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
             [
                 AsyncMock(
@@ -477,7 +477,7 @@ async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected error response"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
     mocker.patch(
-        "ai_chatbots.chatbots.CompiledGraph.aget_state_history",
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
             [
                 AsyncMock(
@@ -716,7 +716,7 @@ async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
         checkpointer=chatbot.checkpointer,
         state_schema=VideoGPTAgentState,
         pre_model_hook=ANY,
-        state_modifier=chatbot.instructions,
+        prompt=chatbot.instructions,
     )
 
 
