@@ -10,7 +10,7 @@ authors  = ["MIT ODL"]
 
 [tool.poetry.dependencies]
 python = "3.13.5"
-Django = "4.2.23"
+Django = "4.2.24"
 aiohttp = "^3.12.15"
 beautifulsoup4 = "^4.13.4"
 boto3 = "^1.35.81"
