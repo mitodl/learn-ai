@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.14.0 (Released September 08, 2025)
+--------------
+
+- Update langgraph (#287)
+- No  dupe citations (#286)
+- Update dependency django-debug-toolbar to v6 (#265)
+- Update dependency next to v15.4.7 [SECURITY] (#284)
+- Update dependency uvicorn to ^0.35.0 (#264)
+
 Version 0.13.2 (Released August 29, 2025)
 --------------
 
