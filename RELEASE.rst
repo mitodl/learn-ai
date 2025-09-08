@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.14.0
+Version 0.14.0 (Released September 08, 2025)
 --------------
 
 - Update langgraph (#287)
