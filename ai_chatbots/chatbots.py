@@ -11,6 +11,7 @@ from uuid import uuid4
 import posthog
 from channels.db import database_sync_to_async
 from django.conf import settings
+from django.db import transaction
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -43,9 +44,10 @@ from ai_chatbots.api import (
     TokenTrackingCallbackHandler,
     get_search_tool_metadata,
 )
-from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
+from main.utils import now_in_utc
 
 log = logging.getLogger(__name__)
 
@@ -500,18 +502,6 @@ class CanvasSyllabusBot(SyllabusBot):
     MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
 
 
-@database_sync_to_async
-def create_tutorbot_output(thread_id, chat_json, edx_module_id):
-    return TutorBotOutput.objects.create(
-        thread_id=thread_id, chat_json=chat_json, edx_module_id=edx_module_id or ""
-    )
-
-
-@database_sync_to_async
-def get_history(thread_id):
-    return TutorBotOutput.objects.filter(thread_id=thread_id).last()
-
-
 class TutorBot(BaseChatbot):
     """
     Chatbot that assists with problem sets
@@ -576,6 +566,167 @@ class TutorBot(BaseChatbot):
             }
         )
 
+    @database_sync_to_async
+    def query_tutorbot_output(self, thread_id):
+        return TutorBotOutput.objects.filter(thread_id=thread_id).last()
+
+    @database_sync_to_async
+    def create_tutorbot_output_and_checkpoints(self, chat_json, edx_module_id):
+        """Atomically create both TutorBotOutput and DjangoCheckpoint objects"""
+        with transaction.atomic():
+            # Create TutorBotOutput
+            tutorbot_output = TutorBotOutput.objects.create(
+                thread_id=self.thread_id,
+                chat_json=chat_json,
+                edx_module_id=edx_module_id or "",
+            )
+
+            checkpoints = self.create_tutor_checkpoints(chat_json)
+
+            return tutorbot_output, checkpoints
+
+    def create_tutor_checkpoints(self, chat_json):
+        """Create DjangoCheckpoint records from tutor chat data (synchronous)"""
+        # Get the associated session
+        try:
+            session = UserChatSession.objects.get(thread_id=self.thread_id)
+        except UserChatSession.DoesNotExist:
+            return []
+
+        # Parse the chat data
+        chat_data = json.loads(chat_json) if isinstance(chat_json, str) else chat_json
+
+        messages = chat_data.get("chat_history", [])
+        if not messages:
+            return []
+
+        # Create checkpoints for each NEW message with cumulative history
+        checkpoints_created = []
+
+        # Filter out ToolMessage types - we don't want checkpoints for these
+        filtered_messages = [
+            msg for msg in messages if msg.get("type") != "ToolMessage"
+        ]
+        if not filtered_messages:
+            return []
+
+        # Get all messages from previous checkpoints to build cumulative history
+        existing_checkpoints = DjangoCheckpoint.objects.filter(
+            thread_id=self.thread_id,
+            checkpoint__channel_values__tutor_metadata__isnull=False,
+        ).order_by("id")
+
+        # Build cumulative message history from existing checkpoints
+        cumulative_messages = []
+        latest_checkpoint = None
+        if existing_checkpoints:
+            # Get the latest checkpoint to get the cumulative history so far
+            latest_checkpoint = existing_checkpoints.last()
+            cumulative_messages = latest_checkpoint.checkpoint.get(
+                "channel_values", {}
+            ).get("messages", [])
+
+        parent_checkpoint_id = (
+            latest_checkpoint.checkpoint_id if latest_checkpoint else None
+        )
+
+        new_messages = (
+            filtered_messages[-2:] if len(filtered_messages) >= 2 else filtered_messages  # noqa: PLR2004
+        )
+
+        if not new_messages:
+            return []  # No new messages to checkpoint
+
+        # Calculate starting step based on existing checkpoints + cumulative messages
+        step = len(cumulative_messages)
+
+        # Create checkpoints only for the NEW messages
+        for message in new_messages:
+            # Generate unique IDs
+            checkpoint_id = str(uuid4())
+            message_id = str(uuid4())
+
+            # Create message with LangChain format
+            langchain_message = {
+                "id": ["langchain", "schema", "messages", message["type"]],
+                "lc": 1,
+                "type": "constructor",
+                "kwargs": {
+                    "id": message_id,
+                    "type": message["type"].lower().replace("message", ""),
+                    "content": message["content"],
+                },
+            }
+            cumulative_messages.append(langchain_message)
+
+            # Create checkpoint data with cumulative history
+            checkpoint_data = {
+                "v": 4,
+                "id": checkpoint_id,
+                "ts": now_in_utc().isoformat(),
+                "pending_sends": [],
+                "versions_seen": {
+                    "__input__": {},
+                    "__start__": {"__start__": step + 1} if step >= 0 else {},
+                },
+                "channel_values": {
+                    "messages": cumulative_messages.copy(),
+                    # Preserve tutor-specific data
+                    "intent_history": chat_data.get("intent_history"),
+                    "assessment_history": chat_data.get("assessment_history"),
+                    # Include metadata for reference
+                    "tutor_metadata": chat_data.get("metadata", {}),
+                    # Add other channel values that might be needed
+                    "branch:to:pre_model_hook": None,
+                },
+                "channel_versions": {
+                    "messages": len(cumulative_messages),
+                    "__start__": step + 1 if step >= 0 else 1,
+                    "intent_history": 1,
+                    "assessment_history": 1,
+                    "tutor_metadata": 1,
+                    "branch:to:pre_model_hook": step + 1 if step >= 0 else 1,
+                },
+            }
+
+            # Create metadata for this step based on message type
+            if message["type"] == "HumanMessage":
+                source = "input"
+                writes = {"__start__": {"messages": [langchain_message]}}
+            else:  # AI message
+                source = "loop"
+                writes = {"agent": {"messages": [langchain_message]}}
+
+            metadata = {
+                "step": step,
+                "source": source,
+                "writes": writes,
+                "parents": {},
+                "thread_id": self.thread_id,
+            }
+
+            # Create and save the checkpoint
+            checkpoint, _ = DjangoCheckpoint.objects.update_or_create(
+                session=session,
+                thread_id=self.thread_id,
+                checkpoint_id=checkpoint_id,
+                defaults={
+                    "checkpoint_ns": "",
+                    "parent_checkpoint_id": parent_checkpoint_id,
+                    "type": "msgpack",
+                    "checkpoint": checkpoint_data,
+                    "metadata": metadata,
+                },
+            )
+            parent_checkpoint_id = checkpoint_id
+            checkpoints_created.append(checkpoint)
+            step += 1
+
+        return checkpoints_created
+
+    async def get_latest_history(self):
+        return await self.query_tutorbot_output(self.thread_id)
+
     async def get_completion(
         self,
         message: str,
@@ -585,7 +736,7 @@ class TutorBot(BaseChatbot):
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
 
-        history = await get_history(self.thread_id)
+        history = await self.get_latest_history()
 
         if history:
             json_history = json.loads(history.chat_json)
@@ -641,8 +792,9 @@ class TutorBot(BaseChatbot):
             json_output = tutor_output_to_json(
                 new_history, new_intent_history, new_assessment_history, metadata
             )
-            await create_tutorbot_output(
-                self.thread_id, json_output, self.edx_module_id
+            # Save both TutorBotOutput and DjangoCheckpoint objects atomically
+            await self.create_tutorbot_output_and_checkpoints(
+                json_output, self.edx_module_id
             )
 
         except Exception:
