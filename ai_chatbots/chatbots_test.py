@@ -662,7 +662,6 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
             return_value="problem_set",
         )
     mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
-    mocker.patch.object(TutorBot, "create_tutorbot_output_and_checkpoints")
     user_msg = "what should i try next?"
     thread_id = f"TEST_{variant}"  # Use unique thread_id per variant
 
