@@ -1,140 +1,53 @@
 # Generated migration to convert TutorBotOutput to DjangoCheckpoint
 
 import json
-from uuid import uuid4
 
-from django.db import migrations, models
+from django.db import migrations
 
-from main.utils import now_in_utc
+from ai_chatbots.api import create_tutor_checkpoints
+from ai_chatbots.utils import add_message_ids
 
 
 def convert_tutorbot_to_checkpoints(apps, schema_editor):
     """Convert all TutorBotOutput records to DjangoCheckpoint format"""
     TutorBotOutput = apps.get_model("ai_chatbots", "TutorBotOutput")
-    DjangoCheckpoint = apps.get_model("ai_chatbots", "DjangoCheckpoint")
-    UserChatSession = apps.get_model("ai_chatbots", "UserChatSession")
+    DjangoCheckpoint = apps.get_model("ai_chatbots", "DjangoCheckpoint")  # noqa: F841
+    UserChatSession = apps.get_model("ai_chatbots", "UserChatSession")  # noqa: F841
 
-    # Get only the latest TutorBotOutput for each thread_id
-    latest_outputs = TutorBotOutput.objects.filter(
-        id__in=TutorBotOutput.objects.values("thread_id")
-        .annotate(latest_id=models.Max("id"))
-        .values_list("latest_id", flat=True)
-    )
+    # Group TutorBotOutputs by thread_id and order by id within each group
+    thread_ids = TutorBotOutput.objects.values_list("thread_id", flat=True).distinct()
 
-    for tutorbot_output in latest_outputs:
-        # Get the associated session
-        try:
-            session = UserChatSession.objects.get(thread_id=tutorbot_output.thread_id)
-        except UserChatSession.DoesNotExist:
-            continue
+    for thread_id in thread_ids:
+        # Get all TutorBotOutputs for this thread, ordered by id
+        outputs = TutorBotOutput.objects.filter(thread_id=thread_id).order_by("id")
 
-        # Parse the chat data - handle both string and object formats
-        if isinstance(tutorbot_output.chat_json, str):
-            chat_data = json.loads(tutorbot_output.chat_json)
-        else:
-            # Handle JSONB field that might be stored as string
-            chat_data = json.loads(str(tutorbot_output.chat_json).strip('"'))
+        # Track message IDs seen so far for this thread
+        previous_output = None
 
-        messages = chat_data.get("chat_history", [])
-        if not messages:
-            continue
-
-        # Filter out ToolMessage types - we don't want checkpoints for these
-        filtered_messages = [
-            msg for msg in messages if msg.get("type") != "ToolMessage"
-        ]
-        if not filtered_messages:
-            continue
-
-        # Create checkpoints for each message with cumulative history
-        cumulative_messages = []
-        parent_checkpoint_id = None
-
-        for step, message in enumerate(filtered_messages):
-            # Generate unique IDs
-            checkpoint_id = str(uuid4())
-            message_id = str(uuid4())
-
-            # Create message with LangChain format
-            langchain_message = {
-                "id": ["langchain", "schema", "messages", message["type"]],
-                "lc": 1,
-                "type": "constructor",
-                "kwargs": {
-                    "id": message_id,
-                    "type": message["type"].lower().replace("message", ""),
-                    "content": message["content"],
-                },
-            }
-            cumulative_messages.append(langchain_message)
-
-            # Create checkpoint data with cumulative history
-            checkpoint_data = {
-                "v": 4,
-                "id": checkpoint_id,
-                "ts": now_in_utc().isoformat(),
-                "pending_sends": [],
-                "versions_seen": {
-                    "__input__": {},
-                    "__start__": {"__start__": step + 1} if step >= 0 else {},
-                },
-                "channel_values": {
-                    "messages": cumulative_messages.copy(),
-                    # Preserve tutor-specific data
-                    "intent_history": chat_data.get("intent_history"),
-                    "assessment_history": chat_data.get("assessment_history"),
-                    # Include metadata for reference
-                    "tutor_metadata": chat_data.get("metadata", {}),
-                    # Add other channel values that might be needed
-                    "branch:to:pre_model_hook": None,
-                },
-                "channel_versions": {
-                    "messages": step + 1,
-                    "__start__": step + 1 if step >= 0 else 1,
-                    "intent_history": 1,
-                    "assessment_history": 1,
-                    "tutor_metadata": 1,
-                    "branch:to:pre_model_hook": step + 1 if step >= 0 else 1,
-                },
-            }
-
-            # Create metadata with the new message
-            if step == 0:
-                source = "input"
-                writes = (
-                    {"__start__": {"messages": [langchain_message]}}
-                    if "Human" in message["type"]
-                    else None
-                )
+        for tutorbot_output in outputs:
+            # Parse the chat data - handle both string and object formats
+            if isinstance(tutorbot_output.chat_json, str):
+                chat_data = json.loads(tutorbot_output.chat_json)
             else:
-                source = "loop"
-                writes = (
-                    {"agent": {"messages": [langchain_message]}}
-                    if "AI" in message["type"]
-                    else {"__start__": {"messages": [langchain_message]}}
-                )
+                # Handle JSONB field that might be stored as string
+                chat_data = json.loads(str(tutorbot_output.chat_json).strip('"'))
 
-            metadata = {
-                "step": step if step > 0 else -1,
-                "source": source,
-                "writes": writes,
-                "parents": {},
-                "thread_id": tutorbot_output.thread_id,
-            }
+            messages = add_message_ids(chat_data.get("chat_history", []))
+            if not messages:
+                continue
 
-            # Create and save the checkpoint
-            DjangoCheckpoint.objects.create(
-                session=session,
-                thread_id=tutorbot_output.thread_id,
-                checkpoint_ns="",
-                checkpoint_id=checkpoint_id,
-                parent_checkpoint_id=parent_checkpoint_id,
-                type="msgpack",
-                checkpoint=checkpoint_data,
-                metadata=metadata,
+            # Update the tutorbot_output with message IDs
+            chat_data["chat_history"] = messages
+            tutorbot_output.chat_json = chat_data
+            tutorbot_output.save(update_fields=["chat_json"])
+
+            previous_chat_json = previous_output.chat_json if previous_output else None
+            create_tutor_checkpoints(
+                thread_id,
+                tutorbot_output.chat_json,
+                previous_chat_json=previous_chat_json,
             )
-
-            parent_checkpoint_id = checkpoint_id
+            previous_output = tutorbot_output
 
 
 def reverse_conversion(apps, schema_editor):

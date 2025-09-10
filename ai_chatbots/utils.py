@@ -7,6 +7,7 @@ import requests
 from django.conf import settings
 from django.core.cache import BaseCache, caches
 from named_enum import ExtendedEnum
+from requests_toolbelt.multipart.encoder import uuid4
 
 log = logging.getLogger(__name__)
 
@@ -47,3 +48,17 @@ def request_with_token(url, params, timeout: int = 30):
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=timeout,
     )
+
+
+def add_message_ids(messages):
+    """Add unique IDs to messages that don't have one"""
+    for message in messages:
+        # Handle both dict and LangChain message objects
+        if isinstance(message, dict):
+            # Dictionary format (e.g., from JSON)
+            if not message.get("id"):
+                message["id"] = str(uuid4())
+        # LangChain message object
+        elif not hasattr(message, "id") or not message.id:
+            message.id = str(uuid4())
+    return messages
