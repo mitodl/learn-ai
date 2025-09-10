@@ -860,3 +860,81 @@ async def test_bad_request(mocker, mock_checkpointer):
     async for _ in chatbot.get_completion("hello"):
         chatbot.agent.astream.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
+
+
+async def test_tutor_bot_ab_testing(mocker, mock_checkpointer):
+    """Test that TutorBot properly handles A/B testing responses."""
+    # Mock the A/B test response from message_tutor
+    mock_control_generator = MockAsyncIterator([
+        ("messages", [AIMessageChunkFactory(content="Control response part 1")]),
+        ("messages", [AIMessageChunkFactory(content=" Control response part 2")]),
+        ("values", {"messages": [HumanMessage(content="test"), AIMessage(content="Control response part 1 Control response part 2")]}),
+    ])
+    
+    mock_treatment_generator = MockAsyncIterator([
+        ("messages", [AIMessageChunkFactory(content="Treatment response part 1")]),
+        ("messages", [AIMessageChunkFactory(content=" Treatment response part 2")]),
+        ("values", {"messages": [HumanMessage(content="test"), AIMessage(content="Treatment response part 1 Treatment response part 2")]}),
+    ])
+    
+    ab_test_response = {
+        "is_ab_test": True,
+        "responses": [
+            {"variant": "control", "stream": mock_control_generator},
+            {"variant": "treatment", "stream": mock_treatment_generator}
+        ]
+    }
+    
+    # Mock message_tutor to return A/B test response
+    mock_message_tutor = mocker.patch("ai_chatbots.chatbots.message_tutor")
+    mock_message_tutor.return_value = (
+        ab_test_response,
+        [[Intent.S_STRATEGY]],  # new_intent_history
+        [HumanMessage(content="test"), AIMessage(content="assessment")]  # new_assessment_history
+    )
+    
+    # Mock get_history to return None (new conversation)
+    mocker.patch("ai_chatbots.chatbots.get_history", return_value=None)
+    
+    # Create TutorBot instance
+    tutor_bot = TutorBot(
+        user_id="test_user",
+        checkpointer=mock_checkpointer,
+        thread_id="test_thread",
+        problem_set_title="Test Problem Set",
+        run_readable_id="test_run",
+    )
+    
+    # Mock the callback setup
+    tutor_bot.llm.callbacks = []
+    mock_get_tool_metadata = mocker.patch.object(tutor_bot, "get_tool_metadata")
+    mock_get_tool_metadata.return_value = '{"test": "metadata"}'
+    mock_set_callbacks = mocker.patch.object(tutor_bot, "set_callbacks")
+    mock_set_callbacks.return_value = []
+    
+    # Test the completion
+    responses = []
+    async for response_chunk in tutor_bot.get_completion("What should I try first?"):
+        responses.append(response_chunk)
+    
+    # Should get exactly one response with A/B test structure
+    assert len(responses) == 1
+    
+    # Parse the JSON response
+    import json
+    ab_response_json = responses[0].replace('<!-- ', '').replace(' -->', '')
+    ab_response_data = json.loads(ab_response_json)
+    
+    # Verify A/B test structure
+    assert ab_response_data["type"] == "ab_test_response"
+    assert "control" in ab_response_data
+    assert "treatment" in ab_response_data
+    assert ab_response_data["control"]["content"] == "Control response part 1 Control response part 2"
+    assert ab_response_data["control"]["variant"] == "control"
+    assert ab_response_data["treatment"]["content"] == "Treatment response part 1 Treatment response part 2"
+    assert ab_response_data["treatment"]["variant"] == "treatment"
+    
+    # Verify metadata is included
+    assert "metadata" in ab_response_data
+    assert ab_response_data["metadata"]["thread_id"] == "test_thread"
+    assert ab_response_data["metadata"]["problem_set_title"] == "Test Problem Set"

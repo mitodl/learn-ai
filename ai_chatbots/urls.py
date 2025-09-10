@@ -32,6 +32,11 @@ v0_urls = [
         views.ProblemSetList.as_view(),
         name="problem_set_list",
     ),
+    path(
+        r"ab_test_choice/",
+        views.ABTestChoiceView.as_view(),
+        name="ab_test_choice",
+    ),
 ]
 
 urlpatterns = [

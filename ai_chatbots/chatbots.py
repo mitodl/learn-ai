@@ -606,7 +606,7 @@ class TutorBot(BaseChatbot):
         full_response = ""
         new_history = []
         try:
-            generator, new_intent_history, new_assessment_history = message_tutor(
+            result = message_tutor(
                 self.problem,
                 self.problem_set,
                 self.llm,
@@ -618,36 +618,180 @@ class TutorBot(BaseChatbot):
                 variant=self.variant,
             )
 
-            async for chunk in generator:
-                # the generator yields message chuncks for a streaming resopnse
-                # then finally yields the full response as the last chunk
-                if (
-                    chunk[0] == "messages"
-                    and chunk[1]
-                    and isinstance(chunk[1][0], AIMessageChunk)
-                ):
-                    full_response += chunk[1][0].content
-                    yield chunk[1][0].content
+            # Handle A/B testing responses
+            if isinstance(result, tuple) and len(result) > 0 and isinstance(result[0], dict) and result[0].get("is_ab_test"):
+                async for response_chunk in self._handle_ab_test_response(result, message):
+                    yield response_chunk
+            else:
+                # Normal single response - backward compatibility
+                generator, new_intent_history, new_assessment_history = result
+                
+                async for chunk in generator:
+                    # the generator yields message chuncks for a streaming resopnse
+                    # then finally yields the full response as the last chunk
+                    if (
+                        chunk[0] == "messages"
+                        and chunk[1]
+                        and isinstance(chunk[1][0], AIMessageChunk)
+                    ):
+                        full_response += chunk[1][0].content
+                        yield chunk[1][0].content
 
-                elif chunk[0] == "values":
-                    new_history = filter_out_system_messages(chunk[1]["messages"])
+                    elif chunk[0] == "values":
+                        new_history = filter_out_system_messages(chunk[1]["messages"])
 
-            metadata = {
-                "edx_module_id": self.edx_module_id,
-                "tutor_model": self.model,
-                "problem_set_title": self.problem_set_title,
-                "run_readable_id": self.run_readable_id,
-            }
-            json_output = tutor_output_to_json(
-                new_history, new_intent_history, new_assessment_history, metadata
-            )
-            await create_tutorbot_output(
-                self.thread_id, json_output, self.edx_module_id
-            )
+                metadata = {
+                    "edx_module_id": self.edx_module_id,
+                    "tutor_model": self.model,
+                    "problem_set_title": self.problem_set_title,
+                    "run_readable_id": self.run_readable_id,
+                }
+                json_output = tutor_output_to_json(
+                    new_history, new_intent_history, new_assessment_history, metadata
+                )
+                await create_tutorbot_output(
+                    self.thread_id, json_output, self.edx_module_id
+                )
 
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
+
+    async def _handle_ab_test_response(self, result, original_message: str) -> AsyncGenerator[str, None]:
+        """Handle A/B test responses by collecting both variants and yielding structured data"""
+        ab_test_data, new_intent_history, new_assessment_history = result
+        
+        # Collect both responses completely
+        control_response = ""
+        treatment_response = ""
+        control_history = []
+        treatment_history = []
+        
+        # Process control variant
+        control_generator = ab_test_data["responses"][0]["stream"]
+        async for chunk in control_generator:
+            if (
+                chunk[0] == "messages"
+                and chunk[1]
+                and isinstance(chunk[1][0], AIMessageChunk)
+            ):
+                control_response += chunk[1][0].content
+            elif chunk[0] == "values":
+                control_history = filter_out_system_messages(chunk[1]["messages"])
+        
+        # Process treatment variant
+        treatment_generator = ab_test_data["responses"][1]["stream"]
+        async for chunk in treatment_generator:
+            if (
+                chunk[0] == "messages"
+                and chunk[1]
+                and isinstance(chunk[1][0], AIMessageChunk)
+            ):
+                treatment_response += chunk[1][0].content
+            elif chunk[0] == "values":
+                treatment_history = filter_out_system_messages(chunk[1]["messages"])
+        
+        # Convert message objects to serializable format
+        def serialize_messages(messages):
+            """Convert message objects to serializable format"""
+            serialized = []
+            for msg in messages:
+                if hasattr(msg, 'content'):
+                    serialized.append({
+                        "type": msg.__class__.__name__,
+                        "content": msg.content
+                    })
+                else:
+                    serialized.append(str(msg))
+            return serialized
+        
+        def serialize_intent_history(intent_history):
+            """Convert intent history to serializable format"""
+            serialized = []
+            for intent_data in intent_history:
+                if isinstance(intent_data, dict):
+                    # If it's already a dict, make sure all values are serializable
+                    serialized_intent = {}
+                    for key, value in intent_data.items():
+                        if hasattr(value, '__dict__'):
+                            serialized_intent[key] = str(value)
+                        else:
+                            serialized_intent[key] = value
+                    serialized.append(serialized_intent)
+                else:
+                    serialized.append(str(intent_data))
+            return serialized
+        
+        # Create A/B test response structure for frontend
+        ab_response = {
+            "type": "ab_test_response",
+            "control": {
+                "content": control_response,
+                "variant": "control"
+            },
+            "treatment": {
+                "content": treatment_response,
+                "variant": "treatment"
+            },
+            "metadata": {
+                "test_name": "tutor_problem",  # Could be extracted from ab_test_data if needed
+                "thread_id": self.thread_id,
+                "original_message": original_message,
+                "edx_module_id": self.edx_module_id,
+                "problem_set_title": self.problem_set_title,
+                "run_readable_id": self.run_readable_id,
+            },
+            # Store histories for when user makes choice (serialized)
+            "_control_history": serialize_messages(control_history),
+            "_treatment_history": serialize_messages(treatment_history),
+            "_intent_history": serialize_intent_history(new_intent_history),
+            "_assessment_history": serialize_messages(new_assessment_history),
+        }
+        
+        # Yield the structured A/B test response as JSON
+        yield f'<!-- {json.dumps(ab_response)} -->'
+    
+    async def save_ab_test_choice(self, ab_response_data: dict, chosen_variant: str, user_preference_reason: str = ""):
+        """Save the user's A/B test choice and update chat history"""
+        
+        # Get the chosen response data
+        chosen_response_data = ab_response_data[chosen_variant]
+        chosen_content = chosen_response_data["content"]
+        
+        # Get the appropriate history based on choice
+        if chosen_variant == "control":
+            new_history = ab_response_data["_control_history"]
+        else:
+            new_history = ab_response_data["_treatment_history"]
+        
+        # Get other data
+        new_intent_history = ab_response_data["_intent_history"]
+        new_assessment_history = ab_response_data["_assessment_history"]
+        
+        # Create metadata including A/B test information
+        metadata = {
+            "edx_module_id": self.edx_module_id,
+            "tutor_model": self.model,
+            "problem_set_title": self.problem_set_title,
+            "run_readable_id": self.run_readable_id,
+            "ab_test_chosen_variant": chosen_variant,
+            "ab_test_metadata": ab_response_data["metadata"],
+            "user_preference_reason": user_preference_reason,
+        }
+        
+        # Save to database
+        json_output = tutor_output_to_json(
+            new_history, new_intent_history, new_assessment_history, metadata
+        )
+        await create_tutorbot_output(
+            self.thread_id, json_output, self.edx_module_id
+        )
+        
+        return {
+            "success": True,
+            "chosen_content": chosen_content,
+            "variant": chosen_variant,
+        }
 
 
 def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
