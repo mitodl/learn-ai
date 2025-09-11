@@ -595,6 +595,7 @@ class TokenTrackingCallbackHandler(CallbackHandler):
 
 @database_sync_to_async
 def query_tutorbot_output(thread_id: str) -> Optional[TutorBotOutput]:
+    """Return the latest TutorBotOutput for a given thread_id"""
     return TutorBotOutput.objects.filter(thread_id=thread_id).last()
 
 
