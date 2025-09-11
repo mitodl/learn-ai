@@ -59,11 +59,8 @@ def _process_thread_batch(apps, thread_ids_batch):
                 # Parse the chat data - handle both string and object formats
                 if isinstance(tutorbot_output.chat_json, str):
                     chat_data = json.loads(tutorbot_output.chat_json)
-                elif isinstance(tutorbot_output.chat_json, dict):
-                    chat_data = tutorbot_output.chat_json
                 else:
-                    # Handle JSONB field
-                    chat_data = json.loads(str(tutorbot_output.chat_json).strip('"'))
+                    chat_data = tutorbot_output.chat_json
 
                 # Determine which messages are new and need to be checkpointed
                 current_messages = chat_data.get("chat_history", [])

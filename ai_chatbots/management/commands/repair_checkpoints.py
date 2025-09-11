@@ -3,7 +3,7 @@
 from django.conf import settings
 from django.core.management import BaseCommand
 
-from ai_chatbots.checkpointers import calculate_state_metadata, calculate_writes
+from ai_chatbots.checkpointers import calculate_writes
 from ai_chatbots.models import DjangoCheckpoint
 from main.utils import chunks
 
@@ -34,10 +34,6 @@ class Command(BaseCommand):
             # Add writes if missing
             if not checkpoint.metadata.get("writes"):
                 checkpoint.metadata["writes"] = calculate_writes(checkpoint.checkpoint)
-
-            # Add state metadata (user-defined state attributes)
-            state_metadata = calculate_state_metadata(checkpoint.checkpoint)
-            checkpoint.metadata.update(state_metadata)
 
         DjangoCheckpoint.objects.bulk_update(checkpoints, ["metadata"])
 
