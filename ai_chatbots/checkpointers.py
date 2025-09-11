@@ -35,7 +35,7 @@ def calculate_writes(checkpoint: dict) -> dict[str, Any]:
         checkpoint (dict): The current checkpoint data.
 
     Returns:
-        dict[str, Any]: A dictionary mapping channel names to their written values.
+        dict[str, Any]: A dict with a writes attribute
     """
     writes = {}
 
@@ -48,7 +48,7 @@ def calculate_writes(checkpoint: dict) -> dict[str, Any]:
 
 
 class CheckpointMetadataWithWrites(CheckpointMetadata):
-    """Metadata associated with a checkpoint."""
+    """Metadata associated with a checkpoint, incuding writes."""
 
     """The writes that were made between the previous checkpoint and this one."""
     writes: dict[str, Any]
