@@ -715,14 +715,7 @@ def _create_checkpoint_data(
             # Add other channel values that might be needed
             "branch:to:pre_model_hook": None,
         },
-        "channel_versions": {
-            "messages": len(cumulative_messages),
-            "__start__": step + 1 if step >= 0 else 1,
-            "intent_history": 1,
-            "assessment_history": 1,
-            "tutor_metadata": 1,
-            "branch:to:pre_model_hook": step + 1 if step >= 0 else 1,
-        },
+        "channel_versions": {"messages": len(cumulative_messages)},
     }
 
 
