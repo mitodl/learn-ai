@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 from uuid import UUID, uuid4
 
 import litellm
@@ -594,12 +594,14 @@ class TokenTrackingCallbackHandler(CallbackHandler):
 
 
 @database_sync_to_async
-def query_tutorbot_output(thread_id):
+def query_tutorbot_output(thread_id: str) -> Optional[TutorBotOutput]:
     return TutorBotOutput.objects.filter(thread_id=thread_id).last()
 
 
 @database_sync_to_async
-def create_tutorbot_output_and_checkpoints(thread_id, chat_json, edx_module_id):
+def create_tutorbot_output_and_checkpoints(
+    thread_id: str, chat_json: Union[str, dict], edx_module_id: Optional[str]
+) -> tuple[TutorBotOutput, list[DjangoCheckpoint]]:
     """Atomically create both TutorBotOutput and DjangoCheckpoint objects"""
     with transaction.atomic():
         # Get the previous TutorBotOutput to compare messages
@@ -620,7 +622,129 @@ def create_tutorbot_output_and_checkpoints(thread_id, chat_json, edx_module_id):
         return tutorbot_output, checkpoints
 
 
-def create_tutor_checkpoints(thread_id, chat_json, previous_chat_json=None):
+def _get_cumulative_messages_from_checkpoints(
+    thread_id: str,
+) -> tuple[list[dict], Optional[str]]:
+    """Get cumulative messages and parent checkpoint ID from existing checkpoints."""
+    existing_checkpoints = DjangoCheckpoint.objects.filter(
+        thread_id=thread_id,
+        checkpoint__channel_values__tutor_metadata__isnull=False,
+    ).order_by("id")
+
+    cumulative_messages = []
+    parent_checkpoint_id = None
+
+    if existing_checkpoints:
+        latest_checkpoint = existing_checkpoints.last()
+        cumulative_messages = latest_checkpoint.checkpoint.get(
+            "channel_values", {}
+        ).get("messages", [])
+        parent_checkpoint_id = latest_checkpoint.checkpoint_id
+
+    return cumulative_messages, parent_checkpoint_id
+
+
+def _identify_new_messages(
+    filtered_messages: list[dict], previous_chat_json: Optional[Union[str, dict]]
+) -> list[dict]:
+    """Identify which messages are new by comparing with previous chat data."""
+    if not previous_chat_json:
+        return filtered_messages
+
+    previous_chat_data = (
+        json.loads(previous_chat_json)
+        if isinstance(previous_chat_json, str)
+        else previous_chat_json
+    )
+    previous_messages = previous_chat_data.get("chat_history", [])
+
+    # Get set of existing message IDs from previous chat (excluding ToolMessages)
+    existing_message_ids = {
+        msg.get("id")
+        for msg in previous_messages
+        if msg.get("type") != "ToolMessage" and msg.get("id")
+    }
+
+    # Find messages with IDs that don't exist in previous chat
+    return [
+        msg for msg in filtered_messages if msg.get("id") not in existing_message_ids
+    ]
+
+
+def _create_langchain_message(message: dict) -> dict:
+    """Create a message in LangChain format."""
+    message_id = str(uuid4())
+    return {
+        "id": ["langchain", "schema", "messages", message["type"]],
+        "lc": 1,
+        "type": "constructor",
+        "kwargs": {
+            "id": message_id,
+            "type": message["type"].lower().replace("message", ""),
+            "content": message["content"],
+        },
+    }
+
+
+def _create_checkpoint_data(
+    checkpoint_id: str, step: int, cumulative_messages: list[dict], chat_data: dict
+) -> dict:
+    """Create the checkpoint data structure."""
+    return {
+        "v": 4,
+        "id": checkpoint_id,
+        "ts": now_in_utc().isoformat(),
+        "pending_sends": [],
+        "versions_seen": {
+            "__input__": {},
+            "__start__": {"__start__": step + 1} if step >= 0 else {},
+        },
+        "channel_values": {
+            "messages": cumulative_messages.copy(),
+            # Preserve tutor-specific data
+            "intent_history": chat_data.get("intent_history"),
+            "assessment_history": chat_data.get("assessment_history"),
+            # Include metadata for reference
+            "tutor_metadata": chat_data.get("metadata", {}),
+            # Add other channel values that might be needed
+            "branch:to:pre_model_hook": None,
+        },
+        "channel_versions": {
+            "messages": len(cumulative_messages),
+            "__start__": step + 1 if step >= 0 else 1,
+            "intent_history": 1,
+            "assessment_history": 1,
+            "tutor_metadata": 1,
+            "branch:to:pre_model_hook": step + 1 if step >= 0 else 1,
+        },
+    }
+
+
+def _create_checkpoint_metadata(
+    message: dict, step: int, langchain_message: dict, thread_id: str
+) -> dict:
+    """Create metadata for the checkpoint based on message type."""
+    if message["type"] == "HumanMessage":
+        source = "input"
+        writes = {"__start__": {"messages": [langchain_message]}}
+    else:  # AI message
+        source = "loop"
+        writes = {"agent": {"messages": [langchain_message]}}
+
+    return {
+        "step": step,
+        "source": source,
+        "writes": writes,
+        "parents": {},
+        "thread_id": thread_id,
+    }
+
+
+def create_tutor_checkpoints(
+    thread_id: str,
+    chat_json: Union[str, dict],
+    previous_chat_json: Optional[Union[str, dict]] = None,
+) -> list[DjangoCheckpoint]:
     """Create DjangoCheckpoint records from tutor chat data (synchronous)"""
     # Get the associated session
     try:
@@ -628,137 +752,48 @@ def create_tutor_checkpoints(thread_id, chat_json, previous_chat_json=None):
     except UserChatSession.DoesNotExist:
         return []
 
-    # Parse the chat data
+    # Parse and validate chat data
     chat_data = json.loads(chat_json) if isinstance(chat_json, str) else chat_json
-
     messages = chat_data.get("chat_history", [])
     if not messages:
         return []
-
-    # Create checkpoints for each NEW message with cumulative history
-    checkpoints_created = []
 
     # Filter out ToolMessage types - we don't want checkpoints for these
     filtered_messages = [msg for msg in messages if msg.get("type") != "ToolMessage"]
     if not filtered_messages:
         return []
 
-    # Get all messages from previous checkpoints to build cumulative history
-    existing_checkpoints = DjangoCheckpoint.objects.filter(
-        thread_id=thread_id,
-        checkpoint__channel_values__tutor_metadata__isnull=False,
-    ).order_by("id")
-
-    # Build cumulative message history from existing checkpoints
-    cumulative_messages = []
-    latest_checkpoint = None
-    if existing_checkpoints:
-        # Get the latest checkpoint to get the cumulative history so far
-        latest_checkpoint = existing_checkpoints.last()
-        cumulative_messages = latest_checkpoint.checkpoint.get(
-            "channel_values", {}
-        ).get("messages", [])
-
-    parent_checkpoint_id = (
-        latest_checkpoint.checkpoint_id if latest_checkpoint else None
+    # Get cumulative message history from existing checkpoints
+    cumulative_messages, parent_checkpoint_id = (
+        _get_cumulative_messages_from_checkpoints(thread_id)
     )
 
     # Determine new messages by comparing message IDs
-    if previous_chat_json:
-        # Parse previous chat data to get existing message IDs
-        previous_chat_data = (
-            json.loads(previous_chat_json)
-            if isinstance(previous_chat_json, str)
-            else previous_chat_json
-        )
-        previous_messages = previous_chat_data.get("chat_history", [])
-        # Get set of existing message IDs from previous chat (excluding ToolMessages)
-        existing_message_ids = {
-            msg.get("id")
-            for msg in previous_messages
-            if msg.get("type") != "ToolMessage" and msg.get("id")
-        }
-
-        # Find messages with IDs that don't exist in previous chat
-        new_messages = [
-            msg
-            for msg in filtered_messages
-            if msg.get("id") not in existing_message_ids
-        ]
-    else:
-        # No previous chat_json, so all filtered messages are new
-        new_messages = filtered_messages
-
+    new_messages = _identify_new_messages(filtered_messages, previous_chat_json)
     if not new_messages:
         return []  # No new messages to checkpoint
 
     # Calculate starting step based on existing checkpoints + cumulative messages
     step = len(cumulative_messages)
+    checkpoints_created = []
 
     # Create checkpoints only for the NEW messages
     for message in new_messages:
-        # Generate unique IDs
         checkpoint_id = str(uuid4())
-        message_id = str(uuid4())
 
-        # Create message with LangChain format
-        langchain_message = {
-            "id": ["langchain", "schema", "messages", message["type"]],
-            "lc": 1,
-            "type": "constructor",
-            "kwargs": {
-                "id": message_id,
-                "type": message["type"].lower().replace("message", ""),
-                "content": message["content"],
-            },
-        }
+        # Create message with LangChain format and add to cumulative history
+        langchain_message = _create_langchain_message(message)
         cumulative_messages.append(langchain_message)
 
-        # Create checkpoint data with cumulative history
-        checkpoint_data = {
-            "v": 4,
-            "id": checkpoint_id,
-            "ts": now_in_utc().isoformat(),
-            "pending_sends": [],
-            "versions_seen": {
-                "__input__": {},
-                "__start__": {"__start__": step + 1} if step >= 0 else {},
-            },
-            "channel_values": {
-                "messages": cumulative_messages.copy(),
-                # Preserve tutor-specific data
-                "intent_history": chat_data.get("intent_history"),
-                "assessment_history": chat_data.get("assessment_history"),
-                # Include metadata for reference
-                "tutor_metadata": chat_data.get("metadata", {}),
-                # Add other channel values that might be needed
-                "branch:to:pre_model_hook": None,
-            },
-            "channel_versions": {
-                "messages": len(cumulative_messages),
-                "__start__": step + 1 if step >= 0 else 1,
-                "intent_history": 1,
-                "assessment_history": 1,
-                "tutor_metadata": 1,
-                "branch:to:pre_model_hook": step + 1 if step >= 0 else 1,
-            },
-        }
+        # Create checkpoint data structure
+        checkpoint_data = _create_checkpoint_data(
+            checkpoint_id, step, cumulative_messages, chat_data
+        )
 
-        # Create metadata for this step based on message type
-        if message["type"] == "HumanMessage":
-            source = "input"
-            writes = {"__start__": {"messages": [langchain_message]}}
-        else:  # AI message
-            source = "loop"
-            writes = {"agent": {"messages": [langchain_message]}}
-
-        metadata = {
-            "step": step,
-            "source": source,
-            "writes": writes,
-            "parents": {},
-            "thread_id": thread_id,
-        }
+        # Create metadata for this step
+        metadata = _create_checkpoint_metadata(
+            message, step, langchain_message, thread_id
+        )
 
         # Create and save the checkpoint
         checkpoint, _ = DjangoCheckpoint.objects.update_or_create(
