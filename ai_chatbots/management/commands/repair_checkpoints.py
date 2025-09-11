@@ -3,19 +3,19 @@
 from django.conf import settings
 from django.core.management import BaseCommand
 
-from ai_chatbots.checkpointers import calculate_writes
+from ai_chatbots.checkpointers import calculate_state_metadata, calculate_writes
 from ai_chatbots.models import DjangoCheckpoint
 from main.utils import chunks
 
 
 class Command(BaseCommand):
     """
-    Add missing writes to checkpoint metadata. Langgraph 0.6
-    no longer includes this in the metadata, but it is useful
-    for data platform reporting.
+    Add missing writes and state attributes to checkpoint metadata.
+    LangGraph 0.6 no longer includes these in the metadata automatically,
+    but they are useful for data platform reporting and backward compatibility.
     """
 
-    help = "Add missing writes to checkpoint metadata"
+    help = "Add missing writes and state attributes to checkpoint metadata"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -26,16 +26,23 @@ class Command(BaseCommand):
         )
 
     def batch_assign_writes(self, ids: list[int]):
-        """Batch assign writes to checkpoints given a list of ids"""
+        """Batch assign writes and state metadata to checkpoints given a list of ids"""
         checkpoints = DjangoCheckpoint.objects.filter(id__in=ids).only(
             "id", "metadata", "checkpoint"
         )
         for checkpoint in checkpoints:
-            checkpoint.metadata["writes"] = calculate_writes(checkpoint.checkpoint)
+            # Add writes if missing
+            if not checkpoint.metadata.get("writes"):
+                checkpoint.metadata["writes"] = calculate_writes(checkpoint.checkpoint)
+
+            # Add state metadata (user-defined state attributes)
+            state_metadata = calculate_state_metadata(checkpoint.checkpoint)
+            checkpoint.metadata.update(state_metadata)
+
         DjangoCheckpoint.objects.bulk_update(checkpoints, ["metadata"])
 
     def handle(self, *args, **options):  # noqa: ARG002
-        """Add missing writes to checkpoint metadata"""
+        """Add missing writes and state attributes to checkpoint metadata"""
 
         batch_size = options["batch_size"]
         self.stdout.write(

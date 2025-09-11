@@ -39,11 +39,21 @@ def calculate_writes(checkpoint: dict) -> dict[str, Any]:
     """
     writes = {}
 
+    channel_values = checkpoint.get("channel_values", {})
+    native_keys = ["context", "__pregel_tasks", "llm_input_messages", "messages"]
     messages = checkpoint.get("channel_values", {}).get("messages", [])
     if messages:
         last_message = messages[-1]
-        writes = {"__start__": {"messages": [last_message]}}
-
+        writes = {
+            "__start__": {
+                "messages": [last_message],
+                **{
+                    key: value
+                    for key, value in channel_values.items()
+                    if key not in native_keys
+                },
+            }
+        }
     return writes
 
 

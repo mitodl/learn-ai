@@ -223,31 +223,11 @@ async def test_alist():
     assert idx == 3
 
 
-async def test_calculate_writes_with_messages():
-    """Test calculate_writes function extracts the last message correctly."""
+async def test_calculate_writes_with_state_attributes():
+    """Test calculate_writes function includes non-native state attributes."""
     checkpoint = {
         "channel_values": {
             "messages": [
-                {
-                    "lc": 1,
-                    "type": "constructor",
-                    "id": ["langchain", "schema", "messages", "SystemMessage"],
-                    "kwargs": {
-                        "content": "System message",
-                        "type": "system",
-                        "id": "system-1",
-                    },
-                },
-                {
-                    "lc": 1,
-                    "type": "constructor",
-                    "id": ["langchain", "schema", "messages", "HumanMessage"],
-                    "kwargs": {
-                        "content": "Hello world",
-                        "type": "human",
-                        "id": "human-1",
-                    },
-                },
                 {
                     "lc": 1,
                     "type": "constructor",
@@ -257,8 +237,15 @@ async def test_calculate_writes_with_messages():
                         "type": "ai",
                         "id": "ai-1",
                     },
-                },
-            ]
+                }
+            ],
+            # These should be included as they're not in native_keys
+            "course_id": ["123"],
+            "collection_name": ["syllabus"],
+            "intent_history": ["greeting"],
+            # These should be excluded as they're in native_keys
+            "context": {"some": "context"},
+            "llm_input_messages": [{"role": "user", "content": "test"}],
         }
     }
 
@@ -275,7 +262,10 @@ async def test_calculate_writes_with_messages():
                         "id": "ai-1",
                     },
                 }
-            ]
+            ],
+            "course_id": ["123"],
+            "collection_name": ["syllabus"],
+            "intent_history": ["greeting"],
         }
     }
 
@@ -417,3 +407,58 @@ async def test_aput_preserves_existing_writes():
         thread_id=thread_id
     ).afirst()
     assert saved_checkpoint.metadata["writes"] == existing_writes
+
+
+async def test_aput_includes_state_in_writes():
+    """Test that aput includes state attributes in writes metadata."""
+    checkpoint_id = uuid4().hex
+    thread_id = uuid4().hex
+    checkpoint_ns = uuid4().hex
+
+    metadata = {
+        "source": "test",
+        "step": 1,
+    }
+
+    checkpoint = {
+        "id": checkpoint_id,
+        "type": "message",
+        "channel_values": {
+            "messages": [
+                {
+                    "content": "Test message",
+                    "type": "human",
+                }
+            ],
+            "intent_history": ["test_intent"],
+            "tutor_metadata": {"subject": "science"},
+        },
+        "channel_versions": {
+            "messages": 1,
+            "intent_history": 1,
+        },
+        "versions_seen": {
+            "__start__": {"__start__": 1},
+        },
+    }
+
+    saver = AsyncDjangoSaver()
+    await saver.aput(
+        {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns}},
+        checkpoint,
+        metadata,
+        [],
+    )
+
+    # Verify the checkpoint was saved with state metadata in writes
+    saved_checkpoint = await DjangoCheckpoint.objects.filter(
+        thread_id=thread_id
+    ).afirst()
+    assert saved_checkpoint is not None
+
+    # Check that state attributes are included in writes
+    writes = saved_checkpoint.metadata["writes"]
+    assert "intent_history" in writes["__start__"]
+    assert "tutor_metadata" in writes["__start__"]
+    assert writes["__start__"]["intent_history"] == ["test_intent"]
+    assert writes["__start__"]["tutor_metadata"] == {"subject": "science"}
