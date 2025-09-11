@@ -19,7 +19,8 @@ class UserChatSession(TimestampedModel):
     object_id = models.CharField(max_length=256, blank=True, db_index=True)
 
     def __str__(self):
-        return f"{self.user.global_id or self.dj_session_key}-{self.thread_id}"
+        user_id = self.user.global_id if self.user else self.dj_session_key
+        return f"{user_id}-{self.thread_id}"
 
 
 class DjangoCheckpointWrite(models.Model):

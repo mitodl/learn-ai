@@ -2,11 +2,13 @@
 
 import json
 import logging
-from typing import Any, Optional, cast
-from uuid import UUID, uuid4
+from typing import Any, Optional, Union, cast
+from uuid import UUID, uuid4, uuid5
 
 import litellm
+from channels.db import database_sync_to_async
 from django.conf import settings
+from django.db import transaction
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import (
     AIMessage,
@@ -34,6 +36,9 @@ from langsmith import Client as LangsmithClient
 from posthog.ai.langchain import CallbackHandler
 from pydantic import BaseModel
 from typing_extensions import TypedDict
+
+from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
+from main.utils import now_in_utc
 
 log = logging.getLogger(__name__)
 
@@ -586,3 +591,241 @@ class TokenTrackingCallbackHandler(CallbackHandler):
         super().on_llm_end(
             response, run_id=run_id, parent_run_id=parent_run_id, **kwargs
         )
+
+
+@database_sync_to_async
+def query_tutorbot_output(thread_id: str) -> Optional[TutorBotOutput]:
+    """Return the latest TutorBotOutput for a given thread_id"""
+    return TutorBotOutput.objects.filter(thread_id=thread_id).last()
+
+
+@database_sync_to_async
+def create_tutorbot_output_and_checkpoints(
+    thread_id: str, chat_json: Union[str, dict], edx_module_id: Optional[str]
+) -> tuple[TutorBotOutput, list[DjangoCheckpoint]]:
+    """Atomically create both TutorBotOutput and DjangoCheckpoint objects"""
+    with transaction.atomic():
+        # Get the previous TutorBotOutput to compare messages
+        previous_output = (
+            TutorBotOutput.objects.filter(thread_id=thread_id).order_by("-id").first()
+        )
+        previous_chat_json = previous_output.chat_json if previous_output else None
+
+        # Create TutorBotOutput
+        tutorbot_output = TutorBotOutput.objects.create(
+            thread_id=thread_id,
+            chat_json=chat_json,
+            edx_module_id=edx_module_id or "",
+        )
+
+        checkpoints = create_tutor_checkpoints(thread_id, chat_json, previous_chat_json)
+
+        return tutorbot_output, checkpoints
+
+
+def _should_create_checkpoint(msg: dict) -> bool:
+    """Determine if a message should have a checkpoint created for it."""
+    # Skip ToolMessage type or tool_calls
+    return not (msg.get("type") == "ToolMessage" or msg.get("tool_calls"))
+
+
+def _get_cumulative_messages_from_checkpoints(
+    thread_id: str,
+) -> tuple[list[dict], Optional[str]]:
+    """Get cumulative messages and parent checkpoint ID from existing checkpoints."""
+    existing_checkpoints = DjangoCheckpoint.objects.filter(
+        thread_id=thread_id,
+        checkpoint__channel_values__tutor_metadata__isnull=False,
+    ).order_by("id")
+
+    cumulative_messages = []
+    parent_checkpoint_id = None
+
+    if existing_checkpoints:
+        latest_checkpoint = existing_checkpoints.last()
+        cumulative_messages = latest_checkpoint.checkpoint.get(
+            "channel_values", {}
+        ).get("messages", [])
+        parent_checkpoint_id = latest_checkpoint.checkpoint_id
+
+    return cumulative_messages, parent_checkpoint_id
+
+
+def _identify_new_messages(
+    filtered_messages: list[dict], previous_chat_json: Optional[Union[str, dict]]
+) -> list[dict]:
+    """Identify which messages are new by comparing with previous chat data."""
+    if not previous_chat_json:
+        return filtered_messages
+
+    previous_chat_data = (
+        json.loads(previous_chat_json)
+        if isinstance(previous_chat_json, str)
+        else previous_chat_json
+    )
+    previous_messages = previous_chat_data.get("chat_history", [])
+
+    # Get set of existing message IDs from previous chat
+    existing_message_ids = {
+        msg.get("id")
+        for msg in previous_messages
+        if _should_create_checkpoint(msg) and msg.get("id")
+    }
+
+    # Find messages with IDs that don't exist in previous chat
+    return [
+        msg for msg in filtered_messages if msg.get("id") not in existing_message_ids
+    ]
+
+
+def _create_langchain_message(message: dict) -> dict:
+    """Create a message in LangChain format."""
+    message_id = str(uuid4())
+    return {
+        "id": ["langchain", "schema", "messages", message["type"]],
+        "lc": 1,
+        "type": "constructor",
+        "kwargs": {
+            "id": message_id,
+            "type": message["type"].lower().replace("message", ""),
+            "content": message["content"],
+        },
+    }
+
+
+def _create_checkpoint_data(
+    checkpoint_id: str, step: int, cumulative_messages: list[dict], chat_data: dict
+) -> dict:
+    """Create the checkpoint data structure."""
+    return {
+        "v": 4,
+        "id": checkpoint_id,
+        "ts": now_in_utc().isoformat(),
+        "pending_sends": [],
+        "versions_seen": {
+            "__input__": {},
+            "__start__": {"__start__": step + 1} if step >= 0 else {},
+        },
+        "channel_values": {
+            "messages": cumulative_messages.copy(),
+            # Preserve tutor-specific data
+            "intent_history": chat_data.get("intent_history"),
+            "assessment_history": chat_data.get("assessment_history"),
+            # Include metadata for reference
+            "tutor_metadata": chat_data.get("metadata", {}),
+            # Add other channel values that might be needed
+            "branch:to:pre_model_hook": None,
+        },
+        "channel_versions": {"messages": len(cumulative_messages)},
+    }
+
+
+def _create_checkpoint_metadata(
+    tutor_meta: dict, message: dict, step: int, langchain_message: dict, thread_id: str
+) -> dict:
+    """Create metadata for the checkpoint based on message type."""
+    source = "input" if message["type"] == "HumanMessage" else "loop"
+    writes = {"__start__": {"messages": [langchain_message], **tutor_meta}}
+
+    return {
+        "step": step,
+        "source": source,
+        "writes": writes,
+        "parents": {},
+        "thread_id": thread_id,
+    }
+
+
+def create_tutor_checkpoints(
+    thread_id: str,
+    chat_json: Union[str, dict],
+    previous_chat_json: Optional[Union[str, dict]] = None,
+) -> list[DjangoCheckpoint]:
+    """Create DjangoCheckpoint records from tutor chat data (synchronous)"""
+    # Get the associated session
+    try:
+        session = UserChatSession.objects.get(thread_id=thread_id)
+    except UserChatSession.DoesNotExist:
+        return []
+
+    # Parse and validate chat data
+    chat_data = json.loads(chat_json) if isinstance(chat_json, str) else chat_json
+    messages = chat_data.get("chat_history", [])
+    if not messages:
+        return []
+
+    # Filter out ToolMessage types and AI messages with tool_calls
+    filtered_messages = [msg for msg in messages if _should_create_checkpoint(msg)]
+    if not filtered_messages:
+        return []
+
+    # Get cumulative message history from existing checkpoints
+    cumulative_messages, parent_checkpoint_id = (
+        _get_cumulative_messages_from_checkpoints(thread_id)
+    )
+
+    # Determine new messages by comparing message IDs
+    new_messages = _identify_new_messages(filtered_messages, previous_chat_json)
+    if not new_messages:
+        return []  # No new messages to checkpoint
+
+    # Calculate starting step based on existing checkpoints + cumulative messages
+    step = len(cumulative_messages)
+    checkpoints_created = []
+
+    # Create checkpoints only for the NEW messages
+    for message in new_messages:
+        checkpoint_id = str(uuid4())
+
+        # Create message with LangChain format and add to cumulative history
+        langchain_message = _create_langchain_message(message)
+        cumulative_messages.append(langchain_message)
+
+        # Create checkpoint data structure
+        checkpoint_data = _create_checkpoint_data(
+            checkpoint_id, step, cumulative_messages, chat_data
+        )
+
+        # Create metadata for this step
+        metadata = _create_checkpoint_metadata(
+            chat_data.get("metadata", {}), message, step, langchain_message, thread_id
+        )
+
+        # Create and save the checkpoint
+        checkpoint, _ = DjangoCheckpoint.objects.update_or_create(
+            session=session,
+            thread_id=thread_id,
+            checkpoint_id=checkpoint_id,
+            defaults={
+                "checkpoint_ns": "",
+                "parent_checkpoint_id": parent_checkpoint_id,
+                "type": "msgpack",
+                "checkpoint": checkpoint_data,
+                "metadata": metadata,
+            },
+        )
+        parent_checkpoint_id = checkpoint_id
+        checkpoints_created.append(checkpoint)
+        step += 1
+
+    return checkpoints_created
+
+
+def _generate_message_id(thread_id: str, output_id: int, message: dict) -> str:
+    """Generate a unique ID for a message based on its content and thread ID"""
+    return str(
+        uuid5(UUID(thread_id), f'{output_id}_{message["type"]}_{message["content"]}')
+    )
+
+
+def add_message_ids(thread_id: str, output_id: int, messages: list[dict]) -> list[dict]:
+    """Add unique IDs to messages that don't have one"""
+    for message in messages:
+        # Handle both dict and LangChain message objects
+        if isinstance(message, dict):
+            if not message.get("id"):
+                message["id"] = _generate_message_id(thread_id, output_id, message)
+        # # LangChain message object
+        elif not hasattr(message, "id") or not message.id:
+            message.id = _generate_message_id(thread_id, output_id, message.__dict__)
+    return messages
