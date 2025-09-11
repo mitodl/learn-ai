@@ -42,6 +42,7 @@ from ai_chatbots.api import (
     TokenTrackingCallbackHandler,
     create_tutorbot_output_and_checkpoints,
     get_search_tool_metadata,
+    query_tutorbot_output,
 )
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import add_message_ids, get_django_cache, request_with_token
@@ -564,7 +565,7 @@ class TutorBot(BaseChatbot):
         )
 
     async def get_latest_history(self):
-        return await self.query_tutorbot_output(self.thread_id)
+        return await query_tutorbot_output(self.thread_id)
 
     async def get_completion(
         self,
@@ -580,10 +581,12 @@ class TutorBot(BaseChatbot):
         if history:
             json_history = json.loads(history.chat_json)
             chat_history = add_message_ids(
+                self.thread_id,
+                history.id,
                 json_to_messages(  # noqa: RUF005
                     json_history.get("chat_history", [])
                 )
-                + [HumanMessage(content=message, id=message_id)]
+                + [HumanMessage(content=message, id=message_id)],
             )
 
             intent_history = json_to_intent_list(json_history["intent_history"])

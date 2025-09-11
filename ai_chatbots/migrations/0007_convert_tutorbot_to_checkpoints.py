@@ -8,8 +8,18 @@ from ai_chatbots.api import create_tutor_checkpoints
 from ai_chatbots.utils import add_message_ids
 
 
+def same_message(msg1, msg2):
+    """Check if two messages are the same based on role and content"""
+    return msg1.get("role") == msg2.get("role") and msg1.get("content") == msg2.get(
+        "content"
+    )
+
+
 def convert_tutorbot_to_checkpoints(apps, schema_editor):
-    """Convert all TutorBotOutput records to DjangoCheckpoint format"""
+    """
+    Add message ids to all TutorBotOutput records and create
+    DjangoCheckpoints for new messages in each.
+    """
     TutorBotOutput = apps.get_model("ai_chatbots", "TutorBotOutput")
     DjangoCheckpoint = apps.get_model("ai_chatbots", "DjangoCheckpoint")  # noqa: F841
     UserChatSession = apps.get_model("ai_chatbots", "UserChatSession")  # noqa: F841
@@ -20,34 +30,49 @@ def convert_tutorbot_to_checkpoints(apps, schema_editor):
     for thread_id in thread_ids:
         # Get all TutorBotOutputs for this thread, ordered by id
         outputs = TutorBotOutput.objects.filter(thread_id=thread_id).order_by("id")
-
-        # Track message IDs seen so far for this thread
-        previous_output = None
+        previous_messages = []
 
         for tutorbot_output in outputs:
             # Parse the chat data - handle both string and object formats
             if isinstance(tutorbot_output.chat_json, str):
                 chat_data = json.loads(tutorbot_output.chat_json)
             else:
-                # Handle JSONB field that might be stored as string
+                # Handle JSONB field
                 chat_data = json.loads(str(tutorbot_output.chat_json).strip('"'))
 
-            messages = add_message_ids(chat_data.get("chat_history", []))
-            if not messages:
+            # Determine which messages are new and need to be checkpointed
+            current_messages = chat_data.get("chat_history", [])
+            final_match_idx = -1
+            for previous_message in previous_messages:
+                for current_idx, current_message in enumerate(current_messages):
+                    if (
+                        same_message(previous_message, current_message)
+                        and current_idx > final_match_idx
+                    ):
+                        final_match_idx = current_idx
+                        break
+            new_messages = (
+                current_messages[final_match_idx + 1 :]
+                if final_match_idx != -1
+                else current_messages
+            )
+            if not new_messages:
                 continue
 
-            # Update the tutorbot_output with message IDs
-            chat_data["chat_history"] = messages
-            tutorbot_output.chat_json = chat_data
+            # Update tutorbot_output with message ids
+            chat_data["chat_history"] = add_message_ids(
+                thread_id, tutorbot_output.id, new_messages
+            )
+            tutorbot_output.chat_json = json.dumps(chat_data)
             tutorbot_output.save(update_fields=["chat_json"])
+            chat_data_str = json.dumps(chat_data)
 
-            previous_chat_json = previous_output.chat_json if previous_output else None
+            # Create a checkpoint for each new message
             create_tutor_checkpoints(
                 thread_id,
-                tutorbot_output.chat_json,
-                previous_chat_json=previous_chat_json,
+                chat_data_str,
             )
-            previous_output = tutorbot_output
+            previous_messages = current_messages
 
 
 def reverse_conversion(apps, schema_editor):

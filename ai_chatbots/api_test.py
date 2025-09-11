@@ -1,6 +1,10 @@
 """Tests for ai_chatbots/api.py"""
 
+import json
+from uuid import uuid4
+
 import pytest
+from asgiref.sync import sync_to_async
 from langchain_core.language_models import FakeMessagesListChatModel
 from langchain_core.messages import (
     AIMessage,
@@ -16,9 +20,12 @@ from ai_chatbots import factories
 from ai_chatbots.api import (
     CustomSummarizationNode,
     TokenTrackingCallbackHandler,
+    create_tutor_checkpoints,
+    create_tutorbot_output_and_checkpoints,
     summarize_messages,
 )
 from ai_chatbots.chatbots import SummaryState
+from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 
 
 class MockChatModel(FakeMessagesListChatModel):
@@ -1326,3 +1333,184 @@ class TestTokenTrackingCallbackHandler:
 
         assert handler._properties["question"] == "Second question"  # noqa: SLF001
         mock_parent.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_create_tutor_checkpoints_no_session():
+    """Test create_tutor_checkpoints when UserChatSession doesn't exist."""
+
+    # Use a thread_id that definitely doesn't exist
+    thread_id = "99999999-9999-9999-9999-999999999999"
+
+    # Ensure no session exists for this thread_id
+    assert not UserChatSession.objects.filter(thread_id=thread_id).exists()
+
+    chat_json = '{"chat_history": [{"type": "HumanMessage", "content": "Hello"}]}'
+
+    result = create_tutor_checkpoints(thread_id, chat_json)
+
+    assert result == []
+
+
+@pytest.mark.django_db
+def test_create_tutor_checkpoints_empty_messages():
+    """Test create_tutor_checkpoints with empty message history."""
+
+    thread_id = str(uuid4())
+    factories.UserChatSessionFactory.create(thread_id=thread_id)
+
+    chat_json = '{"chat_history": []}'
+
+    result = create_tutor_checkpoints(thread_id, chat_json)
+
+    assert result == []
+
+
+@pytest.mark.django_db
+def test_create_tutor_checkpoints_with_tool_messages():
+    """Test create_tutor_checkpoints filters out ToolMessage types."""
+    thread_id = str(uuid4())
+    factories.UserChatSessionFactory.create(thread_id=thread_id)
+
+    chat_json = """
+    {
+        "chat_history": [
+            {"type": "ToolMessage", "content": "Tool result"},
+            {"type": "HumanMessage", "content": "Testing 123", "id": "msg1"}
+        ]
+    }
+    """
+
+    result = create_tutor_checkpoints(thread_id, chat_json)
+
+    assert len(result) == 1
+    checkpoint_meta = json.dumps(result[0].metadata)
+    assert "Tool result" not in checkpoint_meta
+    assert "Testing 123" in checkpoint_meta
+
+
+@pytest.mark.django_db
+def test_create_tutor_checkpoints_with_valid_messages():
+    """Test create_tutor_checkpoints creates checkpoints for valid messages."""
+    thread_id = str(uuid4())
+    factories.UserChatSessionFactory.create(thread_id=thread_id)
+
+    chat_json = {
+        "chat_history": [
+            {"type": "HumanMessage", "content": "Hello", "id": "msg1"},
+            {"type": "AIMessage", "content": "Hi there", "id": "msg2"},
+        ]
+    }
+
+    result = create_tutor_checkpoints(thread_id, chat_json)
+
+    assert len(result) == 2
+    assert all(isinstance(checkpoint, DjangoCheckpoint) for checkpoint in result)
+
+    # Check that checkpoints were actually created in DB
+    saved_checkpoints = DjangoCheckpoint.objects.filter(thread_id=thread_id)
+    assert saved_checkpoints.count() == 2
+
+
+@pytest.mark.django_db
+def test_create_tutor_checkpoints_new_messages_only():
+    """Test create_tutor_checkpoints only creates checkpoints for new messages."""
+    thread_id = str(uuid4())
+    factories.UserChatSessionFactory.create(thread_id=thread_id, user=None)
+
+    # Previous chat with one message
+    previous_chat = {
+        "chat_history": [{"type": "HumanMessage", "content": "Hello", "id": "msg1"}]
+    }
+
+    # New chat with the same message plus a new one
+    new_chat = {
+        "chat_history": [
+            {"type": "HumanMessage", "content": "Hello", "id": "msg1"},  # Existing
+            {"type": "AIMessage", "content": "Hi there", "id": "msg2"},  # New
+        ]
+    }
+
+    result = create_tutor_checkpoints(
+        thread_id, new_chat, previous_chat_json=previous_chat
+    )
+
+    # Should only create checkpoint for the new message
+    assert len(result) == 1
+
+
+@pytest.mark.django_db
+async def test_create_tutorbot_output_and_checkpoints():
+    """Test create_tutorbot_output_and_checkpoints creates both objects."""
+    thread_id = str(uuid4())
+    await sync_to_async(factories.UserChatSessionFactory.create)(thread_id=thread_id)
+
+    chat_json = {
+        "chat_history": [{"type": "HumanMessage", "content": "Hello", "id": "msg1"}]
+    }
+    edx_module_id = "test-module"
+
+    output, checkpoints = await create_tutorbot_output_and_checkpoints(
+        thread_id, chat_json, edx_module_id
+    )
+
+    # Check TutorBotOutput was created
+    assert isinstance(output, TutorBotOutput)
+    assert output.thread_id == thread_id
+    assert output.edx_module_id == edx_module_id
+
+    # Check checkpoints were created
+    assert len(checkpoints) == 1
+    assert all(isinstance(cp, DjangoCheckpoint) for cp in checkpoints)
+
+    # Verify they're saved in DB
+    assert (
+        await sync_to_async(TutorBotOutput.objects.filter(thread_id=thread_id).count)()
+        == 1
+    )
+    assert (
+        await sync_to_async(
+            DjangoCheckpoint.objects.filter(thread_id=thread_id).count
+        )()
+        == 1
+    )
+
+
+@pytest.mark.django_db
+async def test_create_tutorbot_output_and_checkpoints_with_previous():
+    """Test create_tutorbot_output_and_checkpoints compares with previous output."""
+    thread_id = str(uuid4())
+    await sync_to_async(factories.UserChatSessionFactory.create)(
+        thread_id=thread_id, user=None
+    )
+
+    # Create a previous output
+    previous_chat = {
+        "chat_history": [{"type": "HumanMessage", "content": "Hello", "id": "msg1"}]
+    }
+    await sync_to_async(TutorBotOutput.objects.create)(
+        thread_id=thread_id, chat_json=previous_chat, edx_module_id="test"
+    )
+
+    # New chat with additional message
+    new_chat = {
+        "chat_history": [
+            {"type": "HumanMessage", "content": "Hello", "id": "msg1"},  # Existing
+            {"type": "AIMessage", "content": "Hi", "id": "msg2"},  # New
+        ]
+    }
+
+    output, checkpoints = await create_tutorbot_output_and_checkpoints(
+        thread_id, new_chat, "test-module"
+    )
+
+    # Should create new output and only checkpoint for new message
+    assert len(checkpoints) == 1
+    assert (
+        await sync_to_async(TutorBotOutput.objects.filter(thread_id=thread_id).count)()
+        == 2
+    )
+    assert (
+        await sync_to_async(TutorBotOutput.objects.filter(id=output.id).exists)()
+        is True
+    )

@@ -615,7 +615,7 @@ def create_tutorbot_output_and_checkpoints(thread_id, chat_json, edx_module_id):
             edx_module_id=edx_module_id or "",
         )
 
-        checkpoints = create_tutor_checkpoints(chat_json, previous_chat_json)
+        checkpoints = create_tutor_checkpoints(thread_id, chat_json, previous_chat_json)
 
         return tutorbot_output, checkpoints
 

@@ -256,7 +256,9 @@ async def test_get_completion(
 
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
-    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = ResourceRecommendationBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     agent = chatbot.create_agent_graph()
     for node in ("agent", "tools", "pre_model_hook"):
         assert node in agent.nodes
@@ -299,7 +301,9 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = SyllabusBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = SyllabusBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     mock_create_agent.assert_called_once_with(
         chatbot.llm,
         tools=chatbot.tools,
@@ -316,7 +320,9 @@ async def test_syllabus_bot_get_completion_state(
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
-    chatbot = SyllabusBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = SyllabusBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     extra_state = {
         "course_id": ["mitx1.23"],
         "collection_name": ["vector512"],
@@ -663,7 +669,11 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
         )
     mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
     user_msg = "what should i try next?"
-    thread_id = f"TEST_{variant}"  # Use unique thread_id per variant
+    # Use unique UUID-based thread_id per variant
+    if variant == "edx":
+        thread_id = "12345678-1234-5678-9abc-123456789abc"
+    else:
+        thread_id = "87654321-4321-8765-cba9-987654321def"
 
     if variant == "canvas":
         problem_set_title = "Problem Set Title"
@@ -731,7 +741,9 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = VideoGPTBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     mock_create_agent.assert_called_once_with(
         chatbot.llm,
         tools=chatbot.tools,
@@ -797,7 +809,9 @@ async def test_video_gpt_bot_get_completion_state(
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_VIDEO_GPT_MODEL = default_model
-    chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = VideoGPTBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     extra_state = {
         "transcript_asset_id": [
             "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
