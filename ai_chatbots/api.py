@@ -721,15 +721,11 @@ def _create_checkpoint_data(
 
 
 def _create_checkpoint_metadata(
-    message: dict, step: int, langchain_message: dict, thread_id: str
+    tutor_meta: dict, message: dict, step: int, langchain_message: dict, thread_id: str
 ) -> dict:
     """Create metadata for the checkpoint based on message type."""
-    if message["type"] == "HumanMessage":
-        source = "input"
-        writes = {"__start__": {"messages": [langchain_message]}}
-    else:  # AI message
-        source = "loop"
-        writes = {"agent": {"messages": [langchain_message]}}
+    source = "input" if message["type"] == "HumanMessage" else "loop"
+    writes = {"__start__": {"messages": [langchain_message], **tutor_meta}}
 
     return {
         "step": step,
@@ -792,7 +788,7 @@ def create_tutor_checkpoints(
 
         # Create metadata for this step
         metadata = _create_checkpoint_metadata(
-            message, step, langchain_message, thread_id
+            chat_data.get("metadata", {}), message, step, langchain_message, thread_id
         )
 
         # Create and save the checkpoint
