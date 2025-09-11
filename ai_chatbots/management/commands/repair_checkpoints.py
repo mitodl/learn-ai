@@ -1,5 +1,6 @@
 """Management command for adding missing writes to checkpoint metadata"""
 
+from django.conf import settings
 from django.core.management import BaseCommand
 
 from ai_chatbots.checkpointers import calculate_writes
@@ -16,6 +17,14 @@ class Command(BaseCommand):
 
     help = "Add missing writes to checkpoint metadata"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--batch-size",
+            type=int,
+            default=getattr(settings, "QUERY_BATCH_SIZE", 100),
+            help=f"Checkpoint batch size (default: {settings.QUERY_BATCH_SIZE})",
+        )
+
     def batch_assign_writes(self, ids: list[int]):
         """Batch assign writes to checkpoints given a list of ids"""
         checkpoints = DjangoCheckpoint.objects.filter(id__in=ids).only(
@@ -28,16 +37,32 @@ class Command(BaseCommand):
     def handle(self, *args, **options):  # noqa: ARG002
         """Add missing writes to checkpoint metadata"""
 
-        idx = 0
-        checkpoint_ids = (
+        batch_size = options["batch_size"]
+        self.stdout.write(
+            f"Starting checkpoint repair process (batch size: {batch_size})..."
+        )
+
+        # Use iterator to process checkpoints in batches without loading all IDs
+        checkpoint_ids_qs = (
             DjangoCheckpoint.objects.only("id", "metadata")
             .filter(metadata__writes__isnull=True)
             .values_list("id", flat=True)
         )
-        self.stdout.write(f"Found {len(checkpoint_ids)} checkpoints to update")
-        for batch in chunks(checkpoint_ids, chunk_size=100):
+
+        total_processed = 0
+
+        for idx, checkpoint_ids_batch in enumerate(
+            chunks(checkpoint_ids_qs, chunk_size=batch_size)
+        ):
             self.stdout.write(
-                f"Processing batch {idx+1} of {len(checkpoint_ids) // 100 + 1}"
+                f"Processing batch {idx + 1} (size: {len(checkpoint_ids_batch)})..."
             )
-            self.batch_assign_writes(batch)
+            self.batch_assign_writes(checkpoint_ids_batch)
+            total_processed += len(checkpoint_ids_batch)
+
+        if total_processed == 0:
+            self.stdout.write("No checkpoints found that need repair")
+        else:
+            self.stdout.write(f"Completed! Processed {total_processed} checkpoints")
+
         return 0
