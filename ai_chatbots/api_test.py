@@ -1,7 +1,7 @@
 """Tests for ai_chatbots/api.py"""
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -20,6 +20,9 @@ from ai_chatbots import factories
 from ai_chatbots.api import (
     CustomSummarizationNode,
     TokenTrackingCallbackHandler,
+    _generate_message_id,
+    _should_create_checkpoint,
+    add_message_ids,
     create_tutor_checkpoints,
     create_tutorbot_output_and_checkpoints,
     summarize_messages,
@@ -1514,3 +1517,182 @@ async def test_create_tutorbot_output_and_checkpoints_with_previous():
         await sync_to_async(TutorBotOutput.objects.filter(id=output.id).exists)()
         is True
     )
+
+
+def test_generate_message_id():
+    """Test the generate_message_id function."""
+    thread_id = "12345678-1234-5678-9abc-123456789abc"
+    output_id = 1
+    message = {"type": "HumanMessage", "content": "Hello world"}
+
+    # Test basic functionality
+    message_id = _generate_message_id(thread_id, output_id, message)
+    assert isinstance(message_id, str)
+    assert UUID(message_id)  # Should be a valid UUID
+
+    # Test deterministic behavior - same inputs should produce same output
+    message_id2 = _generate_message_id(thread_id, output_id, message)
+    assert message_id == message_id2
+
+    # Test different inputs produce different outputs
+    different_thread = "87654321-4321-8765-cba9-987654321def"
+    different_id = _generate_message_id(different_thread, output_id, message)
+    assert message_id != different_id
+
+    different_output_id = _generate_message_id(thread_id, 2, message)
+    assert message_id != different_output_id
+
+    different_message = {"type": "AIMessage", "content": "Hello world"}
+    different_message_id = _generate_message_id(thread_id, output_id, different_message)
+    assert message_id != different_message_id
+
+
+def test_add_message_ids_with_dicts():
+    """Test add_message_ids function with dictionary messages."""
+    thread_id = "12345678-1234-5678-9abc-123456789abc"
+    output_id = 1
+
+    # Test with messages that don't have IDs
+    messages = [
+        {"type": "HumanMessage", "content": "Hello"},
+        {"type": "AIMessage", "content": "Hi there"},
+    ]
+
+    result = add_message_ids(thread_id, output_id, messages)
+
+    # Should return the same list object
+    assert result is messages
+
+    # All messages should now have IDs
+    for message in messages:
+        assert "id" in message
+        assert UUID(message["id"])  # Should be valid UUIDs
+
+    # IDs should be deterministic
+    messages2 = [
+        {"type": "HumanMessage", "content": "Hello"},
+        {"type": "AIMessage", "content": "Hi there"},
+    ]
+    add_message_ids(thread_id, output_id, messages2)
+
+    for i, message in enumerate(messages):
+        assert message["id"] == messages2[i]["id"]
+
+
+def test_add_message_ids_preserves_existing_ids():
+    """Test that add_message_ids preserves existing message IDs."""
+    thread_id = "12345678-1234-5678-9abc-123456789abc"
+    output_id = 1
+    existing_id = "existing-id-123"
+
+    messages = [
+        {"type": "HumanMessage", "content": "Hello", "id": existing_id},
+        {"type": "AIMessage", "content": "Hi there"},
+    ]
+
+    add_message_ids(thread_id, output_id, messages)
+
+    # First message should keep its existing ID
+    assert messages[0]["id"] == existing_id
+
+    # Second message should get a new ID
+    assert messages[1]["id"] != existing_id
+    assert "id" in messages[1]
+
+
+def test_add_message_ids_with_langchain_objects():
+    """Test add_message_ids function with LangChain message objects."""
+    thread_id = "12345678-1234-5678-9abc-123456789abc"
+    output_id = 1
+
+    # Test with LangChain message without ID
+    message_without_id = HumanMessage(content="Hello")
+    message_with_id = HumanMessage(content="Hi", id="existing-id")
+
+    messages = [message_without_id, message_with_id]
+
+    result = add_message_ids(thread_id, output_id, messages)
+
+    # Should return the same list
+    assert result is messages
+
+    # First message should get an ID
+    assert hasattr(message_without_id, "id")
+    assert message_without_id.id is not None
+    assert UUID(message_without_id.id)
+
+    # Second message should keep its existing ID
+    assert message_with_id.id == "existing-id"
+
+
+def test_add_message_ids_empty_list():
+    """Test add_message_ids with empty list."""
+    thread_id = "12345678-1234-5678-9abc-123456789abc"
+    output_id = 1
+
+    messages = []
+    result = add_message_ids(thread_id, output_id, messages)
+
+    assert result is messages
+    assert len(result) == 0
+
+
+def test_should_create_checkpoint():
+    """Test the _should_create_checkpoint function filters correctly."""
+    # Should create checkpoint for HumanMessage
+    human_msg = {"type": "HumanMessage", "content": "Hello"}
+    assert _should_create_checkpoint(human_msg) is True
+
+    # Should create checkpoint for AIMessage without tool_calls
+    ai_msg = {"type": "AIMessage", "content": "Hi there"}
+    assert _should_create_checkpoint(ai_msg) is True
+
+    # Should create checkpoint for AIMessage with empty tool_calls
+    ai_msg_empty_tools = {"type": "AIMessage", "content": "Hi", "tool_calls": []}
+    assert _should_create_checkpoint(ai_msg_empty_tools) is True
+
+    # Should create checkpoint for AIMessage with null tool_calls
+    ai_msg_null_tools = {"type": "AIMessage", "content": "Hi", "tool_calls": None}
+    assert _should_create_checkpoint(ai_msg_null_tools) is True
+
+    # Should NOT create checkpoint for ToolMessage
+    tool_msg = {"type": "ToolMessage", "content": "Tool result"}
+    assert _should_create_checkpoint(tool_msg) is False
+
+    # Should NOT create checkpoint for AIMessage with tool_calls
+    ai_msg_with_tools = {
+        "type": "AIMessage",
+        "content": "Let me help you",
+        "tool_calls": [{"name": "search", "args": {"query": "test"}}],
+    }
+    assert _should_create_checkpoint(ai_msg_with_tools) is False
+
+
+@pytest.mark.django_db
+def test_create_tutor_checkpoints_filters_ai_messages_with_tool_calls():
+    """Test that create_tutor_checkpoints filters out AI messages with tool_calls."""
+    thread_id = str(uuid4())
+    factories.UserChatSessionFactory.create(thread_id=thread_id)
+
+    chat_json = {
+        "chat_history": [
+            {"type": "HumanMessage", "content": "Hello", "id": "msg1"},
+            {
+                "type": "AIMessage",
+                "content": "Let me search",
+                "id": "msg2",
+                "tool_calls": [{"name": "search"}],
+            },
+            {"type": "ToolMessage", "content": "Search results", "id": "msg3"},
+            {"type": "AIMessage", "content": "Here are the results", "id": "msg4"},
+        ]
+    }
+
+    result = create_tutor_checkpoints(thread_id, chat_json)
+
+    # Should only create checkpoints for HumanMessage and final AIMessage (without tool_calls)
+    assert len(result) == 2
+
+    # Verify in database
+    saved_checkpoints = DjangoCheckpoint.objects.filter(thread_id=thread_id)
+    assert saved_checkpoints.count() == 2

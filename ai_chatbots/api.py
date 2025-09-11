@@ -3,7 +3,7 @@
 import json
 import logging
 from typing import Any, Optional, Union, cast
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 import litellm
 from channels.db import database_sync_to_async
@@ -622,6 +622,12 @@ def create_tutorbot_output_and_checkpoints(
         return tutorbot_output, checkpoints
 
 
+def _should_create_checkpoint(msg: dict) -> bool:
+    """Determine if a message should have a checkpoint created for it."""
+    # Skip ToolMessage type or tool_calls
+    return not (msg.get("type") == "ToolMessage" or msg.get("tool_calls"))
+
+
 def _get_cumulative_messages_from_checkpoints(
     thread_id: str,
 ) -> tuple[list[dict], Optional[str]]:
@@ -658,11 +664,11 @@ def _identify_new_messages(
     )
     previous_messages = previous_chat_data.get("chat_history", [])
 
-    # Get set of existing message IDs from previous chat (excluding ToolMessages)
+    # Get set of existing message IDs from previous chat
     existing_message_ids = {
         msg.get("id")
         for msg in previous_messages
-        if msg.get("type") != "ToolMessage" and msg.get("id")
+        if _should_create_checkpoint(msg) and msg.get("id")
     }
 
     # Find messages with IDs that don't exist in previous chat
@@ -758,8 +764,8 @@ def create_tutor_checkpoints(
     if not messages:
         return []
 
-    # Filter out ToolMessage types - we don't want checkpoints for these
-    filtered_messages = [msg for msg in messages if msg.get("type") != "ToolMessage"]
+    # Filter out ToolMessage types and AI messages with tool_calls
+    filtered_messages = [msg for msg in messages if _should_create_checkpoint(msg)]
     if not filtered_messages:
         return []
 
@@ -813,3 +819,23 @@ def create_tutor_checkpoints(
         step += 1
 
     return checkpoints_created
+
+
+def _generate_message_id(thread_id: str, output_id: int, message: dict) -> str:
+    """Generate a unique ID for a message based on its content and thread ID"""
+    return str(
+        uuid5(UUID(thread_id), f'{output_id}_{message["type"]}_{message["content"]}')
+    )
+
+
+def add_message_ids(thread_id: str, output_id: int, messages: list[dict]) -> list[dict]:
+    """Add unique IDs to messages that don't have one"""
+    for message in messages:
+        # Handle both dict and LangChain message objects
+        if isinstance(message, dict):
+            if not message.get("id"):
+                message["id"] = _generate_message_id(thread_id, output_id, message)
+        # # LangChain message object
+        elif not hasattr(message, "id") or not message.id:
+            message.id = _generate_message_id(thread_id, output_id, message.__dict__)
+    return messages

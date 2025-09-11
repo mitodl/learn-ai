@@ -2,7 +2,6 @@
 
 import logging
 from enum import Enum
-from uuid import UUID, uuid5
 
 import requests
 from django.conf import settings
@@ -48,23 +47,3 @@ def request_with_token(url, params, timeout: int = 30):
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=timeout,
     )
-
-
-def generate_message_id(thread_id: str, output_id: int, message: dict) -> str:
-    """Generate a unique ID for a message based on its content and thread ID"""
-    return str(
-        uuid5(UUID(thread_id), f'{output_id}_{message["type"]}_{message["content"]}')
-    )
-
-
-def add_message_ids(thread_id, output_id: int, messages: list[dict]) -> list[dict]:
-    """Add unique IDs to messages that don't have one"""
-    for message in messages:
-        # Handle both dict and LangChain message objects
-        if isinstance(message, dict):
-            if not message.get("id"):
-                message["id"] = generate_message_id(thread_id, output_id, message)
-        # # LangChain message object
-        elif not hasattr(message, "id") or not message.id:
-            message.id = generate_message_id(thread_id, output_id, message.__dict__)
-    return messages

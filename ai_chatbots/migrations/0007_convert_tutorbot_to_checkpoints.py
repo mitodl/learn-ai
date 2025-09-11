@@ -4,8 +4,7 @@ import json
 
 from django.db import migrations
 
-from ai_chatbots.api import create_tutor_checkpoints
-from ai_chatbots.utils import add_message_ids
+from ai_chatbots.api import add_message_ids, create_tutor_checkpoints
 
 
 def same_message(msg1, msg2):
