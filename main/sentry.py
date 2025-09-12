@@ -6,6 +6,7 @@ import sentry_sdk
 from celery.exceptions import WorkerLostError
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.langchain import LangchainIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 # these errors occur when a shutdown is happening (usually caused by a SIGTERM)
@@ -76,6 +77,7 @@ def init_sentry(  # noqa: PLR0913
         integrations=[
             DjangoIntegration(),
             CeleryIntegration(),
+            LangchainIntegration(),
             LoggingIntegration(level=log_level),
         ],
     )
