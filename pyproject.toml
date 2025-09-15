@@ -65,7 +65,7 @@ pygithub = "^2.0.0"
 redis = "^5.0.0"
 requests = "^2.31.0"
 ruff = "0.12.12"
-sentry-sdk = "^2.13.0"
+sentry-sdk = {extras = ["django", "langgraph"], version = "^2.37.1"}
 social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "0.47.3"
