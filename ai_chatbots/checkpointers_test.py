@@ -9,7 +9,7 @@ from django.contrib.auth.models import AnonymousUser
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.base import CheckpointTuple
 
-from ai_chatbots.checkpointers import AsyncDjangoSaver
+from ai_chatbots.checkpointers import AsyncDjangoSaver, calculate_writes
 from ai_chatbots.factories import (
     CheckpointFactory,
     CheckpointWriteFactory,
@@ -221,3 +221,252 @@ async def test_alist():
         assert len(cp_tuple.pending_writes) == 1
         idx += 1
     assert idx == 3
+
+
+@pytest.mark.parametrize("has_messages", [True, False])
+async def test_calculate_writes_with_state_attributes(has_messages):
+    """Test calculate_writes function includes non-native state attributes."""
+    checkpoint = {
+        "updated_channels": ["messages"] if has_messages else [],
+        "channel_values": {
+            "messages": [
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "AIMessage"],
+                    "kwargs": {
+                        "content": "Hello! How can I help?",
+                        "type": "ai",
+                        "id": "ai-1",
+                    },
+                }
+            ],
+            # These should be included as they're not in native_keys
+            "course_id": ["123"],
+            "collection_name": ["syllabus"],
+            "intent_history": ["greeting"],
+            # These should be excluded as they're in native_keys
+            "context": {"some": "context"},
+            "llm_input_messages": [{"role": "user", "content": "test"}],
+        },
+    }
+
+    assert calculate_writes(checkpoint) == (
+        {
+            "__start__": {
+                "messages": [
+                    {
+                        "lc": 1,
+                        "type": "constructor",
+                        "id": ["langchain", "schema", "messages", "AIMessage"],
+                        "kwargs": {
+                            "content": "Hello! How can I help?",
+                            "type": "ai",
+                            "id": "ai-1",
+                        },
+                    }
+                ],
+                "course_id": ["123"],
+                "collection_name": ["syllabus"],
+                "intent_history": ["greeting"],
+            }
+        }
+        if has_messages
+        else None
+    )
+
+
+async def test_calculate_writes_empty_messages():
+    """Test calculate_writes function with empty messages."""
+    checkpoint = {"channel_values": {"messages": []}}
+
+    assert calculate_writes(checkpoint) is None
+
+
+async def test_calculate_writes_no_messages_key():
+    """Test calculate_writes function with no messages key."""
+    checkpoint = {"channel_values": {}}
+
+    assert calculate_writes(checkpoint) is None
+
+
+async def test_calculate_writes_no_channel_values():
+    """Test calculate_writes function with no channel_values."""
+    assert calculate_writes({}) is None
+
+
+async def test_aput_adds_writes_when_missing():
+    """Test that aput automatically adds writes to metadata when missing."""
+    checkpoint_id = uuid4().hex
+    thread_id = uuid4().hex
+    checkpoint_ns = uuid4().hex
+
+    # Metadata without writes
+    metadata = {
+        "source": "test",
+        "step": 1,
+    }
+
+    # Checkpoint with messages
+    checkpoint = {
+        "id": checkpoint_id,
+        "type": "message",
+        "updated_channels": ["messages"],
+        "channel_values": {
+            "messages": [
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "HumanMessage"],
+                    "kwargs": {
+                        "content": "Test message",
+                        "type": "human",
+                        "id": "test-msg-1",
+                    },
+                },
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "AIMessage"],
+                    "kwargs": {
+                        "content": "AI response",
+                        "type": "ai",
+                        "id": "ai-msg-1",
+                    },
+                },
+            ]
+        },
+    }
+
+    saver = AsyncDjangoSaver()
+    await saver.aput(
+        {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns}},
+        checkpoint,
+        metadata,
+        [],
+    )
+
+    # Verify the checkpoint was saved with calculated writes
+    saved_checkpoint = await DjangoCheckpoint.objects.filter(
+        thread_id=thread_id
+    ).afirst()
+    assert saved_checkpoint is not None
+    assert "writes" in saved_checkpoint.metadata
+
+    expected_writes = {
+        "__start__": {
+            "messages": [
+                {
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "AIMessage"],
+                    "kwargs": {
+                        "content": "AI response",
+                        "type": "ai",
+                        "id": "ai-msg-1",
+                    },
+                }
+            ]
+        }
+    }
+    assert saved_checkpoint.metadata["writes"] == expected_writes
+
+
+async def test_aput_preserves_existing_writes():
+    """Test that aput preserves existing writes in metadata."""
+    checkpoint_id = uuid4().hex
+    thread_id = uuid4().hex
+    checkpoint_ns = uuid4().hex
+
+    existing_writes = {"agent": {"messages": [{"content": "Existing write"}]}}
+
+    # Metadata with existing writes
+    metadata = {
+        "source": "test",
+        "step": 1,
+        "writes": existing_writes,
+    }
+
+    # Checkpoint with messages
+    checkpoint = {
+        "id": checkpoint_id,
+        "type": "message",
+        "channel_values": {
+            "messages": [
+                {
+                    "content": "Test message",
+                    "type": "human",
+                }
+            ]
+        },
+    }
+
+    saver = AsyncDjangoSaver()
+    await saver.aput(
+        {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns}},
+        checkpoint,
+        metadata,
+        [],
+    )
+
+    # Verify the checkpoint was saved with original writes preserved
+    saved_checkpoint = await DjangoCheckpoint.objects.filter(
+        thread_id=thread_id
+    ).afirst()
+    assert saved_checkpoint.metadata["writes"] == existing_writes
+
+
+async def test_aput_includes_state_in_writes():
+    """Test that aput includes state attributes in writes metadata."""
+    checkpoint_id = uuid4().hex
+    thread_id = uuid4().hex
+    checkpoint_ns = uuid4().hex
+
+    metadata = {
+        "source": "test",
+        "step": 1,
+    }
+
+    checkpoint = {
+        "id": checkpoint_id,
+        "type": "message",
+        "channel_values": {
+            "messages": [
+                {
+                    "content": "Test message",
+                    "type": "human",
+                }
+            ],
+            "intent_history": ["test_intent"],
+            "tutor_metadata": {"subject": "science"},
+        },
+        "channel_versions": {
+            "messages": 1,
+            "intent_history": 1,
+        },
+        "updated_channels": ["messages"],
+        "versions_seen": {
+            "__start__": {"__start__": 1},
+        },
+    }
+
+    saver = AsyncDjangoSaver()
+    await saver.aput(
+        {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns}},
+        checkpoint,
+        metadata,
+        [],
+    )
+
+    # Verify the checkpoint was saved with state metadata in writes
+    saved_checkpoint = await DjangoCheckpoint.objects.filter(
+        thread_id=thread_id
+    ).afirst()
+    assert saved_checkpoint is not None
+
+    # Check that state attributes are included in writes
+    writes = saved_checkpoint.metadata["writes"]
+    assert "intent_history" in writes["__start__"]
+    assert "tutor_metadata" in writes["__start__"]
+    assert writes["__start__"]["intent_history"] == ["test_intent"]
+    assert writes["__start__"]["tutor_metadata"] == {"subject": "science"}
