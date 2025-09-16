@@ -19,6 +19,7 @@ from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
 from ai_chatbots.permissions import IsThreadOwner
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import (
+    ABTestChoiceSerializer,
     ChatMessageSerializer,
     LLMModelSerializer,
     SystemPromptSerializer,
@@ -316,3 +317,53 @@ class SystemPromptViewSet(GenericViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+@extend_schema(
+    request=ABTestChoiceSerializer,
+    responses={
+        200: OpenApiResponse(description="A/B test choice saved successfully"),
+        400: OpenApiResponse(description="Invalid request data"),
+        500: OpenApiResponse(description="Error saving choice"),
+    },
+)
+class ABTestChoiceView(ApiView):
+    """
+    API endpoint to save user's A/B test choice and update chat history.
+    """
+
+    http_method_names = ["post"]
+    permission_classes = (AllowAny,)  # Can change to IsAuthenticated if needed
+
+    def post(self, request, *args, **kwargs):  # noqa: ARG002
+        """Save user's A/B test choice."""
+        serializer = ABTestChoiceSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        
+        try:
+            # Extract validated data
+            thread_id = serializer.validated_data["thread_id"]
+            chosen_variant = serializer.validated_data["chosen_variant"]
+            ab_response_data = serializer.validated_data["ab_response_data"]
+            user_preference_reason = serializer.validated_data.get("user_preference_reason", "")
+            problem_set_title = serializer.validated_data["problem_set_title"]
+            run_readable_id = serializer.validated_data["run_readable_id"]
+            
+            # For now, just return success without saving to database
+            # This will be implemented later when we have proper async handling
+            chosen_response_data = ab_response_data[chosen_variant]
+            chosen_content = chosen_response_data["content"]
+            
+            return Response({
+                "success": True,
+                "message": "A/B test choice received successfully",
+                "chosen_variant": chosen_variant,
+                "chosen_content": chosen_content,
+            }, status=200)
+            
+        except Exception as e:
+            return Response({
+                "error": f"Failed to process A/B test choice: {str(e)}"
+            }, status=500)
