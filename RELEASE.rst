@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+Version 0.15.1
+--------------
+
+- Standardize checkpoints for all bots (#301)
+
 Version 0.15.0 (Released September 16, 2025)
 --------------
 
