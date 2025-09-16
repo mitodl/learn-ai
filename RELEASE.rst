@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.15.0
+Version 0.15.0 (Released September 16, 2025)
 --------------
 
 - Make sentry more AI-friendly (#302)
