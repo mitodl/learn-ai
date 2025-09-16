@@ -25,6 +25,47 @@ from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChat
 USER_MODEL = settings.AUTH_USER_MODEL
 
 
+def calculate_writes(checkpoint: dict) -> dict[str, Any]:
+    """
+    Calculate the writes that were made between the previous checkpoint and this one.
+    This is to maintain backwards compatibility with older checkpoints made before
+    the langgraph upgrade and to make data platform reporting easier/more consistent.
+
+    Args:
+        checkpoint (dict): The current checkpoint data.
+
+    Returns:
+        dict[str, Any]: A dict with a writes attribute
+    """
+    writes = None
+
+    updated_channels = checkpoint.get("updated_channels", [])
+    if "messages" in updated_channels:
+        channel_values = checkpoint.get("channel_values", {})
+        native_keys = ["context", "__pregel_tasks", "llm_input_messages", "messages"]
+        messages = channel_values.get("messages", [])
+        if messages:
+            last_message = messages[-1]
+            writes = {
+                "__start__": {
+                    "messages": [last_message],
+                    **{
+                        key: value
+                        for key, value in channel_values.items()
+                        if key not in native_keys
+                    },
+                }
+            }
+    return writes
+
+
+class CheckpointMetadataWithWrites(CheckpointMetadata):
+    """Metadata associated with a checkpoint, incuding writes."""
+
+    """The writes that were made between the previous checkpoint and this one."""
+    writes: dict[str, Any]
+
+
 def _parse_django_checkpoint_writes_key(
     checkpoint_write: DjangoCheckpointWrite,
 ) -> dict:
@@ -189,6 +230,8 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         type_, _ = self.serde.dumps_typed(checkpoint)
         serialized_checkpoint = json.loads(self.serde.dumps(checkpoint))
         serialized_metadata = json.loads(self.serde.dumps(metadata))
+        if not serialized_metadata.get("writes"):
+            serialized_metadata["writes"] = calculate_writes(serialized_checkpoint)
 
         data = {
             "checkpoint": serialized_checkpoint,

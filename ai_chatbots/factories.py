@@ -1,5 +1,6 @@
 """Test factory classes for ai_chatbots tests"""
 
+import json
 from random import randint
 from uuid import uuid4
 
@@ -292,3 +293,22 @@ class LLMModelFactory(DjangoModelFactory):
 
     class Meta:
         model = models.LLMModel
+
+
+class TutorBotOutputFactory(DjangoModelFactory):
+    """Factory for TutorBotOutput instances."""
+
+    thread_id = factory.Faker("uuid4")
+    chat_json = factory.LazyFunction(
+        lambda: json.dumps(
+            {
+                "chat_history": [
+                    HumanMessageFactory().__dict__,
+                    AIMessageFactory().__dict__,
+                ]
+            }
+        )
+    )
+
+    class Meta:
+        model = models.TutorBotOutput

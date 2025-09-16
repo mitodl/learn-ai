@@ -9,7 +9,6 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
-from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -41,9 +40,10 @@ from ai_chatbots import tools
 from ai_chatbots.api import (
     CustomSummarizationNode,
     TokenTrackingCallbackHandler,
+    create_tutorbot_output_and_checkpoints,
     get_search_tool_metadata,
+    query_tutorbot_output,
 )
-from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
 
@@ -500,18 +500,6 @@ class CanvasSyllabusBot(SyllabusBot):
     MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
 
 
-@database_sync_to_async
-def create_tutorbot_output(thread_id, chat_json, edx_module_id):
-    return TutorBotOutput.objects.create(
-        thread_id=thread_id, chat_json=chat_json, edx_module_id=edx_module_id or ""
-    )
-
-
-@database_sync_to_async
-def get_history(thread_id):
-    return TutorBotOutput.objects.filter(thread_id=thread_id).last()
-
-
 class TutorBot(BaseChatbot):
     """
     Chatbot that assists with problem sets
@@ -576,6 +564,9 @@ class TutorBot(BaseChatbot):
             }
         )
 
+    async def get_latest_history(self):
+        return await query_tutorbot_output(self.thread_id)
+
     async def get_completion(
         self,
         message: str,
@@ -585,18 +576,18 @@ class TutorBot(BaseChatbot):
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
 
-        history = await get_history(self.thread_id)
-
+        history = await self.get_latest_history()
+        message_id = str(uuid4())
         if history:
             json_history = json.loads(history.chat_json)
             chat_history = json_to_messages(  # noqa: RUF005
                 json_history.get("chat_history", [])
-            ) + [HumanMessage(content=message)]
+            ) + [HumanMessage(content=message, id=message_id)]
 
             intent_history = json_to_intent_list(json_history["intent_history"])
             assessment_history = json_to_messages(json_history["assessment_history"])
         else:
-            chat_history = [HumanMessage(content=message)]
+            chat_history = [HumanMessage(content=message, id=message_id)]
             intent_history = []
             assessment_history = []
         self.llm.callbacks = await self.set_callbacks(
@@ -610,7 +601,7 @@ class TutorBot(BaseChatbot):
                 self.problem,
                 self.problem_set,
                 self.llm,
-                [HumanMessage(content=message)],
+                [HumanMessage(content=message, id=message_id)],
                 chat_history,
                 assessment_history,
                 intent_history,
@@ -641,7 +632,8 @@ class TutorBot(BaseChatbot):
             json_output = tutor_output_to_json(
                 new_history, new_intent_history, new_assessment_history, metadata
             )
-            await create_tutorbot_output(
+            # Save both TutorBotOutput and DjangoCheckpoint objects atomically
+            await create_tutorbot_output_and_checkpoints(
                 self.thread_id, json_output, self.edx_module_id
             )
 

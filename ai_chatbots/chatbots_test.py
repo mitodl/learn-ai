@@ -6,6 +6,7 @@ from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
 import pytest
+from channels.db import database_sync_to_async
 from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -25,17 +26,18 @@ from ai_chatbots.chatbots import (
     VideoGPTAgentState,
     VideoGPTBot,
     get_canvas_problem_set,
-    get_history,
     get_problem_from_edx_block,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
+from ai_chatbots.consumers import TutorBotHttpConsumer
 from ai_chatbots.factories import (
     AIMessageChunkFactory,
     HumanMessageFactory,
     SystemMessageFactory,
     ToolMessageFactory,
 )
+from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
@@ -254,7 +256,9 @@ async def test_get_completion(
 
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
-    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = ResourceRecommendationBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     agent = chatbot.create_agent_graph()
     for node in ("agent", "tools", "pre_model_hook"):
         assert node in agent.nodes
@@ -297,7 +301,9 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = SyllabusBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = SyllabusBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     mock_create_agent.assert_called_once_with(
         chatbot.llm,
         tools=chatbot.tools,
@@ -314,7 +320,9 @@ async def test_syllabus_bot_get_completion_state(
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
-    chatbot = SyllabusBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = SyllabusBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     extra_state = {
         "course_id": ["mitx1.23"],
         "collection_name": ["vector512"],
@@ -587,9 +595,7 @@ async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
 
 
 @pytest.mark.parametrize("variant", ["edx", "canvas"])
-async def test_tutor_get_completion(
-    posthog_settings, mocker, mock_checkpointer, variant
-):
+async def test_tutor_get_completion(posthog_settings, mocker, variant):
     """Test that the tutor bot get_completion method returns expected values."""
     final_message = [
         "values",
@@ -663,7 +669,11 @@ async def test_tutor_get_completion(
         )
     mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
     user_msg = "what should i try next?"
-    thread_id = "TEST"
+    # Use unique UUID-based thread_id per variant
+    if variant == "edx":
+        thread_id = "12345678-1234-5678-9abc-123456789abc"
+    else:
+        thread_id = "87654321-4321-8765-cba9-987654321def"
 
     if variant == "canvas":
         problem_set_title = "Problem Set Title"
@@ -676,9 +686,37 @@ async def test_tutor_get_completion(
         edx_module_id = "block1"
         block_siblings = ["block1", "block2"]
 
+    # Create metadata for the expected history
+    expected_metadata = {
+        "edx_module_id": edx_module_id,
+        "tutor_model": settings.AI_DEFAULT_TUTOR_MODEL,
+        "problem_set_title": problem_set_title,
+        "run_readable_id": run_readable_id,
+    }
+    new_history = filter_out_system_messages(final_message[1]["messages"])
+    expected_chat_json = tutor_output_to_json(
+        new_history, intents, assessment_history, expected_metadata
+    )
+
+    # Mock the history object that get_history should return
+    mock_history = mocker.Mock()
+    mock_history.thread_id = thread_id
+    mock_history.chat_json = expected_chat_json
+    mock_history.edx_module_id = edx_module_id or ""
+    mocker.patch.object(TutorBot, "get_latest_history", return_value=mock_history)
+
+    checkpointer = await AsyncDjangoSaver.create_with_session(
+        thread_id=thread_id,
+        message=final_message[1]["messages"][1].content,
+        user=None,
+        dj_session_key=uuid4().hex,
+        agent=TutorBotHttpConsumer.ROOM_NAME,
+        object_id=edx_module_id,
+    )
+
     chatbot = TutorBot(
         "anonymous",
-        mock_checkpointer,
+        checkpointer=checkpointer,
         edx_module_id=edx_module_id,
         block_siblings=block_siblings,
         problem_set_title=problem_set_title,
@@ -691,25 +729,21 @@ async def test_tutor_get_completion(
         results += str(chunk)
     assert results == "Let's start by thinking about the problem. "
 
-    history = await get_history(thread_id)
-    assert history.thread_id == thread_id
-    metadata = {
-        "edx_module_id": edx_module_id,
-        "tutor_model": chatbot.model,
-        "problem_set_title": problem_set_title,
-        "run_readable_id": run_readable_id,
-    }
-    new_history = filter_out_system_messages(final_message[1]["messages"])
-    assert history.chat_json == tutor_output_to_json(
-        new_history, intents, assessment_history, metadata
+    get_history_sync = database_sync_to_async(
+        lambda: TutorBotOutput.objects.filter(thread_id=thread_id).last()
     )
+    history = await get_history_sync()
+    assert history.thread_id == thread_id
+    assert history.chat_json == expected_chat_json
     assert history.edx_module_id == (edx_module_id or "")
 
 
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = VideoGPTBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     mock_create_agent.assert_called_once_with(
         chatbot.llm,
         tools=chatbot.tools,
@@ -775,7 +809,9 @@ async def test_video_gpt_bot_get_completion_state(
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_VIDEO_GPT_MODEL = default_model
-    chatbot = VideoGPTBot("anonymous", mock_checkpointer, thread_id="foo")
+    chatbot = VideoGPTBot(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
     extra_state = {
         "transcript_asset_id": [
             "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"

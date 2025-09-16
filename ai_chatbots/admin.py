@@ -13,7 +13,7 @@ class UserChatSessionAdmin(admin.ModelAdmin):
     list_filter = ("agent", "user")
     search_fields = ("title", "thread_id")
     ordering = ("-updated_on",)
-    readonly_fields = ("agent", "thread_id", "created_on", "updated_on")
+    readonly_fields = ("agent", "thread_id", "created_on", "updated_on", "user")
 
 
 @admin.register(LLMModel)
