@@ -1,6 +1,20 @@
 Release Notes
 =============
 
+Version 0.15.0
+--------------
+
+- Make sentry more AI-friendly (#302)
+- Update dependency axios to v1.12.0 [SECURITY] (#303)
+- Update Node.js to v22.19.0 (#298)
+- Update dependency next to v15.5.2 (#297)
+- Update dependency eslint-config-next to v15.5.2 (#296)
+- Update codecov/codecov-action action to v5.5.1 (#295)
+- Update nginx Docker tag to v1.29.1 (#294)
+- Update dependency starlette to v0.47.3 (#293)
+- Update dependency ruff to v0.12.12 (#292)
+- Update dependency Django to v4.2.24 (#291)
+
 Version 0.14.0 (Released September 08, 2025)
 --------------
 
