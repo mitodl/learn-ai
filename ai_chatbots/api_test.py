@@ -1610,7 +1610,7 @@ def test_create_tutor_checkpoints_includes_metadata():
         writes = metadata.get("writes", {})
 
         # The writes should include the tutor metadata
-        start_writes = writes.get("__start__", {})
+        start_writes = writes.get("__start__", writes.get("agent"))
         assert start_writes["user_id"] == "test_user_123"
         assert start_writes["course_id"] == "course_456"
         assert start_writes["custom_field"] == "custom_value"

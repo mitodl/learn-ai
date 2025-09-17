@@ -20,6 +20,7 @@ from langgraph.checkpoint.base import (
 )
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+from ai_chatbots.api import WRITES_MAPPING
 from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChatSession
 
 USER_MODEL = settings.AUTH_USER_MODEL
@@ -46,16 +47,20 @@ def calculate_writes(checkpoint: dict) -> dict[str, Any]:
         messages = channel_values.get("messages", [])
         if messages:
             last_message = messages[-1]
-            writes = {
-                "__start__": {
-                    "messages": [last_message],
-                    **{
-                        key: value
-                        for key, value in channel_values.items()
-                        if key not in native_keys
-                    },
+            writes_key = WRITES_MAPPING.get(
+                last_message.get("kwargs", {}).get("type", None), None
+            )
+            if writes_key:
+                writes = {
+                    writes_key: {
+                        "messages": [last_message],
+                        **{
+                            key: value
+                            for key, value in channel_values.items()
+                            if key not in native_keys
+                        },
+                    }
                 }
-            }
     return writes
 
 

@@ -37,6 +37,7 @@ from posthog.ai.langchain import CallbackHandler
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
+from ai_chatbots.constants import WRITES_MAPPING
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 from main.utils import now_in_utc
 
@@ -700,10 +701,12 @@ def _create_checkpoint_metadata(
     tutor_meta: dict, message: dict, step: int, thread_id: str
 ) -> dict:
     """Create metadata for the checkpoint based on message type."""
-    source = (
-        "input" if message.get("kwargs", {}).get("type") == "HumanMessage" else "loop"
-    )
-    writes = {"__start__": {"messages": [message], **tutor_meta}}
+    writes = None
+    message_type = message.get("kwargs", {}).get("type", None)
+    source = "input" if message_type == HumanMessage.__name__ else "loop"
+    container = WRITES_MAPPING.get(message_type, None)
+    if container:
+        writes = {container: {"messages": [message], **tutor_meta}}
 
     return {
         "step": step,
