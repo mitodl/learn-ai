@@ -83,6 +83,7 @@ class TutorBotOutput(models.Model):
     Store  chat history and internal state for the tutor chatbot
     """
 
+    session = models.ForeignKey(UserChatSession, on_delete=models.CASCADE, null=True)
     thread_id = models.TextField()
     chat_json = models.JSONField()
     edx_module_id = models.CharField(max_length=255, blank=True)
