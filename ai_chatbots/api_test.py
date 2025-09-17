@@ -1605,12 +1605,14 @@ def test_create_tutor_checkpoints_includes_metadata():
     assert len(result) == 2
 
     # Check that metadata is included in checkpoint writes
-    for checkpoint in result:
+    for idx, checkpoint in enumerate(result):
         metadata = checkpoint.metadata
         writes = metadata.get("writes", {})
 
         # The writes should include the tutor metadata
-        start_writes = writes.get("__start__", writes.get("agent"))
+        key = next(iter(writes.keys()))
+        assert key == "__start__" if idx == 0 else "agent"
+        start_writes = writes.get(key)
         assert start_writes["user_id"] == "test_user_123"
         assert start_writes["course_id"] == "course_456"
         assert start_writes["custom_field"] == "custom_value"
