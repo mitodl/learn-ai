@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.15.2
+Version 0.15.2 (Released September 18, 2025)
 --------------
 
 - Adjust metadata writes (#307)
