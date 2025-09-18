@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.15.2
+--------------
+
+- Adjust metadata writes (#307)
+- Standardize checkpoints for all bots (#301)
+
 Version 0.15.0 (Released September 16, 2025)
 --------------
 
