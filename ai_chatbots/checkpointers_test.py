@@ -253,7 +253,7 @@ async def test_calculate_writes_with_state_attributes(has_messages):
 
     assert calculate_writes(checkpoint) == (
         {
-            "__start__": {
+            "agent": {
                 "messages": [
                     {
                         "lc": 1,
@@ -354,7 +354,7 @@ async def test_aput_adds_writes_when_missing():
     assert "writes" in saved_checkpoint.metadata
 
     expected_writes = {
-        "__start__": {
+        "agent": {
             "messages": [
                 {
                     "lc": 1,
@@ -394,9 +394,15 @@ async def test_aput_preserves_existing_writes():
         "channel_values": {
             "messages": [
                 {
-                    "content": "Test message",
-                    "type": "human",
-                }
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "HumanMessage"],
+                    "kwargs": {
+                        "content": "Test message",
+                        "type": "human",
+                        "id": "test-msg-1",
+                    },
+                },
             ]
         },
     }
@@ -433,9 +439,15 @@ async def test_aput_includes_state_in_writes():
         "channel_values": {
             "messages": [
                 {
-                    "content": "Test message",
-                    "type": "human",
-                }
+                    "lc": 1,
+                    "type": "constructor",
+                    "id": ["langchain", "schema", "messages", "HumanMessage"],
+                    "kwargs": {
+                        "content": "Test message",
+                        "type": "human",
+                        "id": "test-msg-1",
+                    },
+                },
             ],
             "intent_history": ["test_intent"],
             "tutor_metadata": {"subject": "science"},

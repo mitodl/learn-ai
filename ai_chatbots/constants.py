@@ -52,7 +52,8 @@ class ChatbotCookie:
         """
         Represent the cookie as a string
         """
-        expire_str = (
-            f"Max-Age={self.max_age}" if self.max_age is not None else ""
-        )
+        expire_str = f"Max-Age={self.max_age}" if self.max_age is not None else ""
         return f"{self.name}={self.value};Path={self.path};{expire_str};"
+
+
+WRITES_MAPPING = {"human": "__start__", "ai": "agent", "tool": "tools"}
