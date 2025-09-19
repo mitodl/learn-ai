@@ -1611,7 +1611,7 @@ def test_create_tutor_checkpoints_includes_metadata():
 
         # The writes should include the tutor metadata
         key = next(iter(writes.keys()))
-        assert key == "__start__" if idx == 0 else "agent"
+        assert key == ("__start__" if idx == 0 else "agent")
         start_writes = writes.get(key)
         assert start_writes["user_id"] == "test_user_123"
         assert start_writes["course_id"] == "course_456"
@@ -1619,3 +1619,7 @@ def test_create_tutor_checkpoints_includes_metadata():
 
         # Messages should still be present
         assert len(start_writes["messages"]) == 1
+        assert (
+            start_writes["messages"][0]
+            == checkpoint.checkpoint["channel_values"]["messages"][idx]
+        )
