@@ -1623,3 +1623,75 @@ def test_create_tutor_checkpoints_includes_metadata():
             start_writes["messages"][0]
             == checkpoint.checkpoint["channel_values"]["messages"][idx]
         )
+
+
+@pytest.mark.parametrize("has_existing_id", [True, False])
+def test_create_langchain_message_id_handling(has_existing_id):
+    """Test that _create_langchain_message preserves existing IDs or generates new ones."""
+    from ai_chatbots.api import _create_langchain_message
+
+    existing_id = str(uuid4())
+    message = {
+        "type": "HumanMessage",
+        "content": "Test message",
+    }
+
+    if has_existing_id:
+        message["id"] = existing_id
+
+    result = _create_langchain_message(message)
+
+    if has_existing_id:
+        assert result["kwargs"]["id"] == existing_id
+    else:
+        assert len(result["kwargs"]["id"]) == 36  # UUID length
+        assert result["kwargs"]["id"] != existing_id
+
+    assert result["kwargs"]["type"] == "human"
+    assert result["kwargs"]["content"] == "Test message"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("has_previous_checkpoint", [True, False])
+def test_create_tutor_checkpoints_step_calculation(has_previous_checkpoint):
+    """Test that step calculation works correctly with or without previous checkpoints."""
+    thread_id = str(uuid4())
+
+    factories.UserChatSessionFactory.create(thread_id=thread_id)
+
+    if has_previous_checkpoint:
+        initial_chat_data = {
+            "chat_history": [
+                {
+                    "type": "HumanMessage",
+                    "content": "Initial message",
+                    "id": str(uuid4()),
+                },
+                {"type": "AIMessage", "content": "Response", "id": str(uuid4())},
+            ],
+            "user_id": "test_user",
+            "course_id": "test_course",
+        }
+
+        previous_checkpoints = create_tutor_checkpoints(thread_id, initial_chat_data)
+        assert len(previous_checkpoints) == 2
+        assert previous_checkpoints[0].metadata["step"] == 0
+    else:
+        initial_chat_data = None
+
+    chat_data = {
+        "chat_history": [
+            {"type": "HumanMessage", "content": "New message", "id": str(uuid4())},
+            {"type": "AIMessage", "content": "Response", "id": str(uuid4())},
+        ],
+        "user_id": "test_user",
+        "course_id": "test_course",
+    }
+
+    result = create_tutor_checkpoints(
+        thread_id, chat_data, previous_chat_json=initial_chat_data
+    )
+
+    assert len(result) == 2
+    assert result[0].metadata["step"] == (2 if has_previous_checkpoint else 0)
+    assert result[1].metadata["step"] == (3 if has_previous_checkpoint else 1)
