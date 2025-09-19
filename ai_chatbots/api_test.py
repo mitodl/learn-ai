@@ -1376,7 +1376,7 @@ def test_create_tutor_checkpoints_with_tool_messages():
     chat_json = """
     {
         "chat_history": [
-            {"type": "ToolMessage", "content": "Tool result"},
+            {"type": "ToolMessage", "content": "Tool result", "id": "msg0"},
             {"type": "HumanMessage", "content": "Testing 123", "id": "msg1"}
         ]
     }
@@ -1625,28 +1625,15 @@ def test_create_tutor_checkpoints_includes_metadata():
         )
 
 
-@pytest.mark.parametrize("has_existing_id", [True, False])
-def test_create_langchain_message_id_handling(has_existing_id):
+def test_create_langchain_message_id_handling():
     """Test that _create_langchain_message preserves existing IDs or generates new ones."""
     from ai_chatbots.api import _create_langchain_message
 
-    existing_id = str(uuid4())
-    message = {
-        "type": "HumanMessage",
-        "content": "Test message",
-    }
-
-    if has_existing_id:
-        message["id"] = existing_id
+    message = {"type": "HumanMessage", "content": "Test message", "id": str(uuid4())}
 
     result = _create_langchain_message(message)
 
-    if has_existing_id:
-        assert result["kwargs"]["id"] == existing_id
-    else:
-        assert len(result["kwargs"]["id"]) == 36  # UUID length
-        assert result["kwargs"]["id"] != existing_id
-
+    assert result["kwargs"]["id"] == message["id"]
     assert result["kwargs"]["type"] == "human"
     assert result["kwargs"]["content"] == "Test message"
 

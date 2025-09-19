@@ -652,9 +652,7 @@ def _identify_new_messages(
     }
 
     # Find messages with IDs that don't exist in previous chat
-    return [
-        msg for msg in filtered_messages if msg.get("id") not in existing_message_ids
-    ]
+    return [msg for msg in filtered_messages if msg["id"] not in existing_message_ids]
 
 
 def _create_langchain_message(message: dict) -> dict:
@@ -664,7 +662,7 @@ def _create_langchain_message(message: dict) -> dict:
         "lc": 1,
         "type": "constructor",
         "kwargs": {
-            "id": message.get("id", str(uuid4())),
+            "id": message["id"],
             "type": message["type"].lower().replace("message", ""),
             "content": message["content"],
         },
@@ -767,6 +765,7 @@ def create_tutor_checkpoints(
     checkpoints_created = []
 
     # Create checkpoints only for the NEW messages
+
     for message in new_messages:
         checkpoint_id = str(uuid4())
 
