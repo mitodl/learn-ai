@@ -53,6 +53,9 @@ class DjangoCheckpoint(models.Model):
     Checkpoint created by the DjangoSaver checkpointer class.
     """
 
+    created_on = models.DateTimeField(
+        auto_now_add=True, db_index=True, null=True
+    )  # UTC
     session = models.ForeignKey(UserChatSession, on_delete=models.CASCADE, null=True)
     thread_id = models.TextField()
     checkpoint_ns = models.TextField()
@@ -83,6 +86,9 @@ class TutorBotOutput(models.Model):
     Store  chat history and internal state for the tutor chatbot
     """
 
+    created_on = models.DateTimeField(
+        auto_now_add=True, db_index=True, null=True
+    )  # UTC
     session = models.ForeignKey(UserChatSession, on_delete=models.CASCADE, null=True)
     thread_id = models.TextField()
     chat_json = models.JSONField()
