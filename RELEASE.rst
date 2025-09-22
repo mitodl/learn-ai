@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.16.0
+Version 0.16.0 (Released September 22, 2025)
 --------------
 
 - Tweak  checkpoint data for TutorBotOutput (#309)
