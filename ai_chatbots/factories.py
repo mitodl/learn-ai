@@ -299,6 +299,9 @@ class TutorBotOutputFactory(DjangoModelFactory):
     """Factory for TutorBotOutput instances."""
 
     thread_id = factory.Faker("uuid4")
+    session = factory.SubFactory(
+        UserChatSessionFactory, thread_id=factory.SelfAttribute("..thread_id")
+    )
     chat_json = factory.LazyFunction(
         lambda: json.dumps(
             {

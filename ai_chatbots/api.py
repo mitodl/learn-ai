@@ -614,6 +614,7 @@ def create_tutorbot_output_and_checkpoints(
 
         # Create TutorBotOutput
         tutorbot_output = TutorBotOutput.objects.create(
+            session=UserChatSession.objects.get(thread_id=thread_id),
             thread_id=thread_id,
             chat_json=chat_json,
             edx_module_id=edx_module_id or "",
