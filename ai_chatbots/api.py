@@ -652,20 +652,17 @@ def _identify_new_messages(
     }
 
     # Find messages with IDs that don't exist in previous chat
-    return [
-        msg for msg in filtered_messages if msg.get("id") not in existing_message_ids
-    ]
+    return [msg for msg in filtered_messages if msg["id"] not in existing_message_ids]
 
 
 def _create_langchain_message(message: dict) -> dict:
     """Create a message in LangChain format."""
-    message_id = str(uuid4())
     return {
         "id": ["langchain", "schema", "messages", message["type"]],
         "lc": 1,
         "type": "constructor",
         "kwargs": {
-            "id": message_id,
+            "id": message["id"],
             "type": message["type"].lower().replace("message", ""),
             "content": message["content"],
         },
@@ -684,7 +681,10 @@ def _create_checkpoint_data(checkpoint_id: str, step: int, chat_data: dict) -> d
             "__start__": {"__start__": step + 1} if step >= 0 else {},
         },
         "channel_values": {
-            "messages": chat_data.get("chat_history", []),
+            "messages": [
+                _create_langchain_message(msg)
+                for msg in chat_data.get("chat_history", [])
+            ],
             # Preserve tutor-specific data
             "intent_history": chat_data.get("intent_history"),
             "assessment_history": chat_data.get("assessment_history"),
@@ -732,6 +732,7 @@ def create_tutor_checkpoints(
     # Parse and validate chat data
     chat_data = json.loads(chat_json) if isinstance(chat_json, str) else chat_json
     messages = chat_data.get("chat_history", [])
+
     if not messages:
         return []
 
@@ -759,16 +760,12 @@ def create_tutor_checkpoints(
     if not new_messages:
         return []  # No new messages to checkpoint
 
-    # Calculate starting step based on length of previous chat history
-    previous_messages = (
-        json.loads(previous_chat_json).get("chat_history", [])
-        if previous_chat_json
-        else []
-    )
-    step = len(previous_messages)
+    # Calculate starting step based on previous checkpoint if any
+    step = latest_checkpoint.metadata.get("step", -1) + 1 if latest_checkpoint else 0
     checkpoints_created = []
 
     # Create checkpoints only for the NEW messages
+
     for message in new_messages:
         checkpoint_id = str(uuid4())
 
