@@ -23,6 +23,7 @@ from ai_chatbots.chatbots import (
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import (
+    AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
@@ -92,6 +93,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
 
         current_thread_id = None
+        self.user_id = self.get_ident()
+        self.session_key = (
+            self.scope["cookies"].get(AI_SESSION_COOKIE_KEY)
+            or self.user_id
+            or uuid4().hex
+        )
         anon_cookie = False
         if clear_history:
             # Create a new random thread id
@@ -144,9 +151,11 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             if anon_cookie:
                 # Anon user has logged in, so associate any existing anon threads
                 # with the same session key
-                await UserChatSession.objects.filter(
-                    user_id=None, dj_session_key=self.session_key
-                ).aupdate(user=user)
+                await (
+                    UserChatSession.objects.exclude(dj_session_key__isnull=True)
+                    .filter(user_id=None, dj_session_key=self.session_key)
+                    .aupdate(user=user)
+                )
             if not clear_history and current_thread_id:
                 # User may have logged in under a different account
                 session = (
@@ -176,6 +185,10 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 value=(cookie_value if user.is_anonymous else ""),
                 max_age=max_age,
             ),
+            ChatbotCookie(
+                name=AI_SESSION_COOKIE_KEY,
+                value=self.session_key,
+            ),
         ]
         return current_thread_id, cookies
 
@@ -196,7 +209,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         )
 
         self.thread_id = current_thread_id
-        self.user_id = self.get_ident()
 
         self.channel_layer = get_channel_layer()
         self.room_name = self.ROOM_NAME

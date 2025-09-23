@@ -709,7 +709,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
         thread_id=thread_id,
         message=final_message[1]["messages"][1].content,
         user=None,
-        dj_session_key=uuid4().hex,
+        dj_session_key="anonymous",
         agent=TutorBotHttpConsumer.ROOM_NAME,
         object_id=edx_module_id,
     )

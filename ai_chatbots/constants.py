@@ -10,6 +10,7 @@ GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
 AI_ANONYMOUS_USER = "anonymous"
 AI_THREAD_COOKIE_KEY = "ai_thread_auth"
 AI_THREADS_ANONYMOUS_COOKIE_KEY = "ai_threads_anon"
+AI_SESSION_COOKIE_KEY = "ai_odl_unique_id"
 
 
 class LearningResourceType(ExtendedEnum):

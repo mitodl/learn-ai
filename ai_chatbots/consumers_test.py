@@ -15,7 +15,11 @@ from rest_framework.exceptions import ValidationError
 from ai_chatbots import consumers, prompts
 from ai_chatbots.chatbots import SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
-from ai_chatbots.constants import AI_THREAD_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
+from ai_chatbots.constants import (
+    AI_SESSION_COOKIE_KEY,
+    AI_THREAD_COOKIE_KEY,
+    AI_THREADS_ANONYMOUS_COOKIE_KEY,
+)
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
@@ -25,55 +29,79 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def recommendation_consumer(async_user):
+def recommendation_consumer(async_user, django_session):
     """Return a recommendation consumer."""
     consumer = consumers.RecommendationBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
     consumer.channel_name = "test_channel"
     return consumer
 
 
 @pytest.fixture
-def syllabus_consumer(async_user):
+def syllabus_consumer(async_user, django_session):
     """Return a syllabus consumer."""
     consumer = consumers.SyllabusBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
     consumer.channel_name = "test_syllabus_channel"
     return consumer
 
 
 @pytest.fixture
-def canvas_syllabus_consumer(async_user):
+def canvas_syllabus_consumer(async_user, django_session):
     """Return a syllabus canvas consumer."""
     consumer = consumers.CanvasSyllabusBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
     consumer.channel_name = "test_syllabus_canvas_channel"
     return consumer
 
 
 @pytest.fixture
-def tutor_consumer(async_user):
+def tutor_consumer(async_user, django_session):
     """Return a tutor consumer."""
     consumer = consumers.TutorBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
     consumer.channel_name = "test_tutor_channel"
     return consumer
 
 
 @pytest.fixture
-def canvas_tutor_consumer(async_user):
+def canvas_tutor_consumer(async_user, django_session):
     """Return a canvas tutor consumer."""
     consumer = consumers.CanvasTutorBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
     consumer.channel_name = "test_tutor_channel"
     return consumer
 
 
 @pytest.fixture
-def video_gpt_consumer(async_user):
+def video_gpt_consumer(async_user, django_session):
     """Return a video gpt consumer."""
     consumer = consumers.VideoGPTBotHttpConsumer()
-    consumer.scope = {"user": async_user, "cookies": {}, "session": None}
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
     consumer.channel_name = "test_video_gpt_channel"
     return consumer
 
@@ -168,7 +196,10 @@ async def test_clear_history(  # noqa: PLR0913
     )
     bot_cookie = f"{recommendation_consumer.ROOM_NAME}_{cookie_name}"
     latest_thread_id = urlsafe_base64_encode(force_bytes("1234"))
-    recommendation_consumer.scope["cookies"] = {bot_cookie: latest_thread_id}
+    recommendation_consumer.scope["cookies"] = {
+        bot_cookie: latest_thread_id,
+        AI_SESSION_COOKIE_KEY: "test_session_key",
+    }
     recommendation_consumer.scope["user"] = AnonymousUser() if is_anon else async_user
     await recommendation_consumer.handle(
         json.dumps({"clear_history": clear_history, "message": "hello"})
@@ -176,15 +207,15 @@ async def test_clear_history(  # noqa: PLR0913
     args = mock_http_consumer_send.send_headers.call_args_list
     if cookie_name == AI_THREAD_COOKIE_KEY:
         # old thread id should not be present at all
-        cookie_args = str(args[0][-1]["headers"][-2][1])
+        cookie_args = str(args[0][-1]["headers"][-3][1])
         assert (latest_thread_id in cookie_args) != clear_history
     elif is_anon:
-        # old thread id should be present in the cookie, but not last in the list
-        cookie_args = str(args[0][-1]["headers"][-1][1])
+        # old thread id should be present in the anon cookie
+        cookie_args = str(args[0][-1]["headers"][-2][1])
         assert (latest_thread_id in cookie_args) != clear_history
     else:
         # anon thread_ids should have been cleared from cookie
-        cookie_args = str(args[0][-1]["headers"][-2][1])
+        cookie_args = str(args[0][-1]["headers"][-3][1])
         assert cookie_args == f"{bot_cookie}=;Path=/;"
 
 
@@ -320,6 +351,7 @@ async def test_assign_thread_cookie(
     syllabus_consumer.scope["cookies"] = {
         user_cookie_name: encoded_user_cookie,
         anon_cookie_name: encoded_anon_cookie,
+        AI_SESSION_COOKIE_KEY: "test_session_key",
     }
 
     user = AnonymousUser() if is_anon else async_user
@@ -335,12 +367,16 @@ async def test_assign_thread_cookie(
             thread_id=user_cookie,
             user=(None if is_anon else user),
             agent=SyllabusBot.__name__,
+            dj_session_key="test_session_key",
         )
     elif anon_cookie:
         for thread in anon_cookie.split(","):
             # Should not yet be associated with user
             await UserChatSession.objects.acreate(
-                thread_id=thread, user=None, agent=SyllabusBot.__name__
+                thread_id=thread,
+                user=None,
+                agent=SyllabusBot.__name__,
+                dj_session_key="test_session_key",
             )
 
     thread_id, cookies = await syllabus_consumer.assign_thread_cookies(user)
@@ -393,7 +429,10 @@ async def test_assign_thread_cookie_changed_account(syllabus_consumer, async_use
 
     encoded_user_cookie = urlsafe_base64_encode(force_bytes(old_thread_id))
 
-    syllabus_consumer.scope["cookies"] = {user_cookie_name: encoded_user_cookie}
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: encoded_user_cookie,
+        AI_SESSION_COOKIE_KEY: "test_session_key",
+    }
 
     syllabus_consumer.scope["user"] = async_user
 
@@ -405,6 +444,7 @@ async def test_assign_thread_cookie_changed_account(syllabus_consumer, async_use
         thread_id=old_thread_id,
         user=await sync_to_async(UserFactory.create)(),
         agent=SyllabusBot.__name__,
+        dj_session_key="different_session_key",
     )
 
     thread_id, cookies = await syllabus_consumer.assign_thread_cookies(async_user)
@@ -440,8 +480,8 @@ async def test_assign_thread_cookie_passed_thread(
     user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
     syllabus_consumer.scope["cookies"] = {
         user_cookie_name: encoded_original_id,
+        AI_SESSION_COOKIE_KEY: session_key if same_key else "other_key",
     }
-    syllabus_consumer.session_key = session_key if same_key else "other_key"
 
     user = AnonymousUser() if is_anon else async_user
     await sync_to_async(UserChatSessionFactory.create)(
@@ -578,7 +618,7 @@ async def test_handle_errors(
         (360000, "4d 4h"),
     ],
 )
-async def test_rate_limit_message(mocker, wait_time, formatted_time):
+async def test_rate_limit_message(mocker, wait_time, formatted_time, django_session):
     """Test that a user gets a rate limit message if they are rate limited."""
     mocker.patch(
         "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
@@ -589,7 +629,11 @@ async def test_rate_limit_message(mocker, wait_time, formatted_time):
         "ai_chatbots.consumers.SyllabusBotHttpConsumer.send_chunk"
     )
     consumer = consumers.SyllabusBotHttpConsumer()
-    consumer.scope = {"user": AnonymousUser()}
+    consumer.scope = {
+        "user": AnonymousUser(),
+        "session": django_session,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+    }
     await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
     mock_send_chunk.assert_any_call(
         f"You have reached the maximum number of chat requests.\
