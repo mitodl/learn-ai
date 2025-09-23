@@ -11,11 +11,6 @@ from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
-from open_learning_ai_tutor.constants import Intent
-from open_learning_ai_tutor.utils import (
-    filter_out_system_messages,
-    tutor_output_to_json,
-)
 from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
@@ -41,6 +36,11 @@ from ai_chatbots.models import TutorBotOutput
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
+from open_learning_ai_tutor.constants import Intent
+from open_learning_ai_tutor.utils import (
+    filter_out_system_messages,
+    tutor_output_to_json,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -791,7 +791,7 @@ def test_get_canvas_problem_set(mocker):
 
     problem_api_results = {
         "problem_set": "test problem set",
-        "solution": "test solution",
+        "solution_set": "test solution",
     }
 
     mocker.patch(
