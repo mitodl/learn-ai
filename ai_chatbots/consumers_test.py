@@ -106,6 +106,49 @@ def video_gpt_consumer(async_user, django_session):
     return consumer
 
 
+@pytest.fixture
+def test_session_key():
+    """Return a unique test session key."""
+    from uuid import uuid4
+
+    return f"test_session_{uuid4().hex}"
+
+
+@pytest.fixture(autouse=True)
+def mock_chatbot_completion(mocker):
+    """Mock chatbot completion for testing."""
+    response = ["test", "response"]
+    return mocker.patch(
+        "ai_chatbots.chatbots.SyllabusBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(response))
+        ),
+    )
+
+
+@pytest.fixture
+def anonymous_consumer_setup(mocker):
+    """Create a consumer setup for anonymous user testing."""
+
+    from django.contrib.auth.models import AnonymousUser
+
+    def create_consumer(session_key, cookies=None):
+        consumer = consumers.SyllabusBotHttpConsumer()
+        mock_session = mocker.Mock()
+        mock_session.session_key = session_key
+        mock_session.save = mocker.Mock()
+
+        consumer.scope = {
+            "user": AnonymousUser(),
+            "cookies": cookies or {},
+            "session": mock_session,
+        }
+        consumer.channel_name = "test_channel"
+        return consumer
+
+    return create_consumer
+
+
 @pytest.mark.parametrize(
     ("message", "temperature", "instructions", "model"),
     [
@@ -789,3 +832,176 @@ async def test_video_agent_consumer_handle(
         title=payload["message"],
         agent=VideoGPTBot.__name__,
     ).aexists()
+
+
+async def test_anonymous_user_session_cookie_assignment(
+    mocker, mock_http_consumer_send, test_session_key
+):
+    """Test that anonymous users get assigned a non-blank session cookie and UserChatSession is created."""
+    from django.contrib.auth.models import AnonymousUser
+
+    from ai_chatbots.constants import AI_SESSION_COOKIE_KEY
+
+    # Create a consumer with an anonymous user and no session cookie
+    consumer = consumers.SyllabusBotHttpConsumer()
+    mock_session = mocker.Mock()
+    mock_session.session_key = test_session_key
+    mock_session.save = mocker.Mock()
+
+    consumer.scope = {
+        "user": AnonymousUser(),
+        "cookies": {},  # No session cookie initially
+        "session": mock_session,
+    }
+    consumer.channel_name = "test_channel"
+
+    # Clear any existing sessions
+    await UserChatSession.objects.all().adelete()
+
+    payload = {
+        "message": "test message",
+        "course_id": "MITx+6.00.1x",
+    }
+
+    await consumer.handle(json.dumps(payload))
+
+    # Verify the session cookie was assigned
+    headers = mock_http_consumer_send.send_headers.call_args[1]["headers"]
+    session_cookie = None
+    for header in headers:
+        if header[0] == b"Set-Cookie" and AI_SESSION_COOKIE_KEY.encode() in header[1]:
+            session_cookie = header[1].decode()
+            break
+
+    assert session_cookie is not None
+    assert f"{AI_SESSION_COOKIE_KEY}=" in session_cookie
+    # Extract the cookie value (everything after the = and before any ;)
+    cookie_value = session_cookie.split(f"{AI_SESSION_COOKIE_KEY}=")[1].split(";")[0]
+    assert cookie_value != ""
+    assert cookie_value is not None
+
+    # Verify UserChatSession was created with correct dj_session_key
+    session = await UserChatSession.objects.aget(
+        thread_id=consumer.thread_id,
+        user=None,  # Should be None for anonymous user
+        agent="SyllabusBot",
+    )
+    assert session.dj_session_key == cookie_value
+    assert session.dj_session_key != ""
+
+
+async def test_anonymous_user_login_session_association(  # noqa: PLR0913
+    mocker,
+    mock_http_consumer_send,
+    async_user,
+    anonymous_consumer_setup,
+    test_session_key,
+    client,
+):
+    """
+    Test that when an anonymous user logs in, their sessions are associated
+    with their user account via Consumer.handle flow.
+    """
+    from ai_chatbots.constants import (
+        AI_SESSION_COOKIE_KEY,
+        AI_THREADS_ANONYMOUS_COOKIE_KEY,
+    )
+
+    # Clear any existing sessions
+    await UserChatSession.objects.all().adelete()
+
+    # Create multiple anonymous sessions with the same session key
+    session_data = []
+
+    for i in range(3):
+        anon_consumer = anonymous_consumer_setup(test_session_key)
+        payload = {
+            "message": f"Anonymous question {i+1}",
+            "course_id": "MITx+6.00.1x",
+        }
+        await anon_consumer.handle(json.dumps(payload))
+        session_data.append(
+            {"thread_id": anon_consumer.thread_id, "message": payload["message"]}
+        )
+
+    # Create 1 anonymous session with a different session key
+    different_session_key = f"different_session_{test_session_key}_different"
+    different_anon_consumer = anonymous_consumer_setup(different_session_key)
+    different_payload = {
+        "message": "Different session anonymous question",
+        "course_id": "MITx+6.00.1x",
+    }
+    await different_anon_consumer.handle(json.dumps(different_payload))
+    different_thread_id = different_anon_consumer.thread_id
+
+    all_anon_sessions = await sync_to_async(list)(
+        UserChatSession.objects.filter(user=None)
+    )
+    assert len(all_anon_sessions) == 4
+
+    test_session_anon_sessions = await sync_to_async(list)(
+        UserChatSession.objects.filter(dj_session_key=test_session_key, user=None)
+    )
+    assert len(test_session_anon_sessions) == 3
+
+    different_session_anon_sessions = await sync_to_async(list)(
+        UserChatSession.objects.filter(dj_session_key=different_session_key, user=None)
+    )
+    assert len(different_session_anon_sessions) == 1
+
+    # Log in user with anon cookie containing some thread IDs
+    logged_in_consumer = consumers.SyllabusBotHttpConsumer()
+    mock_session = mocker.Mock()
+    mock_session.session_key = "new_session_after_login"
+    mock_session.save = mocker.Mock()
+
+    # Set up anon cookie to trigger the association logic
+    anon_cookie_name = (
+        f"{logged_in_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    anon_cookie_value = f"{session_data[0]['thread_id']},{session_data[1]['thread_id']}"
+    encoded_anon_cookie = urlsafe_base64_encode(force_bytes(anon_cookie_value))
+
+    await sync_to_async(client.force_login)(async_user)
+    logged_in_consumer.scope = {
+        "user": async_user,  # Now logged in
+        "cookies": {
+            AI_SESSION_COOKIE_KEY: test_session_key,
+            anon_cookie_name: encoded_anon_cookie,
+        },
+        "session": mock_session,
+    }
+    logged_in_consumer.channel_name = "test_channel"
+
+    await logged_in_consumer.handle(
+        json.dumps(
+            {
+                "message": "First message after login",
+                "course_id": "MITx+6.00.1x",
+            }
+        )
+    )
+
+    # All anonymous sessions with the same session key associated with the user
+    associated_sessions = await sync_to_async(list)(
+        UserChatSession.objects.filter(dj_session_key=test_session_key, user=async_user)
+    )
+    assert len(associated_sessions) == 3
+    original_thread_ids = [s["thread_id"] for s in session_data]
+    associated_thread_ids = [session.thread_id for session in associated_sessions]
+    for thread_id in original_thread_ids:
+        assert thread_id in associated_thread_ids
+
+    # No anonymous sessions remain with this session key
+    remaining_anon_sessions = await sync_to_async(list)(
+        UserChatSession.objects.filter(dj_session_key=test_session_key, user=None)
+    )
+    assert len(remaining_anon_sessions) == 0
+
+    # Sessions with different session keys are not associated
+    different_session_sessions = await sync_to_async(list)(
+        UserChatSession.objects.filter(dj_session_key=different_session_key)
+    )
+    assert len(different_session_sessions) == 1
+    assert different_session_sessions[0].user is None  # Should still be anonymous
+    assert different_session_sessions[0].thread_id == different_thread_id
