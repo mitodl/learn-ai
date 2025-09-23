@@ -1,8 +1,8 @@
-"""Detach duplicate sessions per user per identical updated_on timestamp.
+"""Anonymize duplicate sessions per user per identical updated_on timestamp.
 
-For each user, we group that user's UserChatSession rows by their exact
-updated_on value. If any group has count > 1, we set the user field to
-NULL (detach) for those sessions.
+For each user, group that user's UserChatSession rows by their exact
+updated_on value. If any group has count > 1, set the user field to
+NULL for those sessions.
 """
 
 from collections import defaultdict
