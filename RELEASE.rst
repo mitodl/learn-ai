@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.16.1
+--------------
+
+- Fix chatbot session keys for anon users (#314)
+- add created_at to TutorBotOutput and DjangoCheckpoint (#311)
+- Associate TutorBotOutputs with UserChatSessions (#306)
+
 Version 0.16.0 (Released September 22, 2025)
 --------------
 
