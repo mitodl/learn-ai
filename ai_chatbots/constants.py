@@ -42,6 +42,14 @@ class OfferedBy(ExtendedEnum):
     see = "MIT Sloan Executive Education"
 
 
+class ChatResponseScore(ExtendedEnum):
+    """Enum for chat response ratings"""
+
+    like = "like"
+    dislike = "dislike"
+    no_rating = ""
+
+
 @dataclasses.dataclass
 class ChatbotCookie:
     name: str

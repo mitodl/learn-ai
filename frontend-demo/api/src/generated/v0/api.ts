@@ -40,11 +40,33 @@ import {
 } from "./base"
 
 /**
+ *
+ * @export
+ * @enum {string}
+ */
+
+export const BlankEnumDescriptions = {
+  "": "",
+} as const
+
+export const BlankEnum = {
+  Empty: "",
+} as const
+
+export type BlankEnum = (typeof BlankEnum)[keyof typeof BlankEnum]
+
+/**
  * Serializer for chat messages.  This serializer is used to return just the message, content and role, and is intended to backfill chat history in a frontend UI.
  * @export
  * @interface ChatMessage
  */
 export interface ChatMessage {
+  /**
+   *
+   * @type {number}
+   * @memberof ChatMessage
+   */
+  id: number
   /**
    *
    * @type {string}
@@ -63,6 +85,44 @@ export interface ChatMessage {
    * @memberof ChatMessage
    */
   content: string
+  /**
+   * Rating for the message. Valid options: \'like\', \'dislike\', or \'\'
+   * @type {string}
+   * @memberof ChatMessage
+   */
+  rating: string
+}
+/**
+ * Serializer for creating and updating chat response ratings
+ * @export
+ * @interface ChatResponseRatingRequest
+ */
+export interface ChatResponseRatingRequest {
+  /**
+   *
+   * @type {ChatResponseRatingRequestRating}
+   * @memberof ChatResponseRatingRequest
+   */
+  rating?: ChatResponseRatingRequestRating
+}
+/**
+ * @type ChatResponseRatingRequestRating
+ * @export
+ */
+export type ChatResponseRatingRequestRating = BlankEnum | RatingEnum
+
+/**
+ * Serializer for creating and updating chat response ratings
+ * @export
+ * @interface ChatResponseRatingRequestRequest
+ */
+export interface ChatResponseRatingRequestRequest {
+  /**
+   *
+   * @type {ChatResponseRatingRequestRating}
+   * @memberof ChatResponseRatingRequestRequest
+   */
+  rating?: ChatResponseRatingRequestRating
 }
 /**
  *
@@ -152,18 +212,29 @@ export interface PaginatedUserChatSessionList {
   results: Array<UserChatSession>
 }
 /**
- * Serializer for user chat sessions
+ * * `like` - Like * `dislike` - Dislike * `` - No Rating
  * @export
- * @interface PatchedUserChatSessionRequest
+ * @enum {string}
  */
-export interface PatchedUserChatSessionRequest {
+
+export const RatingEnumDescriptions = {
+  like: "Like",
+  dislike: "Dislike",
+} as const
+
+export const RatingEnum = {
   /**
-   *
-   * @type {string}
-   * @memberof PatchedUserChatSessionRequest
+   * Like
    */
-  title?: string
-}
+  Like: "like",
+  /**
+   * Dislike
+   */
+  Dislike: "dislike",
+} as const
+
+export type RatingEnum = (typeof RatingEnum)[keyof typeof RatingEnum]
+
 /**
  *
  * @export
@@ -317,19 +388,6 @@ export interface UserChatSession {
    * @memberof UserChatSession
    */
   updated_on: string
-}
-/**
- * Serializer for user chat sessions
- * @export
- * @interface UserChatSessionRequest
- */
-export interface UserChatSessionRequest {
-  /**
-   *
-   * @type {string}
-   * @memberof UserChatSessionRequest
-   */
-  title?: string
 }
 
 /**
@@ -639,106 +697,7 @@ export const ChatSessionsApiAxiosParamCreator = function (
 ) {
   return {
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {string} thread_id thread id of the chat session
-     * @param {UserChatSessionRequest} [UserChatSessionRequest]
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    chatSessionsCreate: async (
-      thread_id: string,
-      UserChatSessionRequest?: UserChatSessionRequest,
-      options: RawAxiosRequestConfig = {},
-    ): Promise<RequestArgs> => {
-      // verify required parameter 'thread_id' is not null or undefined
-      assertParamExists("chatSessionsCreate", "thread_id", thread_id)
-      const localVarPath = `/api/v0/chat_sessions/`.replace(
-        `{${"thread_id"}}`,
-        encodeURIComponent(String(thread_id)),
-      )
-      // use dummy base URL string because the URL constructor only accepts absolute URLs.
-      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
-      let baseOptions
-      if (configuration) {
-        baseOptions = configuration.baseOptions
-      }
-
-      const localVarRequestOptions = {
-        method: "POST",
-        ...baseOptions,
-        ...options,
-      }
-      const localVarHeaderParameter = {} as any
-      const localVarQueryParameter = {} as any
-
-      localVarHeaderParameter["Content-Type"] = "application/json"
-
-      setSearchParams(localVarUrlObj, localVarQueryParameter)
-      let headersFromBaseOptions =
-        baseOptions && baseOptions.headers ? baseOptions.headers : {}
-      localVarRequestOptions.headers = {
-        ...localVarHeaderParameter,
-        ...headersFromBaseOptions,
-        ...options.headers,
-      }
-      localVarRequestOptions.data = serializeDataIfNeeded(
-        UserChatSessionRequest,
-        localVarRequestOptions,
-        configuration,
-      )
-
-      return {
-        url: toPathString(localVarUrlObj),
-        options: localVarRequestOptions,
-      }
-    },
-    /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {string} thread_id thread id of the chat session
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    chatSessionsDestroy: async (
-      thread_id: string,
-      options: RawAxiosRequestConfig = {},
-    ): Promise<RequestArgs> => {
-      // verify required parameter 'thread_id' is not null or undefined
-      assertParamExists("chatSessionsDestroy", "thread_id", thread_id)
-      const localVarPath = `/api/v0/chat_sessions/{thread_id}/`.replace(
-        `{${"thread_id"}}`,
-        encodeURIComponent(String(thread_id)),
-      )
-      // use dummy base URL string because the URL constructor only accepts absolute URLs.
-      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
-      let baseOptions
-      if (configuration) {
-        baseOptions = configuration.baseOptions
-      }
-
-      const localVarRequestOptions = {
-        method: "DELETE",
-        ...baseOptions,
-        ...options,
-      }
-      const localVarHeaderParameter = {} as any
-      const localVarQueryParameter = {} as any
-
-      setSearchParams(localVarUrlObj, localVarQueryParameter)
-      let headersFromBaseOptions =
-        baseOptions && baseOptions.headers ? baseOptions.headers : {}
-      localVarRequestOptions.headers = {
-        ...localVarHeaderParameter,
-        ...headersFromBaseOptions,
-        ...options.headers,
-      }
-
-      return {
-        url: toPathString(localVarUrlObj),
-        options: localVarRequestOptions,
-      }
-    },
-    /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Read-only API endpoint for listing and retrieving user chat sessions.
      * @param {string} thread_id thread id of the chat session
      * @param {number} [limit] Number of results to return per page.
      * @param {number} [offset] The initial index from which to return the results.
@@ -795,7 +754,8 @@ export const ChatSessionsApiAxiosParamCreator = function (
       }
     },
     /**
-     * Read-only API endpoint for returning just human/agent chat messages in a thread.
+     * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
+     * @param {number} id ID of the AI response checkpoint
      * @param {string} thread_id thread id of the chat session
      * @param {number} [limit] Number of results to return per page.
      * @param {number} [offset] The initial index from which to return the results.
@@ -803,18 +763,19 @@ export const ChatSessionsApiAxiosParamCreator = function (
      * @throws {RequiredError}
      */
     chatSessionsMessagesList: async (
+      id: number,
       thread_id: string,
       limit?: number,
       offset?: number,
       options: RawAxiosRequestConfig = {},
     ): Promise<RequestArgs> => {
+      // verify required parameter 'id' is not null or undefined
+      assertParamExists("chatSessionsMessagesList", "id", id)
       // verify required parameter 'thread_id' is not null or undefined
       assertParamExists("chatSessionsMessagesList", "thread_id", thread_id)
-      const localVarPath =
-        `/api/v0/chat_sessions/{thread_id}/messages/`.replace(
-          `{${"thread_id"}}`,
-          encodeURIComponent(String(thread_id)),
-        )
+      const localVarPath = `/api/v0/chat_sessions/{thread_id}/messages/`
+        .replace(`{${"id"}}`, encodeURIComponent(String(id)))
+        .replace(`{${"thread_id"}}`, encodeURIComponent(String(thread_id)))
       // use dummy base URL string because the URL constructor only accepts absolute URLs.
       const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
       let baseOptions
@@ -853,23 +814,31 @@ export const ChatSessionsApiAxiosParamCreator = function (
       }
     },
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Rate an AI response message
+     * @param {number} id ID of the AI response checkpoint
      * @param {string} thread_id thread id of the chat session
-     * @param {PatchedUserChatSessionRequest} [PatchedUserChatSessionRequest]
+     * @param {ChatResponseRatingRequestRequest} [ChatResponseRatingRequestRequest]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    chatSessionsPartialUpdate: async (
+    chatSessionsMessagesRateCreate: async (
+      id: number,
       thread_id: string,
-      PatchedUserChatSessionRequest?: PatchedUserChatSessionRequest,
+      ChatResponseRatingRequestRequest?: ChatResponseRatingRequestRequest,
       options: RawAxiosRequestConfig = {},
     ): Promise<RequestArgs> => {
+      // verify required parameter 'id' is not null or undefined
+      assertParamExists("chatSessionsMessagesRateCreate", "id", id)
       // verify required parameter 'thread_id' is not null or undefined
-      assertParamExists("chatSessionsPartialUpdate", "thread_id", thread_id)
-      const localVarPath = `/api/v0/chat_sessions/{thread_id}/`.replace(
-        `{${"thread_id"}}`,
-        encodeURIComponent(String(thread_id)),
+      assertParamExists(
+        "chatSessionsMessagesRateCreate",
+        "thread_id",
+        thread_id,
       )
+      const localVarPath =
+        `/api/v0/chat_sessions/{thread_id}/messages/{id}/rate/`
+          .replace(`{${"id"}}`, encodeURIComponent(String(id)))
+          .replace(`{${"thread_id"}}`, encodeURIComponent(String(thread_id)))
       // use dummy base URL string because the URL constructor only accepts absolute URLs.
       const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
       let baseOptions
@@ -878,7 +847,7 @@ export const ChatSessionsApiAxiosParamCreator = function (
       }
 
       const localVarRequestOptions = {
-        method: "PATCH",
+        method: "POST",
         ...baseOptions,
         ...options,
       }
@@ -896,7 +865,7 @@ export const ChatSessionsApiAxiosParamCreator = function (
         ...options.headers,
       }
       localVarRequestOptions.data = serializeDataIfNeeded(
-        PatchedUserChatSessionRequest,
+        ChatResponseRatingRequestRequest,
         localVarRequestOptions,
         configuration,
       )
@@ -907,7 +876,55 @@ export const ChatSessionsApiAxiosParamCreator = function (
       }
     },
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
+     * @param {number} id ID of the AI response checkpoint
+     * @param {string} thread_id thread id of the chat session
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    chatSessionsMessagesRetrieve: async (
+      id: number,
+      thread_id: string,
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      // verify required parameter 'id' is not null or undefined
+      assertParamExists("chatSessionsMessagesRetrieve", "id", id)
+      // verify required parameter 'thread_id' is not null or undefined
+      assertParamExists("chatSessionsMessagesRetrieve", "thread_id", thread_id)
+      const localVarPath = `/api/v0/chat_sessions/{thread_id}/messages/{id}/`
+        .replace(`{${"id"}}`, encodeURIComponent(String(id)))
+        .replace(`{${"thread_id"}}`, encodeURIComponent(String(thread_id)))
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "GET",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+    /**
+     * Read-only API endpoint for listing and retrieving user chat sessions.
      * @param {string} thread_id thread id of the chat session
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -963,66 +980,7 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
     ChatSessionsApiAxiosParamCreator(configuration)
   return {
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {string} thread_id thread id of the chat session
-     * @param {UserChatSessionRequest} [UserChatSessionRequest]
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    async chatSessionsCreate(
-      thread_id: string,
-      UserChatSessionRequest?: UserChatSessionRequest,
-      options?: RawAxiosRequestConfig,
-    ): Promise<
-      (
-        axios?: AxiosInstance,
-        basePath?: string,
-      ) => AxiosPromise<UserChatSession>
-    > {
-      const localVarAxiosArgs =
-        await localVarAxiosParamCreator.chatSessionsCreate(
-          thread_id,
-          UserChatSessionRequest,
-          options,
-        )
-      const index = configuration?.serverIndex ?? 0
-      const operationBasePath =
-        operationServerMap["ChatSessionsApi.chatSessionsCreate"]?.[index]?.url
-      return (axios, basePath) =>
-        createRequestFunction(
-          localVarAxiosArgs,
-          globalAxios,
-          BASE_PATH,
-          configuration,
-        )(axios, operationBasePath || basePath)
-    },
-    /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {string} thread_id thread id of the chat session
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    async chatSessionsDestroy(
-      thread_id: string,
-      options?: RawAxiosRequestConfig,
-    ): Promise<
-      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>
-    > {
-      const localVarAxiosArgs =
-        await localVarAxiosParamCreator.chatSessionsDestroy(thread_id, options)
-      const index = configuration?.serverIndex ?? 0
-      const operationBasePath =
-        operationServerMap["ChatSessionsApi.chatSessionsDestroy"]?.[index]?.url
-      return (axios, basePath) =>
-        createRequestFunction(
-          localVarAxiosArgs,
-          globalAxios,
-          BASE_PATH,
-          configuration,
-        )(axios, operationBasePath || basePath)
-    },
-    /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Read-only API endpoint for listing and retrieving user chat sessions.
      * @param {string} thread_id thread id of the chat session
      * @param {number} [limit] Number of results to return per page.
      * @param {number} [offset] The initial index from which to return the results.
@@ -1059,7 +1017,8 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
         )(axios, operationBasePath || basePath)
     },
     /**
-     * Read-only API endpoint for returning just human/agent chat messages in a thread.
+     * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
+     * @param {number} id ID of the AI response checkpoint
      * @param {string} thread_id thread id of the chat session
      * @param {number} [limit] Number of results to return per page.
      * @param {number} [offset] The initial index from which to return the results.
@@ -1067,6 +1026,7 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
      * @throws {RequiredError}
      */
     async chatSessionsMessagesList(
+      id: number,
       thread_id: string,
       limit?: number,
       offset?: number,
@@ -1079,6 +1039,7 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
     > {
       const localVarAxiosArgs =
         await localVarAxiosParamCreator.chatSessionsMessagesList(
+          id,
           thread_id,
           limit,
           offset,
@@ -1097,32 +1058,36 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
         )(axios, operationBasePath || basePath)
     },
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Rate an AI response message
+     * @param {number} id ID of the AI response checkpoint
      * @param {string} thread_id thread id of the chat session
-     * @param {PatchedUserChatSessionRequest} [PatchedUserChatSessionRequest]
+     * @param {ChatResponseRatingRequestRequest} [ChatResponseRatingRequestRequest]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    async chatSessionsPartialUpdate(
+    async chatSessionsMessagesRateCreate(
+      id: number,
       thread_id: string,
-      PatchedUserChatSessionRequest?: PatchedUserChatSessionRequest,
+      ChatResponseRatingRequestRequest?: ChatResponseRatingRequestRequest,
       options?: RawAxiosRequestConfig,
     ): Promise<
       (
         axios?: AxiosInstance,
         basePath?: string,
-      ) => AxiosPromise<UserChatSession>
+      ) => AxiosPromise<ChatResponseRatingRequest>
     > {
       const localVarAxiosArgs =
-        await localVarAxiosParamCreator.chatSessionsPartialUpdate(
+        await localVarAxiosParamCreator.chatSessionsMessagesRateCreate(
+          id,
           thread_id,
-          PatchedUserChatSessionRequest,
+          ChatResponseRatingRequestRequest,
           options,
         )
       const index = configuration?.serverIndex ?? 0
       const operationBasePath =
-        operationServerMap["ChatSessionsApi.chatSessionsPartialUpdate"]?.[index]
-          ?.url
+        operationServerMap["ChatSessionsApi.chatSessionsMessagesRateCreate"]?.[
+          index
+        ]?.url
       return (axios, basePath) =>
         createRequestFunction(
           localVarAxiosArgs,
@@ -1132,7 +1097,40 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
         )(axios, operationBasePath || basePath)
     },
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
+     * @param {number} id ID of the AI response checkpoint
+     * @param {string} thread_id thread id of the chat session
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async chatSessionsMessagesRetrieve(
+      id: number,
+      thread_id: string,
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<ChatMessage>
+    > {
+      const localVarAxiosArgs =
+        await localVarAxiosParamCreator.chatSessionsMessagesRetrieve(
+          id,
+          thread_id,
+          options,
+        )
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["ChatSessionsApi.chatSessionsMessagesRetrieve"]?.[
+          index
+        ]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+    /**
+     * Read-only API endpoint for listing and retrieving user chat sessions.
      * @param {string} thread_id thread id of the chat session
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1174,39 +1172,7 @@ export const ChatSessionsApiFactory = function (
   const localVarFp = ChatSessionsApiFp(configuration)
   return {
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {ChatSessionsApiChatSessionsCreateRequest} requestParameters Request parameters.
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    chatSessionsCreate(
-      requestParameters: ChatSessionsApiChatSessionsCreateRequest,
-      options?: RawAxiosRequestConfig,
-    ): AxiosPromise<UserChatSession> {
-      return localVarFp
-        .chatSessionsCreate(
-          requestParameters.thread_id,
-          requestParameters.UserChatSessionRequest,
-          options,
-        )
-        .then((request) => request(axios, basePath))
-    },
-    /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {ChatSessionsApiChatSessionsDestroyRequest} requestParameters Request parameters.
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    chatSessionsDestroy(
-      requestParameters: ChatSessionsApiChatSessionsDestroyRequest,
-      options?: RawAxiosRequestConfig,
-    ): AxiosPromise<void> {
-      return localVarFp
-        .chatSessionsDestroy(requestParameters.thread_id, options)
-        .then((request) => request(axios, basePath))
-    },
-    /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Read-only API endpoint for listing and retrieving user chat sessions.
      * @param {ChatSessionsApiChatSessionsListRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1225,7 +1191,7 @@ export const ChatSessionsApiFactory = function (
         .then((request) => request(axios, basePath))
     },
     /**
-     * Read-only API endpoint for returning just human/agent chat messages in a thread.
+     * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
      * @param {ChatSessionsApiChatSessionsMessagesListRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1236,6 +1202,7 @@ export const ChatSessionsApiFactory = function (
     ): AxiosPromise<PaginatedChatMessageList> {
       return localVarFp
         .chatSessionsMessagesList(
+          requestParameters.id,
           requestParameters.thread_id,
           requestParameters.limit,
           requestParameters.offset,
@@ -1244,25 +1211,44 @@ export const ChatSessionsApiFactory = function (
         .then((request) => request(axios, basePath))
     },
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
-     * @param {ChatSessionsApiChatSessionsPartialUpdateRequest} requestParameters Request parameters.
+     * Rate an AI response message
+     * @param {ChatSessionsApiChatSessionsMessagesRateCreateRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    chatSessionsPartialUpdate(
-      requestParameters: ChatSessionsApiChatSessionsPartialUpdateRequest,
+    chatSessionsMessagesRateCreate(
+      requestParameters: ChatSessionsApiChatSessionsMessagesRateCreateRequest,
       options?: RawAxiosRequestConfig,
-    ): AxiosPromise<UserChatSession> {
+    ): AxiosPromise<ChatResponseRatingRequest> {
       return localVarFp
-        .chatSessionsPartialUpdate(
+        .chatSessionsMessagesRateCreate(
+          requestParameters.id,
           requestParameters.thread_id,
-          requestParameters.PatchedUserChatSessionRequest,
+          requestParameters.ChatResponseRatingRequestRequest,
           options,
         )
         .then((request) => request(axios, basePath))
     },
     /**
-     * API endpoint that allows user session chats to be viewed or edited.
+     * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
+     * @param {ChatSessionsApiChatSessionsMessagesRetrieveRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    chatSessionsMessagesRetrieve(
+      requestParameters: ChatSessionsApiChatSessionsMessagesRetrieveRequest,
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<ChatMessage> {
+      return localVarFp
+        .chatSessionsMessagesRetrieve(
+          requestParameters.id,
+          requestParameters.thread_id,
+          options,
+        )
+        .then((request) => request(axios, basePath))
+    },
+    /**
+     * Read-only API endpoint for listing and retrieving user chat sessions.
      * @param {ChatSessionsApiChatSessionsRetrieveRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1276,41 +1262,6 @@ export const ChatSessionsApiFactory = function (
         .then((request) => request(axios, basePath))
     },
   }
-}
-
-/**
- * Request parameters for chatSessionsCreate operation in ChatSessionsApi.
- * @export
- * @interface ChatSessionsApiChatSessionsCreateRequest
- */
-export interface ChatSessionsApiChatSessionsCreateRequest {
-  /**
-   * thread id of the chat session
-   * @type {string}
-   * @memberof ChatSessionsApiChatSessionsCreate
-   */
-  readonly thread_id: string
-
-  /**
-   *
-   * @type {UserChatSessionRequest}
-   * @memberof ChatSessionsApiChatSessionsCreate
-   */
-  readonly UserChatSessionRequest?: UserChatSessionRequest
-}
-
-/**
- * Request parameters for chatSessionsDestroy operation in ChatSessionsApi.
- * @export
- * @interface ChatSessionsApiChatSessionsDestroyRequest
- */
-export interface ChatSessionsApiChatSessionsDestroyRequest {
-  /**
-   * thread id of the chat session
-   * @type {string}
-   * @memberof ChatSessionsApiChatSessionsDestroy
-   */
-  readonly thread_id: string
 }
 
 /**
@@ -1348,6 +1299,13 @@ export interface ChatSessionsApiChatSessionsListRequest {
  */
 export interface ChatSessionsApiChatSessionsMessagesListRequest {
   /**
+   * ID of the AI response checkpoint
+   * @type {number}
+   * @memberof ChatSessionsApiChatSessionsMessagesList
+   */
+  readonly id: number
+
+  /**
    * thread id of the chat session
    * @type {string}
    * @memberof ChatSessionsApiChatSessionsMessagesList
@@ -1370,24 +1328,52 @@ export interface ChatSessionsApiChatSessionsMessagesListRequest {
 }
 
 /**
- * Request parameters for chatSessionsPartialUpdate operation in ChatSessionsApi.
+ * Request parameters for chatSessionsMessagesRateCreate operation in ChatSessionsApi.
  * @export
- * @interface ChatSessionsApiChatSessionsPartialUpdateRequest
+ * @interface ChatSessionsApiChatSessionsMessagesRateCreateRequest
  */
-export interface ChatSessionsApiChatSessionsPartialUpdateRequest {
+export interface ChatSessionsApiChatSessionsMessagesRateCreateRequest {
+  /**
+   * ID of the AI response checkpoint
+   * @type {number}
+   * @memberof ChatSessionsApiChatSessionsMessagesRateCreate
+   */
+  readonly id: number
+
   /**
    * thread id of the chat session
    * @type {string}
-   * @memberof ChatSessionsApiChatSessionsPartialUpdate
+   * @memberof ChatSessionsApiChatSessionsMessagesRateCreate
    */
   readonly thread_id: string
 
   /**
    *
-   * @type {PatchedUserChatSessionRequest}
-   * @memberof ChatSessionsApiChatSessionsPartialUpdate
+   * @type {ChatResponseRatingRequestRequest}
+   * @memberof ChatSessionsApiChatSessionsMessagesRateCreate
    */
-  readonly PatchedUserChatSessionRequest?: PatchedUserChatSessionRequest
+  readonly ChatResponseRatingRequestRequest?: ChatResponseRatingRequestRequest
+}
+
+/**
+ * Request parameters for chatSessionsMessagesRetrieve operation in ChatSessionsApi.
+ * @export
+ * @interface ChatSessionsApiChatSessionsMessagesRetrieveRequest
+ */
+export interface ChatSessionsApiChatSessionsMessagesRetrieveRequest {
+  /**
+   * ID of the AI response checkpoint
+   * @type {number}
+   * @memberof ChatSessionsApiChatSessionsMessagesRetrieve
+   */
+  readonly id: number
+
+  /**
+   * thread id of the chat session
+   * @type {string}
+   * @memberof ChatSessionsApiChatSessionsMessagesRetrieve
+   */
+  readonly thread_id: string
 }
 
 /**
@@ -1412,43 +1398,7 @@ export interface ChatSessionsApiChatSessionsRetrieveRequest {
  */
 export class ChatSessionsApi extends BaseAPI {
   /**
-   * API endpoint that allows user session chats to be viewed or edited.
-   * @param {ChatSessionsApiChatSessionsCreateRequest} requestParameters Request parameters.
-   * @param {*} [options] Override http request option.
-   * @throws {RequiredError}
-   * @memberof ChatSessionsApi
-   */
-  public chatSessionsCreate(
-    requestParameters: ChatSessionsApiChatSessionsCreateRequest,
-    options?: RawAxiosRequestConfig,
-  ) {
-    return ChatSessionsApiFp(this.configuration)
-      .chatSessionsCreate(
-        requestParameters.thread_id,
-        requestParameters.UserChatSessionRequest,
-        options,
-      )
-      .then((request) => request(this.axios, this.basePath))
-  }
-
-  /**
-   * API endpoint that allows user session chats to be viewed or edited.
-   * @param {ChatSessionsApiChatSessionsDestroyRequest} requestParameters Request parameters.
-   * @param {*} [options] Override http request option.
-   * @throws {RequiredError}
-   * @memberof ChatSessionsApi
-   */
-  public chatSessionsDestroy(
-    requestParameters: ChatSessionsApiChatSessionsDestroyRequest,
-    options?: RawAxiosRequestConfig,
-  ) {
-    return ChatSessionsApiFp(this.configuration)
-      .chatSessionsDestroy(requestParameters.thread_id, options)
-      .then((request) => request(this.axios, this.basePath))
-  }
-
-  /**
-   * API endpoint that allows user session chats to be viewed or edited.
+   * Read-only API endpoint for listing and retrieving user chat sessions.
    * @param {ChatSessionsApiChatSessionsListRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}
@@ -1469,7 +1419,7 @@ export class ChatSessionsApi extends BaseAPI {
   }
 
   /**
-   * Read-only API endpoint for returning just human/agent chat messages in a thread.
+   * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
    * @param {ChatSessionsApiChatSessionsMessagesListRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}
@@ -1481,6 +1431,7 @@ export class ChatSessionsApi extends BaseAPI {
   ) {
     return ChatSessionsApiFp(this.configuration)
       .chatSessionsMessagesList(
+        requestParameters.id,
         requestParameters.thread_id,
         requestParameters.limit,
         requestParameters.offset,
@@ -1490,27 +1441,48 @@ export class ChatSessionsApi extends BaseAPI {
   }
 
   /**
-   * API endpoint that allows user session chats to be viewed or edited.
-   * @param {ChatSessionsApiChatSessionsPartialUpdateRequest} requestParameters Request parameters.
+   * Rate an AI response message
+   * @param {ChatSessionsApiChatSessionsMessagesRateCreateRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}
    * @memberof ChatSessionsApi
    */
-  public chatSessionsPartialUpdate(
-    requestParameters: ChatSessionsApiChatSessionsPartialUpdateRequest,
+  public chatSessionsMessagesRateCreate(
+    requestParameters: ChatSessionsApiChatSessionsMessagesRateCreateRequest,
     options?: RawAxiosRequestConfig,
   ) {
     return ChatSessionsApiFp(this.configuration)
-      .chatSessionsPartialUpdate(
+      .chatSessionsMessagesRateCreate(
+        requestParameters.id,
         requestParameters.thread_id,
-        requestParameters.PatchedUserChatSessionRequest,
+        requestParameters.ChatResponseRatingRequestRequest,
         options,
       )
       .then((request) => request(this.axios, this.basePath))
   }
 
   /**
-   * API endpoint that allows user session chats to be viewed or edited.
+   * Read-only API endpoint for returning just human/agent chat messages in a thread. Supports both listing all messages and retrieving individual checkpoints by ID.
+   * @param {ChatSessionsApiChatSessionsMessagesRetrieveRequest} requestParameters Request parameters.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof ChatSessionsApi
+   */
+  public chatSessionsMessagesRetrieve(
+    requestParameters: ChatSessionsApiChatSessionsMessagesRetrieveRequest,
+    options?: RawAxiosRequestConfig,
+  ) {
+    return ChatSessionsApiFp(this.configuration)
+      .chatSessionsMessagesRetrieve(
+        requestParameters.id,
+        requestParameters.thread_id,
+        options,
+      )
+      .then((request) => request(this.axios, this.basePath))
+  }
+
+  /**
+   * Read-only API endpoint for listing and retrieving user chat sessions.
    * @param {ChatSessionsApiChatSessionsRetrieveRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}

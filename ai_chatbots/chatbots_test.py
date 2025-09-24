@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
@@ -32,7 +33,7 @@ from ai_chatbots.factories import (
     SystemMessageFactory,
     ToolMessageFactory,
 )
-from ai_chatbots.models import TutorBotOutput
+from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
@@ -443,21 +444,17 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
 
     metadata = await chatbot.get_tool_metadata()
     mock_state_history.assert_called_once()
-    assert metadata == json.dumps(
-        {
-            "metadata": {
-                "search_url": mock_tool_content.get("metadata", {}).get(
-                    "search_url", []
-                ),
-                "search_parameters": mock_tool_content.get("metadata", {}).get(
-                    "parameters", []
-                ),
-                "search_results": mock_tool_content.get("results", []),
-                "citation_sources": mock_tool_content.get("citation_sources", []),
-                "thread_id": chatbot.config["configurable"]["thread_id"],
-            }
+    assert metadata == {
+        "metadata": {
+            "search_url": mock_tool_content.get("metadata", {}).get("search_url", []),
+            "search_parameters": mock_tool_content.get("metadata", {}).get(
+                "parameters", []
+            ),
+            "search_results": mock_tool_content.get("results", []),
+            "citation_sources": mock_tool_content.get("citation_sources", []),
+            "thread_id": chatbot.config["configurable"]["thread_id"],
         }
-    )
+    }
 
 
 async def test_get_tool_metadata_none(mocker, mock_checkpointer):
@@ -478,7 +475,7 @@ async def test_get_tool_metadata_none(mocker, mock_checkpointer):
         ),
     )
     metadata = await chatbot.get_tool_metadata()
-    assert metadata == "{}"
+    assert metadata == {}
 
 
 async def test_get_tool_metadata_error(mocker, mock_checkpointer):
@@ -504,9 +501,10 @@ async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     )
     metadata = await chatbot.get_tool_metadata()
 
-    assert metadata == json.dumps(
-        {"error": "Error parsing tool metadata", "content": "Could not connect to api"}
-    )
+    assert metadata == {
+        "error": "Error parsing tool metadata",
+        "content": "Could not connect to api",
+    }
 
 
 @pytest.mark.parametrize("use_proxy", [True, False])
@@ -727,12 +725,20 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
     results = ""
     async for chunk in chatbot.get_completion(user_msg):
         results += str(chunk)
-    assert results == "Let's start by thinking about the problem. "
+    assert "Let's start by thinking about the problem. " in results
 
-    get_history_sync = database_sync_to_async(
+    checkpoint = await database_sync_to_async(
+        lambda: DjangoCheckpoint.objects.select_related("session")
+        .filter(thread_id=thread_id)
+        .last()
+    )()
+    history = await database_sync_to_async(
         lambda: TutorBotOutput.objects.filter(thread_id=thread_id).last()
-    )
-    history = await get_history_sync()
+    )()
+
+    metadata = json.loads(re.search(r"<!-- (.*) -->", results, re.DOTALL).group(1))
+    assert metadata["thread_id"] == thread_id
+    assert metadata["checkpoint_pk"] == checkpoint.pk
     assert history.thread_id == thread_id
     assert history.chat_json == expected_chat_json
     assert history.edx_module_id == (edx_module_id or "")
