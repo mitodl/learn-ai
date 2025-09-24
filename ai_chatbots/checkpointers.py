@@ -188,20 +188,15 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
                 "object_id": object_id or "",
             },
         )
-        if (
-            chat_session
-            and not created
-            and not chat_session.user
-            and user
-            and not user.is_anonymous
-        ):
-            chat_session.user = user
-            chat_session.dj_session_key = ""
-            await chat_session.asave()
         self.session = chat_session
         if chat_session.user is None and user and not user.is_anonymous:
             # Thread was created when user was not logged in.
             chat_session.user = user
+            chat_session.dj_session_key = ""
+            await chat_session.asave()
+        elif not chat_session.user and not chat_session.dj_session_key:
+            # Ensure session key is set for anonymous users
+            chat_session.dj_session_key = dj_session_key
             await chat_session.asave()
         return self
 

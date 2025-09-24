@@ -18,6 +18,17 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
 
     throttle_classes = settings.CONSUMER_THROTTLE_CLASSES
 
+    def get_session_key(self):
+        """
+        Get the session key for the current user.
+        """
+        session = self.scope.get("session")
+        if session:
+            if not session.session_key:
+                session.save()
+            return session.session_key
+        return "Anonymous"
+
     def get_ident(self):
         """
         Get a unique identifier for the consumer user.
@@ -25,13 +36,7 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
         user = self.scope.get("user")
         if isinstance(user, get_user_model()):
             return user.global_id
-        session = self.scope.get("session")
-        ident = session.session_key if session else None
-        if session and not ident:
-            session.save()
-            ident = session.session_key
-        if not ident:
-            return "Anonymous"
+        ident = self.get_session_key()
         return slugify(ident)
 
     async def throttled(self, wait):

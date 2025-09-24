@@ -46,6 +46,30 @@ async def test_create_with_session(async_user, has_user, anon_user):
     assert saver.session.title == message[:255]
 
 
+async def test_create_with_session_anonymous_user_session_key():
+    """Test that anonymous users get assigned a dj_session_key when none exists."""
+    from django.contrib.auth.models import AnonymousUser
+
+    thread_id = uuid4()
+    message = "test message"
+    test_agent = "test_agent"
+    test_session_key = "test_session_key_123"
+
+    saver = await AsyncDjangoSaver.create_with_session(
+        thread_id=thread_id,
+        message=message,
+        user=AnonymousUser(),
+        dj_session_key=test_session_key,
+        agent=test_agent,
+    )
+
+    assert saver.session.thread_id == thread_id
+    assert saver.session.user is None  # Should be None for anonymous user
+    assert saver.session.dj_session_key == test_session_key
+    assert saver.session.agent == test_agent
+    assert saver.session.title == message[:255]
+
+
 async def test_create_with_session_assign_user(async_user):
     """A previously anonymous user should be assigned to an existing session."""
     thread_id = uuid4().hex

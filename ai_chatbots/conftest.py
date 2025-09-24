@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -35,6 +35,17 @@ async def async_user():
 def sync_user():
     """Return a user for the agent."""
     return UserFactory.create()
+
+
+@pytest.fixture
+def django_session():
+    """Create a mock Django session for testing."""
+    from uuid import uuid4
+
+    session = Mock()
+    session.session_key = f"test_session_{uuid4().hex}"
+    session.save = Mock()
+    return session
 
 
 @pytest.fixture(autouse=True)
