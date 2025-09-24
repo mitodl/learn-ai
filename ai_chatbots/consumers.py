@@ -152,7 +152,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 # Anon user has logged in, so associate any existing anon threads
                 # with the same session key
                 await (
-                    UserChatSession.objects.exclude(dj_session_key__isnull=True)
+                    UserChatSession.objects.exclude(dj_session_key="")
                     .filter(user_id=None, dj_session_key=self.session_key)
                     .aupdate(user=user)
                 )

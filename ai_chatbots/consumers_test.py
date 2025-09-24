@@ -1005,3 +1005,51 @@ async def test_anonymous_user_login_session_association(  # noqa: PLR0913
     assert len(different_session_sessions) == 1
     assert different_session_sessions[0].user is None  # Should still be anonymous
     assert different_session_sessions[0].thread_id == different_thread_id
+
+
+@pytest.mark.parametrize(
+    ("dj_session_key", "should_be_updated"),
+    [
+        ("", False),  # empty string session key should be excluded
+        ("user_session_key_value", True),  # valid session key should be updated
+    ],
+)
+async def test_assign_thread_cookies_session_key_filtering(
+    syllabus_consumer, async_user, dj_session_key, should_be_updated
+):
+    """
+    Test that anon user login associations exclude sessions with empty dj_session_key.
+
+    """
+    test_session_key = "user_session_key_value"
+    anon_thread_id = uuid4().hex
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    encoded_anon_cookie = urlsafe_base64_encode(force_bytes(anon_thread_id))
+
+    syllabus_consumer.scope["cookies"] = {
+        anon_cookie_name: encoded_anon_cookie,
+        AI_SESSION_COOKIE_KEY: test_session_key,
+    }
+    syllabus_consumer.scope["user"] = async_user
+    syllabus_consumer.session_key = test_session_key
+
+    await UserChatSession.objects.all().adelete()
+    await UserChatSession.objects.acreate(
+        thread_id=anon_thread_id,
+        user=None,
+        agent=SyllabusBot.__name__,
+        dj_session_key=dj_session_key,
+    )
+
+    await syllabus_consumer.assign_thread_cookies(async_user)
+
+    if should_be_updated:
+        assert await UserChatSession.objects.filter(
+            thread_id=anon_thread_id, user=async_user
+        ).aexists()
+    else:
+        assert await UserChatSession.objects.filter(
+            thread_id=anon_thread_id, user=None
+        ).aexists()
