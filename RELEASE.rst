@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.16.2
+Version 0.16.2 (Released September 25, 2025)
 --------------
 
 - temporarily limit canvas response keys (#313)
