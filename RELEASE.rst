@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.16.1
+Version 0.16.1 (Released September 25, 2025)
 --------------
 
 - Fix chatbot session keys for anon users (#314)
