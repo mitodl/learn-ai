@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:12.22
+    image: postgres:17.6
     healthcheck:
       test: ["CMD", "pg_isready"]
       interval: 3s
