@@ -23,15 +23,6 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
-from open_learning_ai_tutor.message_tutor import message_tutor
-from open_learning_ai_tutor.prompts import get_system_prompt
-from open_learning_ai_tutor.tools import tutor_tools
-from open_learning_ai_tutor.utils import (
-    filter_out_system_messages,
-    json_to_intent_list,
-    json_to_messages,
-    tutor_output_to_json,
-)
 from openai import BadRequestError
 from posthog.ai.langchain import CallbackHandler
 from typing_extensions import TypedDict
@@ -46,6 +37,15 @@ from ai_chatbots.api import (
 )
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
+from open_learning_ai_tutor.message_tutor import message_tutor
+from open_learning_ai_tutor.prompts import get_system_prompt
+from open_learning_ai_tutor.tools import tutor_tools
+from open_learning_ai_tutor.utils import (
+    filter_out_system_messages,
+    json_to_intent_list,
+    json_to_messages,
+    tutor_output_to_json,
+)
 
 log = logging.getLogger(__name__)
 
@@ -689,8 +689,12 @@ def get_canvas_problem_set(run_readable_id: str, problem_set_title: str) -> str:
     api_url = f"{settings.PROBLEM_SET_URL}{run_readable_id}/{problem_set_title}/"
 
     response = request_with_token(api_url, {}, timeout=10)
-
-    return response.json()
+    response = response.json()
+    return {
+        key: value
+        for key, value in response.items()
+        if key in ["problem_set", "solution_set"]
+    }
 
 
 def get_matching_content(api_results: json, edx_module_id: str):
