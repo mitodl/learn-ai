@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.16.2
+--------------
+
+- temporarily limit canvas response keys (#313)
+- security: disable yarn postinstall scripts (#317)
+
 Version 0.16.1 (Released September 25, 2025)
 --------------
 
