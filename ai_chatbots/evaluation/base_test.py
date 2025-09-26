@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 from deepeval.test_case import LLMTestCase
+from langchain_core.messages import AIMessage, HumanMessage
 
 from .base import BaseBotEvaluator, EvaluationConfig, TestCaseSpec
 
@@ -105,9 +106,7 @@ class ConcreteBotEvaluator(BaseBotEvaluator):
         return mock_bot
 
     async def collect_response(self, chatbot, test_case):
-        """Collect mock response with real message objects."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
+        """Collect mock response."""
         _ = chatbot, test_case  # Unused parameters for testing
 
         # Create mock tool call with proper string name
@@ -169,9 +168,7 @@ class TestConcreteBotEvaluator:
 
     @pytest.mark.asyncio
     async def test_collect_response(self, evaluator):
-        """Test response collection with real message objects."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
+        """Test response collection."""
         mock_bot = Mock()
         test_case = TestCaseSpec(question="Test question")
 
@@ -179,16 +176,13 @@ class TestConcreteBotEvaluator:
 
         assert "messages" in response
         assert len(response["messages"]) == 4
-        # Verify we get real message objects, not mocks
         assert isinstance(response["messages"][0], HumanMessage)
         assert isinstance(response["messages"][1], AIMessage)
         assert isinstance(response["messages"][2], AIMessage)
         assert isinstance(response["messages"][3], AIMessage)
 
     def test_extract_tool_results(self, evaluator):
-        """Test tool results extraction with real message objects."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
+        """Test tool results extraction."""
         response = {
             "messages": [
                 HumanMessage(content="User"),
@@ -205,8 +199,6 @@ class TestConcreteBotEvaluator:
 
     def test_extract_tool_results_no_tools(self, evaluator):
         """Test tool results extraction when no tools expected."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
         response = {
             "messages": [HumanMessage(content="User"), AIMessage(content="Bot")]
         }
@@ -229,9 +221,7 @@ class TestConcreteBotEvaluator:
         assert context == []
 
     def test_extract_tool_calls(self, evaluator):
-        """Test tool calls extraction with real message objects."""
-        from langchain_core.messages import AIMessage, HumanMessage
-
+        """Test tool calls extraction."""
         mock_tool_call = Mock()
         mock_tool_call.function.name = "test_tool"
         mock_tool_call.function.arguments = '{"arg": "value"}'
@@ -253,8 +243,6 @@ class TestConcreteBotEvaluator:
 
     def test_extract_tool_calls_no_tools(self, evaluator):
         """Test tool calls extraction with no tool calls."""
-        from langchain_core.messages import HumanMessage
-
         response = {"messages": [HumanMessage(content="User message")]}
 
         tool_calls = evaluator.extract_tool_calls(response)
@@ -267,8 +255,6 @@ class TestConcreteBotEvaluator:
             expected_output="Expected output",
             expected_tools=["test_tool"],
         )
-
-        from langchain_core.messages import AIMessage, HumanMessage
 
         # Create proper tool call mock
         tool_call_mock = Mock()
