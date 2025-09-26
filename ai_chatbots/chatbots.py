@@ -715,10 +715,11 @@ def get_canvas_problem_set(run_readable_id: str, problem_set_title: str) -> str:
 
     response = request_with_token(api_url, {}, timeout=10)
     response = response.json()
+
     return {
         key: value
         for key, value in response.items()
-        if key in ["problem_set", "solution_set"]
+        if key in ["problem_set_files", "solution_set_files"]
     }
 
 

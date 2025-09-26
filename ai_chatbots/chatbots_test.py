@@ -796,8 +796,18 @@ def test_get_canvas_problem_set(mocker):
     problem_set_title = "A Problem Set Title"
 
     problem_api_results = {
-        "problem_set": "test problem set",
-        "solution_set": "test solution",
+        "problem_set_files": [
+            {
+                "file_name": "test_problem_set",
+                "content": "test problem set",
+            }
+        ],
+        "solution_set_files": [
+            {
+                "file_name": "test_solution",
+                "content": "test solution",
+            }
+        ],
     }
 
     mocker.patch(
