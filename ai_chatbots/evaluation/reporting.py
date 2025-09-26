@@ -1,8 +1,61 @@
 """Reporting classes for RAG evaluation results."""
 
+from pathlib import Path
+from typing import Optional, TextIO
+
 import pandas as pd
 from deepeval.evaluate.types import EvaluationResult
 from django.core.management.base import OutputWrapper
+
+
+class DualOutputWrapper:
+    """Wrapper that writes to both stdout and a file simultaneously."""
+
+    def __init__(self, stdout: OutputWrapper, file_path: Optional[str] = None):
+        self.stdout = stdout
+        self.file_path = file_path
+        self.file: Optional[TextIO] = None
+
+        if file_path:
+            file_path_obj = Path(file_path)
+            self.file = file_path_obj.open("w", encoding="utf-8")
+
+    def write(self, msg: str, style_func=None, ending=None) -> None:
+        """Write message to both stdout and file."""
+        # Write to stdout (preserves original behavior)
+        self.stdout.write(msg, style_func=style_func, ending=ending)
+
+        # Also write to file if specified
+        if self.file:
+            if ending is None:
+                ending = "\n"
+
+            # Remove style codes for file output (optional)
+            clean_msg = msg
+            if style_func:
+                # Could strip ANSI codes here if needed
+                clean_msg = msg
+
+            self.file.write(clean_msg + ending)
+            self.file.flush()
+
+    def flush(self):
+        """Flush both outputs."""
+        self.stdout.flush() if hasattr(self.stdout, "flush") else None
+        if self.file:
+            self.file.flush()
+
+    def close(self):
+        """Close the file (but not stdout)."""
+        if self.file and not self.file.closed:
+            self.file.close()
+            self.file = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 
 class EvaluationReporter:

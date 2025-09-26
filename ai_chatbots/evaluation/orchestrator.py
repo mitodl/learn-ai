@@ -4,6 +4,7 @@ import os
 from typing import Optional
 
 import deepeval
+from deepeval.evaluate import AsyncConfig, ErrorConfig
 from deepeval.evaluate.types import EvaluationResult
 from deepeval.metrics import (
     AnswerRelevancyMetric,
@@ -15,11 +16,11 @@ from deepeval.metrics import (
 from django.core.management.base import OutputWrapper
 
 from ai_chatbots.api import get_langsmith_prompt
+from ai_chatbots.evaluation.base import EvaluationConfig
+from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS
+from ai_chatbots.evaluation.reporting import EvaluationReporter
+from ai_chatbots.evaluation.timeout_wrapper import wrap_metrics_with_timeout
 from main.test_utils import load_json_with_settings
-
-from .base import EvaluationConfig
-from .evaluators import BOT_EVALUATORS
-from .reporting import EvaluationReporter
 
 
 class EvaluationOrchestrator:
@@ -34,6 +35,7 @@ class EvaluationOrchestrator:
         models: list[str],
         evaluation_model: str,
         metric_thresholds: Optional[dict[str, float]] = None,
+        timeout_seconds: int = 360,
     ) -> EvaluationConfig:
         """Create evaluation configuration with metrics."""
         if metric_thresholds is None:
@@ -74,20 +76,25 @@ class EvaluationOrchestrator:
             ),
         ]
 
+        # Wrap metrics with timeout functionality
+        timeout_wrapped_metrics = wrap_metrics_with_timeout(metrics, timeout_seconds)
+
         return EvaluationConfig(
             models=models,
             evaluation_model=evaluation_model,
-            metrics=metrics,
+            metrics=timeout_wrapped_metrics,
             confident_api_key=os.environ.get("CONFIDENT_AI_API_KEY"),
         )
 
-    async def run_evaluation(  # noqa: C901, PLR0912
+    async def run_evaluation(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         config: EvaluationConfig,
         *,
         bot_names: Optional[list[str]] = None,
+        data_file: Optional[str] = None,
         use_prompts: bool = True,
         prompts_file: Optional[str] = None,
+        max_concurrent: int = 10,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models."""
         # Set up DeepEval logging if API key is available
@@ -124,7 +131,7 @@ class EvaluationOrchestrator:
                 continue
 
             bot_class, evaluator_class = BOT_EVALUATORS[bot_name]
-            evaluator = evaluator_class(bot_class, bot_name)
+            evaluator = evaluator_class(bot_class, bot_name, data_file=data_file)
 
             # Load and validate test cases for this bot
             bot_test_cases = evaluator.load_test_cases()
@@ -178,14 +185,39 @@ class EvaluationOrchestrator:
                         continue
 
         # Run DeepEval evaluation
-        self.stdout.write(f"Running evaluation on {len(test_cases)} test cases")
+        self.stdout.write(
+            f"Running evaluation on {len(test_cases)} test cases "
+            f"with max_concurrent={max_concurrent}"
+        )
 
         if not test_cases:
             self.stdout.write("No test cases available - skipping evaluation")
             # Create an empty results object to avoid errors
             results = EvaluationResult(test_results=[], confident_link=None)
         else:
-            results = deepeval.evaluate(test_cases=test_cases, metrics=config.metrics)
+            # Create AsyncConfig and log its settings
+            async_config = AsyncConfig(
+                max_concurrent=max_concurrent,
+                throttle_value=0,  # No throttling by default
+            )
+            self.stdout.write(
+                f"AsyncConfig: max_concurrent={async_config.max_concurrent}, "
+                f"throttle_value={async_config.throttle_value}"
+            )
+
+            if max_concurrent < len(test_cases):
+                self.stdout.write(
+                    f"NOTE: DeepEval may show 'Evaluating {len(test_cases)} "
+                    f"test case(s) in parallel' but will actually limit to "
+                    f"{max_concurrent} concurrent executions"
+                )
+
+            results = deepeval.evaluate(
+                test_cases=test_cases,
+                metrics=config.metrics,
+                error_config=ErrorConfig(ignore_errors=True),
+                async_config=async_config,
+            )
 
         # Generate report
         self.reporter.generate_report(results, config.models, bot_names)
