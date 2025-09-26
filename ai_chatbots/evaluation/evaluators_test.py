@@ -4,7 +4,7 @@ import inspect
 from unittest.mock import Mock, patch
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from .base import TestCaseSpec
 from .evaluators import (
@@ -78,7 +78,7 @@ class TestRecommendationBotEvaluator:
         assert evaluator.validate_test_case(test_case) is False
 
     def test_create_bot_instance(self, evaluator):
-        """Test bot instance creation with real parameter passing."""
+        """Test bot instance creation."""
         test_case = TestCaseSpec(
             question="Test", metadata={"extra_init": {"param": "value"}}
         )
@@ -94,11 +94,8 @@ class TestRecommendationBotEvaluator:
 
     @pytest.mark.asyncio
     async def test_collect_response(self, evaluator):
-        """Test response collection with real message processing."""
-        from langchain_core.messages import HumanMessage
-
+        """Test response collection."""
         mock_bot = Mock()
-        # Create a real message object instead of mock
         response_message = HumanMessage(content="Response")
         mock_bot.agent.invoke.return_value = {"messages": [response_message]}
         mock_bot.config = {"configurable": {"test": "config"}}
@@ -113,7 +110,6 @@ class TestRecommendationBotEvaluator:
 
         response = await evaluator.collect_response(mock_bot, test_case)
 
-        # Verify the real invoke call structure
         mock_bot.agent.invoke.assert_called_once_with(
             {
                 "messages": [{"content": "Test question", "role": "user"}],
@@ -121,7 +117,7 @@ class TestRecommendationBotEvaluator:
             },
             config={"test": "config"},
         )
-        # Test the real response processing
+
         assert "messages" in response
         assert len(response["messages"]) == 1
         assert isinstance(response["messages"][0], HumanMessage)
@@ -285,10 +281,9 @@ class TestTutorBotEvaluator:
 
     @pytest.mark.asyncio
     async def test_collect_response(self, evaluator):
-        """Test tutor bot response collection with real message processing."""
+        """Test tutor bot response collection ."""
         mock_bot = Mock()
 
-        # Mock async generator that yields real string chunks
         async def mock_get_completion(question):
             yield "Think "
             yield "about "
@@ -300,7 +295,6 @@ class TestTutorBotEvaluator:
 
         response = await evaluator.collect_response(mock_bot, test_case)
 
-        # Verify the real message processing functionality
         assert "messages" in response
         assert len(response["messages"]) == 1
         assert isinstance(response["messages"][0], AIMessage)
@@ -372,21 +366,18 @@ class TestEvaluatorIntegration:
             bot = evaluator.create_bot_instance("gpt-4", test_cases[0])
             assert bot is not None
 
-            # Mock bot response with real message objects
-            from langchain_core.messages import HumanMessage
-
             mock_bot = Mock()
             mock_bot.agent.invoke.return_value = {
                 "messages": [HumanMessage(content="Bot response")]
             }
             mock_bot.config = {"configurable": {}}
 
-            # Collect response - test real message processing
+            # Collect response
             response = await evaluator.collect_response(mock_bot, test_cases[0])
             assert "messages" in response
             assert isinstance(response["messages"][0], HumanMessage)
 
-            # Create LLM test case - test real object creation
+            # Create LLM test case
             llm_test_case = evaluator.create_llm_test_case(
                 test_cases[0], response, "gpt-4", "default"
             )

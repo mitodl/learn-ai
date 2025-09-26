@@ -5,8 +5,11 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
+from ai_chatbots.evaluation.evaluators import RecommendationBotEvaluator
 from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
+from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 
 NUM_METRICS = 5
 
@@ -349,15 +352,11 @@ class TestEvaluationOrchestrator:
     @pytest.mark.asyncio
     @patch("ai_chatbots.evaluation.orchestrator.deepeval")
     async def test_run_evaluation_with_data_file(self, mock_deepeval, orchestrator):
-        """Test evaluation run with data_file parameter using real evaluator."""
+        """Test evaluation run with data_file parameter."""
         config = Mock()
         config.confident_api_key = None
         config.models = ["gpt-4"]
         config.metrics = [Mock()]
-
-        # Use a real evaluator class that inherits from BaseBotEvaluator
-        from ai_chatbots.chatbots import ResourceRecommendationBot
-        from ai_chatbots.evaluation.evaluators import RecommendationBotEvaluator
 
         # Track the actual evaluator instances created
         actual_evaluators = []
@@ -392,7 +391,6 @@ class TestEvaluationOrchestrator:
                 data_file="/path/to/custom_data.json",
             )
 
-            # Verify a real evaluator was instantiated with the correct data_file
             assert len(actual_evaluators) == 1
             evaluator = actual_evaluators[0]
             assert isinstance(evaluator, RecommendationBotEvaluator)
@@ -414,8 +412,8 @@ class TestEvaluationConfigIntegration:
         """Create orchestrator for testing."""
         return EvaluationOrchestrator(mock_stdout)
 
-    def test_config_with_real_metrics(self):
-        """Test config creation with real DeepEval metrics."""
+    def test_config_creation(self):
+        """Test config creation."""
 
         mock_stdout = Mock()
         orchestrator = EvaluationOrchestrator(mock_stdout)
@@ -447,8 +445,6 @@ class TestEvaluationConfigIntegration:
         )
 
         # Verify that metrics are wrapped with timeout functionality
-        from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
-
         for metric in config.metrics:
             assert isinstance(metric, TimeoutMetricWrapper)
             assert metric.timeout_seconds == timeout_seconds
@@ -461,8 +457,6 @@ class TestEvaluationConfigIntegration:
         config = orchestrator.create_evaluation_config(models, evaluation_model)
 
         # Verify that metrics are wrapped with default timeout
-        from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
-
         for metric in config.metrics:
             assert isinstance(metric, TimeoutMetricWrapper)
             assert metric.timeout_seconds == 360  # Default timeout
@@ -470,15 +464,11 @@ class TestEvaluationConfigIntegration:
     @pytest.mark.asyncio
     @patch("ai_chatbots.evaluation.orchestrator.deepeval")
     async def test_run_evaluation_with_data_file(self, mock_deepeval, orchestrator):
-        """Test evaluation run with data_file parameter using real evaluator."""
+        """Test evaluation run with data_file parameter."""
         config = Mock()
         config.confident_api_key = None
         config.models = ["gpt-4"]
         config.metrics = [Mock()]
-
-        # Use a real evaluator class that inherits from BaseBotEvaluator
-        from ai_chatbots.chatbots import ResourceRecommendationBot
-        from ai_chatbots.evaluation.evaluators import RecommendationBotEvaluator
 
         # Track the actual evaluator instances created
         actual_evaluators = []
@@ -513,7 +503,7 @@ class TestEvaluationConfigIntegration:
                 data_file="/path/to/custom_data.json",
             )
 
-            # Verify a real evaluator was instantiated with the correct data_file
+            # Verify an evaluator was instantiated with the correct data_file
             assert len(actual_evaluators) == 1
             evaluator = actual_evaluators[0]
             assert isinstance(evaluator, RecommendationBotEvaluator)
