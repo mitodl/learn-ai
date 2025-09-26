@@ -30,6 +30,7 @@ from typing_extensions import TypedDict
 from ai_chatbots import tools
 from ai_chatbots.api import (
     CustomSummarizationNode,
+    DjangoCheckpoint,
     TokenTrackingCallbackHandler,
     create_tutorbot_output_and_checkpoints,
     get_search_tool_metadata,
@@ -182,6 +183,18 @@ class BaseChatbot(ABC):
                 return state
         return None
 
+    async def _get_latest_checkpoint_id(self) -> Optional[str]:
+        """Get the most recent assistant response checkpoint"""
+        checkpoint = (
+            await DjangoCheckpoint.objects.prefetch_related("session", "session__user")
+            .filter(
+                thread_id=self.thread_id,
+            )
+            .order_by("-id")
+            .afirst()
+        )
+        return checkpoint.id if checkpoint else None
+
     async def set_callbacks(
         self, properties: Optional[dict] = None
     ) -> list[CallbackHandler]:
@@ -265,9 +278,20 @@ class BaseChatbot(ABC):
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
-        metadata = await self.get_tool_metadata()
-        if debug:
-            yield f"\n\n<!-- {metadata} -->\n\n"
+        metadata = await self.get_metadata(debug=debug)
+        yield f"\n\n<!-- {metadata} -->\n\n"
+
+    async def get_metadata(self, *, debug: bool = False) -> str:
+        """
+        Return metadata JSON about the response
+        """
+        # After streaming completes, get the latest checkpoint ID
+        metadata = {} if not debug else await self.get_tool_metadata()
+        metadata["checkpoint_pk"] = await self._get_latest_checkpoint_id()
+        metadata["thread_id"] = self.thread_id
+        if metadata:
+            return json.dumps(metadata)
+        return ""
 
     @abstractmethod
     async def get_tool_metadata(self) -> str:
@@ -553,16 +577,14 @@ class TutorBot(BaseChatbot):
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
-        return json.dumps(
-            {
-                "edx_module_id": self.edx_module_id,
-                "block_siblings": self.block_siblings,
-                "problem": self.problem,
-                "problem_set": self.problem_set,
-                "problem_set_title": self.problem_set_title,
-                "run_readable_id": self.run_readable_id,
-            }
-        )
+        return {
+            "edx_module_id": self.edx_module_id,
+            "block_siblings": self.block_siblings,
+            "problem": self.problem,
+            "problem_set": self.problem_set,
+            "problem_set_title": self.problem_set_title,
+            "run_readable_id": self.run_readable_id,
+        }
 
     async def get_latest_history(self):
         return await query_tutorbot_output(self.thread_id)
@@ -572,7 +594,7 @@ class TutorBot(BaseChatbot):
         message: str,
         *,
         extra_state: Optional[TypedDict] = None,  # noqa: ARG002
-        debug: bool = settings.AI_DEBUG,  # noqa: ARG002
+        debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
 
@@ -591,7 +613,7 @@ class TutorBot(BaseChatbot):
             intent_history = []
             assessment_history = []
         self.llm.callbacks = await self.set_callbacks(
-            properties=json.loads(await self.get_tool_metadata())
+            properties=await self.get_tool_metadata()
         )
 
         full_response = ""
@@ -622,20 +644,23 @@ class TutorBot(BaseChatbot):
 
                 elif chunk[0] == "values":
                     new_history = filter_out_system_messages(chunk[1]["messages"])
-
-            metadata = {
+            additional_metadata = {
                 "edx_module_id": self.edx_module_id,
                 "tutor_model": self.model,
                 "problem_set_title": self.problem_set_title,
                 "run_readable_id": self.run_readable_id,
             }
             json_output = tutor_output_to_json(
-                new_history, new_intent_history, new_assessment_history, metadata
+                new_history,
+                new_intent_history,
+                new_assessment_history,
+                additional_metadata,
             )
             # Save both TutorBotOutput and DjangoCheckpoint objects atomically
             await create_tutorbot_output_and_checkpoints(
                 self.thread_id, json_output, self.edx_module_id
             )
+            yield (f"<!-- {await self.get_metadata(debug=debug)} -->")
 
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'

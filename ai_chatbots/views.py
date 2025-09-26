@@ -8,24 +8,29 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from open_learning_ai_tutor.prompts import get_system_prompt
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
 from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
 
-from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
+from ai_chatbots.models import (
+    DjangoCheckpoint,
+    LLMModel,
+    UserChatSession,
+)
 from ai_chatbots.permissions import IsThreadOwner
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
+    ChatResponseRatingRequest,
     LLMModelSerializer,
     SystemPromptSerializer,
     UserChatSessionSerializer,
 )
 from ai_chatbots.utils import get_django_cache
-from main.constants import VALID_HTTP_METHODS
 from main.views import DefaultPagination
 
 
@@ -39,12 +44,10 @@ from main.views import DefaultPagination
         )
     ]
 )
-class UserChatSessionsViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint that allows user session chats to be viewed or edited.
-    """
+class UserChatSessionsViewSet(ReadOnlyModelViewSet):
+    """Read-only API endpoint for listing and retrieving user chat sessions."""
 
-    http_method_names = VALID_HTTP_METHODS
+    http_method_names = ["get"]
     serializer_class = UserChatSessionSerializer
     pagination_class = DefaultPagination
     permission_classes = (IsAuthenticated,)
@@ -65,15 +68,24 @@ class UserChatSessionsViewSet(viewsets.ModelViewSet):
             type=OpenApiTypes.STR,
             location=OpenApiParameter.PATH,
             description="thread id of the chat session",
-        )
+        ),
+        OpenApiParameter(
+            name="id",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description="ID of the AI response checkpoint",
+        ),
     ]
 )
-class ChatMessageViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+class ChatMessageViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
     """
     Read-only API endpoint for returning just human/agent chat messages in a thread.
+    Supports both listing all messages and retrieving individual checkpoints by ID.
     """
 
-    http_method_names = ["get"]
+    http_method_names = ["get", "post"]
     serializer_class = ChatMessageSerializer
     permission_classes = (
         IsAuthenticated,
@@ -93,9 +105,58 @@ class ChatMessageViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         thread_id = self.kwargs["thread_id"]
         return (
             DjangoCheckpoint.objects.filter(thread_id=thread_id)
+            .select_related("rating")
             .extra(where=[self.message_filter])  # noqa: S610 - just a hardcoded filter
             .order_by("metadata__step")
         )
+
+    def get_object(self):
+        """
+        Retrieve a single checkpoint by its ID within the specified thread.
+        """
+        thread_id = self.kwargs["thread_id"]
+        checkpoint_id = self.kwargs["pk"]
+
+        try:
+            return (
+                DjangoCheckpoint.objects.filter(thread_id=thread_id, id=checkpoint_id)
+                .select_related("rating")
+                .extra(where=[self.message_filter])  # noqa: S610 - just a hardcoded filter
+                .get()
+            )
+        except DjangoCheckpoint.DoesNotExist:
+            raise NotFound from DjangoCheckpoint.DoesNotExist
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="rate",
+        permission_classes=[IsThreadOwner],
+        serializer_class=ChatResponseRatingRequest,
+    )
+    def rate_message(self, request, thread_id, pk):
+        """Rate an AI response message"""
+        try:
+            # Get the checkpoint using the primary key (id) instead of checkpoint_id
+            checkpoint = DjangoCheckpoint.objects.get(thread_id=thread_id, id=pk)
+        except DjangoCheckpoint.DoesNotExist:
+            raise NotFound from DjangoCheckpoint.DoesNotExist
+
+        # Create serializer with context
+        serializer = ChatResponseRatingRequest(
+            data=request.data,
+            context={
+                "checkpoint": checkpoint,
+            },
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                serializer.validated_data,
+                status=status.HTTP_200_OK,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LLMModelViewSet(ReadOnlyModelViewSet):

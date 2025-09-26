@@ -315,3 +315,13 @@ class TutorBotOutputFactory(DjangoModelFactory):
 
     class Meta:
         model = models.TutorBotOutput
+
+
+class ChatResponseRatingFactory(DjangoModelFactory):
+    """Factory for ChatResponseRating instances."""
+
+    checkpoint = factory.SubFactory(CheckpointFactory, is_agent=True)
+    rating = FuzzyChoice(["like", "dislike"])
+
+    class Meta:
+        model = models.ChatResponseRating

@@ -61,7 +61,7 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
         msg_content = tool_messages[-1].content
         try:
             content = json.loads(msg_content or "{}")
-            metadata = {
+            return {
                 "metadata": {
                     "search_url": content.get("metadata", {}).get("search_url"),
                     "search_parameters": content.get("metadata", {}).get(
@@ -72,16 +72,13 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
                     "thread_id": thread_id,
                 }
             }
-            return json.dumps(metadata)
         except json.JSONDecodeError:
             log.exception(
                 "Error parsing tool metadata, not valid JSON: %s", msg_content
             )
-            return json.dumps(
-                {"error": "Error parsing tool metadata", "content": msg_content}
-            )
+            return {"error": "Error parsing tool metadata", "content": msg_content}
     else:
-        return "{}"
+        return {}
 
 
 def summarize_messages(  # noqa: PLR0912, PLR0913, PLR0915, C901

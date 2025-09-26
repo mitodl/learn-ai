@@ -1,17 +1,25 @@
 """Tests for ai_chatbots views"""
 
+import json
 from random import randint
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
+from django.test import RequestFactory
 from django.urls import reverse
+from rest_framework import status
+from rest_framework.exceptions import ErrorDetail
+from rest_framework.test import APIClient
 
+from ai_chatbots.constants import AI_SESSION_COOKIE_KEY
 from ai_chatbots.factories import (
+    ChatResponseRatingFactory,
     CheckpointFactory,
     LLMModelFactory,
     UserChatSessionFactory,
 )
-from ai_chatbots.models import LLMModel
+from ai_chatbots.models import ChatResponseRating, LLMModel
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING, parse_prompt
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
@@ -48,6 +56,44 @@ def test_session_w_messages():
             CheckpointFactory.create(thread_id=chat_session.thread_id, is_tool=True),
             CheckpointFactory.create(thread_id=chat_session.thread_id, is_agent=True),
         ],
+    )
+
+
+@pytest.fixture
+def test_anonymous_session():
+    """Create a anonymous session containing a few messages"""
+    chat_session = UserChatSessionFactory(user=None, dj_session_key=uuid4().hex)
+    return SimpleNamespace(
+        session=chat_session,
+        messages=[
+            CheckpointFactory.create(thread_id=chat_session.thread_id, is_human=True),
+            CheckpointFactory.create(thread_id=chat_session.thread_id, is_tool=True),
+            CheckpointFactory.create(thread_id=chat_session.thread_id, is_agent=True),
+        ],
+    )
+
+
+@pytest.fixture
+def factory():
+    return RequestFactory()
+
+
+@pytest.fixture
+def user_session():
+    return UserChatSessionFactory()
+
+
+@pytest.fixture
+def agent_checkpoint(user_session):
+    return CheckpointFactory(
+        session=user_session, thread_id=user_session.thread_id, is_agent=True
+    )
+
+
+@pytest.fixture
+def human_checkpoint(user_session):
+    return CheckpointFactory(
+        session=user_session, thread_id=user_session.thread_id, is_human=True
     )
 
 
@@ -145,6 +191,118 @@ def test_thread_messages_view_403(client, test_session_w_messages):
         reverse("ai:v0:chat_session_messages-list", args=[session.thread_id])
     )
     assert response.status_code == 403
+
+
+def test_rate_agent_message_success(client, user_session, agent_checkpoint):
+    """Test successfully rating an agent message"""
+    # Use direct ViewSet approach since URL routing has issues
+    client.force_login(user_session.user)
+    response = client.post(
+        f"/api/v0/chat_sessions/{user_session.thread_id}/messages/{agent_checkpoint.id}/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["rating"] == "like"
+
+    # Verify rating was saved
+    rating = ChatResponseRating.objects.get(checkpoint=agent_checkpoint)
+    assert rating.rating == "like"
+
+
+@pytest.mark.parametrize("blank_key", [True, False])
+def test_rate_agent_message_anon_success(client, test_anonymous_session, blank_key):
+    """Test successfully rating an agent message for an anonymous user"""
+    if blank_key:
+        test_anonymous_session.session.dj_session_key = ""
+        test_anonymous_session.session.save()
+    response = client.post(
+        f"/api/v0/chat_sessions/{test_anonymous_session.session.thread_id}/messages/{test_anonymous_session.messages[2].id}/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+        HTTP_COOKIE=f"{AI_SESSION_COOKIE_KEY}={test_anonymous_session.session.dj_session_key}",
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["rating"] == "like"
+
+    # Verify rating was saved
+    rating = ChatResponseRating.objects.get(
+        checkpoint=test_anonymous_session.messages[2]
+    )
+    assert rating.rating == "like"
+
+
+def test_rate_agent_message_other_user_403(client, user_session, agent_checkpoint):
+    """Test that rating an agent message fails for unauthorized users"""
+    client.force_login(UserFactory.create())
+    response = client.post(
+        f"/api/v0/chat_sessions/{user_session.thread_id}/messages/{agent_checkpoint.id}/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_rate_agent_message_anon_403(client, test_anonymous_session):
+    """Test that rating an agent message for another anonymous user fails"""
+    response = client.post(
+        f"/api/v0/chat_sessions/{test_anonymous_session.session.thread_id}/messages/{test_anonymous_session.messages[2].id}/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+        HTTP_COOKIE=f"{AI_SESSION_COOKIE_KEY}=invalid_session_key",
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_rate_human_message_fails(client: APIClient, user_session, human_checkpoint):
+    """Test that rating a human message fails"""
+    user = user_session.user
+    client.force_login(user)
+
+    response = client.post(
+        f"/api/v0/chat_sessions/{user_session.thread_id}/messages/{human_checkpoint.id}/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data == {
+        "rating": [ErrorDetail(string="Can only rate agent responses", code="invalid")]
+    }
+
+
+def test_rate_nonexistent_checkpoint_fails(client, user_session):
+    """Test rating a non-existent checkpoint fails"""
+    client.force_login(user_session.user)
+
+    response = client.post(
+        f"/api/v0/chat_sessions/{user_session.thread_id}/messages/0/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_update_existing_rating(client, user_session, agent_checkpoint):
+    """Test updating an existing rating"""
+    ChatResponseRatingFactory(checkpoint=agent_checkpoint, rating="like")
+    client.force_login(user_session.user)
+
+    response = client.post(
+        f"/api/v0/chat_sessions/{user_session.thread_id}/messages/{agent_checkpoint.id}/rate/",
+        data=json.dumps({"rating": "dislike"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["rating"] == "dislike"
+
+    # Verify only one rating exists and it's updated
+    ratings = ChatResponseRating.objects.filter(checkpoint=agent_checkpoint)
+    assert ratings.count() == 1
+    assert ratings.first().rating == "dislike"
 
 
 def test_llm_model_viewset(client):

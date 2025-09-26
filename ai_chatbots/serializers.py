@@ -1,9 +1,16 @@
 """Serializers for the ai_chatbots app"""
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from ai_chatbots.models import DjangoCheckpoint, LLMModel, UserChatSession
+from ai_chatbots.models import (
+    ChatResponseRating,
+    ChatResponseScore,
+    DjangoCheckpoint,
+    LLMModel,
+    UserChatSession,
+)
 
 
 class TruncatedCharField(serializers.CharField):
@@ -109,11 +116,22 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     role = serializers.CharField()
     content = serializers.CharField()
+    rating = serializers.SerializerMethodField()
+
+    @extend_schema_field(
+        serializers.CharField(
+            help_text="Rating for the message. Valid options: 'like', 'dislike', or ''"
+        )
+    )
+    def get_rating(self, instance):
+        """Return the rating for this message if it exists"""
+        return instance.rating.rating if hasattr(instance, "rating") else ""
 
     def to_representation(self, instance):
         """Return just the message content and role"""
         role = "agent" if instance.metadata.get("writes", {}).get("agent") else "human"
-        return {
+        data = {
+            "id": instance.id,
             "checkpoint_id": instance.checkpoint_id,
             "step": instance.metadata.get("step"),
             "role": role,
@@ -130,9 +148,15 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             .get("content"),
         }
 
+        # Only include rating for agent messages
+        if role == "agent":
+            data["rating"] = self.get_rating(instance)
+
+        return data
+
     class Meta:
         model = DjangoCheckpoint
-        fields = ["checkpoint_id", "role", "content"]
+        fields = ["id", "checkpoint_id", "role", "content", "rating"]
 
 
 class TutorChatRequestSerializer(ChatRequestSerializer):
@@ -170,3 +194,33 @@ class LLMModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = LLMModel
         fields = ["provider", "name", "litellm_id"]
+
+
+class ChatResponseRatingRequest(serializers.ModelSerializer):
+    """Serializer for creating and updating chat response ratings"""
+
+    def validate_rating(self, value):
+        """Ensure rating is valid"""
+        if value and value not in ChatResponseScore.values():
+            msg = f"Rating must be one of: {', '.join(ChatResponseScore.values())}"
+            raise serializers.ValidationError(msg)
+        # Verify this is an agent message (not human)
+        checkpoint = self.context["checkpoint"]
+        if not checkpoint.metadata.get("writes", {}).get("agent"):
+            msg = "Can only rate agent responses"
+            raise serializers.ValidationError(msg)
+        return value
+
+    def create(self, validated_data):
+        """Create or update rating for a checkpoint"""
+        checkpoint = self.context["checkpoint"]
+
+        # Try to get existing rating (using checkpoint as primary key)
+        rating, _ = ChatResponseRating.objects.update_or_create(
+            checkpoint=checkpoint, defaults={"rating": validated_data["rating"]}
+        )
+        return rating
+
+    class Meta:
+        model = ChatResponseRating
+        fields = ["rating"]

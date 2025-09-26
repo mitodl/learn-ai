@@ -2,6 +2,7 @@
 
 from django.db import models
 
+from ai_chatbots.constants import ChatResponseScore
 from main import settings
 from main.models import TimestampedModel
 
@@ -106,3 +107,33 @@ class LLMModel(models.Model):
 
     def __str__(self):
         return f"{self.provider} - {self.name}"
+
+
+class ChatResponseRating(models.Model):
+    """Store user ratings for AI chatbot responses"""
+
+    RATING_CHOICES = [
+        (ChatResponseScore.like.value, ChatResponseScore.like.value.capitalize()),
+        (ChatResponseScore.dislike.value, ChatResponseScore.dislike.value.capitalize()),
+        (ChatResponseScore.no_rating.value, "No Rating"),
+    ]
+
+    checkpoint = models.OneToOneField(
+        DjangoCheckpoint,
+        on_delete=models.CASCADE,
+        related_name="rating",
+        primary_key=True,
+    )
+    rating = models.CharField(
+        max_length=10, choices=RATING_CHOICES, db_index=True, blank=True
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+    updated_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["rating"], name="rating_value_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.checkpoint.checkpoint_id}-{self.rating}"

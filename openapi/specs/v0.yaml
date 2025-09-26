@@ -7,7 +7,7 @@ paths:
   /api/v0/chat_sessions/:
     get:
       operationId: chat_sessions_list
-      description: API endpoint that allows user session chats to be viewed or edited.
+      description: Read-only API endpoint for listing and retrieving user chat sessions.
       parameters:
       - name: limit
         required: false
@@ -36,40 +36,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedUserChatSessionList'
           description: ''
-    post:
-      operationId: chat_sessions_create
-      description: API endpoint that allows user session chats to be viewed or edited.
-      parameters:
-      - in: path
-        name: thread_id
-        schema:
-          type: string
-        description: thread id of the chat session
-        required: true
-      tags:
-      - chat_sessions
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UserChatSessionRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/UserChatSessionRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/UserChatSessionRequest'
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserChatSession'
-          description: ''
   /api/v0/chat_sessions/{thread_id}/:
     get:
       operationId: chat_sessions_retrieve
-      description: API endpoint that allows user session chats to be viewed or edited.
+      description: Read-only API endpoint for listing and retrieving user chat sessions.
       parameters:
       - in: path
         name: thread_id
@@ -86,57 +56,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserChatSession'
           description: ''
-    patch:
-      operationId: chat_sessions_partial_update
-      description: API endpoint that allows user session chats to be viewed or edited.
-      parameters:
-      - in: path
-        name: thread_id
-        schema:
-          type: string
-        description: thread id of the chat session
-        required: true
-      tags:
-      - chat_sessions
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedUserChatSessionRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedUserChatSessionRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedUserChatSessionRequest'
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserChatSession'
-          description: ''
-    delete:
-      operationId: chat_sessions_destroy
-      description: API endpoint that allows user session chats to be viewed or edited.
-      parameters:
-      - in: path
-        name: thread_id
-        schema:
-          type: string
-        description: thread id of the chat session
-        required: true
-      tags:
-      - chat_sessions
-      responses:
-        '204':
-          description: No response body
   /api/v0/chat_sessions/{thread_id}/messages/:
     get:
       operationId: chat_sessions_messages_list
-      description: Read-only API endpoint for returning just human/agent chat messages
-        in a thread.
+      description: |-
+        Read-only API endpoint for returning just human/agent chat messages in a thread.
+        Supports both listing all messages and retrieving individual checkpoints by ID.
       parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: ID of the AI response checkpoint
+        required: true
       - name: limit
         required: false
         in: query
@@ -163,6 +95,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedChatMessageList'
+          description: ''
+  /api/v0/chat_sessions/{thread_id}/messages/{id}/:
+    get:
+      operationId: chat_sessions_messages_retrieve
+      description: |-
+        Read-only API endpoint for returning just human/agent chat messages in a thread.
+        Supports both listing all messages and retrieving individual checkpoints by ID.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: ID of the AI response checkpoint
+        required: true
+      - in: path
+        name: thread_id
+        schema:
+          type: string
+        description: thread id of the chat session
+        required: true
+      tags:
+      - chat_sessions
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+          description: ''
+  /api/v0/chat_sessions/{thread_id}/messages/{id}/rate/:
+    post:
+      operationId: chat_sessions_messages_rate_create
+      description: Rate an AI response message
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: ID of the AI response checkpoint
+        required: true
+      - in: path
+        name: thread_id
+        schema:
+          type: string
+        description: thread id of the chat session
+        required: true
+      tags:
+      - chat_sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatResponseRatingRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatResponseRatingRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatResponseRatingRequestRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponseRatingRequest'
           description: ''
   /api/v0/get_transcript_edx_module_id/:
     get:
@@ -378,22 +375,51 @@ paths:
                 type: string
 components:
   schemas:
+    BlankEnum:
+      enum:
+      - ''
     ChatMessage:
       type: object
       description: |-
         Serializer for chat messages.  This serializer is used to return just the message,
         content and role, and is intended to backfill chat history in a frontend UI.
       properties:
+        id:
+          type: integer
+          readOnly: true
         checkpoint_id:
           type: string
         role:
           type: string
         content:
           type: string
+        rating:
+          type: string
+          description: 'Rating for the message. Valid options: ''like'', ''dislike'',
+            or '''''
+          readOnly: true
       required:
       - checkpoint_id
       - content
+      - id
+      - rating
       - role
+    ChatResponseRatingRequest:
+      type: object
+      description: Serializer for creating and updating chat response ratings
+      properties:
+        rating:
+          oneOf:
+          - $ref: '#/components/schemas/RatingEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+    ChatResponseRatingRequestRequest:
+      type: object
+      description: Serializer for creating and updating chat response ratings
+      properties:
+        rating:
+          oneOf:
+          - $ref: '#/components/schemas/RatingEnum'
+          - $ref: '#/components/schemas/BlankEnum'
     LLMModel:
       type: object
       properties:
@@ -456,13 +482,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/UserChatSession'
-    PatchedUserChatSessionRequest:
-      type: object
-      description: Serializer for user chat sessions
-      properties:
-        title:
-          type: string
-          maxLength: 255
+    RatingEnum:
+      enum:
+      - like
+      - dislike
+      type: string
+      description: |-
+        * `like` - Like
+        * `dislike` - Dislike
+        * `` - No Rating
+      x-enum-descriptions:
+      - Like
+      - Dislike
     SystemPrompt:
       type: object
       description: Serializer for system prompts
@@ -501,10 +532,3 @@ components:
       - thread_id
       - updated_on
       - user
-    UserChatSessionRequest:
-      type: object
-      description: Serializer for user chat sessions
-      properties:
-        title:
-          type: string
-          maxLength: 255
