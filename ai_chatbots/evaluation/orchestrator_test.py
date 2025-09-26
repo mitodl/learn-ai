@@ -404,6 +404,16 @@ class TestEvaluationOrchestrator:
 class TestEvaluationConfigIntegration:
     """Integration tests for evaluation configuration."""
 
+    @pytest.fixture
+    def mock_stdout(self):
+        """Create mock stdout for testing."""
+        return Mock()
+
+    @pytest.fixture
+    def orchestrator(self, mock_stdout):
+        """Create orchestrator for testing."""
+        return EvaluationOrchestrator(mock_stdout)
+
     def test_config_with_real_metrics(self):
         """Test config creation with real DeepEval metrics."""
 
