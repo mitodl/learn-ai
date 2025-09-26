@@ -5,9 +5,8 @@ from typing import Any, Optional
 from langchain_core.messages import AIMessage
 
 from ai_chatbots import chatbots
+from ai_chatbots.evaluation.base import BaseBotEvaluator, TestCaseSpec
 from main.test_utils import load_json_with_settings
-
-from .base import BaseBotEvaluator, TestCaseSpec
 
 
 class RecommendationBotEvaluator(BaseBotEvaluator):
@@ -15,7 +14,7 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
 
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load recommendation bot test cases."""
-        test_data = load_json_with_settings("test_json/rag_evaluation.json")
+        test_data = load_json_with_settings(self.data_file)
         return [
             TestCaseSpec(
                 question=case_data["question"],
@@ -73,7 +72,7 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
 
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load syllabus bot test cases."""
-        test_data = load_json_with_settings("test_json/rag_evaluation.json")
+        test_data = load_json_with_settings(self.data_file)
         return [
             TestCaseSpec(
                 question=case_data["question"],
@@ -131,7 +130,7 @@ class VideoGPTBotEvaluator(BaseBotEvaluator):
 
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load video GPT bot test cases."""
-        test_data = load_json_with_settings("test_json/rag_evaluation.json")
+        test_data = load_json_with_settings(self.data_file)
         return [
             TestCaseSpec(
                 question=case_data["question"],
@@ -189,7 +188,7 @@ class TutorBotEvaluator(BaseBotEvaluator):
 
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load tutor bot test cases."""
-        test_data = load_json_with_settings("test_json/rag_evaluation.json")
+        test_data = load_json_with_settings(self.data_file)
         return [
             TestCaseSpec(
                 question=case_data["question"],

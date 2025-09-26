@@ -1,12 +1,106 @@
 """Unit tests for evaluation reporting classes."""
 
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import pandas as pd
 import pytest
 from deepeval.evaluate.types import EvaluationResult
 
-from .reporting import EvaluationReporter, SummaryReporter
+from ai_chatbots.evaluation.reporting import (
+    DualOutputWrapper,
+    EvaluationReporter,
+    SummaryReporter,
+)
+
+
+class TestDualOutputWrapper:
+    """Test cases for DualOutputWrapper class."""
+
+    def test_initialization_without_file(self):
+        """Test DualOutputWrapper initialization without file."""
+        stdout = Mock()
+        wrapper = DualOutputWrapper(stdout, file_path=None)
+
+        assert wrapper.stdout is stdout
+        assert wrapper.file_path is None
+        assert wrapper.file is None
+
+    def test_initialization_with_file(self):
+        """Test DualOutputWrapper initialization with file."""
+        stdout = Mock()
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+            try:
+                wrapper = DualOutputWrapper(stdout, file_path=temp_path)
+
+                assert wrapper.stdout is stdout
+                assert wrapper.file_path == temp_path
+                assert wrapper.file is not None
+
+                # Clean up
+                wrapper.close()
+            finally:
+                Path(temp_path).unlink(missing_ok=True)
+
+    def test_write_without_file(self):
+        """Test write method without file output."""
+        stdout = Mock()
+        wrapper = DualOutputWrapper(stdout, file_path=None)
+
+        wrapper.write("test message", style_func=None, ending=None)
+
+        stdout.write.assert_called_once_with(
+            "test message", style_func=None, ending=None
+        )
+
+    def test_write_with_file(self):
+        """Test write method with file output."""
+        stdout = Mock()
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            wrapper = DualOutputWrapper(stdout, file_path=temp_path)
+
+            wrapper.write("test message", ending="\n")
+
+            # Verify stdout was called
+            stdout.write.assert_called_once_with(
+                "test message", style_func=None, ending="\n"
+            )
+
+            # Verify file content
+            wrapper.close()
+            with Path(temp_path).open("r") as f:
+                content = f.read()
+                assert "test message\n" in content
+
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+
+    def test_context_manager(self):
+        """Test DualOutputWrapper as context manager."""
+        stdout = Mock()
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            with DualOutputWrapper(stdout, file_path=temp_path) as wrapper:
+                assert wrapper.file is not None
+                wrapper.write("context test")
+
+            with Path(temp_path).open("r") as f:
+                content = f.read()
+                assert "context test" in content
+
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
 
 
 class TestEvaluationReporter:
@@ -77,6 +171,40 @@ class TestEvaluationReporter:
     def test_reporter_initialization(self, reporter, mock_stdout):
         """Test reporter initialization."""
         assert reporter.stdout == mock_stdout
+
+    def test_normalize_score_for_aggregation(self, reporter):
+        """Test score normalization for different metric types."""
+        # Test hallucination score normalization (should be inverted)
+        assert reporter.normalize_score_for_aggregation("Hallucination", 0.0) == 1.0
+        assert reporter.normalize_score_for_aggregation("Hallucination", 0.3) == 0.7
+        assert reporter.normalize_score_for_aggregation("Hallucination", 1.0) == 0.0
+        assert (
+            reporter.normalize_score_for_aggregation("hallucinationmetric", 0.2) == 0.8
+        )
+
+        # Test other metrics (should remain unchanged)
+        assert (
+            reporter.normalize_score_for_aggregation("ContextualRelevancy", 0.8) == 0.8
+        )
+        assert reporter.normalize_score_for_aggregation("AnswerRelevancy", 0.5) == 0.5
+        assert (
+            reporter.normalize_score_for_aggregation("ContextualPrecision", 1.0) == 1.0
+        )
+        assert reporter.normalize_score_for_aggregation("ContextualRecall", 0.0) == 0.0
+
+    def test_is_inverse_metric(self, reporter):
+        """Test inverse metric detection using settings."""
+        # Test cases based on the AI_INVERSE_METRICS setting
+        assert reporter.is_inverse_metric("Hallucination") is True
+        assert reporter.is_inverse_metric("hallucination") is True
+        assert reporter.is_inverse_metric("HallucinationMetric") is True
+        assert reporter.is_inverse_metric("hallucinationmetric") is True
+
+        # Non-inverse metrics
+        assert reporter.is_inverse_metric("ContextualRelevancy") is False
+        assert reporter.is_inverse_metric("AnswerRelevancy") is False
+        assert reporter.is_inverse_metric("ContextualPrecision") is False
+        assert reporter.is_inverse_metric("UnknownMetric") is False
 
     def test_create_results_dataframe(self, reporter, mock_evaluation_results):
         """Test creation of results DataFrame."""
@@ -176,13 +304,65 @@ class TestEvaluationReporter:
         assert "ContextualRelevancy" in output_text
         assert "AnswerRelevancy" in output_text
 
+    def test_model_comparison_hallucination_sorting(self, reporter, mock_stdout):
+        """Test that model comparison correctly sorts hallucination metrics (lower is better)."""
+        data = [
+            {
+                "model": "gpt-4",
+                "metric": "Hallucination",
+                "score": 0.3,
+            },  # Worse (higher hallucination)
+            {
+                "model": "gpt-3.5",
+                "metric": "Hallucination",
+                "score": 0.1,
+            },  # Better (lower hallucination)
+            {"model": "claude", "metric": "Hallucination", "score": 0.2},  # Middle
+        ]
+        df = pd.DataFrame(data)
+
+        reporter.model_comparison(df)
+
+        # Verify output was generated
+        assert mock_stdout.write.call_count > 0
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+
+        # For hallucination, the ranking should be: gpt-3.5 (0.1), claude (0.2), gpt-4 (0.3)
+        # since lower hallucination scores are better
+        assert "Hallucination" in output_text
+        assert "gpt-3.5" in output_text
+        assert "gpt-4" in output_text
+        assert "claude" in output_text
+
     def test_overall_performance(self, reporter, mock_stdout):
         """Test overall performance calculation."""
         data = [
-            {"model": "gpt-4", "prompt_label": "default", "score": 0.85},
-            {"model": "gpt-4", "prompt_label": "#1", "score": 0.45},
-            {"model": "gpt-3.5", "prompt_label": "default", "score": 0.75},
-            {"model": "gpt-3.5", "prompt_label": "#1", "score": 0.65},
+            {
+                "model": "gpt-4",
+                "prompt_label": "default",
+                "metric": "ContextualRelevancy",
+                "score": 0.85,
+            },
+            {
+                "model": "gpt-4",
+                "prompt_label": "#1",
+                "metric": "AnswerRelevancy",
+                "score": 0.45,
+            },
+            {
+                "model": "gpt-3.5",
+                "prompt_label": "default",
+                "metric": "ContextualRelevancy",
+                "score": 0.75,
+            },
+            {
+                "model": "gpt-3.5",
+                "prompt_label": "#1",
+                "metric": "AnswerRelevancy",
+                "score": 0.65,
+            },
         ]
         df = pd.DataFrame(data)
 
@@ -194,6 +374,54 @@ class TestEvaluationReporter:
         calls = [call[0][0] for call in mock_stdout.write.call_args_list]
         output_text = " ".join(calls)
         assert "OVERALL PERFORMANCE" in output_text
+        assert "gpt-4" in output_text
+        assert "gpt-3.5" in output_text
+
+    def test_overall_performance_with_hallucination_normalization(
+        self, reporter, mock_stdout
+    ):
+        """Test that overall performance correctly normalizes hallucination scores."""
+        data = [
+            {
+                "model": "gpt-4",
+                "metric": "ContextualRelevancy",
+                "score": 0.8,
+                "prompt_label": "default",
+            },
+            {
+                "model": "gpt-4",
+                "metric": "Hallucination",
+                "score": 0.2,
+                "prompt_label": "default",
+            },  # Lower is better
+            {
+                "model": "gpt-3.5",
+                "metric": "ContextualRelevancy",
+                "score": 0.6,
+                "prompt_label": "default",
+            },
+            {
+                "model": "gpt-3.5",
+                "metric": "Hallucination",
+                "score": 0.4,
+                "prompt_label": "default",
+            },  # Lower is better
+        ]
+        df = pd.DataFrame(data)
+
+        # Calculate expected normalized averages:
+        # gpt-4: (0.8 + (1.0 - 0.2)) / 2 = (0.8 + 0.8) / 2 = 0.8
+        # gpt-3.5: (0.6 + (1.0 - 0.4)) / 2 = (0.6 + 0.6) / 2 = 0.6
+
+        reporter.overall_performance(df)
+
+        # Verify that output was generated and contains model rankings
+        assert mock_stdout.write.call_count > 0
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+
+        assert "OVERALL PERFORMANCE" in output_text
+        # gpt-4 should rank higher than gpt-3.5 when hallucination is properly normalized
         assert "gpt-4" in output_text
         assert "gpt-3.5" in output_text
 

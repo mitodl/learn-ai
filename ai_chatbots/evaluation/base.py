@@ -44,9 +44,10 @@ class EvaluationConfig:
 class BaseBotEvaluator(ABC):
     """Abstract base class for bot-specific evaluators."""
 
-    def __init__(self, bot_class, bot_name: str):
+    def __init__(self, bot_class, bot_name: str, *, data_file: Optional[str] = None):
         self.bot_class = bot_class
         self.bot_name = bot_name
+        self.data_file = data_file or "test_json/rag_evaluation.json"
 
     @abstractmethod
     def load_test_cases(self) -> list[TestCaseSpec]:

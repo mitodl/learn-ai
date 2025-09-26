@@ -4,7 +4,7 @@ import inspect
 from unittest.mock import Mock, patch
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from .base import TestCaseSpec
 from .evaluators import (
@@ -83,17 +83,21 @@ class TestRecommendationBotEvaluator:
             question="Test", metadata={"extra_init": {"param": "value"}}
         )
 
-        _ = evaluator.create_bot_instance("gpt-4", test_case)
+        bot_instance = evaluator.create_bot_instance("gpt-4", test_case)
 
+        # Test that a bot instance was created and bot_class was called with correct params
         evaluator.bot_class.assert_called_once_with(
             "eval", checkpointer=None, model="gpt-4", instructions=None, param="value"
         )
+        # Test that the method returns the created instance
+        assert bot_instance == evaluator.bot_class.return_value
 
     @pytest.mark.asyncio
     async def test_collect_response(self, evaluator):
         """Test response collection."""
         mock_bot = Mock()
-        mock_bot.agent.invoke.return_value = {"messages": [Mock(content="Response")]}
+        response_message = HumanMessage(content="Response")
+        mock_bot.agent.invoke.return_value = {"messages": [response_message]}
         mock_bot.config = {"configurable": {"test": "config"}}
 
         test_case = TestCaseSpec(
@@ -113,8 +117,10 @@ class TestRecommendationBotEvaluator:
             },
             config={"test": "config"},
         )
+
         assert "messages" in response
         assert len(response["messages"]) == 1
+        assert isinstance(response["messages"][0], HumanMessage)
         assert response["messages"][0].content == "Response"
 
 
@@ -275,10 +281,9 @@ class TestTutorBotEvaluator:
 
     @pytest.mark.asyncio
     async def test_collect_response(self, evaluator):
-        """Test tutor bot response collection (special async handling)."""
+        """Test tutor bot response collection ."""
         mock_bot = Mock()
 
-        # Mock async generator
         async def mock_get_completion(question):
             yield "Think "
             yield "about "
@@ -361,16 +366,16 @@ class TestEvaluatorIntegration:
             bot = evaluator.create_bot_instance("gpt-4", test_cases[0])
             assert bot is not None
 
-            # Mock bot response
             mock_bot = Mock()
             mock_bot.agent.invoke.return_value = {
-                "messages": [Mock(content="Bot response")]
+                "messages": [HumanMessage(content="Bot response")]
             }
             mock_bot.config = {"configurable": {}}
 
             # Collect response
             response = await evaluator.collect_response(mock_bot, test_cases[0])
             assert "messages" in response
+            assert isinstance(response["messages"][0], HumanMessage)
 
             # Create LLM test case
             llm_test_case = evaluator.create_llm_test_case(
@@ -378,3 +383,4 @@ class TestEvaluatorIntegration:
             )
             assert llm_test_case.name == "recommendation-gpt-4-default"
             assert llm_test_case.input == "Test question"
+            assert llm_test_case.actual_output == "Bot response"
