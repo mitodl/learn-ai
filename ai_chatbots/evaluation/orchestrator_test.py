@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from .base import EvaluationConfig
-from .orchestrator import EvaluationOrchestrator
+from ai_chatbots.evaluation.base import EvaluationConfig
+from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
 
 NUM_METRICS = 5
 
@@ -346,6 +346,60 @@ class TestEvaluationOrchestrator:
             )
             assert call.kwargs["instructions"] == mock_get_langsmith.return_value
 
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
+    async def test_run_evaluation_with_data_file(self, mock_deepeval, orchestrator):
+        """Test evaluation run with data_file parameter using real evaluator."""
+        config = Mock()
+        config.confident_api_key = None
+        config.models = ["gpt-4"]
+        config.metrics = [Mock()]
+
+        # Use a real evaluator class that inherits from BaseBotEvaluator
+        from ai_chatbots.chatbots import ResourceRecommendationBot
+        from ai_chatbots.evaluation.evaluators import RecommendationBotEvaluator
+
+        # Track the actual evaluator instances created
+        actual_evaluators = []
+        original_init = RecommendationBotEvaluator.__init__
+
+        def track_init(self, bot_class, bot_name, *, data_file=None):
+            original_init(self, bot_class, bot_name, data_file=data_file)
+            actual_evaluators.append(self)
+
+        with (
+            patch.object(RecommendationBotEvaluator, "__init__", track_init),
+            patch.object(
+                RecommendationBotEvaluator, "load_test_cases", return_value=[]
+            ),
+            patch(
+                "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+                {
+                    "recommendation": (
+                        ResourceRecommendationBot,
+                        RecommendationBotEvaluator,
+                    )
+                },
+            ),
+        ):
+            mock_deepeval.evaluate.return_value = Mock()
+            orchestrator.reporter.generate_report = Mock()
+
+            # Run evaluation with data_file parameter
+            await orchestrator.run_evaluation(
+                config,
+                bot_names=["recommendation"],
+                data_file="/path/to/custom_data.json",
+            )
+
+            # Verify a real evaluator was instantiated with the correct data_file
+            assert len(actual_evaluators) == 1
+            evaluator = actual_evaluators[0]
+            assert isinstance(evaluator, RecommendationBotEvaluator)
+            assert evaluator.data_file == "/path/to/custom_data.json"
+            assert evaluator.bot_class == ResourceRecommendationBot
+            assert evaluator.bot_name == "recommendation"
+
 
 class TestEvaluationConfigIntegration:
     """Integration tests for evaluation configuration."""
@@ -371,3 +425,205 @@ class TestEvaluationConfigIntegration:
             "AnswerRelevancyMetric",
         ]
         assert set(metric_names) == set(expected_names)
+
+    def test_create_evaluation_config_with_timeout(self, orchestrator):
+        """Test evaluation config creation with timeout parameter."""
+        models = ["gpt-4o"]
+        evaluation_model = "gpt-4o"
+        timeout_seconds = 120
+
+        config = orchestrator.create_evaluation_config(
+            models, evaluation_model, timeout_seconds=timeout_seconds
+        )
+
+        # Verify that metrics are wrapped with timeout functionality
+        from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
+
+        for metric in config.metrics:
+            assert isinstance(metric, TimeoutMetricWrapper)
+            assert metric.timeout_seconds == timeout_seconds
+
+    def test_create_evaluation_config_default_timeout(self, orchestrator):
+        """Test evaluation config creation uses default timeout."""
+        models = ["gpt-4o"]
+        evaluation_model = "gpt-4o"
+
+        config = orchestrator.create_evaluation_config(models, evaluation_model)
+
+        # Verify that metrics are wrapped with default timeout
+        from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
+
+        for metric in config.metrics:
+            assert isinstance(metric, TimeoutMetricWrapper)
+            assert metric.timeout_seconds == 360  # Default timeout
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
+    async def test_run_evaluation_with_data_file(self, mock_deepeval, orchestrator):
+        """Test evaluation run with data_file parameter using real evaluator."""
+        config = Mock()
+        config.confident_api_key = None
+        config.models = ["gpt-4"]
+        config.metrics = [Mock()]
+
+        # Use a real evaluator class that inherits from BaseBotEvaluator
+        from ai_chatbots.chatbots import ResourceRecommendationBot
+        from ai_chatbots.evaluation.evaluators import RecommendationBotEvaluator
+
+        # Track the actual evaluator instances created
+        actual_evaluators = []
+        original_init = RecommendationBotEvaluator.__init__
+
+        def track_init(self, bot_class, bot_name, *, data_file=None):
+            original_init(self, bot_class, bot_name, data_file=data_file)
+            actual_evaluators.append(self)
+
+        with (
+            patch.object(RecommendationBotEvaluator, "__init__", track_init),
+            patch.object(
+                RecommendationBotEvaluator, "load_test_cases", return_value=[]
+            ),
+            patch(
+                "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+                {
+                    "recommendation": (
+                        ResourceRecommendationBot,
+                        RecommendationBotEvaluator,
+                    )
+                },
+            ),
+        ):
+            mock_deepeval.evaluate.return_value = Mock()
+            orchestrator.reporter.generate_report = Mock()
+
+            # Run evaluation with data_file parameter
+            await orchestrator.run_evaluation(
+                config,
+                bot_names=["recommendation"],
+                data_file="/path/to/custom_data.json",
+            )
+
+            # Verify a real evaluator was instantiated with the correct data_file
+            assert len(actual_evaluators) == 1
+            evaluator = actual_evaluators[0]
+            assert isinstance(evaluator, RecommendationBotEvaluator)
+            assert evaluator.data_file == "/path/to/custom_data.json"
+            assert evaluator.bot_class == ResourceRecommendationBot
+            assert evaluator.bot_name == "recommendation"
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
+    async def test_run_evaluation_with_max_concurrent(
+        self, mock_deepeval, orchestrator, mock_stdout
+    ):
+        """Test evaluation run with max_concurrent parameter."""
+        config = Mock()
+        config.confident_api_key = None
+        config.models = ["gpt-4"]
+        config.metrics = [Mock()]
+
+        # Mock evaluator
+        mock_evaluator_class = Mock()
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = [Mock()]
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[Mock()])
+        mock_evaluator_class.return_value = mock_evaluator
+
+        with patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"test_bot": (Mock(), mock_evaluator_class)},
+        ):
+            mock_deepeval.evaluate.return_value = Mock()
+            orchestrator.reporter.generate_report = Mock()
+
+            # Run evaluation with max_concurrent parameter
+            await orchestrator.run_evaluation(
+                config, bot_names=["test_bot"], max_concurrent=5
+            )
+
+            # Verify deepeval.evaluate was called with AsyncConfig
+            mock_deepeval.evaluate.assert_called_once()
+            call_args = mock_deepeval.evaluate.call_args
+
+            # Check that async_config parameter was passed
+            assert "async_config" in call_args.kwargs
+            async_config = call_args.kwargs["async_config"]
+            assert async_config.max_concurrent == 5
+
+            # Verify logging about concurrent execution
+            mock_stdout.write.assert_called()
+            calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+            output_text = " ".join(str(call) for call in calls)
+            assert "max_concurrent=5" in output_text
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
+    async def test_run_evaluation_with_error_config(self, mock_deepeval, orchestrator):
+        """Test evaluation run includes ErrorConfig with ignore_errors=True."""
+        config = Mock()
+        config.confident_api_key = None
+        config.models = ["gpt-4"]
+        config.metrics = [Mock()]
+
+        # Mock evaluator
+        mock_evaluator_class = Mock()
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = [Mock()]
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[Mock()])
+        mock_evaluator_class.return_value = mock_evaluator
+
+        with patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"test_bot": (Mock(), mock_evaluator_class)},
+        ):
+            mock_deepeval.evaluate.return_value = Mock()
+            orchestrator.reporter.generate_report = Mock()
+
+            await orchestrator.run_evaluation(config, bot_names=["test_bot"])
+
+            # Verify deepeval.evaluate was called with ErrorConfig
+            mock_deepeval.evaluate.assert_called_once()
+            call_args = mock_deepeval.evaluate.call_args
+
+            assert "error_config" in call_args.kwargs
+            error_config = call_args.kwargs["error_config"]
+            assert error_config.ignore_errors is True
+
+    @pytest.mark.asyncio
+    @patch("ai_chatbots.evaluation.orchestrator.deepeval")
+    async def test_run_evaluation_empty_test_cases(
+        self, mock_deepeval, orchestrator, mock_stdout
+    ):
+        """Test evaluation handles empty test cases gracefully."""
+        config = Mock()
+        config.confident_api_key = None
+        config.models = ["gpt-4"]
+        config.metrics = [Mock()]
+
+        # Mock evaluator with no test cases
+        mock_evaluator_class = Mock()
+        mock_evaluator = Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+        mock_evaluator_class.return_value = mock_evaluator
+
+        with patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"test_bot": (Mock(), mock_evaluator_class)},
+        ):
+            orchestrator.reporter.generate_report = Mock()
+
+            result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
+
+            # Should not call deepeval.evaluate with empty test cases
+            mock_deepeval.evaluate.assert_not_called()
+
+            # Should create empty results
+            assert result.test_results == []
+            assert result.confident_link is None
+
+            # Should log message about no test cases
+            mock_stdout.write.assert_called()
+            calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+            output_text = " ".join(str(call) for call in calls)
+            assert "No test cases available" in output_text

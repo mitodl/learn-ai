@@ -105,8 +105,11 @@ class ConcreteBotEvaluator(BaseBotEvaluator):
         return mock_bot
 
     async def collect_response(self, chatbot, test_case):
-        """Collect mock response."""
+        """Collect mock response with real message objects."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
         _ = chatbot, test_case  # Unused parameters for testing
+
         # Create mock tool call with proper string name
         tool_call_mock = Mock()
         tool_call_mock.function.name = "test_tool"
@@ -114,13 +117,13 @@ class ConcreteBotEvaluator(BaseBotEvaluator):
 
         return {
             "messages": [
-                Mock(content="User message"),
-                Mock(
+                HumanMessage(content="User message"),
+                AIMessage(
                     content="Tool call",
                     additional_kwargs={"tool_calls": [tool_call_mock]},
                 ),
-                Mock(content='{"results": [{"chunk_content": "Test content"}]}'),
-                Mock(content="Bot response"),
+                AIMessage(content='{"results": [{"chunk_content": "Test content"}]}'),
+                AIMessage(content="Bot response"),
             ]
         }
 
@@ -166,7 +169,9 @@ class TestConcreteBotEvaluator:
 
     @pytest.mark.asyncio
     async def test_collect_response(self, evaluator):
-        """Test response collection."""
+        """Test response collection with real message objects."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
         mock_bot = Mock()
         test_case = TestCaseSpec(question="Test question")
 
@@ -174,15 +179,22 @@ class TestConcreteBotEvaluator:
 
         assert "messages" in response
         assert len(response["messages"]) == 4
+        # Verify we get real message objects, not mocks
+        assert isinstance(response["messages"][0], HumanMessage)
+        assert isinstance(response["messages"][1], AIMessage)
+        assert isinstance(response["messages"][2], AIMessage)
+        assert isinstance(response["messages"][3], AIMessage)
 
     def test_extract_tool_results(self, evaluator):
-        """Test tool results extraction."""
+        """Test tool results extraction with real message objects."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
         response = {
             "messages": [
-                Mock(content="User"),
-                Mock(content="Tool"),
-                Mock(content='{"results": [{"chunk_content": "Test"}]}'),
-                Mock(content="Bot"),
+                HumanMessage(content="User"),
+                AIMessage(content="Tool"),
+                AIMessage(content='{"results": [{"chunk_content": "Test"}]}'),
+                AIMessage(content="Bot"),
             ]
         }
         test_case = TestCaseSpec(question="Test", expected_tools=["test_tool"])
@@ -193,7 +205,11 @@ class TestConcreteBotEvaluator:
 
     def test_extract_tool_results_no_tools(self, evaluator):
         """Test tool results extraction when no tools expected."""
-        response = {"messages": [Mock(), Mock()]}
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        response = {
+            "messages": [HumanMessage(content="User"), AIMessage(content="Bot")]
+        }
         test_case = TestCaseSpec(question="Test")
 
         results = evaluator.extract_tool_results(response, test_case)
@@ -213,15 +229,20 @@ class TestConcreteBotEvaluator:
         assert context == []
 
     def test_extract_tool_calls(self, evaluator):
-        """Test tool calls extraction."""
+        """Test tool calls extraction with real message objects."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
         mock_tool_call = Mock()
         mock_tool_call.function.name = "test_tool"
         mock_tool_call.function.arguments = '{"arg": "value"}'
 
         response = {
             "messages": [
-                Mock(),
-                Mock(additional_kwargs={"tool_calls": [mock_tool_call]}),
+                HumanMessage(content="User"),
+                AIMessage(
+                    content="Tool call",
+                    additional_kwargs={"tool_calls": [mock_tool_call]},
+                ),
             ]
         }
 
@@ -232,7 +253,9 @@ class TestConcreteBotEvaluator:
 
     def test_extract_tool_calls_no_tools(self, evaluator):
         """Test tool calls extraction with no tool calls."""
-        response = {"messages": [Mock()]}
+        from langchain_core.messages import HumanMessage
+
+        response = {"messages": [HumanMessage(content="User message")]}
 
         tool_calls = evaluator.extract_tool_calls(response)
         assert tool_calls == []
@@ -245,30 +268,24 @@ class TestConcreteBotEvaluator:
             expected_tools=["test_tool"],
         )
 
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        # Create proper tool call mock
+        tool_call_mock = Mock()
+        tool_call_mock.function.name = "test_tool"
+        tool_call_mock.function.arguments = '{"arg": "value"}'
+
         response = {
             "messages": [
-                Mock(content="User message"),
-                Mock(
+                HumanMessage(content="User message"),
+                AIMessage(
                     content="Tool call",
-                    additional_kwargs={
-                        "tool_calls": [
-                            Mock(
-                                function=Mock(
-                                    name="test_tool", arguments='{"arg": "value"}'
-                                )
-                            )
-                        ]
-                    },
+                    additional_kwargs={"tool_calls": [tool_call_mock]},
                 ),
-                Mock(content='{"results": [{"chunk_content": "Test content"}]}'),
-                Mock(content="Bot response"),
+                AIMessage(content='{"results": [{"chunk_content": "Test content"}]}'),
+                AIMessage(content="Bot response"),
             ]
         }
-
-        # Mock the function name to return a string
-        response["messages"][1].additional_kwargs["tool_calls"][
-            0
-        ].function.name = "test_tool"
 
         llm_test_case = evaluator.create_llm_test_case(
             test_case, response, "gpt-4o", "default"

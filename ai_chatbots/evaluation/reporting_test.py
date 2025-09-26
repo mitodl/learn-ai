@@ -1,12 +1,106 @@
 """Unit tests for evaluation reporting classes."""
 
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import pandas as pd
 import pytest
 from deepeval.evaluate.types import EvaluationResult
 
-from .reporting import EvaluationReporter, SummaryReporter
+from ai_chatbots.evaluation.reporting import (
+    DualOutputWrapper,
+    EvaluationReporter,
+    SummaryReporter,
+)
+
+
+class TestDualOutputWrapper:
+    """Test cases for DualOutputWrapper class."""
+
+    def test_initialization_without_file(self):
+        """Test DualOutputWrapper initialization without file."""
+        stdout = Mock()
+        wrapper = DualOutputWrapper(stdout, file_path=None)
+
+        assert wrapper.stdout is stdout
+        assert wrapper.file_path is None
+        assert wrapper.file is None
+
+    def test_initialization_with_file(self):
+        """Test DualOutputWrapper initialization with file."""
+        stdout = Mock()
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+            try:
+                wrapper = DualOutputWrapper(stdout, file_path=temp_path)
+
+                assert wrapper.stdout is stdout
+                assert wrapper.file_path == temp_path
+                assert wrapper.file is not None
+
+                # Clean up
+                wrapper.close()
+            finally:
+                Path(temp_path).unlink(missing_ok=True)
+
+    def test_write_without_file(self):
+        """Test write method without file output."""
+        stdout = Mock()
+        wrapper = DualOutputWrapper(stdout, file_path=None)
+
+        wrapper.write("test message", style_func=None, ending=None)
+
+        stdout.write.assert_called_once_with(
+            "test message", style_func=None, ending=None
+        )
+
+    def test_write_with_file(self):
+        """Test write method with file output."""
+        stdout = Mock()
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            wrapper = DualOutputWrapper(stdout, file_path=temp_path)
+
+            wrapper.write("test message", ending="\n")
+
+            # Verify stdout was called
+            stdout.write.assert_called_once_with(
+                "test message", style_func=None, ending="\n"
+            )
+
+            # Verify file content
+            wrapper.close()
+            with Path(temp_path).open("r") as f:
+                content = f.read()
+                assert "test message\n" in content
+
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+
+    def test_context_manager(self):
+        """Test DualOutputWrapper as context manager."""
+        stdout = Mock()
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            with DualOutputWrapper(stdout, file_path=temp_path) as wrapper:
+                assert wrapper.file is not None
+                wrapper.write("context test")
+
+            with Path(temp_path).open("r") as f:
+                content = f.read()
+                assert "context test" in content
+
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
 
 
 class TestEvaluationReporter:

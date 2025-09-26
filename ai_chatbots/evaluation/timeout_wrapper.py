@@ -11,7 +11,7 @@ from deepeval.test_case import LLMTestCase
 class TimeoutMetricWrapper(BaseMetric):
     """Wrapper that adds timeout functionality to any DeepEval metric."""
 
-    def __init__(self, base_metric: BaseMetric, timeout_seconds: int = 360):
+    def __init__(self, base_metric: BaseMetric, timeout_seconds: int = 180):
         """Initialize the timeout wrapper.
 
         Args:
