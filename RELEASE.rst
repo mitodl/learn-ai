@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.16.3
+Version 0.16.3 (Released September 30, 2025)
 --------------
 
 - update open-learning-ai-tutor (#321)
