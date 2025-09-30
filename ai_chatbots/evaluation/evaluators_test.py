@@ -1,13 +1,12 @@
 """Unit tests for bot-specific evaluators."""
 
 import inspect
-from unittest.mock import Mock, patch
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
-from .base import TestCaseSpec
-from .evaluators import (
+from ai_chatbots.evaluation.base import TestCaseSpec
+from ai_chatbots.evaluation.evaluators import (
     BOT_EVALUATORS,
     RecommendationBotEvaluator,
     SyllabusBotEvaluator,
@@ -20,14 +19,16 @@ class TestRecommendationBotEvaluator:
     """Test cases for RecommendationBotEvaluator."""
 
     @pytest.fixture
-    def evaluator(self):
+    def evaluator(self, mocker):
         """Create evaluator for testing."""
-        mock_bot_class = Mock()
+        mock_bot_class = mocker.Mock()
         return RecommendationBotEvaluator(mock_bot_class, "recommendation")
 
-    @patch("ai_chatbots.evaluation.evaluators.load_json_with_settings")
-    def test_load_test_cases(self, mock_load_json, evaluator):
+    def test_load_test_cases(self, evaluator, mocker):
         """Test loading recommendation bot test cases."""
+        mock_load_json = mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings"
+        )
         mock_load_json.return_value = {
             "recommendation": [
                 {
@@ -43,6 +44,7 @@ class TestRecommendationBotEvaluator:
         test_cases = evaluator.load_test_cases()
 
         assert len(test_cases) == 1
+        assert isinstance(test_cases[0], TestCaseSpec)
         assert test_cases[0].question == "What courses are available?"
         assert test_cases[0].expected_output == "Here are the courses..."
         assert test_cases[0].expected_tools == ["search_courses"]
@@ -83,17 +85,20 @@ class TestRecommendationBotEvaluator:
             question="Test", metadata={"extra_init": {"param": "value"}}
         )
 
-        _ = evaluator.create_bot_instance("gpt-4", test_case)
+        bot_instance = evaluator.create_bot_instance("gpt-4", test_case)
 
         evaluator.bot_class.assert_called_once_with(
             "eval", checkpointer=None, model="gpt-4", instructions=None, param="value"
         )
+        # Test that the method returns the created instance
+        assert bot_instance == evaluator.bot_class.return_value
 
     @pytest.mark.asyncio
-    async def test_collect_response(self, evaluator):
+    async def test_collect_response(self, evaluator, mocker):
         """Test response collection."""
-        mock_bot = Mock()
-        mock_bot.agent.invoke.return_value = {"messages": [Mock(content="Response")]}
+        mock_bot = mocker.Mock()
+        response_message = HumanMessage(content="Response")
+        mock_bot.agent.invoke.return_value = {"messages": [response_message]}
         mock_bot.config = {"configurable": {"test": "config"}}
 
         test_case = TestCaseSpec(
@@ -113,6 +118,7 @@ class TestRecommendationBotEvaluator:
             },
             config={"test": "config"},
         )
+
         assert "messages" in response
         assert len(response["messages"]) == 1
         assert response["messages"][0].content == "Response"
@@ -122,14 +128,16 @@ class TestSyllabusBotEvaluator:
     """Test cases for SyllabusBotEvaluator."""
 
     @pytest.fixture
-    def evaluator(self):
+    def evaluator(self, mocker):
         """Create evaluator for testing."""
-        mock_bot_class = Mock()
+        mock_bot_class = mocker.Mock()
         return SyllabusBotEvaluator(mock_bot_class, "syllabus")
 
-    @patch("ai_chatbots.evaluation.evaluators.load_json_with_settings")
-    def test_load_test_cases(self, mock_load_json, evaluator):
+    def test_load_test_cases(self, evaluator, mocker):
         """Test loading syllabus bot test cases."""
+        mock_load_json = mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings"
+        )
         mock_load_json.return_value = {
             "syllabus": [
                 {
@@ -144,6 +152,7 @@ class TestSyllabusBotEvaluator:
         test_cases = evaluator.load_test_cases()
 
         assert len(test_cases) == 1
+        assert isinstance(test_cases[0], TestCaseSpec)
         assert test_cases[0].question == "Who teaches this course?"
         assert test_cases[0].metadata["extra_state"]["course_id"] == [
             "8.01SC+fall_2016"
@@ -151,6 +160,7 @@ class TestSyllabusBotEvaluator:
 
     def test_validate_test_case_valid(self, evaluator):
         """Test validation of valid syllabus bot test case."""
+        # Create valid TestCaseSpec
         test_case = TestCaseSpec(
             question="Test question",
             metadata={
@@ -163,6 +173,7 @@ class TestSyllabusBotEvaluator:
 
     def test_validate_test_case_invalid(self, evaluator):
         """Test validation of invalid syllabus bot test case."""
+        # Create invalid TestCaseSpec
         test_case = TestCaseSpec(
             question="Test question", metadata={"extra_state": {}, "extra_init": {}}
         )
@@ -174,14 +185,16 @@ class TestVideoGPTBotEvaluator:
     """Test cases for VideoGPTBotEvaluator."""
 
     @pytest.fixture
-    def evaluator(self):
+    def evaluator(self, mocker):
         """Create evaluator for testing."""
-        mock_bot_class = Mock()
+        mock_bot_class = mocker.Mock()
         return VideoGPTBotEvaluator(mock_bot_class, "video_gpt")
 
-    @patch("ai_chatbots.evaluation.evaluators.load_json_with_settings")
-    def test_load_test_cases(self, mock_load_json, evaluator):
+    def test_load_test_cases(self, evaluator, mocker):
         """Test loading video GPT bot test cases."""
+        mock_load_json = mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings"
+        )
         mock_load_json.return_value = {
             "video_gpt": [
                 {
@@ -199,6 +212,7 @@ class TestVideoGPTBotEvaluator:
         test_cases = evaluator.load_test_cases()
 
         assert len(test_cases) == 1
+        assert isinstance(test_cases[0], TestCaseSpec)
         assert test_cases[0].question == "What is this video about?"
         assert test_cases[0].metadata["extra_state"]["transcript_asset_id"] == [
             "asset-123"
@@ -229,14 +243,16 @@ class TestTutorBotEvaluator:
     """Test cases for TutorBotEvaluator."""
 
     @pytest.fixture
-    def evaluator(self):
+    def evaluator(self, mocker):
         """Create evaluator for testing."""
-        mock_bot_class = Mock()
+        mock_bot_class = mocker.Mock()
         return TutorBotEvaluator(mock_bot_class, "tutor")
 
-    @patch("ai_chatbots.evaluation.evaluators.load_json_with_settings")
-    def test_load_test_cases(self, mock_load_json, evaluator):
+    def test_load_test_cases(self, evaluator, mocker):
         """Test loading tutor bot test cases."""
+        mock_load_json = mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings"
+        )
         mock_load_json.return_value = {
             "tutor": [
                 {
@@ -253,6 +269,7 @@ class TestTutorBotEvaluator:
         test_cases = evaluator.load_test_cases()
 
         assert len(test_cases) == 1
+        assert isinstance(test_cases[0], TestCaseSpec)
         assert test_cases[0].question == "Can you help me?"
         assert "edx_module_id" in test_cases[0].metadata["extra_init"]
 
@@ -274,11 +291,10 @@ class TestTutorBotEvaluator:
         assert evaluator.validate_test_case(test_case) is False
 
     @pytest.mark.asyncio
-    async def test_collect_response(self, evaluator):
-        """Test tutor bot response collection (special async handling)."""
-        mock_bot = Mock()
+    async def test_collect_response(self, evaluator, mocker):
+        """Test tutor bot response collection."""
+        mock_bot = mocker.Mock()
 
-        # Mock async generator
         async def mock_get_completion(question):
             yield "Think "
             yield "about "
@@ -303,6 +319,7 @@ class TestBotEvaluatorRegistry:
         """Test that all expected bot evaluators are registered."""
         expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor"]
 
+        # Test BOT_EVALUATORS registry
         assert set(BOT_EVALUATORS.keys()) == set(expected_bots)
 
         # Test that each entry has bot class and evaluator class
@@ -328,53 +345,47 @@ class TestEvaluatorIntegration:
     """Integration tests for evaluators."""
 
     @pytest.mark.asyncio
-    async def test_evaluator_workflow(self):
+    async def test_evaluator_workflow(self, mocker):
         """Test complete evaluator workflow."""
-        # Test with recommendation bot evaluator
-        mock_bot_class = Mock()
+        mock_bot_class = mocker.Mock()
         evaluator = RecommendationBotEvaluator(mock_bot_class, "recommendation")
 
-        # Mock the load_json_with_settings to return test data
-        with patch(
+        mock_load = mocker.patch(
             "ai_chatbots.evaluation.evaluators.load_json_with_settings"
-        ) as mock_load:
-            mock_load.return_value = {
-                "recommendation": [
-                    {
-                        "question": "Test question",
-                        "expected_output": "Test output",
-                        "expected_tools": ["search_courses"],
-                        "extra_state": {"search_url": ["http://test.com"]},
-                        "extra_init": {},
-                    }
-                ]
-            }
+        )
+        mock_load.return_value = {
+            "recommendation": [
+                {
+                    "question": "Test question",
+                    "expected_output": "Test output",
+                    "expected_tools": ["search_courses"],
+                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_init": {},
+                }
+            ]
+        }
 
-            # Load test cases
-            test_cases = evaluator.load_test_cases()
-            assert len(test_cases) == 1
+        test_cases = evaluator.load_test_cases()
+        assert len(test_cases) == 1
+        assert isinstance(test_cases[0], TestCaseSpec)
+        assert evaluator.validate_test_case(test_cases[0]) is True
 
-            # Validate test case
-            assert evaluator.validate_test_case(test_cases[0]) is True
+        bot = evaluator.create_bot_instance("gpt-4", test_cases[0])
+        assert bot is not None
 
-            # Create bot instance
-            bot = evaluator.create_bot_instance("gpt-4", test_cases[0])
-            assert bot is not None
+        mock_bot = mocker.Mock()
+        mock_bot.agent.invoke.return_value = {
+            "messages": [HumanMessage(content="Bot response")]
+        }
+        mock_bot.config = {"configurable": {}}
 
-            # Mock bot response
-            mock_bot = Mock()
-            mock_bot.agent.invoke.return_value = {
-                "messages": [Mock(content="Bot response")]
-            }
-            mock_bot.config = {"configurable": {}}
+        response = await evaluator.collect_response(mock_bot, test_cases[0])
+        assert "messages" in response
+        assert isinstance(response["messages"][0], HumanMessage)
 
-            # Collect response
-            response = await evaluator.collect_response(mock_bot, test_cases[0])
-            assert "messages" in response
-
-            # Create LLM test case
-            llm_test_case = evaluator.create_llm_test_case(
-                test_cases[0], response, "gpt-4", "default"
-            )
-            assert llm_test_case.name == "recommendation-gpt-4-default"
-            assert llm_test_case.input == "Test question"
+        llm_test_case = evaluator.create_llm_test_case(
+            test_cases[0], response, "gpt-4", "default"
+        )
+        assert llm_test_case.name == "recommendation-gpt-4-default"
+        assert llm_test_case.input == "Test question"
+        assert llm_test_case.actual_output == "Bot response"

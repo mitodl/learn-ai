@@ -222,5 +222,11 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 - `models`: Comma-delimited list of models that the chatbots will use to answer questions. If none are provided, it will use all the enabled `ai_chatbots.models.LLMModel` objects in the database, so make sure have all the necessary API keys in your environment.
 - `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-4o-mini`.
 - `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated.
+- `data-file`: Input data file containing questions and expected answers. See test_json/rag_evaluation.json for the required format.
+- `prompts`: If true, include alternative prompts to test against in addition to the default prompt per chatbot.
+- `prompts-file`: The file containing alternative prompts to test. See `test_json/rag_evaluation_prompts.json` for the required format.
+- `output-file`: The file to write results to. If not specified, results will only be sent to stdout.
+- `timeout`: The max amount of seconds to wait before aborting a test case and moving on to the next. Default is 360.
+- `max-concurrent`: The max number of test cases to run concurrently. Default is 1.
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.

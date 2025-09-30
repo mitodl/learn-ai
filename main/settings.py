@@ -634,6 +634,9 @@ AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
 AI_CITED_PROMPTS = get_list_of_str("AI_CITED_PROMPTS", default=[])
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o-mini")
+AI_INVERSE_METRICS = get_list_of_str(
+    "AI_INVERSE_METRICS", default=["hallucination", "hallucinationmetric"]
+)
 AI_DEFAULT_RECOMMENDATION_MODEL = get_string(
     "AI_DEFAULT_RECOMMENDATION_MODEL", AI_DEFAULT_MODEL
 )
