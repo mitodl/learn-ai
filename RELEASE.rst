@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.16.3
+--------------
+
+- update open-learning-ai-tutor (#321)
+- API endpoint for rating AI responses (#312)
+- feat: Updated pyproject.toml to install Granian (#318)
+
 Version 0.16.2 (Released September 25, 2025)
 --------------
 
