@@ -32,9 +32,12 @@ class IsThreadOwner(BasePermission):
             f"{chat_session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
         )
         if cookie_value:
-            return thread_id == decode_value(
-                request.COOKIES.get(
-                    f"{chat_session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
-                )
+            return (
+                thread_id
+                == decode_value(
+                    request.COOKIES.get(
+                        f"{chat_session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+                    )
+                ).split("|")[0]
             )
         return False
