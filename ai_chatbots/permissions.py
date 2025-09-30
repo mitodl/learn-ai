@@ -2,7 +2,7 @@
 
 from rest_framework.permissions import BasePermission
 
-from ai_chatbots.consumers import AI_THREADS_ANONYMOUS_COOKIE_KEY
+from ai_chatbots.constants import AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
 from main.utils import decode_value
 
