@@ -154,18 +154,20 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     rating = ChatRatingSerializer(read_only=True)
 
     @extend_schema_field(
-        serializers.CharField(
-            help_text="Rating for the message. Valid options: 'like', 'dislike', or ''"
-        )
+        serializers.CharField(help_text="Message role. Valid options: 'agent', 'human'")
     )
     def get_role(self, instance):
         """Get the role (agent or human) of the message"""
         return "agent" if instance.metadata.get("writes", {}).get("agent") else "human"
 
+    @extend_schema_field(
+        serializers.IntegerField(help_text="Order of the message in the conversation")
+    )
     def get_step(self, instance):
         """Get the step number from metadata"""
         return instance.metadata.get("step")
 
+    @extend_schema_field(serializers.CharField(help_text="Message content"))
     def get_content(self, instance):
         """Get the content of the message from metadata"""
         role = self.get_role(instance)
@@ -192,7 +194,15 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DjangoCheckpoint
-        fields = ["id", "checkpoint_id", "role", "step", "content", "rating"]
+        fields = [
+            "id",
+            "checkpoint_id",
+            "role",
+            "step",
+            "thread_id",
+            "content",
+            "rating",
+        ]
 
 
 class TutorChatRequestSerializer(ChatRequestSerializer):
