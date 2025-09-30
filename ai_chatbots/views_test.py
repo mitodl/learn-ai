@@ -219,18 +219,20 @@ def test_rate_agent_message_anon_success(client, test_anonymous_session, blank_k
         test_anonymous_session.session.save()
     response = client.post(
         f"/api/v0/chat_sessions/{test_anonymous_session.session.thread_id}/messages/{test_anonymous_session.messages[2].id}/rate/",
-        data={"rating": "like"},
+        data={"rating": "dislike", "rating_reason": "Partially inaccurate"},
         content_type="application/json",
         HTTP_COOKIE=f"{AI_SESSION_COOKIE_KEY}={test_anonymous_session.session.dj_session_key}",
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.data["rating"] == "like"
+    assert response.data["rating"] == "dislike"
+    assert response.data["rating_reason"] == "Partially inaccurate"
 
     # Verify rating was saved
     rating = ChatResponseRating.objects.get(
         checkpoint=test_anonymous_session.messages[2]
     )
-    assert rating.rating == "like"
+    assert rating.rating == "dislike"
+    assert rating.rating_reason == "Partially inaccurate"
 
 
 def test_rate_agent_message_other_user_403(client, user_session, agent_checkpoint):
