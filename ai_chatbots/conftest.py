@@ -16,6 +16,12 @@ from ai_chatbots.factories import (
 from main.factories import UserFactory
 
 
+@pytest.fixture
+def mock_stdout(mocker):
+    """Create mock stdout for testing."""
+    return mocker.Mock()
+
+
 @pytest.fixture(autouse=True)
 def mock_settings(settings):
     """Langsmith API should be blank for most tests"""

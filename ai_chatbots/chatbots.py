@@ -23,6 +23,15 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState
+from open_learning_ai_tutor.message_tutor import message_tutor
+from open_learning_ai_tutor.prompts import get_system_prompt
+from open_learning_ai_tutor.tools import tutor_tools
+from open_learning_ai_tutor.utils import (
+    filter_out_system_messages,
+    json_to_intent_list,
+    json_to_messages,
+    tutor_output_to_json,
+)
 from openai import BadRequestError
 from posthog.ai.langchain import CallbackHandler
 from typing_extensions import TypedDict
@@ -38,15 +47,6 @@ from ai_chatbots.api import (
 )
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
-from open_learning_ai_tutor.message_tutor import message_tutor
-from open_learning_ai_tutor.prompts import get_system_prompt
-from open_learning_ai_tutor.tools import tutor_tools
-from open_learning_ai_tutor.utils import (
-    filter_out_system_messages,
-    json_to_intent_list,
-    json_to_messages,
-    tutor_output_to_json,
-)
 
 log = logging.getLogger(__name__)
 
@@ -657,9 +657,10 @@ class TutorBot(BaseChatbot):
                 additional_metadata,
             )
             # Save both TutorBotOutput and DjangoCheckpoint objects atomically
-            await create_tutorbot_output_and_checkpoints(
-                self.thread_id, json_output, self.edx_module_id
-            )
+            if self.checkpointer:
+                await create_tutorbot_output_and_checkpoints(
+                    self.thread_id, json_output, self.edx_module_id
+                )
             yield (f"<!-- {await self.get_metadata(debug=debug)} -->")
 
         except Exception:
