@@ -1612,13 +1612,13 @@ static3 = "*"
 
 [[package]]
 name = "django"
-version = "4.2.24"
+version = "4.2.25"
 description = "A high-level Python web framework that encourages rapid development and clean, pragmatic design."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "django-4.2.24-py3-none-any.whl", hash = "sha256:a6527112c58821a0dfc5ab73013f0bdd906539790a17196658e36e66af43c350"},
-    {file = "django-4.2.24.tar.gz", hash = "sha256:40cd7d3f53bc6cd1902eadce23c337e97200888df41e4a73b42d682f23e71d80"},
+    {file = "django-4.2.25-py3-none-any.whl", hash = "sha256:9584cf26b174b35620e53c2558b09d7eb180a655a3470474f513ff9acb494f8c"},
+    {file = "django-4.2.25.tar.gz", hash = "sha256:2391ab3d78191caaae2c963c19fd70b99e9751008da22a0adcc667c5a4f8d311"},
 ]
 
 [package.dependencies]
@@ -8954,4 +8954,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.13.7"
-content-hash = "bcfbe9c9e3639e623039ee105b30ced1e260e22e82a11f8323c50c759dfe3054"
+content-hash = "7c42f0a207f90f7b25cf4bb3c1aaed0960bfa89f9285f5faf91e054d94138112"
