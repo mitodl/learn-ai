@@ -1,9 +1,12 @@
 """Permission classes for ai_chatbots views"""
 
+from math import log
+
 from rest_framework.permissions import BasePermission
 
-from ai_chatbots.constants import AI_SESSION_COOKIE_KEY
+from ai_chatbots.constants import AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
+from main.utils import decode_value
 
 
 class IsThreadOwner(BasePermission):
@@ -18,17 +21,23 @@ class IsThreadOwner(BasePermission):
             return True
 
         thread_id = view.kwargs.get("thread_id")
+        chat_session = UserChatSession.objects.filter(thread_id=thread_id).first()
+        if not chat_session:
+            return False
 
         # For authenticated users, check if thread belongs to user
         if request.user.is_authenticated:
-            return UserChatSession.objects.filter(
-                thread_id=thread_id, user=request.user
-            ).exists()
+            return chat_session.user == request.user
 
-        # For anonymous users, check if thread belongs to session
-        session_key = request.COOKIES.get(AI_SESSION_COOKIE_KEY)
-        return UserChatSession.objects.filter(
-            thread_id=thread_id, user=None, dj_session_key=session_key
-        ).exists()
-
-        return False
+        # For anonymous users, check if thread belongs to anon user via cookie
+        try:
+            cookie_value = decode_value(
+                request.COOKIES.get(
+                    f"{chat_session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+                )
+            ).split("|")[0]
+        except (ValueError, AttributeError):
+            msg = f"Invalid cookie value for anon user and {thread_id}."
+            log.warning(msg)
+            return False
+        return thread_id == cookie_value

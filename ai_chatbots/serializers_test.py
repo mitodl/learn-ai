@@ -7,8 +7,8 @@ from ai_chatbots.factories import ChatResponseRatingFactory, CheckpointFactory
 from ai_chatbots.models import ChatResponseRating
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
+    ChatRatingSerializer,
     ChatRequestSerializer,
-    ChatResponseRatingRequest,
 )
 from main.factories import UserFactory
 
@@ -56,9 +56,7 @@ def test_valid_rating_serialization():
     checkpoint = CheckpointFactory(is_agent=True)
     data = {"rating": "like"}
 
-    serializer = ChatResponseRatingRequest(
-        data=data, context={"checkpoint": checkpoint}
-    )
+    serializer = ChatRatingSerializer(data=data, context={"checkpoint": checkpoint})
 
     assert serializer.is_valid()
     rating = serializer.save()
@@ -72,9 +70,7 @@ def test_invalid_rating_validation():
     checkpoint = CheckpointFactory(is_agent=True)
     data = {"rating": "invalid"}
 
-    serializer = ChatResponseRatingRequest(
-        data=data, context={"checkpoint": checkpoint}
-    )
+    serializer = ChatRatingSerializer(data=data, context={"checkpoint": checkpoint})
 
     assert not serializer.is_valid()
     assert "rating" in serializer.errors
@@ -87,16 +83,16 @@ def test_update_existing_rating():
     # Create initial rating
     ChatResponseRatingFactory(checkpoint=checkpoint, rating="like")
 
-    # Update to dislike
-    data = {"rating": "dislike"}
-    serializer = ChatResponseRatingRequest(
-        data=data, context={"checkpoint": checkpoint}
-    )
+    # Update to dislike, with a reason for the rating
+    data = {"rating": "dislike", "rating_reason": "Wildly inaccurate"}
+    serializer = ChatRatingSerializer(data=data, context={"checkpoint": checkpoint})
 
     assert serializer.is_valid()
     updated_rating = serializer.save()
+    updated_rating.refresh_from_db()
 
-    assert updated_rating.rating == "dislike"
+    assert updated_rating.rating == data["rating"]
+    assert updated_rating.rating_reason == data["rating_reason"]
     assert updated_rating.checkpoint == checkpoint
 
     # Should only be one rating for this checkpoint
@@ -108,9 +104,7 @@ def test_empty_rating_validation():
     checkpoint = CheckpointFactory(is_agent=True)
     data = {"rating": ""}
 
-    serializer = ChatResponseRatingRequest(
-        data=data, context={"checkpoint": checkpoint}
-    )
+    serializer = ChatRatingSerializer(data=data, context={"checkpoint": checkpoint})
 
     assert serializer.is_valid()
     assert serializer.validated_data["rating"] == ""
@@ -119,13 +113,16 @@ def test_empty_rating_validation():
 def test_agent_message_with_rating():
     """Test agent message serialization includes rating"""
     checkpoint = CheckpointFactory(is_agent=True)
-    ChatResponseRatingFactory(checkpoint=checkpoint, rating="like")
+    ChatResponseRatingFactory(
+        checkpoint=checkpoint, rating="like", rating_reason="Easy to understand"
+    )
 
     serializer = ChatMessageSerializer(checkpoint)
     data = serializer.to_representation(checkpoint)
 
     assert data["role"] == "agent"
-    assert data["rating"] == "like"
+    assert data["rating"]["rating"] == "like"
+    assert data["rating"]["rating_reason"] == "Easy to understand"
 
 
 def test_agent_message_without_rating():
@@ -136,7 +133,7 @@ def test_agent_message_without_rating():
     data = serializer.to_representation(checkpoint)
 
     assert data["role"] == "agent"
-    assert data["rating"] == ""
+    assert data["rating"] is None
 
 
 def test_human_message_no_rating_field():
