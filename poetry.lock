@@ -1727,7 +1727,7 @@ django = ">=3.2"
 
 [[package]]
 name = "django-health-check"
-version = "3.20.1.dev2+g5267d8f"
+version = "3.20.1.dev9+g592f6a8fc"
 description = "Monitor the health of your Django app and its connected services."
 optional = false
 python-versions = ">=3.9"
@@ -1739,14 +1739,14 @@ Django = ">=4.2"
 
 [package.extras]
 docs = ["sphinx"]
-lint = ["ruff (==0.12.1)"]
+lint = ["ruff (==0.13.1)"]
 test = ["boto3", "celery", "django-storages", "pytest", "pytest-cov", "pytest-django", "redis"]
 
 [package.source]
 type = "git"
 url = "https://github.com/revsys/django-health-check"
-reference = "5267d8fd68b1ee307637d6ffca6d6d12cc744cdc"
-resolved_reference = "5267d8fd68b1ee307637d6ffca6d6d12cc744cdc"
+reference = "592f6a8fc2a8481f4f810678461db52bd1b0e3d6"
+resolved_reference = "592f6a8fc2a8481f4f810678461db52bd1b0e3d6"
 
 [[package]]
 name = "django-hijack"
@@ -8954,4 +8954,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.13.7"
-content-hash = "7c42f0a207f90f7b25cf4bb3c1aaed0960bfa89f9285f5faf91e054d94138112"
+content-hash = "ca61a483cffbd8148ab718a5e3b938b638795cf3bfc34a8bbfcfe043c140340a"
