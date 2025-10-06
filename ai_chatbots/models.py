@@ -127,6 +127,7 @@ class ChatResponseRating(models.Model):
     rating = models.CharField(
         max_length=10, choices=RATING_CHOICES, db_index=True, blank=True
     )
+    rating_reason = models.TextField(blank=True)
     created_on = models.DateTimeField(auto_now_add=True)
     updated_on = models.DateTimeField(auto_now=True)
 

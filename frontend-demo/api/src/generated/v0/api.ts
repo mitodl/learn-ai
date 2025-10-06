@@ -74,55 +74,79 @@ export interface ChatMessage {
    */
   checkpoint_id: string
   /**
-   *
+   * Message role. Valid options: \'agent\', \'human\'
    * @type {string}
    * @memberof ChatMessage
    */
   role: string
   /**
+   * Order of the message in the conversation
+   * @type {number}
+   * @memberof ChatMessage
+   */
+  step: number
+  /**
    *
+   * @type {string}
+   * @memberof ChatMessage
+   */
+  thread_id: string
+  /**
+   * Message content
    * @type {string}
    * @memberof ChatMessage
    */
   content: string
   /**
-   * Rating for the message. Valid options: \'like\', \'dislike\', or \'\'
-   * @type {string}
+   *
+   * @type {ChatRating}
    * @memberof ChatMessage
    */
-  rating: string
+  rating: ChatRating
 }
 /**
  * Serializer for creating and updating chat response ratings
  * @export
- * @interface ChatResponseRatingRequest
+ * @interface ChatRating
  */
-export interface ChatResponseRatingRequest {
+export interface ChatRating {
   /**
    *
-   * @type {ChatResponseRatingRequestRating}
-   * @memberof ChatResponseRatingRequest
+   * @type {ChatRatingRating}
+   * @memberof ChatRating
    */
-  rating?: ChatResponseRatingRequestRating
+  rating?: ChatRatingRating
+  /**
+   *
+   * @type {string}
+   * @memberof ChatRating
+   */
+  rating_reason?: string
 }
 /**
- * @type ChatResponseRatingRequestRating
+ * @type ChatRatingRating
  * @export
  */
-export type ChatResponseRatingRequestRating = BlankEnum | RatingEnum
+export type ChatRatingRating = BlankEnum | RatingEnum
 
 /**
  * Serializer for creating and updating chat response ratings
  * @export
- * @interface ChatResponseRatingRequestRequest
+ * @interface ChatRatingRequest
  */
-export interface ChatResponseRatingRequestRequest {
+export interface ChatRatingRequest {
   /**
    *
-   * @type {ChatResponseRatingRequestRating}
-   * @memberof ChatResponseRatingRequestRequest
+   * @type {ChatRatingRating}
+   * @memberof ChatRatingRequest
    */
-  rating?: ChatResponseRatingRequestRating
+  rating?: ChatRatingRating
+  /**
+   *
+   * @type {string}
+   * @memberof ChatRatingRequest
+   */
+  rating_reason?: string
 }
 /**
  *
@@ -817,14 +841,14 @@ export const ChatSessionsApiAxiosParamCreator = function (
      * Rate an AI response message
      * @param {number} id ID of the AI response checkpoint
      * @param {string} thread_id thread id of the chat session
-     * @param {ChatResponseRatingRequestRequest} [ChatResponseRatingRequestRequest]
+     * @param {ChatRatingRequest} [ChatRatingRequest]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     chatSessionsMessagesRateCreate: async (
       id: number,
       thread_id: string,
-      ChatResponseRatingRequestRequest?: ChatResponseRatingRequestRequest,
+      ChatRatingRequest?: ChatRatingRequest,
       options: RawAxiosRequestConfig = {},
     ): Promise<RequestArgs> => {
       // verify required parameter 'id' is not null or undefined
@@ -865,7 +889,7 @@ export const ChatSessionsApiAxiosParamCreator = function (
         ...options.headers,
       }
       localVarRequestOptions.data = serializeDataIfNeeded(
-        ChatResponseRatingRequestRequest,
+        ChatRatingRequest,
         localVarRequestOptions,
         configuration,
       )
@@ -1061,26 +1085,23 @@ export const ChatSessionsApiFp = function (configuration?: Configuration) {
      * Rate an AI response message
      * @param {number} id ID of the AI response checkpoint
      * @param {string} thread_id thread id of the chat session
-     * @param {ChatResponseRatingRequestRequest} [ChatResponseRatingRequestRequest]
+     * @param {ChatRatingRequest} [ChatRatingRequest]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
     async chatSessionsMessagesRateCreate(
       id: number,
       thread_id: string,
-      ChatResponseRatingRequestRequest?: ChatResponseRatingRequestRequest,
+      ChatRatingRequest?: ChatRatingRequest,
       options?: RawAxiosRequestConfig,
     ): Promise<
-      (
-        axios?: AxiosInstance,
-        basePath?: string,
-      ) => AxiosPromise<ChatResponseRatingRequest>
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<ChatRating>
     > {
       const localVarAxiosArgs =
         await localVarAxiosParamCreator.chatSessionsMessagesRateCreate(
           id,
           thread_id,
-          ChatResponseRatingRequestRequest,
+          ChatRatingRequest,
           options,
         )
       const index = configuration?.serverIndex ?? 0
@@ -1219,12 +1240,12 @@ export const ChatSessionsApiFactory = function (
     chatSessionsMessagesRateCreate(
       requestParameters: ChatSessionsApiChatSessionsMessagesRateCreateRequest,
       options?: RawAxiosRequestConfig,
-    ): AxiosPromise<ChatResponseRatingRequest> {
+    ): AxiosPromise<ChatRating> {
       return localVarFp
         .chatSessionsMessagesRateCreate(
           requestParameters.id,
           requestParameters.thread_id,
-          requestParameters.ChatResponseRatingRequestRequest,
+          requestParameters.ChatRatingRequest,
           options,
         )
         .then((request) => request(axios, basePath))
@@ -1349,10 +1370,10 @@ export interface ChatSessionsApiChatSessionsMessagesRateCreateRequest {
 
   /**
    *
-   * @type {ChatResponseRatingRequestRequest}
+   * @type {ChatRatingRequest}
    * @memberof ChatSessionsApiChatSessionsMessagesRateCreate
    */
-  readonly ChatResponseRatingRequestRequest?: ChatResponseRatingRequestRequest
+  readonly ChatRatingRequest?: ChatRatingRequest
 }
 
 /**
@@ -1455,7 +1476,7 @@ export class ChatSessionsApi extends BaseAPI {
       .chatSessionsMessagesRateCreate(
         requestParameters.id,
         requestParameters.thread_id,
-        requestParameters.ChatResponseRatingRequestRequest,
+        requestParameters.ChatRatingRequest,
         options,
       )
       .then((request) => request(this.axios, this.basePath))

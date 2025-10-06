@@ -25,7 +25,7 @@ from ai_chatbots.permissions import IsThreadOwner
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
-    ChatResponseRatingRequest,
+    ChatRatingSerializer,
     LLMModelSerializer,
     SystemPromptSerializer,
     UserChatSessionSerializer,
@@ -132,7 +132,7 @@ class ChatMessageViewSet(
         methods=["post"],
         url_path="rate",
         permission_classes=[IsThreadOwner],
-        serializer_class=ChatResponseRatingRequest,
+        serializer_class=ChatRatingSerializer,
     )
     def rate_message(self, request, thread_id, pk):
         """Rate an AI response message"""
@@ -143,7 +143,7 @@ class ChatMessageViewSet(
             raise NotFound from DjangoCheckpoint.DoesNotExist
 
         # Create serializer with context
-        serializer = ChatResponseRatingRequest(
+        serializer = ChatRatingSerializer(
             data=request.data,
             context={
                 "checkpoint": checkpoint,

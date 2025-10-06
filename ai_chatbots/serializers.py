@@ -108,34 +108,71 @@ class UserChatSessionSerializer(serializers.ModelSerializer):
         read_only_fields = ("created_on", "updated_on", "thread_id", "user")
 
 
+class ChatRatingSerializer(serializers.ModelSerializer):
+    """Serializer for creating and updating chat response ratings"""
+
+    def validate_rating(self, value: str) -> str:
+        """Ensure rating is valid"""
+        if value and value not in ChatResponseScore.values():
+            msg = f"Rating must be one of: {', '.join(ChatResponseScore.values())}"
+            raise serializers.ValidationError(msg)
+        # Verify this is an agent message (not human)
+        checkpoint = self.context["checkpoint"]
+        if not checkpoint.metadata.get("writes", {}).get("agent"):
+            msg = "Can only rate agent responses"
+            raise serializers.ValidationError(msg)
+        return value
+
+    def create(self, validated_data: dict) -> ChatResponseRating:
+        """Create or update rating for a checkpoint"""
+        checkpoint = self.context["checkpoint"]
+
+        # Try to get existing rating (using checkpoint as primary key)
+        rating, _ = ChatResponseRating.objects.update_or_create(
+            checkpoint=checkpoint,
+            defaults={
+                "rating": validated_data["rating"],
+                "rating_reason": validated_data.get("rating_reason", ""),
+            },
+        )
+        return rating
+
+    class Meta:
+        model = ChatResponseRating
+        fields = ["rating", "rating_reason"]
+
+
 class ChatMessageSerializer(serializers.ModelSerializer):
     """
     Serializer for chat messages.  This serializer is used to return just the message,
     content and role, and is intended to backfill chat history in a frontend UI.
     """
 
-    role = serializers.CharField()
-    content = serializers.CharField()
-    rating = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    step = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
+    rating = ChatRatingSerializer(read_only=True)
 
     @extend_schema_field(
-        serializers.CharField(
-            help_text="Rating for the message. Valid options: 'like', 'dislike', or ''"
-        )
+        serializers.CharField(help_text="Message role. Valid options: 'agent', 'human'")
     )
-    def get_rating(self, instance):
-        """Return the rating for this message if it exists"""
-        return instance.rating.rating if hasattr(instance, "rating") else ""
+    def get_role(self, instance):
+        """Get the role (agent or human) of the message"""
+        return "agent" if instance.metadata.get("writes", {}).get("agent") else "human"
 
-    def to_representation(self, instance):
-        """Return just the message content and role"""
-        role = "agent" if instance.metadata.get("writes", {}).get("agent") else "human"
-        data = {
-            "id": instance.id,
-            "checkpoint_id": instance.checkpoint_id,
-            "step": instance.metadata.get("step"),
-            "role": role,
-            "content": instance.metadata.get("writes", {})
+    @extend_schema_field(
+        serializers.IntegerField(help_text="Order of the message in the conversation")
+    )
+    def get_step(self, instance):
+        """Get the step number from metadata"""
+        return instance.metadata.get("step")
+
+    @extend_schema_field(serializers.CharField(help_text="Message content"))
+    def get_content(self, instance):
+        """Get the content of the message from metadata"""
+        role = self.get_role(instance)
+        return (
+            instance.metadata.get("writes", {})
             .get("agent", {})
             .get("messages", [{}])[0]
             .get("kwargs", {})
@@ -145,18 +182,27 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             .get("__start__", {})
             .get("messages", [{}])[0]
             .get("kwargs", {})
-            .get("content"),
-        }
+            .get("content")
+        )
 
-        # Only include rating for agent messages
-        if role == "agent":
-            data["rating"] = self.get_rating(instance)
-
+    def to_representation(self, instance) -> dict:
+        """Remove rating field for human messages"""
+        data = super().to_representation(instance)
+        if data["role"] == "human":
+            data.pop("rating", None)  # Remove rating field for human messages
         return data
 
     class Meta:
         model = DjangoCheckpoint
-        fields = ["id", "checkpoint_id", "role", "content", "rating"]
+        fields = [
+            "id",
+            "checkpoint_id",
+            "role",
+            "step",
+            "thread_id",
+            "content",
+            "rating",
+        ]
 
 
 class TutorChatRequestSerializer(ChatRequestSerializer):
@@ -194,33 +240,3 @@ class LLMModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = LLMModel
         fields = ["provider", "name", "litellm_id"]
-
-
-class ChatResponseRatingRequest(serializers.ModelSerializer):
-    """Serializer for creating and updating chat response ratings"""
-
-    def validate_rating(self, value):
-        """Ensure rating is valid"""
-        if value and value not in ChatResponseScore.values():
-            msg = f"Rating must be one of: {', '.join(ChatResponseScore.values())}"
-            raise serializers.ValidationError(msg)
-        # Verify this is an agent message (not human)
-        checkpoint = self.context["checkpoint"]
-        if not checkpoint.metadata.get("writes", {}).get("agent"):
-            msg = "Can only rate agent responses"
-            raise serializers.ValidationError(msg)
-        return value
-
-    def create(self, validated_data):
-        """Create or update rating for a checkpoint"""
-        checkpoint = self.context["checkpoint"]
-
-        # Try to get existing rating (using checkpoint as primary key)
-        rating, _ = ChatResponseRating.objects.update_or_create(
-            checkpoint=checkpoint, defaults={"rating": validated_data["rating"]}
-        )
-        return rating
-
-    class Meta:
-        model = ChatResponseRating
-        fields = ["rating"]

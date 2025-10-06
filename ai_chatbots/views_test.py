@@ -8,11 +8,13 @@ from uuid import uuid4
 import pytest
 from django.test import RequestFactory
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.exceptions import ErrorDetail
 from rest_framework.test import APIClient
 
-from ai_chatbots.constants import AI_SESSION_COOKIE_KEY
+from ai_chatbots.constants import AI_SESSION_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import (
     ChatResponseRatingFactory,
     CheckpointFactory,
@@ -211,33 +213,58 @@ def test_rate_agent_message_success(client, user_session, agent_checkpoint):
     assert rating.rating == "like"
 
 
-@pytest.mark.parametrize("blank_key", [True, False])
-def test_rate_agent_message_anon_success(client, test_anonymous_session, blank_key):
+@pytest.mark.parametrize("has_object_id", [True, False])
+def test_rate_agent_message_anon_success(client, test_anonymous_session, has_object_id):
     """Test successfully rating an agent message for an anonymous user"""
-    if blank_key:
-        test_anonymous_session.session.dj_session_key = ""
+    if has_object_id:
+        test_anonymous_session.session.object_id = uuid4().hex
         test_anonymous_session.session.save()
+    cookie_value = urlsafe_base64_encode(
+        force_bytes(
+            f"{test_anonymous_session.session.thread_id}{f'|{test_anonymous_session.session.object_id}' if test_anonymous_session.session.object_id else ''}"
+        )
+    )
     response = client.post(
         f"/api/v0/chat_sessions/{test_anonymous_session.session.thread_id}/messages/{test_anonymous_session.messages[2].id}/rate/",
-        data={"rating": "like"},
+        data={"rating": "dislike", "rating_reason": "Partially inaccurate"},
         content_type="application/json",
-        HTTP_COOKIE=f"{AI_SESSION_COOKIE_KEY}={test_anonymous_session.session.dj_session_key}",
+        HTTP_COOKIE=f"{test_anonymous_session.session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}={cookie_value}",
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.data["rating"] == "like"
+    assert response.data["rating"] == "dislike"
+    assert response.data["rating_reason"] == "Partially inaccurate"
 
     # Verify rating was saved
     rating = ChatResponseRating.objects.get(
         checkpoint=test_anonymous_session.messages[2]
     )
-    assert rating.rating == "like"
+    assert rating.rating == "dislike"
+    assert rating.rating_reason == "Partially inaccurate"
 
 
-def test_rate_agent_message_other_user_403(client, user_session, agent_checkpoint):
+def test_rate_agent_message_other_user_403_wrong_cookie(
+    client, test_anonymous_session, agent_checkpoint
+):
     """Test that rating an agent message fails for unauthorized users"""
+    wrong_cookie_value = urlsafe_base64_encode(force_bytes(f"{uuid4().hex}|1000"))
     client.force_login(UserFactory.create())
     response = client.post(
-        f"/api/v0/chat_sessions/{user_session.thread_id}/messages/{agent_checkpoint.id}/rate/",
+        f"/api/v0/chat_sessions/{test_anonymous_session.session.thread_id}/messages/{test_anonymous_session.messages[2].id}/rate/",
+        data={"rating": "like"},
+        content_type="application/json",
+        HTTP_COOKIE=f"{test_anonymous_session.session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}={wrong_cookie_value}",
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_rate_agent_message_other_user_403_no_cookie(
+    client, test_anonymous_session, agent_checkpoint
+):
+    """Test that rating an agent message fails for unauthorized users without any cookie"""
+    client.force_login(UserFactory.create())
+    response = client.post(
+        f"/api/v0/chat_sessions/{test_anonymous_session.session.thread_id}/messages/{test_anonymous_session.messages[2].id}/rate/",
         data={"rating": "like"},
         content_type="application/json",
     )

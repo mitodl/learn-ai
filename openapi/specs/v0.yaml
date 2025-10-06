@@ -147,19 +147,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatResponseRatingRequestRequest'
+              $ref: '#/components/schemas/ChatRatingRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ChatResponseRatingRequestRequest'
+              $ref: '#/components/schemas/ChatRatingRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ChatResponseRatingRequestRequest'
+              $ref: '#/components/schemas/ChatRatingRequest'
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChatResponseRatingRequest'
+                $ref: '#/components/schemas/ChatRating'
           description: ''
   /api/v0/get_transcript_edx_module_id/:
     get:
@@ -391,12 +391,21 @@ components:
           type: string
         role:
           type: string
+          description: 'Message role. Valid options: ''agent'', ''human'''
+          readOnly: true
+        step:
+          type: integer
+          description: Order of the message in the conversation
+          readOnly: true
+        thread_id:
+          type: string
         content:
           type: string
+          description: Message content
+          readOnly: true
         rating:
-          type: string
-          description: 'Rating for the message. Valid options: ''like'', ''dislike'',
-            or '''''
+          allOf:
+          - $ref: '#/components/schemas/ChatRating'
           readOnly: true
       required:
       - checkpoint_id
@@ -404,7 +413,9 @@ components:
       - id
       - rating
       - role
-    ChatResponseRatingRequest:
+      - step
+      - thread_id
+    ChatRating:
       type: object
       description: Serializer for creating and updating chat response ratings
       properties:
@@ -412,7 +423,9 @@ components:
           oneOf:
           - $ref: '#/components/schemas/RatingEnum'
           - $ref: '#/components/schemas/BlankEnum'
-    ChatResponseRatingRequestRequest:
+        rating_reason:
+          type: string
+    ChatRatingRequest:
       type: object
       description: Serializer for creating and updating chat response ratings
       properties:
@@ -420,6 +433,8 @@ components:
           oneOf:
           - $ref: '#/components/schemas/RatingEnum'
           - $ref: '#/components/schemas/BlankEnum'
+        rating_reason:
+          type: string
     LLMModel:
       type: object
       properties:
