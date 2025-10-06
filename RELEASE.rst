@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.17.0
+--------------
+
+- Add rating_reason field to ChatResponseRating model, serializer (#323)
+- chore(deps): update redis docker tag to v7.4.6 (#326)
+- fix(deps): update dependency django to v4.2.25 [security] (#325)
+- Update python Docker tag to v3.13.7 (#285)
+- Enhancements to RAG evaluation command (#320)
+
 Version 0.16.3 (Released September 30, 2025)
 --------------
 
