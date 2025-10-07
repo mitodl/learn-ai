@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.17.0
+Version 0.17.0 (Released October 07, 2025)
 --------------
 
 - Add rating_reason field to ChatResponseRating model, serializer (#323)
