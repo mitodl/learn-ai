@@ -516,26 +516,7 @@ def format_posthog_messages(messages: list[BaseMessage]) -> list[dict]:
     flattened_messages = []
     for message_list in messages:
         flattened_messages.extend(message_list)
-    formatted_messages = []
-    for msg in flattened_messages:
-        msg_dict = {"role": msg.type, **msg.__dict__}
-
-        # Transform LangChain tool call format to OpenAI format
-        if msg_dict.get("tool_calls"):
-            msg_dict["tool_calls"] = [
-                {
-                    "id": tc.get("id", ""),
-                    "type": tc.get("type", "tool_call"),
-                    "function": {
-                        "name": tc.get("name", ""),
-                        "arguments": tc.get("args", {}),
-                    },
-                }
-                for tc in msg_dict["tool_calls"]
-            ]
-
-        formatted_messages.append(msg_dict)
-    return formatted_messages
+    return serialize_for_posthog(flattened_messages)
 
 
 class TokenTrackingCallbackHandler(CallbackHandler):
