@@ -453,7 +453,6 @@ def get_langsmith_prompt(prompt_name: str) -> str:
 def serialize_tool_calls(tool_calls: list[dict]) -> list[dict]:
     """
     Transform LangChain tool call format to OpenAI function call format.
-    :rtype: list[dict]
     """
     return [
         {
@@ -471,7 +470,6 @@ def serialize_tool_calls(tool_calls: list[dict]) -> list[dict]:
 def serialize_for_posthog(obj: Any) -> Any:  # noqa: PLR0911
     """
     Recursively serialize objects to JSON-compatible format for PostHog.
-    Handles LangChain Message objects, LangGraph Send objects, and other complex types.
     """
     # Handle primitive types first
     if isinstance(obj, str | int | float | bool | type(None)):
@@ -511,7 +509,7 @@ def serialize_for_posthog(obj: Any) -> Any:  # noqa: PLR0911
 
 def format_posthog_messages(messages: list[BaseMessage]) -> list[dict]:
     """
-    Standardize messages to dicts.
+    Standardize Langchain Message objects to a list of dicts.
     """
     flattened_messages = []
     for message_list in messages:

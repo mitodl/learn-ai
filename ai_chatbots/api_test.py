@@ -1376,7 +1376,7 @@ class TestTokenTrackingCallbackHandler:
     ],
 )
 def test_serialize_for_posthog(input_obj, expected):
-    """Test serialization of primitive types"""
+    """Test serialization of different objects/types"""
     result = serialize_for_posthog(input_obj)
     assert result == expected
 
@@ -1444,7 +1444,7 @@ def test_serialize_for_posthog_send_object():
 
 
 def test_token_tracking_callback_handler_pop_run(mocker):
-    """Test serialization of list containing Send objects"""
+    """Test custom _pop_run_and_capture_trace_or_span method"""
     mock_bot = mocker.Mock()
     mock_bot.user_id = "test_user"
     mock_bot.thread_id = "test_thread"
