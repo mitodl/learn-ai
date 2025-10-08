@@ -14,6 +14,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.messages.utils import count_tokens_approximately
+from langgraph.graph.state import Send
 from langmem.short_term import RunningSummary, SummarizationResult
 
 from ai_chatbots import factories
@@ -23,6 +24,7 @@ from ai_chatbots.api import (
     _should_create_checkpoint,
     create_tutor_checkpoints,
     create_tutorbot_output_and_checkpoints,
+    serialize_for_posthog,
     summarize_messages,
 )
 from ai_chatbots.chatbots import SummaryState
@@ -1334,6 +1336,167 @@ class TestTokenTrackingCallbackHandler:
 
         assert handler._properties["question"] == "Second question"  # noqa: SLF001
         mock_parent.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("input_obj", "expected"),
+    [
+        # Primitive types
+        ("test_string", "test_string"),
+        (3.14, 3.14),
+        (True, True),
+        (None, None),
+        # Lists and dicts
+        ([1, "two", 3.0, True, None], [1, "two", 3.0, True, None]),
+        ({"a": 1, "b": "two", "c": None}, {"a": 1, "b": "two", "c": None}),
+        # LangChain Message objects
+        (
+            [
+                HumanMessage(content="Hello", id="msg-1"),
+                AIMessage(content="Hi", id="msg-2", tool_calls=[]),
+            ],
+            [
+                {
+                    "type": "human",
+                    "role": "human",
+                    "content": "Hello",
+                    "id": "msg-1",
+                    "additional_kwargs": {},
+                },
+                {
+                    "type": "ai",
+                    "role": "ai",
+                    "content": "Hi",
+                    "id": "msg-2",
+                    "tool_calls": [],
+                    "additional_kwargs": {},
+                },
+            ],
+        ),
+    ],
+)
+def test_serialize_for_posthog(input_obj, expected):
+    """Test serialization of primitive types"""
+    result = serialize_for_posthog(input_obj)
+    assert result == expected
+
+
+def test_serialize_for_posthog_tool_calls():
+    """Test serialization of AIMessage with tool calls"""
+    msg = AIMessage(
+        content="Using search tool",
+        id="ai-msg-456",
+        tool_calls=[
+            {
+                "name": "search_courses",
+                "args": {"q": "data science", "resource_type": ["course"]},
+                "id": "call_123",
+                "type": "tool_call",
+            }
+        ],
+    )
+    result = serialize_for_posthog(msg)
+
+    assert result == {
+        "type": "ai",
+        "role": "ai",
+        "content": "Using search tool",
+        "id": "ai-msg-456",
+        "tool_calls": [
+            {
+                "id": "call_123",
+                "type": "tool_call",
+                "function": {
+                    "name": "search_courses",
+                    "arguments": {"q": "data science", "resource_type": ["course"]},
+                },
+            },
+        ],
+        "additional_kwargs": {},
+    }
+
+
+def test_serialize_for_posthog_send_object():
+    """Test serialization of LangGraph Send objects"""
+    # Use actual Send object
+    send_obj = [
+        Send(node="tools", arg={"key": "value"}),
+        Send(node="llm", arg={"messages": HumanMessage(content="Hello")}),
+    ]
+
+    result = serialize_for_posthog(send_obj)
+
+    assert result == [
+        {"node": "tools", "arg": {"key": "value"}},
+        {
+            "node": "llm",
+            "arg": {
+                "messages": {
+                    "type": "human",
+                    "role": "human",
+                    "content": "Hello",
+                    "id": None,
+                    "additional_kwargs": {},
+                }
+            },
+        },
+    ]
+
+
+def test_token_tracking_callback_handler_pop_run(mocker):
+    """Test serialization of list containing Send objects"""
+    mock_bot = mocker.Mock()
+    mock_bot.user_id = "test_user"
+    mock_bot.thread_id = "test_thread"
+    mock_bot.JOB_ID = "TEST_JOB"
+
+    mock_posthog_client = mocker.Mock()
+
+    mock_parent_method = mocker.patch(
+        "posthog.ai.langchain.CallbackHandler._pop_run_and_capture_trace_or_span"
+    )
+
+    handler = TokenTrackingCallbackHandler(
+        model_name="gpt-4", client=mock_posthog_client, bot=mock_bot
+    )
+
+    # Create list of Send objects
+    send1 = Send(node="tool1", arg={"messages": HumanMessage(content="value1")})
+    send2 = Send(node="tool2", arg={"messages": AIMessage(content="value2")})
+
+    outputs = [send1, send2]
+
+    handler._pop_run_and_capture_trace_or_span(uuid4(), uuid4(), outputs)  # noqa: SLF001
+
+    serialized_output = mock_parent_method.call_args.args[2]
+    assert len(serialized_output) == 2
+    assert serialized_output == [
+        {
+            "node": "tool1",
+            "arg": {
+                "messages": {
+                    "type": "human",
+                    "role": "human",
+                    "content": "value1",
+                    "id": None,
+                    "additional_kwargs": {},
+                }
+            },
+        },
+        {
+            "node": "tool2",
+            "arg": {
+                "messages": {
+                    "type": "ai",
+                    "role": "ai",
+                    "content": "value2",
+                    "id": None,
+                    "tool_calls": [],
+                    "additional_kwargs": {},
+                }
+            },
+        },
+    ]
 
 
 @pytest.mark.django_db

@@ -546,9 +546,7 @@ class TokenTrackingCallbackHandler(CallbackHandler):
 
     def __init__(self, model_name: str, **kwargs):
         self.bot = kwargs.pop("bot", None)
-        client = kwargs.pop("client", None)
-        serialized_kwargs = {k: serialize_for_posthog(v) for k, v in kwargs.items()}
-        super().__init__(client=client, **serialized_kwargs)
+        super().__init__(**kwargs)
         self.model_name = model_name
         self.input_tokens = 0
         self.set_trace_attributes()
