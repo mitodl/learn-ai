@@ -124,6 +124,20 @@ files = [
     {file = "aiohttp-3.13.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:7c2c4c9ce834801651f81d6760d0a51035b8b239f58f298de25162fcf6f8bb64"},
     {file = "aiohttp-3.13.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:f91e8f9053a07177868e813656ec57599cd2a63238844393cd01bd69c2e40147"},
     {file = "aiohttp-3.13.0-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:df46d9a3d78ec19b495b1107bf26e4fcf97c900279901f4f4819ac5bb2a02a4c"},
+    {file = "aiohttp-3.13.0-cp39-cp39-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:3b1eb9871cbe43b6ca6fac3544682971539d8a1d229e6babe43446279679609d"},
+    {file = "aiohttp-3.13.0-cp39-cp39-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl", hash = "sha256:62a3cddf8d9a2eae1f79585fa81d32e13d0c509bb9e7ad47d33c83b45a944df7"},
+    {file = "aiohttp-3.13.0-cp39-cp39-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl", hash = "sha256:0f735e680c323ee7e9ef8e2ea26425c7dbc2ede0086fa83ce9d7ccab8a089f26"},
+    {file = "aiohttp-3.13.0-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6a51839f778b0e283b43cd82bb17f1835ee2cc1bf1101765e90ae886e53e751c"},
+    {file = "aiohttp-3.13.0-cp39-cp39-manylinux_2_31_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:ac90cfab65bc281d6752f22db5fa90419e33220af4b4fa53b51f5948f414c0e7"},
+    {file = "aiohttp-3.13.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:62fd54f3e6f17976962ba67f911d62723c760a69d54f5d7b74c3ceb1a4e9ef8d"},
+    {file = "aiohttp-3.13.0-cp39-cp39-musllinux_1_2_armv7l.whl", hash = "sha256:cf2b60b65df05b6b2fa0d887f2189991a0dbf44a0dd18359001dc8fcdb7f1163"},
+    {file = "aiohttp-3.13.0-cp39-cp39-musllinux_1_2_ppc64le.whl", hash = "sha256:1ccedfe280e804d9a9d7fe8b8c4309d28e364b77f40309c86596baa754af50b1"},
+    {file = "aiohttp-3.13.0-cp39-cp39-musllinux_1_2_riscv64.whl", hash = "sha256:ea01ffbe23df53ece0c8732d1585b3d6079bb8c9ee14f3745daf000051415a31"},
+    {file = "aiohttp-3.13.0-cp39-cp39-musllinux_1_2_s390x.whl", hash = "sha256:19ba8625fa69523627b67f7e9901b587a4952470f68814d79cdc5bc460e9b885"},
+    {file = "aiohttp-3.13.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:4b14bfae90598d331b5061fd15a7c290ea0c15b34aeb1cf620464bb5ec02a602"},
+    {file = "aiohttp-3.13.0-cp39-cp39-win32.whl", hash = "sha256:cf7a4b976da219e726d0043fc94ae8169c0dba1d3a059b3c1e2c964bafc5a77d"},
+    {file = "aiohttp-3.13.0-cp39-cp39-win_amd64.whl", hash = "sha256:6b9697d15231aeaed4786f090c9c8bc3ab5f0e0a6da1e76c135a310def271020"},
+    {file = "aiohttp-3.13.0.tar.gz", hash = "sha256:378dbc57dd8cf341ce243f13fa1fa5394d68e2e02c15cd5f28eae35a70ec7f67"},
 ]
 
 [package.dependencies]
