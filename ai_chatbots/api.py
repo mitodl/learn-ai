@@ -450,16 +450,71 @@ def get_langsmith_prompt(prompt_name: str) -> str:
     return None
 
 
+def serialize_tool_calls(tool_calls: list[dict]) -> list[dict]:
+    """
+    Transform LangChain tool call format to OpenAI function call format.
+    """
+    return [
+        {
+            "id": tc.get("id", ""),
+            "type": tc.get("type", "tool_call"),
+            "function": {
+                "name": tc.get("name", ""),
+                "arguments": tc.get("args", {}),
+            },
+        }
+        for tc in tool_calls
+    ]
+
+
+def serialize_for_posthog(obj: Any) -> Any:  # noqa: PLR0911
+    """
+    Recursively serialize objects to JSON-compatible format for PostHog.
+    """
+    # Handle primitive types first
+    if isinstance(obj, str | int | float | bool | type(None)):
+        return obj
+
+    # Handle BaseMessage objects from LangChain
+    if hasattr(obj, "type") and hasattr(obj, "content"):
+        msg_dict = {"role": obj.type, "type": obj.type, "content": obj.content}
+        if hasattr(obj, "id"):
+            msg_dict["id"] = obj.id
+        if hasattr(obj, "additional_kwargs"):
+            msg_dict["additional_kwargs"] = serialize_for_posthog(obj.additional_kwargs)
+        if hasattr(obj, "tool_calls"):
+            msg_dict["tool_calls"] = serialize_tool_calls(obj.tool_calls)
+        return msg_dict
+
+    # Handle Send objects from LangGraph
+    if type(obj).__name__ == "Send":
+        return {
+            "node": obj.node if hasattr(obj, "node") else str(obj),
+            "arg": serialize_for_posthog(obj.arg if hasattr(obj, "arg") else {}),
+        }
+
+    # Handle collections
+    if isinstance(obj, list):
+        return [serialize_for_posthog(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: serialize_for_posthog(v) for k, v in obj.items()}
+
+    # Handle objects with __dict__
+    if hasattr(obj, "__dict__"):
+        return {k: serialize_for_posthog(v) for k, v in obj.__dict__.items()}
+
+    # Fallback to string representation
+    return str(obj)
+
+
 def format_posthog_messages(messages: list[BaseMessage]) -> list[dict]:
     """
-    Standardize messages to dicts.
+    Standardize Langchain Message objects to a list of dicts.
     """
     flattened_messages = []
     for message_list in messages:
         flattened_messages.extend(message_list)
-
-    # Convert LangChain messages to the format LiteLLM expects
-    return [{"role": msg.type, **msg.__dict__} for msg in flattened_messages]
+    return serialize_for_posthog(flattened_messages)
 
 
 class TokenTrackingCallbackHandler(CallbackHandler):
@@ -588,6 +643,15 @@ class TokenTrackingCallbackHandler(CallbackHandler):
         # Call parent method
         super().on_llm_end(
             response, run_id=run_id, parent_run_id=parent_run_id, **kwargs
+        )
+
+    def _pop_run_and_capture_trace_or_span(
+        self, run_id: UUID, parent_run_id: Optional[UUID], outputs: Any
+    ):
+        """Override to serialize outputs before passing to parent."""
+        serialized_outputs = serialize_for_posthog(outputs)
+        super()._pop_run_and_capture_trace_or_span(
+            run_id, parent_run_id, serialized_outputs
         )
 
 
