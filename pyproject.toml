@@ -70,7 +70,7 @@ social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "0.48.0"
 ulid-py = "^1.0.0"
-uvicorn = {extras = ["standard"], version = "^0.35.0"}
+uvicorn = {extras = ["standard"], version = "^0.37.0"}
 granian = "^2.5.4"
 open-learning-ai-tutor = "^0.2.12"
 
