@@ -1,6 +1,24 @@
 Release Notes
 =============
 
+Version 0.18.1
+--------------
+
+- Use granian instead of uvicorn (#344)
+- fix(deps): update dependency uvicorn to ^0.37.0 (#337)
+- fix(deps): update dependency starlette to v0.48.0 (#336)
+- fix(deps): update dependency ruff to v0.14.0 (#335)
+- chore(deps): update node.js to v22.20.0 (#333)
+- chore(deps): update nginx docker tag to v1.29.2 (#332)
+- chore(deps): update dependency social-auth-app-django to v5.6.0 [security] (#330)
+- Fixes for token cost estimates and posthog calls (#329)
+- chore(deps): lock file maintenance (#167)
+- fix(deps): update django-health-check digest to 592f6a8 (#257)
+- chore(deps): update actions/checkout action to v5 (#299)
+- chore(deps): update actions/setup-node action to v5 (#300)
+- chore(deps): update dependency eslint-config-next to v15.5.4 (#322)
+- fix(deps): update dependency next to v15.5.4 (#327)
+
 Version 0.17.0 (Released October 07, 2025)
 --------------
 
