@@ -299,6 +299,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     async def handle(self, message: str):
         """Handle the incoming message and send the response."""
+        if not message:
+            return
         cookies = None
         try:
             await self.check_throttles()
