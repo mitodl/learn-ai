@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.18.1
+Version 0.18.1 (Released October 15, 2025)
 --------------
 
 - Use granian instead of uvicorn (#344)
