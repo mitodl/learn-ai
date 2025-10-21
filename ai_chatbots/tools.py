@@ -68,7 +68,7 @@ class SearchToolSchema(pydantic.BaseModel):
             description=(
                 """
                 Type of resource to search for: course, program, video, etc.
-                If the user mentions courses, programs, videos, or podcasts in
+                If the user mentions courses, programs, videos, articles, or podcasts in
                 particular, filter the search by this parameter.  DO NOT USE THE
                 resource_type FILTER OTHERWISE. You MUST combine multiple resource types
                 in one request like this: "resource_type=course&resource_type=program".

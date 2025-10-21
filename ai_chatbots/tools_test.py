@@ -35,7 +35,7 @@ def mock_get_content_files(mocker, content_chunk_results):
     "params",
     [
         {"q": "physics"},
-        {"q": "biology", "resource_type": ["course", "video"]},
+        {"q": "biology", "resource_type": ["course", "video", "article"]},
         {"q": "chemistry", "resource_type": ["course"], "free": True},
         {
             "q": "astronomy",
