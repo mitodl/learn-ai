@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+Version 0.19.0
+--------------
+
+- Add article support (#346)
+- chore(deps): update actions/setup-python action to v6 (#339)
+- chore(deps): update dependency @faker-js/faker to v10 (#340)
+- fix(deps): update django-health-check digest to 53f9bdc (#331)
+
 Version 0.18.1 (Released October 15, 2025)
 --------------
 
