@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.19.0
+Version 0.19.0 (Released October 21, 2025)
 --------------
 
 - Add article support (#346)
