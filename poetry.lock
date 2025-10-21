@@ -4221,13 +4221,13 @@ langchain-core = ">=0.3.28,<0.4.0"
 
 [[package]]
 name = "langchain-litellm"
-version = "0.2.3"
+version = "0.3.0"
 description = "An integration package connecting Litellm and LangChain"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "langchain_litellm-0.2.3-py3-none-any.whl", hash = "sha256:422254b8742893aed6380f5ee73e6ae77869b218758edd0888d14ebd2c439352"},
-    {file = "langchain_litellm-0.2.3.tar.gz", hash = "sha256:0e11687373ae6a99efee5a04d3a76de4fab0e1459edc0e84adb6f60ca76ebf79"},
+    {file = "langchain_litellm-0.3.0-py3-none-any.whl", hash = "sha256:029afdce461fc51ff45fd06e0c2467b79304e5cc127e3596e208182ce0f637ba"},
+    {file = "langchain_litellm-0.3.0.tar.gz", hash = "sha256:94d7c106c5c9c81eba0e54ce9a4f720c61461d2f5592ad612e974f096866b351"},
 ]
 
 [package.dependencies]
@@ -9913,4 +9913,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.13.7"
-content-hash = "415ac7ce26e4fde98d67148aa176a3f0a44b0a8844a522de69dd06e3aabe2f91"
+content-hash = "9b50e65d494005f8440cfc69f8d94c6989b420e000bdc87bd734dc947eaa706e"
