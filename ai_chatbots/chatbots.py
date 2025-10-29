@@ -37,13 +37,13 @@ from typing_extensions import TypedDict
 from ai_chatbots import tools
 from ai_chatbots.api import (
     DjangoCheckpoint,
-    TokenTrackingCallbackHandler,
+    MessageTruncationNode,
     create_tutorbot_output_and_checkpoints,
     get_search_tool_metadata,
     query_tutorbot_output,
 )
+from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
-from ai_chatbots.truncation import MessageTruncationNode
 from ai_chatbots.utils import get_django_cache, request_with_token
 
 log = logging.getLogger(__name__)
