@@ -19,7 +19,7 @@ class MessageTruncationNode(RunnableCallable):
     their responses.
 
     Preserves all messages in the database, but only sends recent messages
-    to the LLM to prevent context window errors. Counts only human messages
+    to the LLM to keep context window size small. Counts only human messages
     to determine truncation point, then includes all associated AI and tool
     messages.
     """
@@ -53,7 +53,6 @@ class MessageTruncationNode(RunnableCallable):
         if not messages:
             return {self.output_messages_key: messages}
 
-        # Separate system message from others
         system_msg = None
         other_messages = messages
 
@@ -61,26 +60,17 @@ class MessageTruncationNode(RunnableCallable):
             system_msg = messages[0]
             other_messages = messages[1:]
 
-        # Count human messages and find the truncation point
         human_message_count = sum(
             1 for msg in other_messages if isinstance(msg, HumanMessage)
         )
-
         if human_message_count <= self.max_human_messages:
-            # No truncation needed
             return {self.output_messages_key: messages}
-
-        # Find the index of the Nth-from-last human message
         truncation_index = self.find_nth_human_message_from_end(
             other_messages, self.max_human_messages
         )
 
-        # Truncate from that point onward
         truncated = other_messages[truncation_index:]
-
-        # Reassemble with system message
         result = [system_msg, *truncated] if system_msg else truncated
-
         log.info(
             "Truncated messages: %d -> %d (kept last %d human messages)",
             len(messages),
@@ -106,10 +96,6 @@ class MessageTruncationNode(RunnableCallable):
         human_indices = [
             i for i, msg in enumerate(messages) if isinstance(msg, HumanMessage)
         ]
-
         if len(human_indices) < n:
-            # Not enough human messages, return start
             return 0
-
-        # Return the index of the Nth-from-last human message
         return human_indices[-n]

@@ -307,7 +307,7 @@ class SummaryState(AgentState):
     context: dict[str, Any]
 
 
-class SummarizingChatbot(BaseChatbot):
+class TruncatingChatbot(BaseChatbot):
     """
     Chatbot that truncates chat history to keep only recent messages.
 
@@ -317,17 +317,16 @@ class SummarizingChatbot(BaseChatbot):
     """
 
     STATE_CLASS = AgentState
-    MAX_HUMAN_MESSAGES = 10  # Maximum number of human messages to keep
 
     def create_agent_graph(self) -> CompiledStateGraph:
         """
         Generate a standard react agent graph with message truncation.
 
-        Truncates to last MAX_HUMAN_MESSAGES (and their responses) before sending
-        to LLM, ensuring complete conversation sequences are preserved.
+        Truncates to last N human messages (and their responses) before
+        sending to LLM.
         """
         truncation_node = MessageTruncationNode(
-            max_human_messages=self.MAX_HUMAN_MESSAGES,
+            max_human_messages=settings.AI_HUMAN_MAX_CONVERSATION_MEMORY,
             output_messages_key="llm_input_messages",
         )
 
@@ -352,7 +351,7 @@ class RecommendationAgentState(SummaryState):
     search_url: Annotated[list[str], add]
 
 
-class ResourceRecommendationBot(SummarizingChatbot):
+class ResourceRecommendationBot(TruncatingChatbot):
     """
     Chatbot that searches for learning resources in the MIT Learn catalog,
     then recommends the best results to the user based on their query.
@@ -362,7 +361,6 @@ class ResourceRecommendationBot(SummarizingChatbot):
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
     STATE_CLASS = RecommendationAgentState
-    MAX_HUMAN_MESSAGES = 10
 
     def __init__(  # noqa: PLR0913
         self,
@@ -412,14 +410,13 @@ class SyllabusAgentState(SummaryState):
     exclude_canvas: Annotated[Optional[list[str]], add]
 
 
-class SyllabusBot(SummarizingChatbot):
+class SyllabusBot(TruncatingChatbot):
     """Service class for the AI syllabus agent"""
 
     PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
-    MAX_HUMAN_MESSAGES = 15
 
     def __init__(  # noqa: PLR0913
         self,
@@ -466,7 +463,6 @@ class CanvasSyllabusBot(SyllabusBot):
     TASK_NAME = "CANVAS_SYLLABUS_TASK"
     JOB_ID = "CANVAS_SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
-    MAX_HUMAN_MESSAGES = 15
 
 
 class TutorBot(BaseChatbot):
@@ -697,14 +693,13 @@ class VideoGPTAgentState(SummaryState):
     transcript_asset_id: Annotated[list[str], add]
 
 
-class VideoGPTBot(SummarizingChatbot):
+class VideoGPTBot(TruncatingChatbot):
     """Service class for the AI video chat agent"""
 
     PROMPT_TEMPLATE = "video_gpt"
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
     STATE_CLASS = VideoGPTAgentState
-    MAX_HUMAN_MESSAGES = 15
 
     def __init__(  # noqa: PLR0913
         self,
