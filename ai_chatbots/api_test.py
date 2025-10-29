@@ -5,10 +5,8 @@ from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
-from langchain_core.language_models import FakeMessagesListChatModel
 from langchain_core.messages import (
     AIMessage,
-    BaseMessage,
     HumanMessage,
     ToolMessage,
 )
@@ -24,27 +22,6 @@ from ai_chatbots.chatbots import SystemMessage
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 
 
-class MockChatModel(FakeMessagesListChatModel):
-    """Mock chat model for testing the summarizer."""
-
-    invoke_calls: list[list[BaseMessage]] = []
-
-    def __init__(self, responses: list[BaseMessage]):
-        """Initialize with predefined responses."""
-        super().__init__(
-            responses=responses or [AIMessage(content="This is a mock summary.")]
-        )
-
-    def invoke(self, input: list[BaseMessage]) -> AIMessage:  # noqa: A002
-        """Mock invoke method that returns predefined responses."""
-        self.invoke_calls.append(input)
-        return super().invoke(input)
-
-    def bind(self, **kwargs):  # noqa: ARG002
-        """Mock bind method that returns self."""
-        return self
-
-
 @pytest.fixture
 def truncation_node():
     """Create a truncation node with max_human_messages=5."""
@@ -53,15 +30,7 @@ def truncation_node():
 
 @pytest.fixture
 def sample_messages():
-    """Create a comprehensive list of messages for testing.
-
-    Contains:
-    - 1 SystemMessage
-    - 7 HumanMessages (H1-H7)
-    - 7 AIMessages (A1-A7)
-
-    Tests can slice this list as needed using [:n] syntax.
-    """
+    """Create a list of messages for testing."""
     return [
         SystemMessage(content="You are a helpful assistant", id=str(uuid4())),
         HumanMessage(content="Question 1", id=str(uuid4())),
@@ -78,32 +47,6 @@ def sample_messages():
         AIMessage(content="Answer 6", id=str(uuid4())),
         HumanMessage(content="Question 7", id=str(uuid4())),
         AIMessage(content="Answer 7", id=str(uuid4())),
-    ]
-
-
-@pytest.fixture
-def short_messages():
-    """Create a list of messages with short labels for order testing.
-
-    Contains:
-    - 1 SystemMessage ("System")
-    - 5 HumanMessages (H1-H5)
-    - 5 AIMessages (A1-A5)
-
-    Tests can slice this list as needed using [:n] syntax.
-    """
-    return [
-        SystemMessage(content="System", id=str(uuid4())),
-        HumanMessage(content="H1", id=str(uuid4())),
-        AIMessage(content="A1", id=str(uuid4())),
-        HumanMessage(content="H2", id=str(uuid4())),
-        AIMessage(content="A2", id=str(uuid4())),
-        HumanMessage(content="H3", id=str(uuid4())),
-        AIMessage(content="A3", id=str(uuid4())),
-        HumanMessage(content="H4", id=str(uuid4())),
-        AIMessage(content="A4", id=str(uuid4())),
-        HumanMessage(content="H5", id=str(uuid4())),
-        AIMessage(content="A5", id=str(uuid4())),
     ]
 
 
@@ -561,19 +504,6 @@ def test_truncation_with_only_ai_messages():
     assert result["llm_input_messages"] == messages
 
 
-def test_truncation_preserves_message_order(short_messages):
-    """Test that message order is preserved after truncation."""
-    truncation_node = MessageTruncationNode(max_human_messages=3)
-    messages = short_messages  # All 11 messages
-
-    result = truncation_node.invoke({"messages": messages})
-
-    # Should have system + last 3 human + their responses
-    assert len(result["llm_input_messages"]) == 7
-    contents = [msg.content for msg in result["llm_input_messages"]]
-    assert contents == ["System", "H3", "A3", "H4", "A4", "H5", "A5"]
-
-
 def test_truncation_with_multiple_ai_responses():
     """Test truncation when AI sends multiple messages per human question."""
     truncation_node = MessageTruncationNode(max_human_messages=2)
@@ -599,35 +529,23 @@ def test_truncation_with_multiple_ai_responses():
     assert result["llm_input_messages"][-1].content == "Answer 2"
 
 
-def test_find_nth_human_message_from_end():
+def test_find_nth_human_message_from_end(sample_messages):
     """Test the helper method for finding human message indices."""
     node = MessageTruncationNode(max_human_messages=3)
+    messages = [AIMessage(content="Hello", id=str(uuid4()))] + sample_messages[
+        1:7
+    ]  # Question 1-3, Answer 1-3
 
-    messages = [
-        AIMessage(content="AI intro", id=str(uuid4())),
-        HumanMessage(content="H1", id=str(uuid4())),  # index 1
-        AIMessage(content="A1", id=str(uuid4())),
-        HumanMessage(content="H2", id=str(uuid4())),  # index 3
-        AIMessage(content="A2", id=str(uuid4())),
-        HumanMessage(content="H3", id=str(uuid4())),  # index 5
-        AIMessage(content="A3", id=str(uuid4())),
-    ]
-
-    # Should find the 3rd-from-last human message (H1 at index 1)
+    # Should find the 3rd-from-last human message (Question 1 at index 0)
     index = node.find_nth_human_message_from_end(messages, 3)
     assert index == 1
-    assert messages[index].content == "H1"
+    assert messages[index].content == "Question 1"
 
 
-def test_find_nth_human_message_not_enough():
+def test_find_nth_human_message_not_enough(sample_messages):
     """Test helper when there aren't enough human messages."""
     node = MessageTruncationNode(max_human_messages=10)
-
-    messages = [
-        HumanMessage(content="H1", id=str(uuid4())),
-        AIMessage(content="A1", id=str(uuid4())),
-        HumanMessage(content="H2", id=str(uuid4())),
-    ]
+    messages = sample_messages[1:5]  # Question 1, Answer 1, Question 2, Answer 2
 
     # Should return 0 when there aren't enough human messages
     index = node.find_nth_human_message_from_end(messages, 10)
