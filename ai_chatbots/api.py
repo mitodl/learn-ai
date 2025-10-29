@@ -316,7 +316,7 @@ class MessageTruncationNode(RunnableCallable):
     def __init__(
         self,
         *,
-        max_human_messages: int = 10,
+        max_human_messages: int = settings.AI_HUMAN_MAX_CONVERSATION_MEMORY,
         input_messages_key: str = "messages",
         output_messages_key: str = "llm_input_messages",
         name: str = "truncation",
