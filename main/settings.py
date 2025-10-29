@@ -707,7 +707,7 @@ AI_MIT_SEARCH_URL = get_string(
     default=AI_MIT_SEARCH_VECTOR_URL,
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
-AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
+AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=10)
 AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=5)
 
 # Provider keys
