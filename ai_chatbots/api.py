@@ -360,12 +360,6 @@ class MessageTruncationNode(RunnableCallable):
 
         truncated = other_messages[truncation_index:]
         result = [system_msg, *truncated] if system_msg else truncated
-        log.info(
-            "Truncated messages: %d -> %d (kept last %d human messages)",
-            len(messages),
-            len(result),
-            self.max_human_messages,
-        )
 
         return {self.output_messages_key: result}
 
