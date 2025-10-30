@@ -1,6 +1,16 @@
 Release Notes
 =============
 
+Version 0.20.0
+--------------
+
+- Replace chat summarization with truncation (#360)
+- chore(deps): lock file maintenance (#342)
+- fix(deps): update dependency starlette to v0.49.1 [security] (#359)
+- chore(deps): update dependency pytest-cov to v7 (#349)
+- fix(deps): update dependency langchain-litellm to ^0.3.0 (#348)
+- fix(deps): update dependency ruff to v0.14.1 (#347)
+
 Version 0.19.0 (Released October 21, 2025)
 --------------
 
