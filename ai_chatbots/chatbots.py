@@ -325,18 +325,13 @@ class TruncatingChatbot(BaseChatbot):
         Truncates to last N human messages (and their responses) before
         sending to LLM.
         """
-        truncation_node = MessageTruncationNode(
-            max_human_messages=settings.AI_HUMAN_MAX_CONVERSATION_MEMORY,
-            output_messages_key="llm_input_messages",
-        )
-
         log.debug("Instructions: \n%s\n\n", self.instructions)
 
         return create_react_agent(
             self.llm,
             tools=self.tools,
             checkpointer=self.checkpointer,
-            pre_model_hook=truncation_node,
+            pre_model_hook=MessageTruncationNode(),
             state_schema=self.STATE_CLASS,
             prompt=self.instructions,
         )
