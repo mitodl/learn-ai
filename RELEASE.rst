@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.20.0
+Version 0.20.0 (Released October 30, 2025)
 --------------
 
 - Replace chat summarization with truncation (#360)
