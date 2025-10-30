@@ -11,8 +11,9 @@ This application provides backend API endpoints to access various AI chatbots.
 3. [Committing & Formatting](#committing--formatting)
 4. [Sample Requests](#sample-requests)
 5. [Langsmith Integration](#langsmith-integration)
-6. [Architecture Overview](#architecture-overview)
-7. [RAG Evaluation](#rag-evaluation)
+6. [Posthog Integration](#posthog-integration)
+7. [Architecture Overview](#architecture-overview)
+8. [RAG Evaluation](#rag-evaluation)
 
 ## Initial Setup
 
@@ -115,6 +116,22 @@ If you need to update a prompt, you have 2 options:
   the change. This may happen if someone had editied the prompt in the Langsmith UI, in which
   case you should consult with the editor, merge the changes together into the hardcoded `prompts.py`
   value, and then run the management command again.
+
+## PostHog Integration
+
+[PostHog](https://us.posthog.com) can be used instead of or in addition to Langsmith for monitoring agent usage, costs, and outputs.
+To enable this functionality, you need to perform the following steps:
+
+1. Create a free PostHog account and obtain an API key.
+2. From the left sidebar, click "Settings", then "Account->Feature previews", and enable "LLM Analytics"
+3. Add the following to your backend environment variables:
+   ```
+    POSTHOG_PERSONAL_API_KEY=phx_......
+    POSTHOG_PROJECT_API_KEY=phc_......
+    POSTHOG_PROJECT_ID=project_id
+    POSTHOG_API_HOST=https://app.posthog.com
+   ```
+4. You now should be able to see AI traces and generations by clicking "Analytics->LLM analytics" in the left sidebar.
 
 ## Architecture Overview
 

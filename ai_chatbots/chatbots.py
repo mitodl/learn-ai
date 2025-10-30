@@ -14,8 +14,6 @@ from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
-from langchain_core.messages.utils import count_tokens_approximately
-from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -38,13 +36,13 @@ from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import (
-    CustomSummarizationNode,
     DjangoCheckpoint,
-    TokenTrackingCallbackHandler,
+    MessageTruncationNode,
     create_tutorbot_output_and_checkpoints,
     get_search_tool_metadata,
     query_tutorbot_output,
 )
+from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import get_django_cache, request_with_token
 
@@ -309,90 +307,31 @@ class SummaryState(AgentState):
     context: dict[str, Any]
 
 
-class SummarizingChatbot(BaseChatbot):
+class TruncatingChatbot(BaseChatbot):
     """
-    Chatbot that summarizes chat history after every n tokens.  The initial prompts are
-    based on the original langmem.short_term.summarization prompts.
+    Chatbot that truncates chat history to keep only recent messages.
+
+    This prevents context window errors by limiting messages sent to the LLM,
+    while preserving all messages in the database. Counts only human messages
+    to determine truncation point.
     """
 
-    STATE_CLASS = SummaryState
-    MAX_TOKENS = 5000
-
-    INITIAL_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
-        [
-            ("placeholder", "{messages}"),
-            (
-                "user",
-                get_system_prompt(
-                    "summary_initial", SYSTEM_PROMPT_MAPPING, get_django_cache
-                ),
-            ),
-        ]
-    )
-
-    EXISTING_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
-        [
-            ("placeholder", "{messages}"),
-            (
-                "user",
-                get_system_prompt(
-                    "summary_existing", SYSTEM_PROMPT_MAPPING, get_django_cache
-                ),
-            ),
-        ]
-    )
-
-    FINAL_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
-        [
-            # if exists
-            ("placeholder", "{system_message}"),
-            (
-                "system",
-                get_system_prompt(
-                    "summary_final", SYSTEM_PROMPT_MAPPING, get_django_cache
-                ),
-            ),
-            ("placeholder", "{messages}"),
-        ]
-    )
+    STATE_CLASS = AgentState
 
     def create_agent_graph(self) -> CompiledStateGraph:
         """
-        Generate a standard react agent graph for the summarizing agent.
-        Use the custom SummarizingAgentState to summarize the chat history
-        after MAX_TOKENS have been reached.
+        Generate a standard react agent graph with message truncation.
 
-        https://github.com/langchain-ai/langgraph/blob/main/docs/docs/how-tos/create-react-agent-manage-message-history.ipynb
+        Truncates to last N human messages (and their responses) before
+        sending to LLM.
         """
-
-        summary_llm = ChatLiteLLM(
-            model=f"{self.proxy_prefix}{settings.AI_DEFAULT_SUMMARY_MODEL}",
-            **(self.proxy.get_api_kwargs() if self.proxy else {}),
-            **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
-        )
-
-        # Summary should be 1/2 the size of max_tokens, to allow room for other messages
-        max_summary_tokens = min(settings.AI_MAX_TOKEN_BIND, int(self.MAX_TOKENS / 2))
-
-        summarization_node = CustomSummarizationNode(
-            token_counter=count_tokens_approximately,
-            model=summary_llm.bind(max_tokens=max_summary_tokens),
-            max_tokens=int(self.MAX_TOKENS),
-            max_tokens_before_summary=self.MAX_TOKENS,
-            max_summary_tokens=max_summary_tokens,
-            output_messages_key="llm_input_messages",
-            initial_summary_prompt=self.INITIAL_SUMMARY_PROMPT,
-            existing_summary_prompt=self.EXISTING_SUMMARY_PROMPT,
-            final_prompt=self.FINAL_SUMMARY_PROMPT,
-        )
-
         log.debug("Instructions: \n%s\n\n", self.instructions)
 
         return create_react_agent(
             self.llm,
             tools=self.tools,
             checkpointer=self.checkpointer,
-            pre_model_hook=summarization_node,
+            pre_model_hook=MessageTruncationNode(),
             state_schema=self.STATE_CLASS,
             prompt=self.instructions,
         )
@@ -407,7 +346,7 @@ class RecommendationAgentState(SummaryState):
     search_url: Annotated[list[str], add]
 
 
-class ResourceRecommendationBot(SummarizingChatbot):
+class ResourceRecommendationBot(TruncatingChatbot):
     """
     Chatbot that searches for learning resources in the MIT Learn catalog,
     then recommends the best results to the user based on their query.
@@ -417,7 +356,6 @@ class ResourceRecommendationBot(SummarizingChatbot):
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
     STATE_CLASS = RecommendationAgentState
-    MAX_TOKENS = settings.AI_DEFAULT_RECOMMENDATION_MAX_TOKENS
 
     def __init__(  # noqa: PLR0913
         self,
@@ -467,14 +405,13 @@ class SyllabusAgentState(SummaryState):
     exclude_canvas: Annotated[Optional[list[str]], add]
 
 
-class SyllabusBot(SummarizingChatbot):
+class SyllabusBot(TruncatingChatbot):
     """Service class for the AI syllabus agent"""
 
     PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
-    MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
 
     def __init__(  # noqa: PLR0913
         self,
@@ -521,7 +458,6 @@ class CanvasSyllabusBot(SyllabusBot):
     TASK_NAME = "CANVAS_SYLLABUS_TASK"
     JOB_ID = "CANVAS_SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
-    MAX_TOKENS = settings.AI_DEFAULT_SYLLABUS_MAX_TOKENS
 
 
 class TutorBot(BaseChatbot):
@@ -752,14 +688,13 @@ class VideoGPTAgentState(SummaryState):
     transcript_asset_id: Annotated[list[str], add]
 
 
-class VideoGPTBot(SummarizingChatbot):
+class VideoGPTBot(TruncatingChatbot):
     """Service class for the AI video chat agent"""
 
     PROMPT_TEMPLATE = "video_gpt"
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
     STATE_CLASS = VideoGPTAgentState
-    MAX_TOKENS = settings.AI_DEFAULT_VIDEO_GPT_MAX_TOKENS
 
     def __init__(  # noqa: PLR0913
         self,

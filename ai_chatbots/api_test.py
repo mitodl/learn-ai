@@ -5,1497 +5,48 @@ from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
-from langchain_core.language_models import FakeMessagesListChatModel
 from langchain_core.messages import (
     AIMessage,
-    BaseMessage,
     HumanMessage,
-    SystemMessage,
     ToolMessage,
 )
-from langchain_core.messages.utils import count_tokens_approximately
-from langgraph.graph.state import Send
-from langmem.short_term import RunningSummary, SummarizationResult
 
 from ai_chatbots import factories
 from ai_chatbots.api import (
-    CustomSummarizationNode,
-    TokenTrackingCallbackHandler,
+    MessageTruncationNode,
     _should_create_checkpoint,
     create_tutor_checkpoints,
     create_tutorbot_output_and_checkpoints,
-    serialize_for_posthog,
-    summarize_messages,
 )
-from ai_chatbots.chatbots import SummaryState
+from ai_chatbots.chatbots import SystemMessage
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 
 
-class MockChatModel(FakeMessagesListChatModel):
-    """Mock chat model for testing the summarizer."""
-
-    invoke_calls: list[list[BaseMessage]] = []
-
-    def __init__(self, responses: list[BaseMessage]):
-        """Initialize with predefined responses."""
-        super().__init__(
-            responses=responses or [AIMessage(content="This is a mock summary.")]
-        )
-
-    def invoke(self, input: list[BaseMessage]) -> AIMessage:  # noqa: A002
-        """Mock invoke method that returns predefined responses."""
-        self.invoke_calls.append(input)
-        return super().invoke(input)
-
-    def bind(self, **kwargs):  # noqa: ARG002
-        """Mock bind method that returns self."""
-        return self
-
-
-def test_empty_input():
-    model = MockChatModel(responses=[])
-
-    # Test with empty message list
-    result = summarize_messages(
-        [],
-        running_summary=None,
-        model=model,
-        max_tokens=10,
-        max_summary_tokens=1,
-    )
-
-    # Check that no summarization occurred
-    assert result.running_summary is None
-    assert result.messages == []
-    assert len(model.invoke_calls) == 0
-
-    # Test with only system message
-    system_msg = SystemMessage(content="You are a helpful assistant.", id="sys")
-    result = summarize_messages(
-        [system_msg],
-        running_summary=None,
-        model=model,
-        max_tokens=10,
-        max_summary_tokens=1,
-    )
-
-    # Check that no summarization occurred
-    assert result.running_summary is None
-    assert result.messages == [system_msg]
-
-
-def test_no_summarization_needed():
-    model = MockChatModel(responses=[])
-
-    messages = [
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-    ]
-
-    # Tokens are under the limit, so no summarization should occur
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=10,
-        max_summary_tokens=1,
-    )
-
-    # Check that no summarization occurred
-    assert result.running_summary is None
-    assert result.messages == messages
-    assert len(model.invoke_calls) == 0  # Model should not have been called
-
-
-def test_summarize_first_time():
-    model = MockChatModel(
-        responses=[AIMessage(content="This is a summary of the conversation.")]
-    )
-
-    # Create enough messages to trigger summarization
-    messages = [
-        # these messages will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        # these messages will be added to the result post-summarization
-        HumanMessage(content="Message 4", id="7"),
-        AIMessage(content="Response 4", id="8"),
-        HumanMessage(content="Latest message", id="9"),
-    ]
-
-    # Call the summarizer
-    max_summary_tokens = 1
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=6,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Check that model was called
-    assert len(model.invoke_calls) == 1
-
-    # Check that the result has the expected structure:
-    # - First message should be a summary
-    # - Last 3 messages should be the last 3 original messages
-    assert len(result.messages) == 4
-    assert result.messages[0].type == "system"
-    assert "summary" in result.messages[0].content.lower()
-    assert result.messages[-3:] == messages[-3:]
-
-    # Check the summary value
-    summary_value = result.running_summary
-    assert summary_value is not None
-    assert summary_value.summary == "This is a summary of the conversation."
-    assert summary_value.summarized_message_ids == {msg.id for msg in messages[:-3]}
-
-    # Test subsequent invocation (no new summary needed)
-    result = summarize_messages(
-        messages,
-        running_summary=summary_value,
-        model=model,
-        token_counter=len,
-        max_tokens=6,
-        max_summary_tokens=max_summary_tokens,
-    )
-    assert len(result.messages) == 4
-    assert result.messages[0].type == "system"
-    assert (
-        result.messages[0].content
-        == "Summary of the conversation so far: This is a summary of the conversation."
-    )
-    assert result.messages[-3:] == messages[-3:]
-
-
-def test_max_tokens_before_summary():
-    model = MockChatModel(
-        responses=[AIMessage(content="This is a summary of the conversation.")]
-    )
-
-    # Create enough messages to trigger summarization
-    messages = [
-        # these messages will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        HumanMessage(content="Message 4", id="7"),
-        AIMessage(content="Response 4", id="8"),
-        # these messages will be added to the result post-summarization
-        HumanMessage(content="Latest message", id="9"),
-    ]
-
-    # Call the summarizer
-    max_summary_tokens = 1
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=6,
-        max_tokens_before_summary=8,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Check that model was called
-    assert len(model.invoke_calls) == 1
-
-    # Check that the result has the expected structure:
-    # - First message should be a summary
-    # - Last message should be the last original message
-    assert len(result.messages) == 2
-    assert result.messages[0].type == "system"
-    assert "summary" in result.messages[0].content.lower()
-    assert result.messages[1:] == messages[-1:]
-
-    # Check the summary value
-    summary_value = result.running_summary
-    assert summary_value is not None
-    assert summary_value.summary == "This is a summary of the conversation."
-    assert summary_value.summarized_message_ids == {
-        msg.id for msg in messages[:8]
-    }  # All messages except the latest
-
-    # Test subsequent invocation (no new summary needed)
-    result = summarize_messages(
-        messages,
-        running_summary=summary_value,
-        model=model,
-        token_counter=len,
-        max_tokens=6,
-        max_tokens_before_summary=8,
-        max_summary_tokens=max_summary_tokens,
-    )
-    assert len(result.messages) == 2
-    assert result.messages[0].type == "system"
-    assert (
-        result.messages[0].content
-        == "Summary of the conversation so far: This is a summary of the conversation."
-    )
-    assert result.messages[1:] == messages[-1:]
-
-
-def test_with_system_message():
-    """Test summarization with a system message present."""
-    model = MockChatModel(
-        responses=[AIMessage(content="Summary with system message present.")]
-    )
-
-    # Create messages with a system message
-    messages = [
-        # this will not be summarized, but will be added post-summarization
-        SystemMessage(content="You are a helpful assistant.", id="0"),
-        # these messages will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        # these messages will be added to the result post-summarization
-        HumanMessage(content="Message 4", id="7"),
-        AIMessage(content="Response 4", id="8"),
-        HumanMessage(content="Latest message", id="9"),
-    ]
-
-    # Call the summarizer
-    max_tokens = 6
-    # we're using len() as a token counter, so a summary is simply 1 "token"
-    max_summary_tokens = 1
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Check that model was called
-    assert len(model.invoke_calls) == 1
-    assert model.invoke_calls[0] == messages[1:7] + [
-        HumanMessage(content="Create a summary of the conversation above:")
-    ]
-
-    # Check that the result has the expected structure:
-    # - System message should be preserved
-    # - Second message should be a summary of messages 2-5
-    # - Last 3 messages should be the last 3 original messages
-    assert len(result.messages) == 5
-    assert result.messages[0].type == "system"
-    assert result.messages[1].type == "system"  # Summary message
-    assert "summary" in result.messages[1].content.lower()
-    assert result.messages[2:] == messages[-3:]
-
-
-def test_approximate_token_counter():
-    model = MockChatModel(responses=[AIMessage(content="Summary with empty messages.")])
-
-    # Create messages with some empty content
-    messages = [
-        # these will be summarized
-        HumanMessage(content="", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        HumanMessage(content="Message 4", id="7"),
-        AIMessage(content="Response 4", id="8"),
-        # these will be added to the result post-summarization
-        HumanMessage(content="Latest message", id="9"),
-    ]
-
-    # Call the summarizer
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=count_tokens_approximately,
-        max_tokens=50,
-        max_summary_tokens=10,
-    )
-
-    # Check that summarization still works with empty messages
-    assert len(result.messages) == 2
-    assert "summary" in result.messages[0].content.lower()
-    assert result.messages[1:] == messages[-1:]
-
-
-def test_large_number_of_messages():
-    """Test summarization with a large number of messages."""
-    model = MockChatModel(responses=[AIMessage(content="Summary of many messages.")])
-
-    # Create a large number of messages
-    messages = []
-    for i in range(20):  # 20 pairs of messages = 40 messages total
-        messages.append(HumanMessage(content=f"Human message {i}", id=f"h{i}"))
-        messages.append(AIMessage(content=f"AI response {i}", id=f"a{i}"))
-
-    # Add one final message
-    messages.append(HumanMessage(content="Final message", id=f"h{len(messages)}"))
-
-    # Call the summarizer
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=22,
-        max_summary_tokens=0,
-    )
-
-    # Check that summarization works with many messages
-    assert (
-        len(result.messages) == 20
-    )  # summary for the first 40 messages + final message
-    assert "summary" in result.messages[0].content.lower()
-    assert result.messages[-1] == messages[-1]  # final message included
-
-    # Check that the model was called with a subset of messages
-    # The implementation might limit how many messages are sent to the model
-    assert len(model.invoke_calls) == 1
-
-
-def test_subsequent_summarization_with_new_messages():
-    model = MockChatModel(
-        responses=[
-            AIMessage(content="First summary of the conversation."),
-            AIMessage(content="Updated summary including new messages."),
-        ]
-    )
-
-    # First batch of messages
-    messages1 = [
-        # these will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        HumanMessage(content="Latest message 1", id="7"),  # will be filtered out
-    ]
-
-    # First summarization
-    max_tokens = 6
-    max_summary_tokens = 1
-    result = summarize_messages(
-        messages1,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Verify the first summarization result
-    assert "summary" in result.messages[0].content.lower()
-    assert len(result.messages) == 2
-    assert result.messages[-1] == messages1[-1]
-    assert len(model.invoke_calls) == 1
-
-    # Check the summary value
-    summary_value = result.running_summary
-    assert summary_value.summary == "First summary of the conversation."
-    assert len(summary_value.summarized_message_ids) == 6  # first 6 messages
-
-    # Add more messages to trigger another summarization
-    new_messages = [
-        # these will be summarized (including accounting for the previous summary!)
-        AIMessage(content="Response to latest 1", id="8"),
-        HumanMessage(content="Message 4", id="9"),
-        AIMessage(content="Response 4", id="10"),
-        HumanMessage(content="Message 5", id="11"),
-        AIMessage(content="Response 5", id="12"),
-        HumanMessage(content="Message 6", id="13"),
-        AIMessage(content="Response 6", id="14"),
-        HumanMessage(content="Latest message 2", id="15"),
-    ]
-
-    messages2 = messages1.copy()
-    messages2.extend(new_messages)
-
-    # Second summarization
-    result2 = summarize_messages(
-        messages2,
-        running_summary=summary_value,
-        model=model,
-        token_counter=len,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Check that model was called twice
-    assert len(model.invoke_calls) == 2
-
-    # Get the messages sent to the model in the second call
-    second_call_messages = model.invoke_calls[1]
-
-    # Check that the previous summary is included in the prompt
-    prompt_message = second_call_messages[-1]
-    assert "First summary of the conversation" in prompt_message.content
-    assert "Extend this summary" in prompt_message.content
-
-    # Check that only the new messages are sent to the model, not already summarized ones
-    assert len(second_call_messages) == 7  # 6 messages + prompt
-    assert [msg.content for msg in second_call_messages[:-1]] == [
-        "Latest message 1",
-        "Response to latest 1",
-        "Message 4",
-        "Response 4",
-        "Message 5",
-        "Response 5",
-    ]
-
-    # Verify the structure of the final result
-    assert "summary" in result2.messages[0].content.lower()
-    assert len(result2.messages) == 4  # Summary + last 3 messages
-    assert result2.messages[-3:] == messages2[-3:]
-
-    # Check the updated summary
-    updated_summary_value = result2.running_summary
-    assert updated_summary_value.summary == "Updated summary including new messages."
-    # Verify all messages except the last 3 were summarized
-    assert len(updated_summary_value.summarized_message_ids) == len(messages2) - 3
-
-
-def test_subsequent_summarization_with_new_messages_approximate_token_counter():
-    model = MockChatModel(
-        responses=[
-            AIMessage(content="First summary of the conversation."),
-            AIMessage(content="Updated summary including new messages."),
-        ]
-    )
-
-    # First batch of messages
-    messages1 = [
-        # these will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        # this will be propagated to the next summarization
-        HumanMessage(content="Latest message 1", id="7"),
-    ]
-
-    # First summarization
-    max_tokens = 45
-    max_summary_tokens = 15
-    result = summarize_messages(
-        messages1,
-        running_summary=None,
-        model=model,
-        token_counter=count_tokens_approximately,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Verify the first summarization result
-    assert "summary" in result.messages[0].content.lower()
-    assert len(result.messages) == 2
-    assert result.messages[-1] == messages1[-1]
-    assert len(model.invoke_calls) == 1
-
-    # Check the summary value
-    summary_value = result.running_summary
-    assert summary_value.summary == "First summary of the conversation."
-    assert len(summary_value.summarized_message_ids) == 6  # first 6 messages
-
-    # Add more messages to trigger another summarization
-    new_messages = [
-        # these will be summarized (including accounting for the previous summary!)
-        AIMessage(content="Response to latest 1", id="8"),
-        HumanMessage(content="Message 4", id="9"),
-        AIMessage(content="Response 4", id="10"),
-        HumanMessage(content="Message 5", id="11"),
-        AIMessage(content="Response 5", id="12"),
-        HumanMessage(content="Message 6", id="13"),
-        AIMessage(content="Response 6", id="14"),
-        # this will be kept in the final result
-        HumanMessage(content="Latest message 2", id="15"),
-    ]
-
-    messages2 = messages1.copy()
-    messages2.extend(new_messages)
-
-    # Second summarization
-    result2 = summarize_messages(
-        messages2,
-        running_summary=summary_value,
-        model=model,
-        token_counter=count_tokens_approximately,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Check that model was called twice
-    assert len(model.invoke_calls) == 2
-
-    # Get the messages sent to the model in the second call
-    second_call_messages = model.invoke_calls[1]
-
-    # Check that the previous summary is included in the prompt
-    prompt_message = second_call_messages[-1]
-    assert "First summary of the conversation" in prompt_message.content
-    assert "Extend this summary" in prompt_message.content
-
-    # Check that only the new messages are sent to the model, not already summarized ones
-    assert len(second_call_messages) == 7  # 5 messages + prompt
-    assert [msg.content for msg in second_call_messages[:-1]] == [
-        "Latest message 1",
-        "Response to latest 1",
-        "Message 4",
-        "Response 4",
-        "Message 5",
-        "Response 5",
-    ]
-
-    # Verify the structure of the final result
-    assert "summary" in result2.messages[0].content.lower()
-    assert len(result2.messages) == 4  # Summary + last 3 messages
-    assert result2.messages[-3:] == messages2[-3:]
-
-    # Check the updated summary
-    updated_summary_value = result2.running_summary
-    assert updated_summary_value.summary == "Updated summary including new messages."
-    # Verify all messages except the last 3 were summarized
-    assert len(updated_summary_value.summarized_message_ids) == len(messages2) - 3
-
-
-@pytest.mark.parametrize("is_tool_call", [True, False])
-def test_last_ai_with_tool_calls(is_tool_call):
-    """Summarization should be skipped if last message is a tool call."""
-    model = MockChatModel(responses=[AIMessage(content="Summary without tool calls.")])
-
-    messages = [
-        # these will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(
-            content="",
-            id="2",
-            tool_calls=[
-                {"name": "tool_1", "id": "1", "args": {"arg1": "value1"}},
-                {"name": "tool_2", "id": "2", "args": {"arg1": "value1"}},
-            ],
-        ),
-        ToolMessage(content="Call tool 1", tool_call_id="1", name="tool_1", id="3"),
-        ToolMessage(content="Call tool 2", tool_call_id="2", name="tool_2", id="4"),
-        # these will be kept in the final result
-        AIMessage(content="Response 1", id="5"),
-        HumanMessage(content="Message 2", id="6"),
-    ]
-
-    if is_tool_call:
-        # If the last message is a tool call, we should not summarize
-        messages.append(
-            ToolMessage(content="Call tool 3", tool_call_id="3", name="tool_3", id="7")
-        )
-
-    # Call the summarizer
-    result = summarize_messages(
-        messages,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens_before_summary=2,
-        max_tokens=2,
-        max_summary_tokens=1,
-    )
-
-    # Check that the AI message with tool calls was summarized together with the tool messages
-    assert len(result.messages) == (7 if is_tool_call else 2)
-    assert result.messages[0].type == ("human" if is_tool_call else "system")
-    assert result.messages[-1].type == ("tool" if is_tool_call else "human")
-
-    if is_tool_call:
-        assert result.running_summary is None
-    else:
-        assert result.running_summary.summarized_message_ids == {
-            msg.id for msg in messages[:-1]
-        }
-
-
-def test_missing_message_ids():
-    messages = [
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response"),  # Missing ID
-        HumanMessage(content="Message 2", id="1"),
-    ]
-    with pytest.raises(ValueError, match="Messages are required to have ID field"):
-        summarize_messages(
-            messages,
-            running_summary=None,
-            model=MockChatModel(responses=[]),
-            max_tokens=1,
-            max_summary_tokens=1,
-        )
-
-
-def test_duplicate_message_ids():
-    model = MockChatModel(responses=[AIMessage(content="Summary")])
-
-    # First summarization
-    messages1 = [
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-    ]
-
-    result = summarize_messages(
-        messages1,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=2,
-        max_summary_tokens=1,
-    )
-
-    # Second summarization with a duplicate ID
-    messages2 = [
-        AIMessage(content="Response 1", id="2"),  # Duplicate ID
-        HumanMessage(content="Message 2", id="3"),  # Duplicate ID
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-    ]
-
-    with pytest.raises(ValueError, match="has already been summarized"):
-        summarize_messages(
-            messages1 + messages2,
-            running_summary=result.running_summary,
-            model=model,
-            token_counter=len,
-            max_tokens=6,
-            max_summary_tokens=1,
-        )
-
-
-def test_summarization_updated_messages():
-    # this is a variant of test_subsequent_summarization_with_new_messages
-    # that passes the updated (ie., summarized) messages on the second turn
-    model = MockChatModel(
-        responses=[
-            AIMessage(content="First summary of the conversation."),
-            AIMessage(content="Updated summary including new messages."),
-        ]
-    )
-
-    # First batch of messages
-    messages1 = [
-        # these will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        # this will be propagated to the next summarization
-        HumanMessage(content="Latest message 1", id="7"),  # will be filtered out
-    ]
-
-    # First summarization
-    max_tokens = 6
-    max_summary_tokens = 1
-    result = summarize_messages(
-        messages1,
-        running_summary=None,
-        model=model,
-        token_counter=len,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Verify the first summarization result
-    assert "summary" in result.messages[0].content.lower()
-    assert len(result.messages) == 2
-    assert result.messages[-1] == messages1[-1]
-    assert len(model.invoke_calls) == 1
-
-    # Check the summary value
-    summary_value = result.running_summary
-    assert summary_value.summary == "First summary of the conversation."
-    assert len(summary_value.summarized_message_ids) == 6  # first 6 messages
-
-    # Add more messages to trigger another summarization
-    new_messages = [
-        # these will be summarized (including accounting for the previous summary!)
-        AIMessage(content="Response to latest 1", id="8"),  # will be filtered out
-        HumanMessage(content="Message 4", id="9"),
-        AIMessage(content="Response 4", id="10"),
-        HumanMessage(content="Message 5", id="11"),
-        AIMessage(content="Response 5", id="12"),
-        HumanMessage(content="Message 6", id="13"),
-        AIMessage(content="Response 6", id="14"),
-        # this will be kept in the final result
-        HumanMessage(content="Latest message 2", id="15"),
-    ]
-
-    # NOTE: here we're using the updated messages, not the original ones
-    messages2 = result.messages.copy()
-    messages2.extend(new_messages)
-
-    # Second summarization
-    result2 = summarize_messages(
-        messages2,
-        running_summary=summary_value,
-        model=model,
-        token_counter=len,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-    )
-
-    # Check that model was called twice
-    assert len(model.invoke_calls) == 2
-
-    # Get the messages sent to the model in the second call
-    second_call_messages = model.invoke_calls[1]
-
-    # Check that the previous summary is included in the prompt
-    prompt_message = second_call_messages[-1]
-    assert "First summary of the conversation" in prompt_message.content
-    assert "Extend this summary" in prompt_message.content
-
-    # Check that only the new messages are sent to the model, not already summarized ones
-    assert len(second_call_messages) == 7  # 6 messages + prompt
-    assert [msg.content for msg in second_call_messages[:-1]] == [
-        "Latest message 1",
-        "Response to latest 1",
-        "Message 4",
-        "Response 4",
-        "Message 5",
-        "Response 5",
-    ]
-
-    # Verify the structure of the final result
-    assert "summary" in result2.messages[0].content.lower()
-    assert len(result2.messages) == 4  # Summary + last 3 messages
-    assert result2.messages[-3:] == messages2[-3:]
-
-    # Check the updated summary
-    updated_summary_value = result2.running_summary
-    assert updated_summary_value.summary == "Updated summary including new messages."
-    # Verify all messages except the last 3 were summarized
-    assert len(updated_summary_value.summarized_message_ids) == 12
-
-
-def test_summarization_node():
-    model = MockChatModel(
-        responses=[AIMessage(content="This is a summary of the conversation.")]
-    )
-
-    # Create enough messages to trigger summarization
-    messages = [
-        # these messages will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        # these messages will be added to the result post-summarization
-        HumanMessage(content="Message 4", id="7"),
-        AIMessage(content="Response 4", id="8"),
-        HumanMessage(content="Latest message", id="9"),
-    ]
-
-    # Call the summarizer
-    max_summary_tokens = 1
-    summarization_node = CustomSummarizationNode(
-        model=model,
-        token_counter=len,
-        max_tokens=6,
-        max_summary_tokens=max_summary_tokens,
-    )
-    result = summarization_node.invoke({"messages": messages})
-
-    # Check that model was called
-    assert len(model.invoke_calls) == 1
-
-    # Check that the result has the expected structure:
-    # - First message should be a summary
-    # - Last 3 messages should be the last 3 original messages
-    assert len(result["summarized_messages"]) == 4  # 3 messages + summary
-    assert result["summarized_messages"][0].type == "system"
-    assert "summary" in result["summarized_messages"][0].content.lower()
-    assert result["summarized_messages"][1:] == messages[-3:]
-    assert (
-        result["context"]["running_summary"].summary
-        in result["summarized_messages"][0].content
-    )
-
-    # Check the summary value
-    summary_value = result["context"]["running_summary"]
-    assert summary_value is not None
-    assert summary_value.summary == "This is a summary of the conversation."
-    assert summary_value.summarized_message_ids == {
-        msg.id for msg in messages[:6]
-    }  # All messages except the latest
-
-    # Test subsequent invocation (no new summary needed)
-    result = summarization_node.invoke(
-        {"messages": messages, "context": {"running_summary": summary_value}}
-    )
-    assert len(result["summarized_messages"]) == 4
-    assert result["summarized_messages"][0].type == "system"
-    assert (
-        result["summarized_messages"][0].content
-        == "Summary of the conversation so far: This is a summary of the conversation."
-    )
-    assert result["summarized_messages"][1:] == messages[-3:]
-
-
-def test_summarization_node_same_key():
-    # this is a variant of test_subsequent_summarization_with_new_messages
-    # that passes the updated (ie., summarized) messages on the second turn
-    model = MockChatModel(
-        responses=[
-            AIMessage(content="First summary of the conversation."),
-            AIMessage(content="Updated summary including new messages."),
-        ]
-    )
-
-    # First batch of messages
-    messages1 = [
-        # these will be summarized
-        HumanMessage(content="Message 1", id="1"),
-        AIMessage(content="Response 1", id="2"),
-        HumanMessage(content="Message 2", id="3"),
-        AIMessage(content="Response 2", id="4"),
-        HumanMessage(content="Message 3", id="5"),
-        AIMessage(content="Response 3", id="6"),
-        # this will be propagated to the next summarization
-        HumanMessage(content="Latest message 1", id="7"),  # will be filtered out
-    ]
-
-    # First summarization
-    max_tokens = 6
-    max_summary_tokens = 1
-    summarization_node = CustomSummarizationNode(
-        model=model,
-        token_counter=len,
-        max_tokens=max_tokens,
-        max_summary_tokens=max_summary_tokens,
-        input_messages_key="messages",
-        output_messages_key="messages",
-    )
-    result = summarization_node.invoke({"messages": messages1})
-
-    # Verify the first summarization result
-    assert result["messages"][-1].type == "remove"
-    assert "summary" in result["messages"][0].content.lower()
-    assert len(result["messages"]) == 8  # 6 removed + 1 summary + last message
-    assert result["messages"][-7] == messages1[-1]  # last 6 are RemoveMessages
-    assert len(model.invoke_calls) == 1
-
-    # Check the summary value
-    summary_value = result["context"]["running_summary"]
-    assert summary_value.summary == "First summary of the conversation."
-    assert len(summary_value.summarized_message_ids) == 6  # first 6 messages
-
-    # Add more messages to trigger another summarization
-    new_messages = [
-        # these will be summarized (including accounting for the previous summary!)
-        AIMessage(content="Response to latest 1", id="8"),  # will be filtered out
-        HumanMessage(content="Message 4", id="9"),
-        AIMessage(content="Response 4", id="10"),
-        HumanMessage(content="Message 5", id="11"),
-        AIMessage(content="Response 5", id="12"),
-        HumanMessage(content="Message 6", id="13"),
-        # these will be kept in the final result
-        AIMessage(content="Response 6", id="14"),
-        HumanMessage(content="Latest message 2", id="15"),
-    ]
-
-    # NOTE: here we're using the updated messages, not the original ones
-    messages2 = result["messages"][1:].copy()
-    messages2.extend(new_messages)
-
-    # Second summarization
-    result2 = summarization_node.invoke(
-        {"messages": messages2, "context": {"running_summary": summary_value}}
-    )
-
-    # Check that model was called twice
-    assert len(model.invoke_calls) == 2
-
-    # Get the messages sent to the model in the second call
-    second_call_messages = model.invoke_calls[1]
-
-    # Check that the previous summary is included in the prompt
-    prompt_message = second_call_messages[-1]
-    assert "First summary of the conversation" in prompt_message.content
-    assert "Extend this summary" in prompt_message.content
-
-    # Check that only the new messages are sent to the model, not already summarized ones
-    assert len(second_call_messages) == 7  # 6 messages + prompt
-    assert [msg.content for msg in second_call_messages[:-1]] == [
-        "Response to latest 1",
-        "Message 4",
-        "Response 4",
-        "Message 5",
-        "Response 5",
-        "Message 6",
-    ]
-
-    # Verify the structure of the final result
-    assert result2["messages"][-1].type == "remove"
-    assert "summary" in result2["messages"][0].content.lower()
-    assert len(result2["messages"]) == 15  # Summary + last 2 messages + Remove msgs
-    assert result2["messages"][1:3] == messages2[-2:]
-
-    # Check the updated summary
-    updated_summary_value = result2["context"]["running_summary"]
-    assert updated_summary_value.summary == "Updated summary including new messages."
-    # Verify all messages except the last 3 were summarized
-    assert len(updated_summary_value.summarized_message_ids) == 12
-
-
-@pytest.mark.parametrize(
-    ("is_state_node", "max_tokens", "has_summary", "generate_summary"),
-    [
-        (True, 1000, True, True),
-        (True, 500, False, True),
-        (False, 500, True, False),
-        (False, 3000, False, False),
-    ],
-)
-def test_custom_summarization_node(
-    mocker, is_state_node, max_tokens, has_summary, generate_summary
-):
-    """The CustomSummarizationNode should return expected output"""
-    messages = [
-        factories.SystemMessageFactory.create(),
-        factories.HumanMessageFactory.create(),
-        factories.AIMessageFactory.create(),
-        factories.HumanMessageFactory.create(),
-    ]
-    old_summary = RunningSummary(
-        summary="An old summary",
-        summarized_message_ids={m.id for m in messages[0:2]},
-        last_summarized_message_id=messages[1].id,
-    )
-    context = (
-        {"foo": "bar", "running_summary": old_summary}
-        if has_summary
-        else {"foo": "bar"}
-    )
-    running_summary = "A new summary" if generate_summary else None
-    node_input = (
-        SummaryState(messages=messages, context=context)
-        if is_state_node
-        else {"messages": messages, "context": context}
-    )
-    output_messages_key = "llm_input_messages"
-    mock_summarize = mocker.patch(
-        "ai_chatbots.api.summarize_messages",
-        return_value=SummarizationResult(
-            messages=messages[2:],
-            running_summary=RunningSummary(
-                summary=running_summary,
-                summarized_message_ids={m.id for m in messages[2:]},
-                last_summarized_message_id=messages[-1].id,
-            ),
-        ),
-    )
-
-    summarization_node = CustomSummarizationNode(
-        token_counter=count_tokens_approximately,
-        model=mocker.Mock(bind=mocker.Mock()).bind(max_tokens=max_tokens),
-        max_tokens=int(max_tokens),
-        max_tokens_before_summary=max_tokens,
-        max_summary_tokens=int(max_tokens / 2),
-        output_messages_key=output_messages_key,
-    )
-
-    result = summarization_node._func(node_input)  # noqa: SLF001
-    mock_summarize.assert_called_once_with(
-        messages,
-        running_summary=context.get("running_summary"),
-        model=summarization_node.model,
-        max_tokens=max_tokens,
-        max_tokens_before_summary=max_tokens,
-        max_summary_tokens=int(max_tokens / 2),
-        token_counter=summarization_node.token_counter,
-        initial_summary_prompt=summarization_node.initial_summary_prompt,
-        existing_summary_prompt=summarization_node.existing_summary_prompt,
-        final_prompt=summarization_node.final_prompt,
-    )
-
-    assert (
-        mock_summarize.return_value.running_summary.summary
-        in [m.content for m in result[output_messages_key]]
-    ) is generate_summary
-
-    assert result.get("context").get("running_summary").summary == (
-        running_summary if generate_summary else None
-    )
-
-
-def test_custom_summarization_node_invalid_input(mocker):
-    """The CustomSummarizationNode should raise an error for invalid input"""
-    summarization_node = CustomSummarizationNode(
-        model=mocker.Mock(bind=mocker.Mock()), max_tokens=10
-    )
-
-    with pytest.raises(TypeError, match="Invalid input type: <class 'str'>"):
-        summarization_node._func("This is an invalid input type")  # noqa: SLF001
-
-
-def test_custom_summarization_node_no_messagest(mocker):
-    """The CustomSummarizationNode should raise an error if there are no messages"""
-    summarization_node = CustomSummarizationNode(
-        model=mocker.Mock(bind=mocker.Mock()), max_tokens=1000
-    )
-
-    with pytest.raises(
-        ValueError, match="Missing required field `messages` in the input."
-    ):
-        summarization_node._func({"foo": []})  # noqa: SLF001
-
-
-class TestTokenTrackingCallbackHandler:
-    """Test suite for TokenTrackingCallbackHandler class"""
-
-    @pytest.fixture
-    def mock_bot(self, mocker):
-        """Mock bot instance for testing"""
-        bot = mocker.Mock()
-        bot.user_id = "test_user"
-        bot.thread_id = "test_thread"
-        bot.JOB_ID = "TEST_JOB"
-        return bot
-
-    @pytest.fixture
-    def mock_posthog_client(self, mocker):
-        """Mock PostHog client"""
-        return mocker.Mock()
-
-    def test_initialization(
-        self,
-        mock_posthog_client,
-        mock_bot,
-    ):
-        """Test TokenTrackingCallbackHandler initialization with various parameters"""
-        properties = {
-            "$ai_model": "gpt-3.5-turbo",
-            "$ai_provider": "openai",
-        }
-        handler = TokenTrackingCallbackHandler(
-            model_name="openai/gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-            properties=properties,
-        )
-
-        for prop in properties:
-            assert handler._properties[prop] == properties[prop]  # noqa: SLF001
-        assert handler.input_tokens == 0
-        assert handler.bot == mock_bot
-        mock_posthog_client.capture.assert_called_once_with(
-            event="$ai_trace",
-            distinct_id=mock_bot.user_id,
-            properties={
-                "$ai_trace_id": mock_bot.thread_id,
-                "$ai_span_name": mock_bot.JOB_ID,
-                "botName": mock_bot.JOB_ID,
-            },
-        )
-
-    @pytest.mark.parametrize(
-        ("messages", "expected_input_tokens"),
-        [
-            # Test with single message list containing human message
-            ([[HumanMessage(content="Hello world")]], 3),
-            # Test with nested message lists
-            (
-                [
-                    [
-                        HumanMessage(content="Hello"),
-                        SystemMessage(content="You are helpful"),
-                    ],
-                    [HumanMessage(content="How are you?")],
-                ],
-                6,
-            ),
-            # Test with AI message
-            ([[AIMessage(content="I'm doing well, thank you!")]], 7),
-            # Test empty messages
-            ([[]], 0),
-        ],
-    )
-    def test_on_chat_model_start_token_counting(
-        self, mocker, mock_posthog_client, mock_bot, messages, expected_input_tokens
-    ):
-        """Test on_chat_model_start method with various message configurations"""
-        # Mock litellm.token_counter to return predictable values
-        mock_token_counter = mocker.patch("ai_chatbots.api.litellm.token_counter")
-        mock_token_counter.return_value = expected_input_tokens
-        # Mock the parent's on_chat_model_start to avoid calling real PostHog
-        mocker.patch("posthog.ai.langchain.CallbackHandler.on_chat_model_start")
-
-        handler = TokenTrackingCallbackHandler(
-            model_name="gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-        )
-
-        handler.on_chat_model_start(serialized={}, messages=messages, run_id="test_run")
-
-        assert handler.input_tokens == expected_input_tokens
-        if expected_input_tokens > 0:
-            mock_token_counter.assert_called_once()
-
-    def test_on_chat_model_start_litellm_failure_fallback(
-        self, mocker, mock_posthog_client, mock_bot
-    ):
-        """Test fallback to character-based estimation when litellm fails"""
-        # Mock litellm.token_counter to raise an exception
-        mock_token_counter = mocker.patch(
-            "ai_chatbots.api.litellm.token_counter",
-            side_effect=Exception("API error"),
-        )
-        mock_log = mocker.patch("ai_chatbots.api.log.exception")
-        # Mock the parent's on_chat_model_start to avoid calling real PostHog
-        mocker.patch("posthog.ai.langchain.CallbackHandler.on_chat_model_start")
-
-        messages = [[HumanMessage(content="Hello world, this is a test message")]]
-
-        handler = TokenTrackingCallbackHandler(
-            model_name="gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-        )
-
-        handler.on_chat_model_start(serialized={}, messages=messages, run_id="test_run")
-
-        # Should fallback to character-based estimation: len("Hello world, this is a test message") // 4 = 8
-        expected_tokens = len("Hello world, this is a test message") // 4
-        assert handler.input_tokens == expected_tokens
-        mock_log.assert_called_once()
-        mock_token_counter.assert_called_once()
-
-    @pytest.mark.parametrize(
-        ("response_text_data", "expected_output_tokens"),
-        [
-            # Test with single generation containing text
-            ([["This is a response"]], 5),
-            # Test with multiple generations
-            ([["First part", "Second part"], ["Third part"]], 3),
-            # Test with empty response
-            ([[]], 0),
-            # Test with generations without text attribute
-            ([["no_text_attr"]], 0),
-        ],
-    )
-    def test_on_llm_end_token_counting(
-        self,
-        mocker,
-        mock_posthog_client,
-        mock_bot,
-        response_text_data,
-        expected_output_tokens,
-    ):
-        """Test on_llm_end method with various response configurations"""
-        # Create mock response generations based on text data
-        response_generations = []
-        for generation_group in response_text_data:
-            generation_list = []
-            for text_data in generation_group:
-                if text_data == "no_text_attr":
-                    # Mock without text attribute
-                    generation_list.append(mocker.Mock(spec=[]))
-                else:
-                    generation_list.append(mocker.Mock(text=text_data))
-            response_generations.append(generation_list)
-
-        # Create mock response object
-        mock_response = mocker.Mock()
-        mock_response.generations = response_generations
-
-        # Mock litellm.token_counter for output
-        mock_token_counter = mocker.patch("ai_chatbots.api.litellm.token_counter")
-        mock_token_counter.return_value = expected_output_tokens
-        # Mock the parent's on_llm_end to avoid calling real PostHog
-        mocker.patch("posthog.ai.langchain.CallbackHandler.on_llm_end")
-
-        handler = TokenTrackingCallbackHandler(
-            model_name="gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-            properties={},
-        )
-
-        handler.on_llm_end(response=mock_response, run_id="test_run")
-
-        assert handler._properties["$ai_output_tokens"] == expected_output_tokens  # noqa: SLF001
-        if expected_output_tokens > 0:
-            mock_token_counter.assert_called()
-
-    def test_on_llm_end_litellm_failure_fallback(
-        self, mocker, mock_posthog_client, mock_bot
-    ):
-        """Test fallback to character-based estimation when litellm fails for output"""
-        # Create mock response with text
-        mock_generation = mocker.Mock()
-        mock_generation.text = "This is a test response with some content"
-        mock_response = mocker.Mock()
-        mock_response.generations = [[mock_generation]]
-
-        # Mock litellm.token_counter to raise an exception
-        mock_token_counter = mocker.patch(
-            "ai_chatbots.api.litellm.token_counter",
-            side_effect=Exception("API error"),
-        )
-        mock_log = mocker.patch("ai_chatbots.api.log.exception")
-        # Mock the parent's on_llm_end to avoid calling real PostHog
-        mocker.patch("posthog.ai.langchain.CallbackHandler.on_llm_end")
-
-        handler = TokenTrackingCallbackHandler(
-            model_name="gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-            properties={},
-        )
-
-        handler.on_llm_end(response=mock_response, run_id="test_run")
-
-        # Should fallback to character-based estimation
-        expected_tokens = len("This is a test response with some content") // 4
-        assert handler._properties["$ai_output_tokens"] == expected_tokens  # noqa: SLF001
-        mock_log.assert_called_once()
-        mock_token_counter.assert_called_once()
-
-    def test_properties_update_on_llm_end(self, mocker, mock_posthog_client, mock_bot):
-        """Test that properties are correctly updated in on_llm_end"""
-        mock_generation = mocker.Mock()
-        mock_generation.text = "Test response"
-        mock_response = mocker.Mock()
-        mock_response.generations = [[mock_generation]]
-
-        mocker.patch("ai_chatbots.api.litellm.token_counter", return_value=10)
-        # Mock the parent's on_llm_end to avoid calling real PostHog
-        mocker.patch("posthog.ai.langchain.CallbackHandler.on_llm_end")
-
-        handler = TokenTrackingCallbackHandler(
-            model_name="gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-        )
-        handler._properties = {"existing_key": "existing_value"}  # noqa: SLF001
-        handler.input_tokens = 5
-
-        handler.on_llm_end(response=mock_response, run_id="test_run")
-
-        expected_properties = {
-            "existing_key": "existing_value",
-            "answer": "Test response",
-            "$ai_input_tokens": 5,
-            "$ai_output_tokens": 10,
-            "$ai_trace_name": "TEST_JOB",
-            "$ai_span_name": "TEST_JOB",
-        }
-
-        assert handler._properties == expected_properties  # noqa: SLF001
-
-    def test_multiple_human_messages_question_extraction(
-        self, mocker, mock_posthog_client, mock_bot
-    ):
-        """Test that the last human message is used as the question"""
-        mocker.patch("ai_chatbots.api.litellm.token_counter", return_value=10)
-        # Mock the parent's on_chat_model_start to avoid calling real PostHog
-        mock_parent = mocker.patch(
-            "posthog.ai.langchain.CallbackHandler.on_chat_model_start"
-        )
-
-        # The current implementation incorrectly tries to iterate through nested lists
-        # We need to provide the messages as a flat list for this test
-        messages = [
-            [HumanMessage(content="First question"), AIMessage(content="First answer")],
-            [HumanMessage(content="Second question")],
-        ]
-
-        handler = TokenTrackingCallbackHandler(
-            model_name="gpt-3.5-turbo",
-            client=mock_posthog_client,
-            bot=mock_bot,
-        )
-
-        handler.on_chat_model_start(serialized={}, messages=messages, run_id="test_run")
-
-        assert handler._properties["question"] == "Second question"  # noqa: SLF001
-        mock_parent.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    ("input_obj", "expected"),
-    [
-        # Primitive types
-        ("test_string", "test_string"),
-        (3.14, 3.14),
-        (True, True),
-        (None, None),
-        # Lists and dicts
-        ([1, "two", 3.0, True, None], [1, "two", 3.0, True, None]),
-        ({"a": 1, "b": "two", "c": None}, {"a": 1, "b": "two", "c": None}),
-        # LangChain Message objects
-        (
-            [
-                HumanMessage(content="Hello", id="msg-1"),
-                AIMessage(content="Hi", id="msg-2", tool_calls=[]),
-            ],
-            [
-                {
-                    "type": "human",
-                    "role": "human",
-                    "content": "Hello",
-                    "id": "msg-1",
-                    "additional_kwargs": {},
-                },
-                {
-                    "type": "ai",
-                    "role": "ai",
-                    "content": "Hi",
-                    "id": "msg-2",
-                    "tool_calls": [],
-                    "additional_kwargs": {},
-                },
-            ],
-        ),
-    ],
-)
-def test_serialize_for_posthog(input_obj, expected):
-    """Test serialization of different objects/types"""
-    result = serialize_for_posthog(input_obj)
-    assert result == expected
-
-
-def test_serialize_for_posthog_tool_calls():
-    """Test serialization of AIMessage with tool calls"""
-    msg = AIMessage(
-        content="Using search tool",
-        id="ai-msg-456",
-        tool_calls=[
-            {
-                "name": "search_courses",
-                "args": {"q": "data science", "resource_type": ["course"]},
-                "id": "call_123",
-                "type": "tool_call",
-            }
-        ],
-    )
-    result = serialize_for_posthog(msg)
-
-    assert result == {
-        "type": "ai",
-        "role": "ai",
-        "content": "Using search tool",
-        "id": "ai-msg-456",
-        "tool_calls": [
-            {
-                "id": "call_123",
-                "type": "tool_call",
-                "function": {
-                    "name": "search_courses",
-                    "arguments": {"q": "data science", "resource_type": ["course"]},
-                },
-            },
-        ],
-        "additional_kwargs": {},
-    }
-
-
-def test_serialize_for_posthog_send_object():
-    """Test serialization of LangGraph Send objects"""
-    # Use actual Send object
-    send_obj = [
-        Send(node="tools", arg={"key": "value"}),
-        Send(node="llm", arg={"messages": HumanMessage(content="Hello")}),
-    ]
-
-    result = serialize_for_posthog(send_obj)
-
-    assert result == [
-        {"node": "tools", "arg": {"key": "value"}},
-        {
-            "node": "llm",
-            "arg": {
-                "messages": {
-                    "type": "human",
-                    "role": "human",
-                    "content": "Hello",
-                    "id": None,
-                    "additional_kwargs": {},
-                }
-            },
-        },
-    ]
-
-
-def test_token_tracking_callback_handler_pop_run(mocker):
-    """Test custom _pop_run_and_capture_trace_or_span method"""
-    mock_bot = mocker.Mock()
-    mock_bot.user_id = "test_user"
-    mock_bot.thread_id = "test_thread"
-    mock_bot.JOB_ID = "TEST_JOB"
-
-    mock_posthog_client = mocker.Mock()
-
-    mock_parent_method = mocker.patch(
-        "posthog.ai.langchain.CallbackHandler._pop_run_and_capture_trace_or_span"
-    )
-
-    handler = TokenTrackingCallbackHandler(
-        model_name="gpt-4", client=mock_posthog_client, bot=mock_bot
-    )
-
-    # Create list of Send objects
-    send1 = Send(node="tool1", arg={"messages": HumanMessage(content="value1")})
-    send2 = Send(node="tool2", arg={"messages": AIMessage(content="value2")})
-
-    outputs = [send1, send2]
-
-    handler._pop_run_and_capture_trace_or_span(uuid4(), uuid4(), outputs)  # noqa: SLF001
-
-    serialized_output = mock_parent_method.call_args.args[2]
-    assert len(serialized_output) == 2
-    assert serialized_output == [
-        {
-            "node": "tool1",
-            "arg": {
-                "messages": {
-                    "type": "human",
-                    "role": "human",
-                    "content": "value1",
-                    "id": None,
-                    "additional_kwargs": {},
-                }
-            },
-        },
-        {
-            "node": "tool2",
-            "arg": {
-                "messages": {
-                    "type": "ai",
-                    "role": "ai",
-                    "content": "value2",
-                    "id": None,
-                    "tool_calls": [],
-                    "additional_kwargs": {},
-                }
-            },
-        },
+@pytest.fixture
+def truncation_node():
+    """Create a truncation node with max_human_messages=5."""
+    return MessageTruncationNode(max_human_messages=5)
+
+
+@pytest.fixture
+def sample_messages():
+    """Create a list of messages for testing."""
+    return [
+        SystemMessage(content="You are a helpful assistant", id=str(uuid4())),
+        HumanMessage(content="Question 1", id=str(uuid4())),
+        AIMessage(content="Answer 1", id=str(uuid4())),
+        HumanMessage(content="Question 2", id=str(uuid4())),
+        AIMessage(content="Answer 2", id=str(uuid4())),
+        HumanMessage(content="Question 3", id=str(uuid4())),
+        AIMessage(content="Answer 3", id=str(uuid4())),
+        HumanMessage(content="Question 4", id=str(uuid4())),
+        AIMessage(content="Answer 4", id=str(uuid4())),
+        HumanMessage(content="Question 5", id=str(uuid4())),
+        AIMessage(content="Answer 5", id=str(uuid4())),
+        HumanMessage(content="Question 6", id=str(uuid4())),
+        AIMessage(content="Answer 6", id=str(uuid4())),
+        HumanMessage(content="Question 7", id=str(uuid4())),
+        AIMessage(content="Answer 7", id=str(uuid4())),
     ]
 
 
@@ -1845,3 +396,157 @@ def test_create_tutor_checkpoints_step_calculation(has_previous_checkpoint):
     assert len(result) == 2
     assert result[0].metadata["step"] == (2 if has_previous_checkpoint else 0)
     assert result[1].metadata["step"] == (3 if has_previous_checkpoint else 1)
+
+
+def test_truncation_with_few_messages(truncation_node, sample_messages):
+    """Test that truncation doesn't affect conversations with few human messages."""
+    messages = sample_messages[:5]  # System + 2 human + 2 AI
+
+    result = truncation_node.invoke({"messages": messages})
+
+    assert len(result["llm_input_messages"]) == 5
+    assert result["llm_input_messages"] == messages
+
+
+def test_truncation_with_many_human_messages(truncation_node, sample_messages):
+    """Test that truncation keeps only last N human messages and their responses."""
+    messages = sample_messages  # All 15 messages
+
+    result = truncation_node.invoke({"messages": messages})
+
+    # Should have system message + last 5 human messages + their responses (10 messages)
+    assert len(result["llm_input_messages"]) == 11  # system + 5 human + 5 AI
+    assert isinstance(result["llm_input_messages"][0], SystemMessage)
+
+    # Should have kept questions 3-7
+    assert result["llm_input_messages"][1].content == "Question 3"
+    assert result["llm_input_messages"][2].content == "Answer 3"
+    assert result["llm_input_messages"][-2].content == "Question 7"
+    assert result["llm_input_messages"][-1].content == "Answer 7"
+
+
+def test_truncation_with_tool_calls():
+    """Test that truncation includes tool calls when human message triggered them."""
+    truncation_node = MessageTruncationNode(max_human_messages=2)
+
+    tool_call_id = str(uuid4())
+    messages = [
+        SystemMessage(content="You are a helpful assistant", id=str(uuid4())),
+        HumanMessage(content="Question 1", id=str(uuid4())),
+        AIMessage(content="Answer 1", id=str(uuid4())),
+        HumanMessage(content="Question 2 needs search", id=str(uuid4())),
+        AIMessage(
+            content="Let me search",
+            id=str(uuid4()),
+            tool_calls=[{"id": tool_call_id, "name": "search", "args": {}}],
+        ),
+        ToolMessage(
+            content="Search results", id=str(uuid4()), tool_call_id=tool_call_id
+        ),
+        AIMessage(content="Based on search: Answer 2", id=str(uuid4())),
+        HumanMessage(content="Question 3", id=str(uuid4())),
+        AIMessage(content="Answer 3", id=str(uuid4())),
+    ]
+
+    result = truncation_node.invoke({"messages": messages})
+
+    # Should have system + last 2 human messages + all their responses including tools
+    assert len(result["llm_input_messages"]) >= 7  # system + Q2 + 3 AI msgs + Q3 + A3
+    assert isinstance(result["llm_input_messages"][0], SystemMessage)
+    assert result["llm_input_messages"][1].content == "Question 2 needs search"
+    assert result["llm_input_messages"][-2].content == "Question 3"
+    assert result["llm_input_messages"][-1].content == "Answer 3"
+
+
+def test_truncation_without_system_message(truncation_node, sample_messages):
+    """Test truncation works when there's no system message."""
+    messages = sample_messages[1:13]  # Skip system message, use Q1-Q6 + A1-A6
+
+    result = truncation_node.invoke({"messages": messages})
+
+    # Should have last 5 human messages + responses (10 messages total)
+    assert len(result["llm_input_messages"]) == 10
+    assert result["llm_input_messages"][0].content == "Question 2"
+    assert result["llm_input_messages"][-1].content == "Answer 6"
+
+
+def test_truncation_with_empty_messages(truncation_node):
+    """Test truncation handles empty message list."""
+    result = truncation_node.invoke({"messages": []})
+    assert result["llm_input_messages"] == []
+
+
+def test_truncation_with_exact_limit(truncation_node, sample_messages):
+    """Test truncation when we have exactly max_human_messages."""
+    messages = sample_messages[:11]  # System + Q1-Q5 + A1-A5
+
+    result = truncation_node.invoke({"messages": messages})
+
+    # Should keep all messages (no truncation needed)
+    assert len(result["llm_input_messages"]) == 11
+    assert result["llm_input_messages"] == messages
+
+
+def test_truncation_with_only_ai_messages():
+    """Test truncation when there are no human messages."""
+    truncation_node = MessageTruncationNode(max_human_messages=5)
+
+    messages = [
+        SystemMessage(content="You are a helpful assistant", id=str(uuid4())),
+        AIMessage(content="Welcome!", id=str(uuid4())),
+        AIMessage(content="How can I help?", id=str(uuid4())),
+    ]
+
+    result = truncation_node.invoke({"messages": messages})
+
+    # Should keep all messages since there are no human messages to count
+    assert len(result["llm_input_messages"]) == 3
+    assert result["llm_input_messages"] == messages
+
+
+def test_truncation_with_multiple_ai_responses():
+    """Test truncation when AI sends multiple messages per human question."""
+    truncation_node = MessageTruncationNode(max_human_messages=2)
+
+    messages = [
+        SystemMessage(content="System", id=str(uuid4())),
+        HumanMessage(content="Question 1", id=str(uuid4())),
+        AIMessage(content="Let me think...", id=str(uuid4())),
+        AIMessage(content="Here's part 1", id=str(uuid4())),
+        AIMessage(content="And part 2", id=str(uuid4())),
+        HumanMessage(content="Question 2", id=str(uuid4())),
+        AIMessage(content="Answer 2", id=str(uuid4())),
+    ]
+
+    result = truncation_node.invoke({"messages": messages})
+
+    # Should include Question 1 and all its AI responses, plus Question 2
+    # System + Q1 + 3 AI + Q2 + A2 = 7 messages
+    assert len(result["llm_input_messages"]) == 7
+    assert result["llm_input_messages"][0].content == "System"
+    assert result["llm_input_messages"][1].content == "Question 1"
+    assert result["llm_input_messages"][-2].content == "Question 2"
+    assert result["llm_input_messages"][-1].content == "Answer 2"
+
+
+def test_find_nth_human_message_from_end(sample_messages):
+    """Test the helper method for finding human message indices."""
+    node = MessageTruncationNode(max_human_messages=3)
+    messages = [AIMessage(content="Hello", id=str(uuid4()))] + sample_messages[
+        1:7
+    ]  # Question 1-3, Answer 1-3
+
+    # Should find the 3rd-from-last human message (Question 1 at index 0)
+    index = node.find_nth_human_message_from_end(messages, 3)
+    assert index == 1
+    assert messages[index].content == "Question 1"
+
+
+def test_find_nth_human_message_not_enough(sample_messages):
+    """Test helper when there aren't enough human messages."""
+    node = MessageTruncationNode(max_human_messages=10)
+    messages = sample_messages[1:5]  # Question 1, Answer 1, Question 2, Answer 2
+
+    # Should return 0 when there aren't enough human messages
+    index = node.find_nth_human_message_from_end(messages, 10)
+    assert index == 0

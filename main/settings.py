@@ -676,6 +676,9 @@ AI_PROMPT_CACHE_FUNCTION = get_string(
 AI_TUTOR_MAX_CONVERSATION_MEMORY = get_int(
     name="AI_TUTOR_MAX_CONVERSATION_MEMORY", default=6
 )  # 6 back and forth messages prior to the current message
+AI_HUMAN_MAX_CONVERSATION_MEMORY = get_int(
+    name="AI_HUMAN_MAX_CONVERSATION_MEMORY", default=6
+)  # 6 human messages prior to the current message
 AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
     name="AI_UNSUPPORTED_TEMP_MODELS",
     default=["openai/o3-mini", "openai/gpt-5", "openai/gpt-5-mini"],
@@ -707,7 +710,7 @@ AI_MIT_SEARCH_URL = get_string(
     default=AI_MIT_SEARCH_VECTOR_URL,
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
-AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=20)
+AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=10)
 AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=5)
 
 # Provider keys
