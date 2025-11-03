@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.21.0
+Version 0.21.0 (Released November 03, 2025)
 --------------
 
 - http_request should look out for chunked messages (#362)
