@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from uuid import uuid4
 
+from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.conf import settings
@@ -366,21 +367,21 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):
-        try:
-            # Collect all body chunks in case there are multiple
-            body_parts = [message.get("body", b"")]
-
-            while message.get("more_body", False):
-                message = await self.receive()
-                if message.get("type") == "http.request":
-                    body_parts.append(message.get("body", b""))
-
-            complete_body = b"".join(body_parts).decode("utf-8")
-            await self.handle(complete_body)
-        except:  # noqa: E722
-            log.exception("Error in handling consumer http_request")
-        finally:
-            await self.disconnect()
+        """
+        Receives a request and holds the connection open
+        until the client or server chooses to disconnect.
+        """
+        if "body" in message:
+            self.body.append(message["body"])
+        if not message.get("more_body"):
+            try:
+                await self.handle(b"".join(self.body))
+            except:  # noqa: E722
+                log.exception("Error in handling consumer http_request")
+            finally:
+                await self.disconnect()
+            # This ensures connection is completely closed
+            raise StopConsumer
 
 
 class RecommendationBotHttpConsumer(BaseBotHttpConsumer):

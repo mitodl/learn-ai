@@ -287,8 +287,9 @@ async def test_http_request_complete_body(mocker):
     )
     consumer = consumers.RecommendationBotHttpConsumer()
     msg = {"body": b"test message without chunks"}
-    await consumer.http_request(msg)
-    mock_handle.assert_called_once_with("test message without chunks")
+    with pytest.raises(consumers.StopConsumer):
+        await consumer.http_request(msg)
+    mock_handle.assert_called_once_with(b"test message without chunks")
 
 
 async def test_http_request_chunked_body(mocker):
@@ -300,27 +301,17 @@ async def test_http_request_chunked_body(mocker):
 
     # Test chunked message body with multiple chunks
     first_chunk = {"body": b"test", "more_body": True}
-    second_chunk = {"type": "http.request", "body": b" message", "more_body": True}
-    third_chunk = {"type": "http.request", "body": b" with chunks", "more_body": False}
-
-    # Mock the receive method to return chunks in sequence
-    chunks = [second_chunk, third_chunk]
-    receive_call_count = 0
-
-    async def mock_receive():
-        nonlocal receive_call_count
-        chunk = chunks[receive_call_count]
-        receive_call_count += 1
-        return chunk
-
-    consumer.receive = mock_receive
+    second_chunk = {"body": b" message", "more_body": True}
+    third_chunk = {"body": b" with chunks", "more_body": False}
 
     await consumer.http_request(first_chunk)
+    await consumer.http_request(second_chunk)
+
+    with pytest.raises(consumers.StopConsumer):
+        await consumer.http_request(third_chunk)
 
     # Verify handle was called with the complete body from all chunks
-    mock_handle.assert_called_once_with("test message with chunks")
-    # Verify receive was called the correct number of times
-    assert receive_call_count == 2
+    mock_handle.assert_called_once_with(b"test message with chunks")
 
 
 async def test_http_request_error(mocker):
@@ -331,7 +322,8 @@ async def test_http_request_error(mocker):
         side_effect=Exception("Test exception"),
     )
     consumer = consumers.RecommendationBotHttpConsumer()
-    await consumer.http_request({"body": b"test"})
+    with pytest.raises(consumers.StopConsumer):
+        await consumer.http_request({"body": b"test"})
     mock_handle.assert_called_once()
     mock_log.assert_called_once_with("Error in handling consumer http_request")
 
