@@ -366,12 +366,17 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         await self.send_body(body=chunk.encode("utf-8"), more_body=more_body)
 
     async def http_request(self, message):
-        """
-        Receives a request and holds the connection open
-        until the client or server chooses to disconnect.
-        """
         try:
-            await self.handle(message.get("body"))
+            # Collect all body chunks in case there are multiple
+            body_parts = [message.get("body", b"")]
+
+            while message.get("more_body", False):
+                message = await self.receive()
+                if message.get("type") == "http.request":
+                    body_parts.append(message.get("body", b""))
+
+            complete_body = b"".join(body_parts).decode("utf-8")
+            await self.handle(complete_body)
         except:  # noqa: E722
             log.exception("Error in handling consumer http_request")
         finally:

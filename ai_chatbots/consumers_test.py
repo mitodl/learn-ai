@@ -238,9 +238,17 @@ async def test_clear_history(  # noqa: PLR0913
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
     )
     bot_cookie = f"{recommendation_consumer.ROOM_NAME}_{cookie_name}"
-    latest_thread_id = urlsafe_base64_encode(force_bytes("1234"))
+    unique_thread_id = uuid4().hex
+
+    session = await sync_to_async(UserChatSessionFactory.create)(
+        thread_id=unique_thread_id,
+        user=(None if is_anon else async_user),
+        agent=recommendation_consumer.ROOM_NAME,
+        dj_session_key="test_session_key",
+    )
+    thread_id_bytes = urlsafe_base64_encode(force_bytes(session.thread_id))
     recommendation_consumer.scope["cookies"] = {
-        bot_cookie: latest_thread_id,
+        bot_cookie: thread_id_bytes,
         AI_SESSION_COOKIE_KEY: "test_session_key",
     }
     recommendation_consumer.scope["user"] = AnonymousUser() if is_anon else async_user
@@ -248,29 +256,71 @@ async def test_clear_history(  # noqa: PLR0913
         json.dumps({"clear_history": clear_history, "message": "hello"})
     )
     args = mock_http_consumer_send.send_headers.call_args_list
-    if cookie_name == AI_THREAD_COOKIE_KEY:
+    headers = args[0][-1]["headers"]
+
+    # Find the specific cookie by name rather than relying on position
+    target_cookie = None
+    for header_name, header_value in headers:
+        if header_name == b"Set-Cookie":
+            cookie_str = header_value.decode()
+            if cookie_str.startswith(f"{bot_cookie}="):
+                target_cookie = cookie_str
+                break
+
+    assert target_cookie is not None, f"Cookie {bot_cookie} not found in headers"
+
+    if cookie_name == AI_THREAD_COOKIE_KEY and not is_anon:
         # old thread id should not be present at all
-        cookie_args = str(args[0][-1]["headers"][-3][1])
-        assert (latest_thread_id in cookie_args) != clear_history
-    elif is_anon:
+        assert (thread_id_bytes in target_cookie) != clear_history
+    elif is_anon and cookie_name == AI_THREADS_ANONYMOUS_COOKIE_KEY:
         # old thread id should be present in the anon cookie
-        cookie_args = str(args[0][-1]["headers"][-2][1])
-        assert (latest_thread_id in cookie_args) != clear_history
+        assert (thread_id_bytes in target_cookie) != clear_history
     else:
         # anon thread_ids should have been cleared from cookie
-        cookie_args = str(args[0][-1]["headers"][-3][1])
-        assert cookie_args == f"{bot_cookie}=;Path=/;"
+        assert target_cookie == f"{bot_cookie}=;Path=/;"
 
 
-async def test_http_request(mocker):
-    """Test the http request function of the AsyncHttpConsumer"""
-    msg = {"body": "test"}
+async def test_http_request_complete_body(mocker):
+    """Test the http request function with a complete message body"""
     mock_handle = mocker.patch(
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    msg = {"body": b"test message without chunks"}
     await consumer.http_request(msg)
-    mock_handle.assert_called_once_with(msg["body"])
+    mock_handle.assert_called_once_with("test message without chunks")
+
+
+async def test_http_request_chunked_body(mocker):
+    """Test the http request function with a chunked message body"""
+    mock_handle = mocker.patch(
+        "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
+    )
+    consumer = consumers.RecommendationBotHttpConsumer()
+
+    # Test chunked message body with multiple chunks
+    first_chunk = {"body": b"test", "more_body": True}
+    second_chunk = {"type": "http.request", "body": b" message", "more_body": True}
+    third_chunk = {"type": "http.request", "body": b" with chunks", "more_body": False}
+
+    # Mock the receive method to return chunks in sequence
+    chunks = [second_chunk, third_chunk]
+    receive_call_count = 0
+
+    async def mock_receive():
+        nonlocal receive_call_count
+        chunk = chunks[receive_call_count]
+        receive_call_count += 1
+        return chunk
+
+    consumer.receive = mock_receive
+
+    await consumer.http_request(first_chunk)
+
+    # Verify handle was called with the complete body from all chunks
+    mock_handle.assert_called_once_with("test message with chunks")
+    # Verify receive was called the correct number of times
+    assert receive_call_count == 2
 
 
 async def test_http_request_error(mocker):
@@ -281,7 +331,7 @@ async def test_http_request_error(mocker):
         side_effect=Exception("Test exception"),
     )
     consumer = consumers.RecommendationBotHttpConsumer()
-    await consumer.http_request({"body": "test"})
+    await consumer.http_request({"body": b"test"})
     mock_handle.assert_called_once()
     mock_log.assert_called_once_with("Error in handling consumer http_request")
 
