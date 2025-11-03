@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from uuid import uuid4
 
+from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.conf import settings
@@ -370,12 +371,17 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         Receives a request and holds the connection open
         until the client or server chooses to disconnect.
         """
-        try:
-            await self.handle(message.get("body"))
-        except:  # noqa: E722
-            log.exception("Error in handling consumer http_request")
-        finally:
-            await self.disconnect()
+        if "body" in message:
+            self.body.append(message["body"])
+        if not message.get("more_body"):
+            try:
+                await self.handle(b"".join(self.body))
+            except:  # noqa: E722
+                log.exception("Error in handling consumer http_request")
+            finally:
+                await self.disconnect()
+            # This ensures connection is completely closed
+            raise StopConsumer
 
 
 class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
