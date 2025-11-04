@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:12.22
+    image: postgres:16
     healthcheck:
       test: ["CMD", "pg_isready"]
       interval: 3s
@@ -89,7 +89,7 @@ services:
       - ./config/litellm_config.yml:/app/litellm_config.yml
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
+    image: quay.io/keycloak/keycloak:26.4
     depends_on:
       - db
     ports:
@@ -119,7 +119,7 @@ services:
       - ./config/keycloak/realms:/opt/keycloak/data/import
 
   apigateway:
-    image: apache/apisix:latest
+    image: apache/apisix:3.13.0-debian # versions above this drop the local port on redirects
     depends_on:
       - keycloak
     env_file:
