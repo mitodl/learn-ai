@@ -111,6 +111,7 @@ def posthog_settings(settings):
         (None, None, None, False),
     ],
 )
+@pytest.mark.asyncio
 async def test_recommendation_bot_initialization_defaults(
     mocker, model, temperature, instructions, has_tools
 ):
@@ -146,6 +147,7 @@ async def test_recommendation_bot_initialization_defaults(
     )
 
 
+@pytest.mark.asyncio
 async def test_recommendation_bot_tool(
     settings, mock_httpx_async_client, search_results
 ):
@@ -201,6 +203,7 @@ async def test_recommendation_bot_tool(
 
 
 @pytest.mark.parametrize("debug", [True, False])
+@pytest.mark.asyncio
 async def test_get_completion(
     posthog_settings, mocker, mock_checkpointer, debug, search_results
 ):
@@ -258,6 +261,7 @@ async def test_get_completion(
     assert "".join([value.decode() for value in expected_return_value]) in results
 
 
+@pytest.mark.asyncio
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
     chatbot = ResourceRecommendationBot(
@@ -302,6 +306,7 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
         assert test_condition
 
 
+@pytest.mark.asyncio
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -319,6 +324,7 @@ async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+@pytest.mark.asyncio
 async def test_syllabus_bot_get_completion_state(
     mock_checkpointer, mock_openai_astream, default_model
 ):
@@ -341,6 +347,7 @@ async def test_syllabus_bot_get_completion_state(
     assert chatbot.llm.model == default_model
 
 
+@pytest.mark.asyncio
 async def test_syllabus_bot_tool(
     settings,
     mock_checkpointer,
@@ -400,6 +407,7 @@ async def test_syllabus_bot_tool(
     assert_json_equal(json.loads(results), expected_results)
 
 
+@pytest.mark.asyncio
 async def test_get_tool_metadata(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected metadata"""
     chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
@@ -464,6 +472,7 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
     }
 
 
+@pytest.mark.asyncio
 async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns an empty dict JSON string"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
@@ -485,6 +494,7 @@ async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     assert metadata == {}
 
 
+@pytest.mark.asyncio
 async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected error response"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
@@ -515,6 +525,7 @@ async def test_get_tool_metadata_error(mocker, mock_checkpointer):
 
 
 @pytest.mark.parametrize("use_proxy", [True, False])
+@pytest.mark.asyncio
 async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     """Test that the proxy settings are set correctly"""
     mock_create_proxy_user = mocker.patch(
@@ -556,6 +567,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     ],
 )
 @pytest.mark.parametrize("variant", ["edx", "canvas"])
+@pytest.mark.asyncio
 async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
     """Test the tutor class instantiation."""
     name = "My tutor bot"
@@ -605,6 +617,7 @@ async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
 
 
 @pytest.mark.parametrize("variant", ["edx", "canvas"])
+@pytest.mark.asyncio
 async def test_tutor_get_completion(posthog_settings, mocker, variant):
     """Test that the tutor bot get_completion method returns expected values."""
     final_message = [
@@ -758,6 +771,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
     assert history.edx_module_id == (edx_module_id or "")
 
 
+@pytest.mark.asyncio
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -832,6 +846,7 @@ async def test_get_canvas_problem_set(mock_httpx_async_client):
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+@pytest.mark.asyncio
 async def test_video_gpt_bot_get_completion_state(
     mock_checkpointer, mock_openai_astream, default_model
 ):
@@ -859,6 +874,7 @@ async def test_video_gpt_bot_get_completion_state(
     assert chatbot.llm.model == default_model
 
 
+@pytest.mark.asyncio
 async def test_video_gpt_bot_tool(
     settings,
     mock_checkpointer,
@@ -907,6 +923,7 @@ async def test_video_gpt_bot_tool(
     assert_json_equal(json.loads(results), expected_results)
 
 
+@pytest.mark.asyncio
 async def test_bad_request(mocker, mock_checkpointer):
     """Test that the bad_request function logs the exception"""
     mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")
