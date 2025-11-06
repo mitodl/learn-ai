@@ -1,5 +1,6 @@
 """Utility functions for ai chat agents"""
 
+import asyncio
 import logging
 from enum import Enum
 
@@ -44,7 +45,11 @@ class HTTPClientManager:
 
     def reset(self):
         """Reset client instances (primarily for testing)."""
+        if self._sync_client:
+            self._sync_client.close()
         self._sync_client = None
+        if self._async_client:
+            asyncio.run(self._async_client.aclose())
         self._async_client = None
 
 
