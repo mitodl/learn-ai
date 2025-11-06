@@ -1,5 +1,6 @@
 """Agent service classes for the AI chatbots"""
 
+import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -32,7 +33,6 @@ from open_learning_ai_tutor.utils import (
 )
 from openai import BadRequestError
 from posthog.ai.langchain import CallbackHandler
-from typing_extensions import TypedDict
 
 from ai_chatbots import tools
 from ai_chatbots.api import (
@@ -44,7 +44,10 @@ from ai_chatbots.api import (
 )
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
-from ai_chatbots.utils import get_django_cache, request_with_token
+from ai_chatbots.utils import (
+    async_request_with_token,
+    get_django_cache,
+)
 
 log = logging.getLogger(__name__)
 
@@ -225,7 +228,7 @@ class BaseChatbot(ABC):
         self,
         message: str,
         *,
-        extra_state: Optional[TypedDict] = None,
+        extra_state: Optional[dict[str, Any]] = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
@@ -498,21 +501,18 @@ class TutorBot(BaseChatbot):
         self.problem_set_title = problem_set_title
 
         if not self.edx_module_id:
-            self.problem_set = get_canvas_problem_set(
-                self.run_readable_id, self.problem_set_title
-            )
-
-            self.problem = ""
             self.variant = "canvas"
-
+            self.problem = ""
         else:
-            self.problem, self.problem_set = get_problem_from_edx_block(
-                edx_module_id, block_siblings
-            )
             self.variant = "edx"
+            self.problem = None
+
+        self.problem_set = None
+        self.problem_data_loaded = False
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
+        await self.load_problem_data()
         return {
             "edx_module_id": self.edx_module_id,
             "block_siblings": self.block_siblings,
@@ -529,10 +529,12 @@ class TutorBot(BaseChatbot):
         self,
         message: str,
         *,
-        extra_state: Optional[TypedDict] = None,  # noqa: ARG002
+        extra_state: Optional[dict[str, Any]] = None,  # noqa: ARG002
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
+
+        await self.load_problem_data()
 
         history = await self.get_latest_history()
         message_id = str(uuid4())
@@ -555,7 +557,12 @@ class TutorBot(BaseChatbot):
         full_response = ""
         new_history = []
         try:
-            generator, new_intent_history, new_assessment_history = message_tutor(
+            (
+                generator,
+                new_intent_history,
+                new_assessment_history,
+            ) = await asyncio.to_thread(
+                message_tutor,
                 self.problem,
                 self.problem_set,
                 self.llm,
@@ -603,8 +610,36 @@ class TutorBot(BaseChatbot):
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
 
+    async def load_problem_data(self) -> None:
+        """Fetch problem content if it has not already been loaded."""
+        if self.problem_data_loaded:
+            return
 
-def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
+        if self.variant == "canvas":
+            if not self.run_readable_id or not self.problem_set_title:
+                msg = "Canvas tutor requires run_readable_id and problem_set_title"
+                raise ValueError(msg)
+            self.problem_set = await get_canvas_problem_set(
+                self.run_readable_id,
+                self.problem_set_title,
+            )
+        else:
+            if not self.edx_module_id or not self.block_siblings:
+                msg = "Edx tutor requires edx_module_id and block_siblings"
+                raise ValueError(msg)
+            problem, problem_set = await get_problem_from_edx_block(
+                self.edx_module_id,
+                self.block_siblings,
+            )
+            self.problem = problem
+            self.problem_set = problem_set
+
+        self.problem_data_loaded = True
+
+
+async def get_problem_from_edx_block(
+    edx_module_id: str, block_siblings: list[str]
+) -> tuple[str, str]:
     """
     Make an call to the learn contentfiles api to get the problem xml and problem
     set xml using the block id
@@ -622,7 +657,7 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
     api_url = settings.AI_MIT_CONTENTFILE_URL
     params = {"edx_module_id": block_siblings}
 
-    response = request_with_token(api_url, params, timeout=10)
+    response = await async_request_with_token(api_url, params, timeout=10)
 
     response = response.json()
 
@@ -635,7 +670,9 @@ def get_problem_from_edx_block(edx_module_id: str, block_siblings: list[str]):
     return problem, problem_set
 
 
-def get_canvas_problem_set(run_readable_id: str, problem_set_title: str) -> str:
+async def get_canvas_problem_set(
+    run_readable_id: str, problem_set_title: str
+) -> dict[str, list[dict[str, str]]]:
     """
     Make an call to the learn tutor probalem api to get the problem set and solution
     using run_readable_id and problem_set_title
@@ -650,7 +687,7 @@ def get_canvas_problem_set(run_readable_id: str, problem_set_title: str) -> str:
 
     api_url = f"{settings.PROBLEM_SET_URL}{run_readable_id}/{problem_set_title}/"
 
-    response = request_with_token(api_url, {}, timeout=10)
+    response = await async_request_with_token(api_url, {}, timeout=10)
     response = response.json()
 
     return {

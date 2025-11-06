@@ -3,31 +3,25 @@
 import json
 
 import pytest
+from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
-from requests import RequestException
 
 from ai_chatbots.tools import search_content_files, search_courses
 
 
 @pytest.fixture
-def mock_get_resources(mocker, search_results):
-    """Mock resource requests.get for all tests."""
-    return mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(
-            json=mocker.Mock(return_value=search_results), status_code=200
-        ),
+def mock_get_resources(mock_httpx_async_client, search_results):
+    """Mock httpx async client for resource search tests."""
+    return mock_httpx_async_client(
+        search_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
 
 
 @pytest.fixture
-def mock_get_content_files(mocker, content_chunk_results):
-    """Mock resource requests.get for all tests."""
-    return mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(
-            json=mocker.Mock(return_value=content_chunk_results), status_code=200
-        ),
+def mock_get_content_files(mock_httpx_async_client, content_chunk_results):
+    """Mock httpx async requests for content file tests."""
+    return mock_httpx_async_client(
+        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
 
 
@@ -55,18 +49,23 @@ def mock_get_content_files(mocker, content_chunk_results):
     ("search_url", "limit"),
     [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
 )
-def test_search_courses(  # noqa: PLR0913
+async def test_search_courses(  # noqa: PLR0913
     settings, params, mock_get_resources, search_results, search_url, limit
 ):
     """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SEARCH_URL = search_url
     settings.AI_MIT_SEARCH_LIMIT = limit
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     params["state"] = {"search_url": [search_url]}
-    results = json.loads(search_courses.invoke(params))
+    results = json.loads(await search_courses.ainvoke(params))
     params.pop("state")
     expected_params = {"limit": limit, **params}
-    mock_get_resources.assert_called_once_with(
-        search_url, params=expected_params, timeout=30
+    # The mock client's get method should be called
+    mock_get_resources.return_value.get.assert_called_once_with(
+        search_url,
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
     )
     assert len(results["results"]) == len(search_results["results"])
 
@@ -75,18 +74,25 @@ def test_search_courses(  # noqa: PLR0913
     "search_url",
     ["https://mit.edu/search", "https://mit.edu/vector"],
 )
-def test_search_courses_override_url(settings, mock_get_resources, search_url):
+async def test_search_courses_override_url(settings, mock_get_resources, search_url):
     """Test that the search_courses tool returns expected results w/expected params."""
     settings.AI_MIT_SEARCH_URL = "http://default_url.edu"
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     params = {
         "q": "physics",
         "limit": 10,
         "resource_type": ["course"],
         "state": {"search_url": [search_url]},
     }
-    search_courses.invoke(params)
+    await search_courses.ainvoke(params)
     params.pop("state")
-    mock_get_resources.assert_called_once_with(search_url, params=params, timeout=30)
+    # The mock client's get method should be called
+    mock_get_resources.return_value.get.assert_called_once_with(
+        search_url,
+        params=params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
 
 
 @pytest.mark.parametrize(
@@ -107,10 +113,14 @@ def test_invalid_params(params):
         search_courses.invoke(params)
 
 
-def test_request_exception(mocker):
+async def test_httpx_exception(mocker):
     """Test that a request exception returns a JSON error msg"""
-    mocker.patch("ai_chatbots.tools.requests.get", side_effect=RequestException)
-    result = search_courses.invoke(
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
+
+    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
+
+    result = await search_courses.ainvoke(
         {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
     )
     assert result == '{"error": "An error occurred while searching"}'
@@ -121,7 +131,7 @@ def test_request_exception(mocker):
     [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
 )
 @pytest.mark.parametrize("no_collection_name", [True, False])
-def test_search_content_files(  # noqa: PLR0913
+async def test_search_content_files(  # noqa: PLR0913
     settings,
     mock_get_content_files,
     syllabus_agent_state,
@@ -145,9 +155,11 @@ def test_search_content_files(  # noqa: PLR0913
         syllabus_agent_state.pop("collection_name")
 
     results = json.loads(
-        search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
+        await search_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
     )
-    mock_get_content_files.assert_called_once_with(
+    mock_get_content_files.return_value.get.assert_called_once_with(
         search_url,
         params=expected_params,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
@@ -172,8 +184,12 @@ def test_search_content_files(  # noqa: PLR0913
 
 
 @pytest.mark.parametrize("exclude_canvas", [True, False])
-def test_search_canvas_content_files(
-    settings, mocker, syllabus_agent_state, content_chunk_results, exclude_canvas
+async def test_search_canvas_content_files(
+    settings,
+    mock_httpx_async_client,
+    syllabus_agent_state,
+    content_chunk_results,
+    exclude_canvas,
 ):
     """Test that search_content_files returns canvas results only if exclude_canvas is False."""
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
@@ -181,14 +197,16 @@ def test_search_canvas_content_files(
     syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
     for result in content_chunk_results["results"]:
         result["platform"]["code"] = "canvas"
-    mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(
-            json=mocker.Mock(return_value=content_chunk_results), status_code=200
-        ),
+
+    # Mock httpx async client
+    mock_httpx_async_client(
+        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
+
     results = json.loads(
-        search_content_files.invoke({"q": "main topics", "state": syllabus_agent_state})
+        await search_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
     )
 
     assert len(results["results"]) == (

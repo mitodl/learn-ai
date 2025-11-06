@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from uuid import uuid4
 
+import litellm
 from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
@@ -357,10 +358,20 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
+        # Close any unclosed async HTTP clients from LiteLLM to prevent resource leaks
+        try:
+            await litellm.close_litellm_async_clients()
+        except Exception:
+            log.exception("Error closing LiteLLM async clients")
+
+        # Clean up Django Channels group
         if hasattr(self, "channel_layer") and hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(
                 self.room_group_name, self.channel_name
             )
+
+        # Call parent disconnect
+        await super().disconnect()
 
     async def send_chunk(self, chunk: str, *, more_body: bool = True):
         """send_chunk should call send_body with the chunk and more_body kwarg"""
