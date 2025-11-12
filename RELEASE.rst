@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.22.0
+--------------
+
+- chore(deps): update dependency social-auth-app-django to v5.6.0 [security] (#364)
+- fix(deps): update dependency ai to v5 [security] (#368)
+- More async-friendly connections plus httpx and pooling (#367)
+- Hardcoded versions for keycloak, apisix, postgres (#365)
+- fix(deps): update dependency django to v4.2.26 [security] (#366)
+
 Version 0.21.0 (Released November 03, 2025)
 --------------
 
