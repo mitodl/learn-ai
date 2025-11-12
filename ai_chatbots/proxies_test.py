@@ -26,7 +26,13 @@ def proxy_settings(settings):
 )
 def test_litellm_create_user(settings, mocker, user_id, multiplier, endpoint):
     """Test that correct api calls are made to create a LitelLM proxy user"""
-    mock_request_post = mocker.patch("ai_chatbots.proxies.requests.post")
+    mock_response = mocker.Mock()
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client = mocker.Mock()
+    mock_client.post = mocker.Mock(return_value=mock_response)
+
+    mocker.patch("ai_chatbots.proxies.get_sync_http_client", return_value=mock_client)
     LiteLLMProxy().create_proxy_user(user_id, endpoint)
 
     expected_multiplier = multiplier if user_id == "anonymous" else 1
@@ -40,7 +46,7 @@ def test_litellm_create_user(settings, mocker, user_id, multiplier, endpoint):
         "budget_duration": settings.AI_BUDGET_DURATION,
     }
 
-    mock_request_post.assert_called_once_with(
+    mock_client.post.assert_called_once_with(
         urljoin(settings.AI_PROXY_URL, f"/customer/{endpoint}"),
         json=expected_body,
         timeout=settings.REQUESTS_TIMEOUT,
@@ -50,19 +56,21 @@ def test_litellm_create_user(settings, mocker, user_id, multiplier, endpoint):
 
 def test_litellm_create_user_exists(settings, mocker):
     """If user already exists, update the user instead"""
-    mock_request_post = mocker.patch(
-        "ai_chatbots.proxies.requests.post",
+    mock_client = mocker.Mock()
+    mock_client.post = mocker.Mock(
         side_effect=[
             Exception("Error, duplicate key value violates unique constraint"),
             mocker.Mock(),
-        ],
+        ]
     )
+
+    mocker.patch("ai_chatbots.proxies.get_sync_http_client", return_value=mock_client)
 
     LiteLLMProxy().create_proxy_user("user1")
 
-    assert mock_request_post.call_count == 2
+    assert mock_client.post.call_count == 2
     for endpoint in ("new", "update"):
-        mock_request_post.assert_any_call(
+        mock_client.post.assert_any_call(
             urljoin(settings.AI_PROXY_URL, f"/customer/{endpoint}"),
             json=ANY,
             timeout=settings.REQUESTS_TIMEOUT,
@@ -98,6 +106,6 @@ def test_get_additional_kwargs(mocker):
                     f"jobID:{mock_agent.JOB_ID}",
                     f"taskName:{mock_agent.TASK_NAME}",
                 ]
-            }
+            },
         },
     }

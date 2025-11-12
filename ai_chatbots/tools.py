@@ -5,14 +5,14 @@ import logging
 from typing import Annotated, Optional
 
 import pydantic
-import requests
 from django.conf import settings
+from httpx import RequestError
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
-from ai_chatbots.utils import enum_zip, request_with_token
+from ai_chatbots.utils import async_request_with_token, enum_zip
 
 log = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class SearchToolSchema(pydantic.BaseModel):
 
 
 @tool(args_schema=SearchToolSchema)
-def search_courses(
+async def search_courses(
     q: str, state: Optional[Annotated[dict, InjectedState]], **kwargs
 ) -> str:
     """
@@ -141,7 +141,9 @@ def search_courses(
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
-        response = requests.get(search_url, params=params, timeout=30)
+        response = await async_request_with_token(
+            search_url, params, timeout=settings.REQUESTS_TIMEOUT
+        )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -180,7 +182,7 @@ def search_courses(
             "metadata": {"search_url": search_url, "parameters": params},
         }
         return json.dumps(full_output)
-    except requests.exceptions.RequestException:
+    except RequestError:
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
 
@@ -239,12 +241,14 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     )
 
 
-def _content_file_search(url, params, *, exclude_canvas=True):
+async def _content_file_search(url, params, *, exclude_canvas=True):
     try:
         # Convert the exclude_canvas parameter to a boolean if it is a string
         if exclude_canvas and exclude_canvas == "False":
             exclude_canvas = False
-        response = request_with_token(url, params, timeout=30)
+        response = await async_request_with_token(
+            url, params, timeout=settings.REQUESTS_TIMEOUT
+        )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -274,13 +278,13 @@ def _content_file_search(url, params, *, exclude_canvas=True):
             "metadata": {"parameters": params},
         }
         return json.dumps(full_output)
-    except requests.exceptions.RequestException:
+    except Exception:
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
-def search_content_files(
+async def search_content_files(
     q: str, state: Annotated[dict, InjectedState], readable_id: str | None = None
 ) -> str:
     """
@@ -299,11 +303,11 @@ def search_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
-    return _content_file_search(url, params, exclude_canvas=exclude_canvas)
+    return await _content_file_search(url, params, exclude_canvas=exclude_canvas)
 
 
 @tool(args_schema=SearchRelatedCourseContentFilesToolSchema)
-def search_related_course_content_files(
+async def search_related_course_content_files(
     q: str, state: Annotated[dict, InjectedState]
 ) -> str:
     """
@@ -320,11 +324,13 @@ def search_related_course_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
-    return _content_file_search(url, params)
+    return await _content_file_search(url, params)
 
 
 @tool(args_schema=VideoGPTToolSchema)
-def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) -> str:
+async def get_video_transcript_chunk(
+    q: str, state: Annotated[dict, InjectedState]
+) -> str:
     """
     Query the MIT video transcript API, and return results as a JSON string.
     """
@@ -340,7 +346,9 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
 
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = request_with_token(url, params, timeout=30)
+        response = await async_request_with_token(
+            url, params, timeout=settings.REQUESTS_TIMEOUT
+        )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
         # Simplify the response to only include the main properties
@@ -356,6 +364,6 @@ def get_video_transcript_chunk(q: str, state: Annotated[dict, InjectedState]) ->
         }
 
         return json.dumps(full_output)
-    except requests.exceptions.RequestException:
+    except Exception:
         log.exception("Error querying MIT API for transcripts")
         return json.dumps({"error": "An error occurred while getting the transcript"})

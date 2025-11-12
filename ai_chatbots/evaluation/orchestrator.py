@@ -222,7 +222,7 @@ class EvaluationOrchestrator:
         """Run evaluation across specified bots and models."""
         # Set up DeepEval authentication if API key is available
         if config.confident_api_key:
-            deepeval.login_with_confident_api_key(config.confident_api_key)
+            deepeval.login(config.confident_api_key)
 
         # Determine which bots to evaluate
         bot_names = bot_names or list(BOT_EVALUATORS.keys())

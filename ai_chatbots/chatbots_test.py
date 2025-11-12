@@ -12,6 +12,11 @@ from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
+from open_learning_ai_tutor.constants import Intent
+from open_learning_ai_tutor.utils import (
+    filter_out_system_messages,
+    tutor_output_to_json,
+)
 from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
@@ -37,11 +42,6 @@ from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
-from open_learning_ai_tutor.constants import Intent
-from open_learning_ai_tutor.utils import (
-    filter_out_system_messages,
-    tutor_output_to_json,
-)
 
 pytestmark = pytest.mark.django_db
 
@@ -111,6 +111,7 @@ def posthog_settings(settings):
         (None, None, None, False),
     ],
 )
+@pytest.mark.asyncio
 async def test_recommendation_bot_initialization_defaults(
     mocker, model, temperature, instructions, has_tools
 ):
@@ -146,7 +147,10 @@ async def test_recommendation_bot_initialization_defaults(
     )
 
 
-async def test_recommendation_bot_tool(settings, mocker, search_results):
+@pytest.mark.asyncio
+async def test_recommendation_bot_tool(
+    settings, mock_httpx_async_client, search_results
+):
     """The ResourceRecommendationBot tool should be created and function correctly."""
     settings.AI_MIT_SEARCH_LIMIT = 5
     settings.AI_MIT_SEARCH_DETAIL_URL = "https://test.mit.edu/resource="
@@ -170,9 +174,8 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
         simple_result["url"] = f"https://test.mit.edu/resource={resource.get('id')}"
         expected_results["results"].append(simple_result)
 
-    mock_post = mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(json=mocker.Mock(return_value=search_results)),
+    mock_client_patch = mock_httpx_async_client(
+        search_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
     chatbot = ResourceRecommendationBot("anonymous")
     search_parameters = {
@@ -185,19 +188,22 @@ async def test_recommendation_bot_tool(settings, mocker, search_results):
         "state": {"search_url": [settings.AI_MIT_SEARCH_URL]},
     }
     tool = chatbot.create_tools()[0]
-    results = tool.invoke(search_parameters)
+    results = await tool.ainvoke(search_parameters)
     search_parameters.pop("state")
     expected_results["metadata"]["parameters"] = search_parameters
     expected_results["metadata"]["search_url"] = settings.AI_MIT_SEARCH_URL
-    mock_post.assert_called_once_with(
+    mock_client_instance = mock_client_patch.return_value
+    mock_client_instance.get.assert_called_once_with(
         settings.AI_MIT_SEARCH_URL,
         params={"q": "physics", **search_parameters},
+        headers={"Authorization": f"Bearer {settings.AI_PROXY_AUTH_TOKEN}"},
         timeout=30,
     )
     assert_json_equal(json.loads(results), expected_results)
 
 
 @pytest.mark.parametrize("debug", [True, False])
+@pytest.mark.asyncio
 async def test_get_completion(
     posthog_settings, mocker, mock_checkpointer, debug, search_results
 ):
@@ -255,6 +261,7 @@ async def test_get_completion(
     assert "".join([value.decode() for value in expected_return_value]) in results
 
 
+@pytest.mark.asyncio
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
     chatbot = ResourceRecommendationBot(
@@ -266,7 +273,7 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     graph = agent.get_graph()
     tool = graph.nodes["tools"].data.tools_by_name["search_courses"]
     assert tool.args_schema == SearchToolSchema
-    assert tool.func.__name__ == "search_courses"
+    assert tool.coroutine.__name__ == "search_courses"
     edges = graph.edges
     assert len(edges) == 5
     summary_edge = edges[3]
@@ -299,6 +306,7 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
         assert test_condition
 
 
+@pytest.mark.asyncio
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -316,6 +324,7 @@ async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+@pytest.mark.asyncio
 async def test_syllabus_bot_get_completion_state(
     mock_checkpointer, mock_openai_astream, default_model
 ):
@@ -338,8 +347,13 @@ async def test_syllabus_bot_get_completion_state(
     assert chatbot.llm.model == default_model
 
 
+@pytest.mark.asyncio
 async def test_syllabus_bot_tool(
-    settings, mocker, mock_checkpointer, syllabus_agent_state, content_chunk_results
+    settings,
+    mock_checkpointer,
+    syllabus_agent_state,
+    content_chunk_results,
+    mock_httpx_async_client,
 ):
     """The SyllabusBot tool should call the correct tool"""
     settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
@@ -369,9 +383,8 @@ async def test_syllabus_bot_tool(
         "metadata": {},
     }
 
-    mock_post = mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(json=mocker.Mock(return_value=content_chunk_results)),
+    mock_client_patch = mock_httpx_async_client(
+        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
 
@@ -383,8 +396,9 @@ async def test_syllabus_bot_tool(
     }
     expected_results["metadata"]["parameters"] = search_parameters
     tool = chatbot.create_tools()[0]
-    results = tool.invoke({"q": "main topics", "state": syllabus_agent_state})
-    mock_post.assert_called_once_with(
+    results = await tool.ainvoke({"q": "main topics", "state": syllabus_agent_state})
+    mock_client_instance = mock_client_patch.return_value
+    mock_client_instance.get.assert_called_once_with(
         settings.AI_MIT_SYLLABUS_URL,
         params=search_parameters,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
@@ -393,6 +407,7 @@ async def test_syllabus_bot_tool(
     assert_json_equal(json.loads(results), expected_results)
 
 
+@pytest.mark.asyncio
 async def test_get_tool_metadata(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected metadata"""
     chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
@@ -457,6 +472,7 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
     }
 
 
+@pytest.mark.asyncio
 async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns an empty dict JSON string"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
@@ -478,6 +494,7 @@ async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     assert metadata == {}
 
 
+@pytest.mark.asyncio
 async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected error response"""
     chatbot = SyllabusBot("anonymous", mock_checkpointer)
@@ -508,6 +525,7 @@ async def test_get_tool_metadata_error(mocker, mock_checkpointer):
 
 
 @pytest.mark.parametrize("use_proxy", [True, False])
+@pytest.mark.asyncio
 async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     """Test that the proxy settings are set correctly"""
     mock_create_proxy_user = mocker.patch(
@@ -549,6 +567,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     ],
 )
 @pytest.mark.parametrize("variant", ["edx", "canvas"])
+@pytest.mark.asyncio
 async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
     """Test the tutor class instantiation."""
     name = "My tutor bot"
@@ -559,6 +578,7 @@ async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
         run_readable_id = None
         mocker.patch(
             "ai_chatbots.chatbots.get_problem_from_edx_block",
+            new_callable=AsyncMock,
             return_value=("problem_xml", "problem_set_xml"),
         )
     else:
@@ -568,6 +588,7 @@ async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
         run_readable_id = "run_readable_id"
         mocker.patch(
             "ai_chatbots.chatbots.get_canvas_problem_set",
+            new_callable=AsyncMock,
             return_value="problem_set",
         )
 
@@ -585,14 +606,18 @@ async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
     assert chatbot.temperature == (
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
+    assert chatbot.problem_data_loaded is False
+    await chatbot.load_problem_data()
     assert chatbot.problem == ("problem_xml" if variant == "edx" else "")
     assert chatbot.problem_set == (
         "problem_set_xml" if variant == "edx" else "problem_set"
     )
+    assert chatbot.problem_data_loaded is True
     assert chatbot.model == model if model else settings.AI_DEFAULT_TUTOR_MODEL
 
 
 @pytest.mark.parametrize("variant", ["edx", "canvas"])
+@pytest.mark.asyncio
 async def test_tutor_get_completion(posthog_settings, mocker, variant):
     """Test that the tutor bot get_completion method returns expected values."""
     final_message = [
@@ -658,11 +683,13 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
     if variant == "edx":
         mocker.patch(
             "ai_chatbots.chatbots.get_problem_from_edx_block",
+            new_callable=AsyncMock,
             return_value=("problem_xml", "problem_set_xml"),
         )
     else:
         mocker.patch(
             "ai_chatbots.chatbots.get_canvas_problem_set",
+            new_callable=AsyncMock,
             return_value="problem_set",
         )
     mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
@@ -744,6 +771,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
     assert history.edx_module_id == (edx_module_id or "")
 
 
+@pytest.mark.asyncio
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -760,7 +788,8 @@ async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
     )
 
 
-def test_get_problem_from_edx_block(mocker):
+@pytest.mark.asyncio
+async def test_get_problem_from_edx_block(mock_httpx_async_client):
     """Test that the get_problem_from_edx_block function returns the expected problem and problem set"""
     edx_module_id = "block1"
     block_siblings = ["block1", "block2"]
@@ -777,20 +806,19 @@ def test_get_problem_from_edx_block(mocker):
             },
         ]
     }
-
-    mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(
-            json=mocker.Mock(return_value=contentfile_api_results)
-        ),
+    mock_httpx_async_client(
+        contentfile_api_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
 
-    problem, problem_set = get_problem_from_edx_block(edx_module_id, block_siblings)
+    problem, problem_set = await get_problem_from_edx_block(
+        edx_module_id, block_siblings
+    )
     assert problem == "<problem>problem 1</problem>"
     assert problem_set == "<problem>problem 1</problem><problem>problem 2</problem>"
 
 
-def test_get_canvas_problem_set(mocker):
+@pytest.mark.asyncio
+async def test_get_canvas_problem_set(mock_httpx_async_client):
     """Test that the get_canvas_problem_set function returns the expected problem set and solution"""
     run_readable_id = "a_run_readable_id"
     problem_set_title = "A Problem Set Title"
@@ -809,17 +837,16 @@ def test_get_canvas_problem_set(mocker):
             }
         ],
     }
-
-    mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(json=mocker.Mock(return_value=problem_api_results)),
+    mock_httpx_async_client(
+        problem_api_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
 
-    problem_set = get_canvas_problem_set(run_readable_id, problem_set_title)
+    problem_set = await get_canvas_problem_set(run_readable_id, problem_set_title)
     assert problem_set == problem_api_results
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
+@pytest.mark.asyncio
 async def test_video_gpt_bot_get_completion_state(
     mock_checkpointer, mock_openai_astream, default_model
 ):
@@ -847,12 +874,13 @@ async def test_video_gpt_bot_get_completion_state(
     assert chatbot.llm.model == default_model
 
 
+@pytest.mark.asyncio
 async def test_video_gpt_bot_tool(
     settings,
-    mocker,
     mock_checkpointer,
     video_gpt_agent_state,
     video_transcript_content_chunk_results,
+    mock_httpx_async_client,
 ):
     """The VideoGPTBot should call the correct tool"""
     settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 2
@@ -869,11 +897,9 @@ async def test_video_gpt_bot_tool(
         "metadata": {},
     }
 
-    mock_post = mocker.patch(
-        "ai_chatbots.tools.requests.get",
-        return_value=mocker.Mock(
-            json=mocker.Mock(return_value=video_transcript_content_chunk_results)
-        ),
+    mock_client_patch = mock_httpx_async_client(
+        video_transcript_content_chunk_results,
+        patch_path="ai_chatbots.utils.get_async_http_client",
     )
     chatbot = VideoGPTBot("anonymous", mock_checkpointer)
 
@@ -884,10 +910,11 @@ async def test_video_gpt_bot_tool(
     }
     expected_results["metadata"]["parameters"] = search_parameters
     tool = chatbot.create_tools()[0]
-    results = tool.invoke(
+    results = await tool.ainvoke(
         {"q": "What is this video about?", "state": video_gpt_agent_state}
     )
-    mock_post.assert_called_once_with(
+    mock_client_instance = mock_client_patch.return_value
+    mock_client_instance.get.assert_called_once_with(
         settings.AI_MIT_VIDEO_TRANSCRIPT_URL,
         params=search_parameters,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
@@ -896,6 +923,7 @@ async def test_video_gpt_bot_tool(
     assert_json_equal(json.loads(results), expected_results)
 
 
+@pytest.mark.asyncio
 async def test_bad_request(mocker, mock_checkpointer):
     """Test that the bad_request function logs the exception"""
     mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")

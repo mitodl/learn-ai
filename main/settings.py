@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.21.0"
+VERSION = "0.22.0"
 
 log = logging.getLogger()
 
@@ -560,6 +560,7 @@ HIJACK_LOGOUT_REDIRECT_URL = "/admin/auth/user"
 ANONYMOUS_USER_NAME = None
 
 REQUESTS_TIMEOUT = get_int("REQUESTS_TIMEOUT", 30)
+REQUESTS_KEEPALIVE_EXPIRY = get_int("REQUESTS_KEEPALIVE_EXPIRY", 180)
 
 CELERY_BEAT_SCHEDULE = {
     "delete_stale_chat_sessions": {
