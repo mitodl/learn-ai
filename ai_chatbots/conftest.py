@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from asgiref.sync import sync_to_async
 
+from ai_chatbots import utils
 from ai_chatbots.factories import (
     HumanMessageFactory,
     SyllabusAgentStateFactory,
@@ -14,6 +15,13 @@ from ai_chatbots.factories import (
     VideoGPTAgentStateFactory,
 )
 from main.factories import UserFactory
+
+
+@pytest.fixture(autouse=True)
+def _reset_http_clients():
+    """Reset HTTP client singletons before and after each test."""
+    utils.http_client_manager.reset()
+    utils.http_client_manager.reset()
 
 
 @pytest.fixture
@@ -57,8 +65,16 @@ def django_session():
 @pytest.fixture(autouse=True)
 def ai_settings(settings, mocker):
     """Assign default AI settings"""
+    # Reset HTTP client singletons before each test
+    from ai_chatbots import utils
+
+    utils.sync_http_client = None
+    utils.async_http_client = None
+
     settings.AI_PROXY = None
     settings.AI_PROXY_URL = None
+    settings.AI_PROXY_AUTH_TOKEN = "test_token"  # noqa: S105
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     settings.OPENAI_API_KEY = "test_key"
     os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
     mocker.patch("channels_redis.core.RedisChannelLayer", return_value=AsyncMock())
@@ -143,3 +159,63 @@ def video_gpt_agent_state():
             "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
         ],
     )
+
+
+@pytest.fixture
+def mock_httpx_client(mocker):
+    """Mock httpx.Client for synchronous HTTP requests using shared client."""
+
+    def _mock_client(json_return_value, status_code=200, patch_path=None):
+        """
+        Create a mock httpx.Client for testing.
+
+        Args:
+            json_return_value: The value to return from response.json()
+            status_code: HTTP status code to return (default: 200)
+            patch_path: Optional path to patch
+        """
+        mock_response = mocker.Mock()
+        mock_response.json.return_value = json_return_value
+        mock_response.status_code = status_code
+        mock_response.raise_for_status = mocker.Mock()
+
+        mock_client = mocker.Mock()
+        mock_client.get = mocker.Mock(return_value=mock_response)
+        mock_client.post = mocker.Mock(return_value=mock_response)
+        mock_client.close = mocker.Mock()
+
+        if patch_path:
+            return mocker.patch(patch_path, return_value=mock_client)
+        return mock_client
+
+    return _mock_client
+
+
+@pytest.fixture
+def mock_httpx_async_client(mocker):
+    """Mock httpx.AsyncClient for asynchronous HTTP requests using shared client."""
+
+    def _mock_async_client(json_return_value, status_code=200, patch_path=None):
+        """
+        Create a mock httpx.AsyncClient for testing.
+
+        Args:
+            json_return_value: The value to return from response.json()
+            status_code: HTTP status code to return (default: 200)
+            patch_path: Optional path to patch
+        """
+        mock_response = mocker.Mock()
+        mock_response.json.return_value = json_return_value
+        mock_response.status_code = status_code
+        mock_response.raise_for_status = mocker.Mock()
+
+        mock_client = mocker.Mock()
+        mock_client.get = mocker.AsyncMock(return_value=mock_response)
+        mock_client.post = mocker.AsyncMock(return_value=mock_response)
+        mock_client.aclose = mocker.AsyncMock()
+
+        if patch_path:
+            return mocker.patch(patch_path, return_value=mock_client)
+        return mock_client
+
+    return _mock_async_client

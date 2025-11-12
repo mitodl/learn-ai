@@ -4,11 +4,11 @@ import logging
 from abc import ABC, abstractmethod
 from urllib.parse import urljoin
 
-import requests
 from django.conf import settings
 
 from ai_chatbots.chatbots import BaseChatbot
 from ai_chatbots.constants import AI_ANONYMOUS_USER
+from ai_chatbots.utils import get_sync_http_client
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class LiteLLMProxy(AIProxy):
                         f"jobID:{service.JOB_ID}",
                         f"taskName:{service.TASK_NAME}",
                     ]
-                }
+                },
             },
         }
 
@@ -112,7 +112,8 @@ class LiteLLMProxy(AIProxy):
             }
             headers = {"Authorization": f"Bearer {settings.AI_PROXY_AUTH_TOKEN}"}
             try:
-                response = requests.post(
+                client = get_sync_http_client()
+                response = client.post(
                     urljoin(settings.AI_PROXY_URL, f"/customer/{endpoint}"),
                     json=request_json,
                     timeout=settings.REQUESTS_TIMEOUT,
