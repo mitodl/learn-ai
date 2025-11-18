@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.22.0
+Version 0.22.0 (Released November 18, 2025)
 --------------
 
 - chore(deps): update dependency social-auth-app-django to v5.6.0 [security] (#364)
