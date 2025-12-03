@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.23.0
+--------------
+
+- fix(deps): update dependency django to v4.2.27 [security] (#373)
+- chore(deps): update dependency social-auth-app-django to v5.6.0 [security] (#370)
+- chore(deps): update dependency langchain-core to v0.3.80 [security] (#371)
+
 Version 0.22.0 (Released November 18, 2025)
 --------------
 
