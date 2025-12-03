@@ -4340,17 +4340,17 @@ ormsgpack = ">=1.10.0"
 
 [[package]]
 name = "langgraph-checkpoint-postgres"
-version = "2.0.25"
+version = "3.0.1"
 description = "Library with a Postgres implementation of LangGraph checkpoint saver."
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 files = [
-    {file = "langgraph_checkpoint_postgres-2.0.25-py3-none-any.whl", hash = "sha256:cf1248a58fe828c9cfc36ee57ff118d7799ce214d4b35718e57ec98407130fb5"},
-    {file = "langgraph_checkpoint_postgres-2.0.25.tar.gz", hash = "sha256:916b80f73a641a589301f6c54414974768b6d646d82db7b301ff8d47105c3613"},
+    {file = "langgraph_checkpoint_postgres-3.0.1-py3-none-any.whl", hash = "sha256:f79eb588b328f05d715c7ed35d20895cd0a126b524f95edbbebedc4a595f43dd"},
+    {file = "langgraph_checkpoint_postgres-3.0.1.tar.gz", hash = "sha256:4ff0f04a70ce8f5b49d373f521eba97ccf0bb61181de1535e5d91e99db2ce7da"},
 ]
 
 [package.dependencies]
-langgraph-checkpoint = ">=2.1.2,<3.0.0"
+langgraph-checkpoint = ">=2.1.2,<4.0.0"
 orjson = ">=3.10.1"
 psycopg = ">=3.2.0"
 psycopg-pool = ">=3.2.0"
@@ -10044,4 +10044,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.13.7"
-content-hash = "150194b9ba3b2ab004c3923439d86cfd1117464e3bb00a2c970d6316731dfdad"
+content-hash = "9755b79b7e8facfff5e5a418fefbe83124bed329c55670f98fc9f8c5438387fe"
