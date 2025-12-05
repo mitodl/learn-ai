@@ -331,10 +331,7 @@ files = [
 ]
 
 [package.dependencies]
-cffi = [
-    {version = ">=1.0.1", markers = "python_version < \"3.14\""},
-    {version = ">=2.0.0b1", markers = "python_version >= \"3.14\""},
-]
+cffi = {version = ">=1.0.1", markers = "python_version < \"3.14\""}
 
 [[package]]
 name = "arrow"
@@ -5597,13 +5594,15 @@ sympy = "*"
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.2.12"
+version = "0.2.13"
 description = "AI powered tutor"
 optional = false
-python-versions = "~=3.12"
+python-versions = "<3.14,>=3.12"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "open_learning_ai_tutor-0.2.13-py3-none-any.whl", hash = "sha256:a022aed7f14d56a7c39181a3569258ab14306518ecac54ad29816974c5a6010a"},
+    {file = "open_learning_ai_tutor-0.2.13.tar.gz", hash = "sha256:90e146fbc8f355257f58990457125ab8a7998c1cb4d445d67e31f56635f8e4c6"},
+]
 
 [package.dependencies]
 e2b-code-interpreter = ">=1.1.0,<2"
@@ -5612,12 +5611,6 @@ langchain-core = ">=1.0.0,<2.0.0"
 langchain-experimental = ">=0.4,<0.5"
 langgraph = ">=1.0.0,<2.0.0"
 langsmith = ">=0.4.21,<0.5.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/mitodl/open-learning-ai-tutor.git"
-reference = "c0f1511234dd2ef3475505ce4e2877ef23611d9a"
-resolved_reference = "c0f1511234dd2ef3475505ce4e2877ef23611d9a"
 
 [[package]]
 name = "openai"
@@ -8259,7 +8252,7 @@ description = "C version of reader, parser and emitter for ruamel.yaml derived f
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
-markers = "python_version < \"3.14\" and platform_python_implementation == \"CPython\""
+markers = "platform_python_implementation == \"CPython\""
 files = [
     {file = "ruamel_yaml_clib-0.2.15-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:88eea8baf72f0ccf232c22124d122a7f26e8a24110a0273d9bcddcb0f7e1fa03"},
     {file = "ruamel_yaml_clib-0.2.15-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:9b6f7d74d094d1f3a4e157278da97752f16ee230080ae331fcc219056ca54f77"},
@@ -10309,5 +10302,5 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 
 [metadata]
 lock-version = "2.1"
-python-versions = "^3.13.7"
-content-hash = "c1610102715cea0f3970aa719ace75ef0caa2f72cdf97da826008302d5b03f43"
+python-versions = ">=3.13.7,<3.14"
+content-hash = "6fad68a7ef2d1e664c1e6d11f14ea73d7a2d1953327d6390c6f429d7dcfce359"

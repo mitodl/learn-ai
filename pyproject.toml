@@ -9,7 +9,7 @@ authors  = ["MIT ODL"]
 
 
 [tool.poetry.dependencies]
-python = "^3.13.7"
+python = ">=3.13.7,<3.14"
 Django = "4.2.27"
 aiohttp = "^3.12.15"
 beautifulsoup4 = "^4.13.4"
@@ -70,7 +70,7 @@ social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "0.49.1"
 ulid-py = "^1.0.0"
 granian = "^2.5.4"
-open-learning-ai-tutor = { git = "https://github.com/mitodl/open-learning-ai-tutor.git", rev = "c0f1511234dd2ef3475505ce4e2877ef23611d9a" }  # pragma: allowlist secret
+open-learning-ai-tutor = "^0.2.13"
 httpx = "^0.28.1"
 opentelemetry-instrumentation-httpx = "^0.59b0"
 
