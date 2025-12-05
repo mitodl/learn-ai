@@ -98,7 +98,9 @@ class TestRecommendationBotEvaluator:
         """Test response collection."""
         mock_bot = mocker.Mock()
         response_message = HumanMessage(content="Response")
-        mock_bot.agent.invoke.return_value = {"messages": [response_message]}
+        mock_bot.agent.ainvoke = mocker.AsyncMock(
+            return_value={"messages": [response_message]}
+        )
         mock_bot.config = {"configurable": {"test": "config"}}
 
         test_case = TestCaseSpec(
@@ -111,7 +113,7 @@ class TestRecommendationBotEvaluator:
 
         response = await evaluator.collect_response(mock_bot, test_case)
 
-        mock_bot.agent.invoke.assert_called_once_with(
+        mock_bot.agent.ainvoke.assert_called_once_with(
             {
                 "messages": [{"content": "Test question", "role": "user"}],
                 "search_url": ["http://test.com"],
@@ -374,9 +376,9 @@ class TestEvaluatorIntegration:
         assert bot is not None
 
         mock_bot = mocker.Mock()
-        mock_bot.agent.invoke.return_value = {
-            "messages": [HumanMessage(content="Bot response")]
-        }
+        mock_bot.agent.ainvoke = mocker.AsyncMock(
+            return_value={"messages": [HumanMessage(content="Bot response")]}
+        )
         mock_bot.config = {"configurable": {}}
 
         response = await evaluator.collect_response(mock_bot, test_cases[0])

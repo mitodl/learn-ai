@@ -544,6 +544,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         assert isinstance(chatbot.proxy, LiteLLMProxy)
         mock_llm.assert_any_call(
             model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
+            streaming=True,
             **chatbot.proxy.get_api_kwargs(),
             **chatbot.proxy.get_additional_kwargs(chatbot),
         )
@@ -553,6 +554,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         assert chatbot.proxy is None
         mock_llm.assert_any_call(
             model=model_name,
+            streaming=True,
             **{},
             **{},
         )

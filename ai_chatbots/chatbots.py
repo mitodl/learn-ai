@@ -13,7 +13,7 @@ import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
@@ -116,6 +116,7 @@ class BaseChatbot(ABC):
         """
         llm = ChatLiteLLM(
             model=f"{self.proxy_prefix}{self.model}",
+            streaming=True,
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
@@ -254,7 +255,7 @@ class BaseChatbot(ABC):
             )
             async for chunk in response_generator:
                 if (
-                    isinstance(chunk[0], AIMessageChunk)
+                    isinstance(chunk[0], AIMessage | AIMessageChunk)
                     and chunk[1].get("langgraph_node") != "pre_model_hook"
                 ):
                     full_response += chunk[0].content
@@ -580,7 +581,7 @@ class TutorBot(BaseChatbot):
                 if (
                     chunk[0] == "messages"
                     and chunk[1]
-                    and isinstance(chunk[1][0], AIMessageChunk)
+                    and isinstance(chunk[1][0], AIMessage | AIMessageChunk)
                 ):
                     full_response += chunk[1][0].content
                     yield chunk[1][0].content
