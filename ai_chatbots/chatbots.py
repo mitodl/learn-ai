@@ -10,7 +10,6 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
-from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -47,9 +46,9 @@ from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
     async_request_with_token,
-    collect_answered_tool_call_ids,
-    filter_orphaned_tool_calls,
     get_django_cache,
+    remove_orphaned_tool_calls_from_db,
+    truncate_checkpoint_messages_in_db,
 )
 
 log = logging.getLogger(__name__)
@@ -235,85 +234,15 @@ class BaseChatbot(ABC):
                 # Determine which cleaning strategy to use and apply to checkpoint
                 if "ToolMessage" in error_msg:
                     # Remove orphaned tool calls from checkpoint
-                    await self.remove_orphaned_tool_calls()
+                    await remove_orphaned_tool_calls_from_db(self.thread_id)
                 else:
                     # For other validation errors, truncate to latest HumanMessage
                     cleaned_messages = self.truncate_to_latest_human_message(messages)
-                    await self.truncate_checkpoint_messages(cleaned_messages)
+                    keep_ids = {msg.id for msg in cleaned_messages}
+                    await truncate_checkpoint_messages_in_db(self.thread_id, keep_ids)
 
         except Exception:
             log.exception("Error while cleaning checkpoint")
-
-    async def remove_orphaned_tool_calls(self) -> None:
-        """Remove orphaned tool calls directly from serialized checkpoint messages."""
-
-        @database_sync_to_async
-        def update_checkpoint():
-            latest_checkpoint = (
-                DjangoCheckpoint.objects.filter(thread_id=self.thread_id)
-                .order_by("-id")
-                .first()
-            )
-
-            checkpoint_data = latest_checkpoint.checkpoint
-            is_string = isinstance(checkpoint_data, str)
-            if is_string:
-                checkpoint_data = json.loads(checkpoint_data)
-
-            messages = checkpoint_data.get("channel_values", {}).get("messages", [])
-            answered_tool_calls = collect_answered_tool_call_ids(messages)
-            modified = filter_orphaned_tool_calls(messages, answered_tool_calls)
-
-            if modified:
-                latest_checkpoint.checkpoint = (
-                    json.dumps(checkpoint_data) if is_string else checkpoint_data
-                )
-                latest_checkpoint.save(update_fields=["checkpoint"])
-                log.info(
-                    "Removed orphaned tool calls from checkpoint %s",
-                    latest_checkpoint.id,
-                )
-
-        await update_checkpoint()
-
-    async def truncate_checkpoint_messages(self, cleaned_messages: list) -> None:
-        """Truncate checkpoint to only keep messages in cleaned_messages."""
-
-        @database_sync_to_async
-        def update_checkpoint():
-            latest_checkpoint = (
-                DjangoCheckpoint.objects.filter(thread_id=self.thread_id)
-                .order_by("-id")
-                .first()
-            )
-
-            checkpoint_data = latest_checkpoint.checkpoint
-            is_string = isinstance(checkpoint_data, str)
-            if is_string:
-                checkpoint_data = json.loads(checkpoint_data)
-
-            messages = checkpoint_data.get("channel_values", {}).get("messages", [])
-            keep_ids = {msg.id for msg in cleaned_messages}
-
-            filtered_messages = [
-                msg_dict
-                for msg_dict in messages
-                if isinstance(msg_dict, dict)
-                and msg_dict.get("kwargs", {}).get("id") in keep_ids
-            ]
-
-            checkpoint_data["channel_values"]["messages"] = filtered_messages
-            latest_checkpoint.checkpoint = (
-                json.dumps(checkpoint_data) if is_string else checkpoint_data
-            )
-            latest_checkpoint.save(update_fields=["checkpoint"])
-            log.info(
-                "Truncated checkpoint messages to %d messages in checkpoint %s",
-                len(filtered_messages),
-                latest_checkpoint.id,
-            )
-
-        await update_checkpoint()
 
     async def _get_latest_checkpoint_id(self) -> Optional[str]:
         """Get the most recent assistant response checkpoint"""

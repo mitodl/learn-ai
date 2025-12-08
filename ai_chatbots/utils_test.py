@@ -1,12 +1,16 @@
 """Tests for ai_chatbots utils"""
 
 import asyncio
+import json
 
 import httpx
+import pytest
+from channels.db import database_sync_to_async
 from django.conf import settings
 from named_enum import ExtendedEnum
 
 from ai_chatbots import utils
+from ai_chatbots.factories import CheckpointFactory
 
 
 def test_enum_zip():
@@ -249,3 +253,107 @@ def test_filter_orphaned_tool_calls_handles_additional_kwargs():
     ]
     utils.filter_orphaned_tool_calls(messages, set())
     assert "tool_calls" not in messages[0]["kwargs"].get("additional_kwargs", {})
+
+
+@pytest.mark.parametrize("is_orphaned", [True, False])
+def test_remove_orphaned_tool_calls_from_checkpoint(is_orphaned):
+    """Should return False when tool call has matching response."""
+    messages = [
+        {
+            "id": ["langchain", "schema", "messages", "AIMessage"],
+            "kwargs": {"tool_calls": [{"id": "call_123"}]},
+        },
+        {
+            "id": ["langchain", "schema", "messages", "ToolMessage"],
+            "kwargs": {"tool_call_id": "call_123" if not is_orphaned else "other_id"},
+        },
+    ]
+    checkpoint_data = {"channel_values": {"messages": messages}}
+    result = utils.remove_orphaned_tool_calls_from_checkpoint(checkpoint_data)
+    assert result is is_orphaned
+
+
+@pytest.mark.parametrize(
+    ("messages", "expected_ids"),
+    [
+        (
+            [
+                {"kwargs": {"id": "msg1"}},
+                {"kwargs": {"id": "msg2"}},
+                {"kwargs": {"id": "msg3"}},
+            ],
+            ["msg1", "msg3"],
+        ),
+        ([{"kwargs": {"id": "msg2"}}], []),
+    ],
+)
+def test_truncate_checkpoint_to_message_ids(messages, expected_ids):
+    """Should keep only messages with IDs in keep_ids."""
+    checkpoint_data = {"channel_values": {"messages": messages}}
+    count = utils.truncate_checkpoint_to_message_ids(checkpoint_data, {"msg1", "msg3"})
+    assert count == len(expected_ids)
+    ids = [m["kwargs"]["id"] for m in checkpoint_data["channel_values"]["messages"]]
+    assert ids == expected_ids
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_remove_orphaned_tool_calls_from_db_saves():
+    """Should remove orphaned tool calls and save to DB."""
+    checkpoint_data = {
+        "channel_values": {
+            "messages": [
+                {
+                    "id": ["langchain", "schema", "messages", "AIMessage"],
+                    "kwargs": {"tool_calls": [{"id": "orphaned"}]},
+                },
+            ]
+        }
+    }
+    checkpoint = await database_sync_to_async(CheckpointFactory)(
+        checkpoint=json.dumps(checkpoint_data)
+    )
+
+    await utils.remove_orphaned_tool_calls_from_db(checkpoint.thread_id)
+
+    await database_sync_to_async(checkpoint.refresh_from_db)()
+    saved = json.loads(checkpoint.checkpoint)
+    assert "tool_calls" not in saved["channel_values"]["messages"][0]["kwargs"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_remove_orphaned_tool_calls_from_db_no_checkpoint():
+    """Should not error when no checkpoint exists."""
+    await utils.remove_orphaned_tool_calls_from_db("nonexistent_thread")
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_truncate_checkpoint_messages_in_db_saves():
+    """Should truncate messages and save to DB."""
+    checkpoint_data = {
+        "channel_values": {
+            "messages": [
+                {"kwargs": {"id": "keep_me"}},
+                {"kwargs": {"id": "remove_me"}},
+            ]
+        }
+    }
+    checkpoint = await database_sync_to_async(CheckpointFactory)(
+        checkpoint=json.dumps(checkpoint_data)
+    )
+
+    await utils.truncate_checkpoint_messages_in_db(checkpoint.thread_id, {"keep_me"})
+
+    await database_sync_to_async(checkpoint.refresh_from_db)()
+    saved = json.loads(checkpoint.checkpoint)
+    assert len(saved["channel_values"]["messages"]) == 1
+    assert saved["channel_values"]["messages"][0]["kwargs"]["id"] == "keep_me"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_truncate_checkpoint_messages_in_db_no_checkpoint():
+    """Should not error when no checkpoint exists."""
+    await utils.truncate_checkpoint_messages_in_db("nonexistent_thread", {"any"})

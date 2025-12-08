@@ -1019,8 +1019,14 @@ async def test_validate_and_clean_checkpoint_no_action_when_valid(
         "aget_state",
         return_value=mocker.Mock(values={"messages": valid_messages}),
     )
-    mock_remove = mocker.patch.object(chatbot, "remove_orphaned_tool_calls")
-    mock_truncate = mocker.patch.object(chatbot, "truncate_checkpoint_messages")
+    mock_remove = mocker.patch(
+        "ai_chatbots.chatbots.remove_orphaned_tool_calls_from_db",
+        new_callable=AsyncMock,
+    )
+    mock_truncate = mocker.patch(
+        "ai_chatbots.chatbots.truncate_checkpoint_messages_in_db",
+        new_callable=AsyncMock,
+    )
 
     await chatbot.validate_and_clean_checkpoint()
 
@@ -1043,8 +1049,9 @@ async def test_validate_and_clean_checkpoint_orphaned_tool_calls(
         "ai_chatbots.chatbots._validate_chat_history",
         side_effect=ValueError("ToolMessage without matching tool call"),
     )
-    mock_remove = mocker.patch.object(
-        chatbot, "remove_orphaned_tool_calls", new_callable=AsyncMock
+    mock_remove = mocker.patch(
+        "ai_chatbots.chatbots.remove_orphaned_tool_calls_from_db",
+        new_callable=AsyncMock,
     )
 
     await chatbot.validate_and_clean_checkpoint()
@@ -1068,8 +1075,9 @@ async def test_validate_and_clean_checkpoint_truncates_on_other_error(
         "ai_chatbots.chatbots._validate_chat_history",
         side_effect=ValueError("Some other validation error"),
     )
-    mock_truncate = mocker.patch.object(
-        chatbot, "truncate_checkpoint_messages", new_callable=AsyncMock
+    mock_truncate = mocker.patch(
+        "ai_chatbots.chatbots.truncate_checkpoint_messages_in_db",
+        new_callable=AsyncMock,
     )
 
     await chatbot.validate_and_clean_checkpoint()
@@ -1080,8 +1088,9 @@ async def test_validate_and_clean_checkpoint_truncates_on_other_error(
 @pytest.mark.asyncio
 async def test_remove_orphaned_tool_calls_saves_checkpoint(mocker, mock_checkpointer):
     """Should remove orphaned tool calls and save checkpoint."""
+    from ai_chatbots.utils import remove_orphaned_tool_calls_from_db
+
     thread_id = mock_checkpointer.session.thread_id
-    chatbot = ResourceRecommendationBot("user", mock_checkpointer, thread_id=thread_id)
     checkpoint_data = {
         "channel_values": {
             "messages": [
@@ -1097,7 +1106,7 @@ async def test_remove_orphaned_tool_calls_saves_checkpoint(mocker, mock_checkpoi
         checkpoint=json.dumps(checkpoint_data),
     )
 
-    await chatbot.remove_orphaned_tool_calls()
+    await remove_orphaned_tool_calls_from_db(thread_id)
 
     await database_sync_to_async(checkpoint.refresh_from_db)()
     saved_data = json.loads(checkpoint.checkpoint)
@@ -1107,8 +1116,9 @@ async def test_remove_orphaned_tool_calls_saves_checkpoint(mocker, mock_checkpoi
 @pytest.mark.asyncio
 async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
     """Should filter checkpoint messages to only keep specified IDs."""
+    from ai_chatbots.utils import truncate_checkpoint_messages_in_db
+
     thread_id = mock_checkpointer.session.thread_id
-    chatbot = ResourceRecommendationBot("user", mock_checkpointer, thread_id=thread_id)
     keep_msg = HumanMessageFactory.create(content="keep")
     checkpoint_data = {
         "channel_values": {
@@ -1123,7 +1133,7 @@ async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
         checkpoint=json.dumps(checkpoint_data),
     )
 
-    await chatbot.truncate_checkpoint_messages([keep_msg])
+    await truncate_checkpoint_messages_in_db(thread_id, {keep_msg.id})
 
     await database_sync_to_async(checkpoint.refresh_from_db)()
     saved_data = json.loads(checkpoint.checkpoint)

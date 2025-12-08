@@ -227,3 +227,133 @@ def filter_tool_calls_from_message(
             additional.pop("tool_calls", None)
 
     return True
+
+
+def remove_orphaned_tool_calls_from_checkpoint(
+    checkpoint_data: dict,
+) -> bool:
+    """
+    Remove orphaned tool calls from a checkpoint's serialized messages in-place.
+
+    Args:
+        checkpoint_data: The checkpoint data dict (already parsed from JSON if needed)
+
+    Returns:
+        True if modifications were made, False otherwise
+    """
+    messages = checkpoint_data.get("channel_values", {}).get("messages", [])
+    answered_tool_calls = collect_answered_tool_call_ids(messages)
+    return filter_orphaned_tool_calls(messages, answered_tool_calls)
+
+
+def truncate_checkpoint_to_message_ids(
+    checkpoint_data: dict, keep_ids: set[str]
+) -> int:
+    """
+    Truncate a checkpoint's messages to only keep those with IDs in keep_ids.
+
+    Modifies checkpoint_data in-place.
+
+    Args:
+        checkpoint_data: The checkpoint data dict (already parsed from JSON if needed)
+        keep_ids: Set of message IDs to keep
+
+    Returns:
+        The number of messages after truncation
+    """
+    messages = checkpoint_data.get("channel_values", {}).get("messages", [])
+
+    filtered_messages = [
+        msg_dict
+        for msg_dict in messages
+        if isinstance(msg_dict, dict)
+        and msg_dict.get("kwargs", {}).get("id") in keep_ids
+    ]
+
+    checkpoint_data["channel_values"]["messages"] = filtered_messages
+    return len(filtered_messages)
+
+
+async def remove_orphaned_tool_calls_from_db(thread_id: str) -> None:
+    """
+    Remove orphaned tool calls from the latest checkpoint for a thread.
+
+    Args:
+        thread_id: The thread ID to clean up
+    """
+    import json
+
+    from channels.db import database_sync_to_async
+
+    from ai_chatbots.api import DjangoCheckpoint
+
+    @database_sync_to_async
+    def update_checkpoint():
+        latest_checkpoint = (
+            DjangoCheckpoint.objects.filter(thread_id=thread_id).order_by("-id").first()
+        )
+        if not latest_checkpoint:
+            return
+
+        checkpoint_data = latest_checkpoint.checkpoint
+        is_string = isinstance(checkpoint_data, str)
+        if is_string:
+            checkpoint_data = json.loads(checkpoint_data)
+
+        modified = remove_orphaned_tool_calls_from_checkpoint(checkpoint_data)
+
+        if modified:
+            latest_checkpoint.checkpoint = (
+                json.dumps(checkpoint_data) if is_string else checkpoint_data
+            )
+            latest_checkpoint.save(update_fields=["checkpoint"])
+            log.info(
+                "Removed orphaned tool calls from checkpoint %s",
+                latest_checkpoint.id,
+            )
+
+    await update_checkpoint()
+
+
+async def truncate_checkpoint_messages_in_db(
+    thread_id: str, keep_ids: set[str]
+) -> None:
+    """
+    Truncate the latest checkpoint for a thread to only keep specified message IDs.
+
+    Args:
+        thread_id: The thread ID to clean up
+        keep_ids: Set of message IDs to keep
+    """
+    import json
+
+    from channels.db import database_sync_to_async
+
+    from ai_chatbots.api import DjangoCheckpoint
+
+    @database_sync_to_async
+    def update_checkpoint():
+        latest_checkpoint = (
+            DjangoCheckpoint.objects.filter(thread_id=thread_id).order_by("-id").first()
+        )
+        if not latest_checkpoint:
+            return
+
+        checkpoint_data = latest_checkpoint.checkpoint
+        is_string = isinstance(checkpoint_data, str)
+        if is_string:
+            checkpoint_data = json.loads(checkpoint_data)
+
+        num_messages = truncate_checkpoint_to_message_ids(checkpoint_data, keep_ids)
+
+        latest_checkpoint.checkpoint = (
+            json.dumps(checkpoint_data) if is_string else checkpoint_data
+        )
+        latest_checkpoint.save(update_fields=["checkpoint"])
+        log.info(
+            "Truncated checkpoint messages to %d messages in checkpoint %s",
+            num_messages,
+            latest_checkpoint.id,
+        )
+
+    await update_checkpoint()
