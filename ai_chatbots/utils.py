@@ -11,6 +11,10 @@ from named_enum import ExtendedEnum
 
 log = logging.getLogger(__name__)
 
+# Message type identifiers for LangChain serialized messages
+TOOL_MESSAGE_ID = ["langchain", "schema", "messages", "ToolMessage"]
+AI_MESSAGE_ID = ["langchain", "schema", "messages", "AIMessage"]
+
 
 class HTTPClientManager:
     """Manager for shared HTTP client instances with connection pooling."""
@@ -159,3 +163,67 @@ async def async_request_with_token(url, params, timeout: int = 30):
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=timeout,
     )
+
+
+def collect_answered_tool_call_ids(messages: list[dict]) -> set[str]:
+    """Collect tool_call_ids from ToolMessages in serialized checkpoint data."""
+    answered_tool_calls = set()
+    for msg_dict in messages:
+        if not isinstance(msg_dict, dict) or msg_dict.get("id") != TOOL_MESSAGE_ID:
+            continue
+        tool_call_id = msg_dict.get("kwargs", {}).get("tool_call_id")
+        if tool_call_id:
+            answered_tool_calls.add(tool_call_id)
+    return answered_tool_calls
+
+
+def filter_orphaned_tool_calls(
+    messages: list[dict], answered_tool_calls: set[str]
+) -> bool:
+    """
+    Filter orphaned tool calls from AIMessages in-place.
+
+    Returns True if any modifications were made.
+    """
+    modified = False
+    for msg_dict in messages:
+        if not isinstance(msg_dict, dict) or msg_dict.get("id") != AI_MESSAGE_ID:
+            continue
+        if filter_tool_calls_from_message(msg_dict, answered_tool_calls):
+            modified = True
+    return modified
+
+
+def filter_tool_calls_from_message(
+    msg_dict: dict, answered_tool_calls: set[str]
+) -> bool:
+    """
+    Filter tool calls from a single AIMessage dict in-place.
+
+    Returns True if modifications were made.
+    """
+    kwargs = msg_dict.get("kwargs", {})
+    tool_calls = kwargs.get("tool_calls", [])
+    if not tool_calls:
+        return False
+
+    valid_tool_calls = [tc for tc in tool_calls if tc.get("id") in answered_tool_calls]
+
+    if len(valid_tool_calls) == len(tool_calls):
+        return False
+
+    # Update kwargs
+    if valid_tool_calls:
+        kwargs["tool_calls"] = valid_tool_calls
+    else:
+        kwargs.pop("tool_calls", None)
+
+    # Update additional_kwargs if present
+    additional = kwargs.get("additional_kwargs", {})
+    if "tool_calls" in additional:
+        if valid_tool_calls:
+            additional["tool_calls"] = valid_tool_calls
+        else:
+            additional.pop("tool_calls", None)
+
+    return True

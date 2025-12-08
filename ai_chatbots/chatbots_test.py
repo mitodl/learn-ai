@@ -34,6 +34,7 @@ from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.consumers import TutorBotHttpConsumer
 from ai_chatbots.factories import (
     AIMessageChunkFactory,
+    CheckpointFactory,
     HumanMessageFactory,
     SystemMessageFactory,
     ToolMessageFactory,
@@ -942,3 +943,189 @@ async def test_bad_request(mocker, mock_checkpointer):
     async for _ in chatbot.get_completion("hello"):
         chatbot.agent.astream.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
+
+
+@pytest.mark.asyncio
+async def test_get_completion_retries_on_value_error(mocker, mock_checkpointer):
+    """Should call validate_and_clean_checkpoint and retry send_chunks on ValueError."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+
+    call_count = 0
+
+    async def mock_send_chunks(state):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ValueError
+        yield "success"
+
+    mocker.patch.object(chatbot, "send_chunks", side_effect=mock_send_chunks)
+    mock_validate = mocker.patch.object(
+        chatbot, "validate_and_clean_checkpoint", new_callable=AsyncMock
+    )
+    mock_log = mocker.patch("ai_chatbots.chatbots.log.warning")
+
+    results = [chunk async for chunk in chatbot.get_completion("hello")]
+
+    mock_validate.assert_called_once()
+    mock_log.assert_called_with("Validation error, cleaning checkpoint and retrying")
+    assert call_count == 2
+    assert "success" in results
+
+
+@pytest.mark.asyncio
+async def test_truncate_to_latest_human_message(mock_checkpointer):
+    """Should keep only messages from last HumanMessage onward."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    messages = [
+        SystemMessageFactory.create(),
+        HumanMessageFactory.create(content="first"),
+        AIMessage(content="response1"),
+        HumanMessageFactory.create(content="second"),
+        AIMessage(content="response2"),
+    ]
+    result = chatbot.truncate_to_latest_human_message(messages)
+    assert len(result) == 2
+    assert result[0].content == "second"
+    assert result[1].content == "response2"
+
+
+@pytest.mark.asyncio
+async def test_truncate_to_latest_human_message_missing(mock_checkpointer):
+    """Should return last message only when no HumanMessage found."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    messages = [SystemMessageFactory.create(), AIMessage(content="response")]
+    result = chatbot.truncate_to_latest_human_message(messages)
+    assert len(result) == 1
+    assert result[0].content == "response"
+
+
+@pytest.mark.asyncio
+async def test_truncate_to_latest_human_message_empty(mock_checkpointer):
+    """Should return empty list for empty input."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    assert chatbot.truncate_to_latest_human_message([]) == []
+
+
+@pytest.mark.asyncio
+async def test_validate_and_clean_checkpoint_no_action_when_valid(
+    mocker, mock_checkpointer
+):
+    """Should not modify checkpoint when messages are valid."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    valid_messages = [HumanMessageFactory.create(), AIMessage(content="response")]
+    mocker.patch.object(
+        chatbot.agent,
+        "aget_state",
+        return_value=mocker.Mock(values={"messages": valid_messages}),
+    )
+    mock_remove = mocker.patch.object(chatbot, "remove_orphaned_tool_calls")
+    mock_truncate = mocker.patch.object(chatbot, "truncate_checkpoint_messages")
+
+    await chatbot.validate_and_clean_checkpoint()
+
+    mock_remove.assert_not_called()
+    mock_truncate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_validate_and_clean_checkpoint_orphaned_tool_calls(
+    mocker, mock_checkpointer
+):
+    """Should call remove_orphaned_tool_calls when ToolMessage error."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    mocker.patch.object(
+        chatbot.agent,
+        "aget_state",
+        return_value=mocker.Mock(values={"messages": [HumanMessage(content="hi")]}),
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots._validate_chat_history",
+        side_effect=ValueError("ToolMessage without matching tool call"),
+    )
+    mock_remove = mocker.patch.object(
+        chatbot, "remove_orphaned_tool_calls", new_callable=AsyncMock
+    )
+
+    await chatbot.validate_and_clean_checkpoint()
+
+    mock_remove.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_validate_and_clean_checkpoint_truncates_on_other_error(
+    mocker, mock_checkpointer
+):
+    """Should truncate messages on non-ToolMessage validation errors."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    messages = [HumanMessage(content="hi")]
+    mocker.patch.object(
+        chatbot.agent,
+        "aget_state",
+        return_value=mocker.Mock(values={"messages": messages}),
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots._validate_chat_history",
+        side_effect=ValueError("Some other validation error"),
+    )
+    mock_truncate = mocker.patch.object(
+        chatbot, "truncate_checkpoint_messages", new_callable=AsyncMock
+    )
+
+    await chatbot.validate_and_clean_checkpoint()
+
+    mock_truncate.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_remove_orphaned_tool_calls_saves_checkpoint(mocker, mock_checkpointer):
+    """Should remove orphaned tool calls and save checkpoint."""
+    thread_id = mock_checkpointer.session.thread_id
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer, thread_id=thread_id)
+    checkpoint_data = {
+        "channel_values": {
+            "messages": [
+                {
+                    "id": ["langchain", "schema", "messages", "AIMessage"],
+                    "kwargs": {"tool_calls": [{"id": "orphaned_call"}]},
+                },
+            ]
+        }
+    }
+    checkpoint = await database_sync_to_async(CheckpointFactory)(
+        thread_id=thread_id,
+        checkpoint=json.dumps(checkpoint_data),
+    )
+
+    await chatbot.remove_orphaned_tool_calls()
+
+    await database_sync_to_async(checkpoint.refresh_from_db)()
+    saved_data = json.loads(checkpoint.checkpoint)
+    assert "tool_calls" not in saved_data["channel_values"]["messages"][0]["kwargs"]
+
+
+@pytest.mark.asyncio
+async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
+    """Should filter checkpoint messages to only keep specified IDs."""
+    thread_id = mock_checkpointer.session.thread_id
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer, thread_id=thread_id)
+    keep_msg = HumanMessageFactory.create(content="keep")
+    checkpoint_data = {
+        "channel_values": {
+            "messages": [
+                {"kwargs": {"id": "remove_id"}},
+                {"kwargs": {"id": keep_msg.id}},
+            ]
+        }
+    }
+    checkpoint = await database_sync_to_async(CheckpointFactory)(
+        thread_id=thread_id,
+        checkpoint=json.dumps(checkpoint_data),
+    )
+
+    await chatbot.truncate_checkpoint_messages([keep_msg])
+
+    await database_sync_to_async(checkpoint.refresh_from_db)()
+    saved_data = json.loads(checkpoint.checkpoint)
+    assert len(saved_data["channel_values"]["messages"]) == 1
+    assert saved_data["channel_values"]["messages"][0]["kwargs"]["id"] == keep_msg.id

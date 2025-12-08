@@ -10,6 +10,7 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
+from channels.db import database_sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -21,7 +22,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
-from langgraph.prebuilt.chat_agent_executor import AgentState
+from langgraph.prebuilt.chat_agent_executor import AgentState, _validate_chat_history
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
@@ -46,6 +47,8 @@ from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
     async_request_with_token,
+    collect_answered_tool_call_ids,
+    filter_orphaned_tool_calls,
     get_django_cache,
 )
 
@@ -185,6 +188,133 @@ class BaseChatbot(ABC):
                 return state
         return None
 
+    def truncate_to_latest_human_message(self, messages: list) -> list:
+        """
+        Truncate messages to keep only the latest HumanMessage and everything after it.
+
+        Returns a cleaned copy of the messages list.
+        """
+        if not messages:
+            return messages
+
+        # Find the last HumanMessage
+        last_human_index = -1
+        for i in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[i], HumanMessage):
+                last_human_index = i
+                break
+
+        if last_human_index >= 0:
+            return messages[last_human_index:]
+        else:
+            # No HumanMessage found, return last message only
+            return messages[-1:] if messages else []
+
+    async def validate_and_clean_checkpoint(self) -> None:
+        """
+        Clean the current checkpoint if it has validation errors.
+        """
+        try:
+            # Get the current state
+            current_state = await self.agent.aget_state(self.config)
+            if not current_state or not current_state.values:
+                return
+
+            messages = current_state.values.get("messages", [])
+            if not messages:
+                return
+
+            # Validate using LangChain's built-in validation
+            try:
+                _validate_chat_history(messages)
+            except ValueError as e:
+                # Validation failed, clean the messages
+                error_msg = str(e)
+                log.warning("Checkpoint has validation errors, cleaning: %s", error_msg)
+
+                # Determine which cleaning strategy to use and apply to checkpoint
+                if "ToolMessage" in error_msg:
+                    # Remove orphaned tool calls from checkpoint
+                    await self.remove_orphaned_tool_calls()
+                else:
+                    # For other validation errors, truncate to latest HumanMessage
+                    cleaned_messages = self.truncate_to_latest_human_message(messages)
+                    await self.truncate_checkpoint_messages(cleaned_messages)
+
+        except Exception:
+            log.exception("Error while cleaning checkpoint")
+
+    async def remove_orphaned_tool_calls(self) -> None:
+        """Remove orphaned tool calls directly from serialized checkpoint messages."""
+
+        @database_sync_to_async
+        def update_checkpoint():
+            latest_checkpoint = (
+                DjangoCheckpoint.objects.filter(thread_id=self.thread_id)
+                .order_by("-id")
+                .first()
+            )
+
+            checkpoint_data = latest_checkpoint.checkpoint
+            is_string = isinstance(checkpoint_data, str)
+            if is_string:
+                checkpoint_data = json.loads(checkpoint_data)
+
+            messages = checkpoint_data.get("channel_values", {}).get("messages", [])
+            answered_tool_calls = collect_answered_tool_call_ids(messages)
+            modified = filter_orphaned_tool_calls(messages, answered_tool_calls)
+
+            if modified:
+                latest_checkpoint.checkpoint = (
+                    json.dumps(checkpoint_data) if is_string else checkpoint_data
+                )
+                latest_checkpoint.save(update_fields=["checkpoint"])
+                log.info(
+                    "Removed orphaned tool calls from checkpoint %s",
+                    latest_checkpoint.id,
+                )
+
+        await update_checkpoint()
+
+    async def truncate_checkpoint_messages(self, cleaned_messages: list) -> None:
+        """Truncate checkpoint to only keep messages in cleaned_messages."""
+
+        @database_sync_to_async
+        def update_checkpoint():
+            latest_checkpoint = (
+                DjangoCheckpoint.objects.filter(thread_id=self.thread_id)
+                .order_by("-id")
+                .first()
+            )
+
+            checkpoint_data = latest_checkpoint.checkpoint
+            is_string = isinstance(checkpoint_data, str)
+            if is_string:
+                checkpoint_data = json.loads(checkpoint_data)
+
+            messages = checkpoint_data.get("channel_values", {}).get("messages", [])
+            keep_ids = {msg.id for msg in cleaned_messages}
+
+            filtered_messages = [
+                msg_dict
+                for msg_dict in messages
+                if isinstance(msg_dict, dict)
+                and msg_dict.get("kwargs", {}).get("id") in keep_ids
+            ]
+
+            checkpoint_data["channel_values"]["messages"] = filtered_messages
+            latest_checkpoint.checkpoint = (
+                json.dumps(checkpoint_data) if is_string else checkpoint_data
+            )
+            latest_checkpoint.save(update_fields=["checkpoint"])
+            log.info(
+                "Truncated checkpoint messages to %d messages in checkpoint %s",
+                len(filtered_messages),
+                latest_checkpoint.id,
+            )
+
+        await update_checkpoint()
+
     async def _get_latest_checkpoint_id(self) -> Optional[str]:
         """Get the most recent assistant response checkpoint"""
         checkpoint = (
@@ -225,6 +355,20 @@ class BaseChatbot(ABC):
             return [callback_handler]
         return []
 
+    async def send_chunks(self, state) -> AsyncGenerator[str, None]:
+        """Yield the response in chunks"""
+        response_generator = self.agent.astream(
+            state,
+            self.config,
+            stream_mode="messages",
+        )
+        async for chunk in response_generator:
+            if (
+                isinstance(chunk[0], AIMessage | AIMessageChunk)
+                and chunk[1].get("langgraph_node") != "pre_model_hook"
+            ):
+                yield chunk[0].content
+
     async def get_completion(
         self,
         message: str,
@@ -248,18 +392,17 @@ class BaseChatbot(ABC):
                 "messages": [HumanMessage(message)],
                 **(extra_state or {}),
             }
-            response_generator = self.agent.astream(
-                state,
-                self.config,
-                stream_mode="messages",
-            )
-            async for chunk in response_generator:
-                if (
-                    isinstance(chunk[0], AIMessage | AIMessageChunk)
-                    and chunk[1].get("langgraph_node") != "pre_model_hook"
-                ):
-                    full_response += chunk[0].content
-                    yield chunk[0].content
+            try:
+                async for chunk in self.send_chunks(state):
+                    full_response += chunk
+                    yield chunk
+            except ValueError:
+                # Validate and clean checkpoint, then try again
+                log.warning("Validation error, cleaning checkpoint and retrying")
+                await self.validate_and_clean_checkpoint()
+                async for chunk in self.send_chunks(state):
+                    full_response += chunk
+                    yield chunk
         except BadRequestError as error:
             log.exception("Bad request error")
             # Format and yield an error message inside a hidden comment

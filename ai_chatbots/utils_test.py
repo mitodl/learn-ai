@@ -167,3 +167,85 @@ async def test_concurrent_sync_requests_pooling(mocker):
     client_ids = {r["client_id"] for r in results}
     assert len(client_ids) == 1
     assert len(results) == 10
+
+
+def test_collect_answered_tool_call_ids():
+    """Should ignore AIMessages and HumanMessages, just get ToolMessage."""
+    messages = [
+        {"id": ["langchain", "schema", "messages", "HumanMessage"]},
+        {
+            "id": ["langchain", "schema", "messages", "AIMessage"],
+            "kwargs": {"tool_call_id": "ignored"},
+        },
+        {
+            "id": ["langchain", "schema", "messages", "ToolMessage"],
+            "kwargs": {"tool_call_id": "call_123"},
+        },
+    ]
+    assert utils.collect_answered_tool_call_ids(messages) == {"call_123"}
+
+
+def test_collect_answered_tool_call_ids_handles_empty():
+    """Should return empty set for empty messages."""
+    assert utils.collect_answered_tool_call_ids([]) == set()
+
+
+def test_collect_answered_tool_call_ids_skips_missing():
+    """Should skip ToolMessages without tool_call_id."""
+    messages = [
+        {"id": ["langchain", "schema", "messages", "ToolMessage"], "kwargs": {}}
+    ]
+    assert utils.collect_answered_tool_call_ids(messages) == set()
+
+
+def test_filter_orphaned_tool_calls_removes_orphaned():
+    """Should remove tool calls without matching ToolMessage responses."""
+    messages = [
+        {
+            "id": ["langchain", "schema", "messages", "AIMessage"],
+            "kwargs": {"tool_calls": [{"id": "call_123"}, {"id": "call_orphaned"}]},
+        },
+    ]
+    modified = utils.filter_orphaned_tool_calls(messages, {"call_123"})
+    assert modified is True
+    assert messages[0]["kwargs"]["tool_calls"] == [{"id": "call_123"}]
+
+
+def test_filter_orphaned_tool_calls_removes_all_when_none_answered():
+    """Should remove tool_calls key when no tool calls are answered."""
+    messages = [
+        {
+            "id": ["langchain", "schema", "messages", "AIMessage"],
+            "kwargs": {"tool_calls": [{"id": "orphaned"}]},
+        },
+    ]
+    modified = utils.filter_orphaned_tool_calls(messages, set())
+    assert modified is True
+    assert "tool_calls" not in messages[0]["kwargs"]
+
+
+def test_filter_orphaned_tool_calls_no_modification_when_all_answered():
+    """Should return False when all tool calls have responses."""
+    messages = [
+        {
+            "id": ["langchain", "schema", "messages", "AIMessage"],
+            "kwargs": {"tool_calls": [{"id": "call_123"}]},
+        },
+    ]
+    modified = utils.filter_orphaned_tool_calls(messages, {"call_123"})
+    assert modified is False
+
+
+def test_filter_orphaned_tool_calls_handles_additional_kwargs():
+    """Should also clean additional_kwargs.tool_calls."""
+    messages = [
+        {
+            "id": ["langchain", "schema", "messages", "AIMessage"],
+            "kwargs": {
+                "tool_calls": [{"id": "orphaned"}],
+                "additional_kwargs": {"tool_calls": [{"id": "orphaned"}]},
+            },
+        },
+    ]
+    utils.filter_orphaned_tool_calls(messages, set())
+    assert "tool_calls" not in messages[0]["kwargs"].get("additional_kwargs", {})
