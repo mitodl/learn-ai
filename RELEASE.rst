@@ -1,6 +1,11 @@
 Release Notes
 =============
 
+Version 0.24.0
+--------------
+
+- Updated versions of  langchain, langgraph, etc (#375)
+
 Version 0.23.0 (Released December 03, 2025)
 --------------
 
