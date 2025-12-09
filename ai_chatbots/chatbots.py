@@ -21,7 +21,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
-from langgraph.prebuilt.chat_agent_executor import AgentState
+from langgraph.prebuilt.chat_agent_executor import AgentState, _validate_chat_history
 from open_learning_ai_tutor.message_tutor import message_tutor
 from open_learning_ai_tutor.prompts import get_system_prompt
 from open_learning_ai_tutor.tools import tutor_tools
@@ -43,10 +43,12 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
-from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
     async_request_with_token,
     get_django_cache,
+    save_truncated_checkpoint,
+    truncate_to_latest_human_message,
 )
 
 log = logging.getLogger(__name__)
@@ -185,6 +187,34 @@ class BaseChatbot(ABC):
                 return state
         return None
 
+    async def validate_and_clean_checkpoint(self) -> None:
+        """
+        Clean the current checkpoint if it has validation errors.
+        """
+        try:
+            # Get the current state
+            current_state = await self.agent.aget_state(self.config)
+            if not current_state or not current_state.values:
+                return
+
+            messages = current_state.values.get("messages", [])
+            if not messages:
+                return
+
+            # Validate using LangChain's built-in validation
+            # This is done to make sure it's actually a problem
+            # with the chat history, and not something else
+            try:
+                _validate_chat_history(messages)
+            except ValueError:
+                # if validation failed, truncate to latest HumanMessage
+                cleaned_messages = truncate_to_latest_human_message(messages)
+                keep_ids = {msg.id for msg in cleaned_messages}
+                await save_truncated_checkpoint(self.thread_id, keep_ids)
+
+        except Exception:
+            log.exception("Error while cleaning checkpoint")
+
     async def _get_latest_checkpoint_id(self) -> Optional[str]:
         """Get the most recent assistant response checkpoint"""
         checkpoint = (
@@ -225,6 +255,20 @@ class BaseChatbot(ABC):
             return [callback_handler]
         return []
 
+    async def send_chunks(self, state) -> AsyncGenerator[str, None]:
+        """Yield the response in chunks"""
+        response_generator = self.agent.astream(
+            state,
+            self.config,
+            stream_mode="messages",
+        )
+        async for chunk in response_generator:
+            if (
+                isinstance(chunk[0], AIMessage | AIMessageChunk)
+                and chunk[1].get("langgraph_node") != "pre_model_hook"
+            ):
+                yield chunk[0].content
+
     async def get_completion(
         self,
         message: str,
@@ -248,18 +292,25 @@ class BaseChatbot(ABC):
                 "messages": [HumanMessage(message)],
                 **(extra_state or {}),
             }
-            response_generator = self.agent.astream(
-                state,
-                self.config,
-                stream_mode="messages",
-            )
-            async for chunk in response_generator:
-                if (
-                    isinstance(chunk[0], AIMessage | AIMessageChunk)
-                    and chunk[1].get("langgraph_node") != "pre_model_hook"
-                ):
-                    full_response += chunk[0].content
-                    yield chunk[0].content
+            try:
+                async for chunk in self.send_chunks(state):
+                    full_response += chunk
+                    yield chunk
+            except ValueError:
+                # Validate and clean checkpoint, then try again
+                log.exception("Validation error, cleaning checkpoint")
+                await self.validate_and_clean_checkpoint()
+                # Add a system message to notify the user about lost context
+                state["messages"].append(
+                    SystemMessage(
+                        content=CONTEXT_LOST_PROMPT,
+                        id=str(uuid4()),
+                    )
+                )
+                # Try to answer the user's last question anyway
+                async for chunk in self.send_chunks(state):
+                    full_response += chunk
+                    yield chunk
         except BadRequestError as error:
             log.exception("Bad request error")
             # Format and yield an error message inside a hidden comment

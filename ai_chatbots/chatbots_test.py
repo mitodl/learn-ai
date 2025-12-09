@@ -4,7 +4,6 @@ import json
 import os
 import re
 from unittest.mock import ANY, AsyncMock
-from uuid import uuid4
 
 import pytest
 from channels.db import database_sync_to_async
@@ -61,14 +60,6 @@ def mock_openai_astream(mocker):
     return mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.astream",
         return_value="Here are some results",
-    )
-
-
-@pytest.fixture
-async def mock_checkpointer(mocker):
-    """Mock the checkpointer"""
-    return await AsyncDjangoSaver.create_with_session(
-        uuid4(), "test message", "test_bot"
     )
 
 
@@ -942,3 +933,61 @@ async def test_bad_request(mocker, mock_checkpointer):
     async for _ in chatbot.get_completion("hello"):
         chatbot.agent.astream.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
+
+
+@pytest.mark.asyncio
+async def test_get_completion_handles_value_error(mocker, mock_checkpointer):
+    """Should call validate_and_clean_checkpoint, add system message, and retry on ValueError."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+
+    call_count = 0
+    captured_state = None
+
+    async def mock_send_chunks(state):
+        nonlocal call_count, captured_state
+        call_count += 1
+        if call_count == 1:
+            raise ValueError
+        captured_state = state
+        yield "success"
+
+    mocker.patch.object(chatbot, "send_chunks", side_effect=mock_send_chunks)
+    mock_validate = mocker.patch.object(
+        chatbot, "validate_and_clean_checkpoint", new_callable=AsyncMock
+    )
+    mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")
+
+    results = [chunk async for chunk in chatbot.get_completion("hello")]
+
+    mock_validate.assert_called_once()
+    mock_log.assert_called_with("Validation error, cleaning checkpoint")
+    assert call_count == 2
+    # Check that a SystemMessage was added to notify about lost context
+    assert len(captured_state["messages"]) == 2
+    assert isinstance(captured_state["messages"][1], SystemMessage)
+    assert "success" in results
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+@pytest.mark.parametrize("is_valid", [True, False])
+async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid):
+    """Should not modify checkpoint when messages are valid."""
+    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    valid_messages = [HumanMessageFactory.create(), AIMessage(content="response")]
+    mocker.patch.object(
+        chatbot.agent,
+        "aget_state",
+        return_value=mocker.Mock(values={"messages": valid_messages}),
+    )
+    mock_truncate = mocker.patch(
+        "ai_chatbots.chatbots.save_truncated_checkpoint",
+        new_callable=AsyncMock,
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots._validate_chat_history",
+        side_effect=(ValueError if not is_valid else None),
+    )
+
+    await chatbot.validate_and_clean_checkpoint()
+    assert mock_truncate.call_count == (0 if is_valid else 1)
