@@ -43,12 +43,12 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
-from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
     async_request_with_token,
     get_django_cache,
-    remove_orphaned_tool_calls_from_db,
-    truncate_checkpoint_messages_in_db,
+    save_truncated_checkpoint,
+    truncate_to_latest_human_message,
 )
 
 log = logging.getLogger(__name__)
@@ -187,28 +187,6 @@ class BaseChatbot(ABC):
                 return state
         return None
 
-    def truncate_to_latest_human_message(self, messages: list) -> list:
-        """
-        Truncate messages to keep only the latest HumanMessage and everything after it.
-
-        Returns a cleaned copy of the messages list.
-        """
-        if not messages:
-            return messages
-
-        # Find the last HumanMessage
-        last_human_index = -1
-        for i in range(len(messages) - 1, -1, -1):
-            if isinstance(messages[i], HumanMessage):
-                last_human_index = i
-                break
-
-        if last_human_index >= 0:
-            return messages[last_human_index:]
-        else:
-            # No HumanMessage found, return last message only
-            return messages[-1:] if messages else []
-
     async def validate_and_clean_checkpoint(self) -> None:
         """
         Clean the current checkpoint if it has validation errors.
@@ -224,22 +202,15 @@ class BaseChatbot(ABC):
                 return
 
             # Validate using LangChain's built-in validation
+            # This is done to make sure it's actually a problem
+            # with the chat history, and not something else
             try:
                 _validate_chat_history(messages)
-            except ValueError as e:
-                # Validation failed, clean the messages
-                error_msg = str(e)
-                log.warning("Checkpoint has validation errors, cleaning: %s", error_msg)
-
-                # Determine which cleaning strategy to use and apply to checkpoint
-                if "ToolMessage" in error_msg:
-                    # Remove orphaned tool calls from checkpoint
-                    await remove_orphaned_tool_calls_from_db(self.thread_id)
-                else:
-                    # For other validation errors, truncate to latest HumanMessage
-                    cleaned_messages = self.truncate_to_latest_human_message(messages)
-                    keep_ids = {msg.id for msg in cleaned_messages}
-                    await truncate_checkpoint_messages_in_db(self.thread_id, keep_ids)
+            except ValueError:
+                # if validation failed, truncate to latest HumanMessage
+                cleaned_messages = truncate_to_latest_human_message(messages)
+                keep_ids = {msg.id for msg in cleaned_messages}
+                await save_truncated_checkpoint(self.thread_id, keep_ids)
 
         except Exception:
             log.exception("Error while cleaning checkpoint")
@@ -327,8 +298,16 @@ class BaseChatbot(ABC):
                     yield chunk
             except ValueError:
                 # Validate and clean checkpoint, then try again
-                log.warning("Validation error, cleaning checkpoint and retrying")
+                log.exception("Validation error, cleaning checkpoint")
                 await self.validate_and_clean_checkpoint()
+                # Add a system message to notify the user about lost context
+                state["messages"].append(
+                    SystemMessage(
+                        content=CONTEXT_LOST_PROMPT,
+                        id=str(uuid4()),
+                    )
+                )
+                # Try to answer the user's last question anyway
                 async for chunk in self.send_chunks(state):
                     full_response += chunk
                     yield chunk

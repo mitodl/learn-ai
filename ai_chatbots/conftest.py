@@ -2,11 +2,13 @@ import json
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
 
 from ai_chatbots import utils
+from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.factories import (
     HumanMessageFactory,
     SyllabusAgentStateFactory,
@@ -90,6 +92,14 @@ def chat_history():
         HumanMessageFactory.create(),
         SystemMessageFactory.create(),
     ]
+
+
+@pytest.fixture
+async def mock_checkpointer(mocker) -> AsyncDjangoSaver:  # noqa: ARG001
+    """Mock the checkpointer"""
+    return await AsyncDjangoSaver.create_with_session(
+        uuid4(), "test message", "test_bot"
+    )
 
 
 class MockAsyncIterator:
