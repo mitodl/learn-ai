@@ -7,9 +7,14 @@ from enum import Enum
 import httpx
 from django.conf import settings
 from django.core.cache import BaseCache, caches
+from langchain_core.messages import HumanMessage
 from named_enum import ExtendedEnum
 
 log = logging.getLogger(__name__)
+
+# Message type identifiers for LangChain serialized messages
+TOOL_MESSAGE_ID = ["langchain", "schema", "messages", "ToolMessage"]
+AI_MESSAGE_ID = ["langchain", "schema", "messages", "AIMessage"]
 
 
 class HTTPClientManager:
@@ -159,3 +164,78 @@ async def async_request_with_token(url, params, timeout: int = 30):
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=timeout,
     )
+
+
+def truncate_to_latest_human_message(messages: list) -> list:
+    """
+    Truncate messages to keep only the latest HumanMessage and everything after it.
+
+    Returns a cleaned copy of the messages list.
+    """
+    if not messages:
+        return messages
+
+    # Find the last HumanMessage
+    last_human_index = -1
+    for i in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[i], HumanMessage):
+            last_human_index = i
+            break
+
+    if last_human_index >= 0:
+        return messages[last_human_index:]
+    else:
+        # No HumanMessage found, return empty list
+        return []
+
+
+async def save_truncated_checkpoint(thread_id: str, keep_ids: set[str]) -> None:
+    """
+    Truncate the latest checkpoint for a thread to only keep specified message IDs.
+
+    Args:
+        thread_id: The thread ID to clean up
+        keep_ids: Set of message IDs to keep
+    """
+    import json
+
+    from channels.db import database_sync_to_async
+
+    from ai_chatbots.api import DjangoCheckpoint
+
+    @database_sync_to_async
+    def update_checkpoint():
+        latest_checkpoint = (
+            DjangoCheckpoint.objects.filter(thread_id=thread_id).order_by("-id").first()
+        )
+        if not latest_checkpoint:
+            return
+
+        checkpoint_data = latest_checkpoint.checkpoint
+        is_string = isinstance(checkpoint_data, str)
+        if is_string:
+            checkpoint_data = json.loads(checkpoint_data)
+
+        messages = checkpoint_data.get("channel_values", {}).get("messages", [])
+
+        filtered_messages = [
+            msg_dict
+            for msg_dict in messages
+            if isinstance(msg_dict, dict)
+            and msg_dict.get("kwargs", {}).get("id") in keep_ids
+        ]
+
+        checkpoint_data["channel_values"]["messages"] = filtered_messages
+        num_messages = len(filtered_messages)
+
+        latest_checkpoint.checkpoint = (
+            json.dumps(checkpoint_data) if is_string else checkpoint_data
+        )
+        latest_checkpoint.save(update_fields=["checkpoint"])
+        log.info(
+            "Truncated checkpoint messages to %d messages in checkpoint %s",
+            num_messages,
+            latest_checkpoint.id,
+        )
+
+    await update_checkpoint()

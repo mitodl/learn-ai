@@ -58,7 +58,7 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
 
-        return chatbot.agent.invoke(
+        return await chatbot.agent.ainvoke(
             {
                 "messages": [{"content": test_case.question, "role": "user"}],
                 **extra_state,
@@ -116,7 +116,7 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
 
-        return chatbot.agent.invoke(
+        return await chatbot.agent.ainvoke(
             {
                 "messages": [{"content": test_case.question, "role": "user"}],
                 **extra_state,
@@ -174,7 +174,7 @@ class VideoGPTBotEvaluator(BaseBotEvaluator):
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
 
-        return chatbot.agent.invoke(
+        return await chatbot.agent.ainvoke(
             {
                 "messages": [{"content": test_case.question, "role": "user"}],
                 **extra_state,

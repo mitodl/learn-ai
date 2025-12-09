@@ -223,3 +223,43 @@ async def test_search_canvas_content_files(
         if not exclude_canvas
         else 0
     )
+
+
+@pytest.mark.parametrize(
+    ("resource_type", "offered_by"),
+    [
+        (None, None),
+        (None, ["xpro"]),
+        (["course"], None),
+    ],
+)
+async def test_search_courses_handles_none_kwargs(
+    settings, mock_get_resources, resource_type, offered_by
+):
+    """Test that search_courses handles None values for resource_type and offered_by."""
+    settings.AI_MIT_SEARCH_URL = "https://mit.edu/search"
+    settings.AI_MIT_SEARCH_LIMIT = 10
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    params = {
+        "q": "physics",
+        "state": {"search_url": ["https://mit.edu/search"]},
+        "resource_type": resource_type,
+        "offered_by": offered_by,
+    }
+
+    await search_courses.ainvoke(params)
+
+    # Build expected params - None values should be excluded
+    expected_params = {"q": "physics", "limit": 10}
+    if resource_type is not None:
+        expected_params["resource_type"] = resource_type
+    if offered_by is not None:
+        expected_params["offered_by"] = offered_by
+
+    mock_get_resources.return_value.get.assert_called_once_with(
+        "https://mit.edu/search",
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )

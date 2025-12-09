@@ -195,3 +195,9 @@ SYSTEM_PROMPT_MAPPING = {
     "summary_existing": PROMPT_SUMMARY_EXISTING,
     "summary_final": PROMPT_SUMMARY_FINAL,
 }
+
+
+# No cache for this, as it's only used in rare error cases
+CONTEXT_LOST_PROMPT = """
+IMPORTANT: Apologize to the user for losing track of the earlier conversation.
+"""

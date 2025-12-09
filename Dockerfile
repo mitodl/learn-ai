@@ -45,6 +45,7 @@ RUN curl -sSL https://install.python-poetry.org \
 WORKDIR /src
 RUN python3 -m venv $VIRTUAL_ENV
 RUN poetry install
+RUN poetry run pip install deepeval --no-deps
 
 # Add project
 USER root

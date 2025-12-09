@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import factory
 import pytest
 import responses
+from langgraph.func import LangGraphDeprecatedSinceV10
 from pytest_mock import PytestMockWarning
 from urllib3.exceptions import InsecureRequestWarning
 
@@ -32,6 +33,10 @@ def warnings_as_errors():  # noqa: PT004
         warnings.filterwarnings("ignore", category=InsecureRequestWarning)
         warnings.filterwarnings("ignore", category=PytestMockWarning)
         warnings.filterwarnings("ignore", category=ResourceWarning)
+        # create_react_agent will be removed in langgraph 2.0; supress for now.
+        # The new langchain.agents.create_agent function should replace it
+        # eventually, but that is not a drop-in replacement.
+        warnings.filterwarnings("ignore", category=LangGraphDeprecatedSinceV10)
         # Ignore deprecation warnings in third party libraries
         warnings.filterwarnings(
             "ignore",

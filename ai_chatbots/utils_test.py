@@ -1,12 +1,21 @@
 """Tests for ai_chatbots utils"""
 
 import asyncio
+import json
 
 import httpx
+import pytest
+from channels.db import database_sync_to_async
 from django.conf import settings
+from langchain_core.messages import AIMessage
 from named_enum import ExtendedEnum
 
 from ai_chatbots import utils
+from ai_chatbots.factories import (
+    CheckpointFactory,
+    HumanMessageFactory,
+    SystemMessageFactory,
+)
 
 
 def test_enum_zip():
@@ -167,3 +176,97 @@ async def test_concurrent_sync_requests_pooling(mocker):
     client_ids = {r["client_id"] for r in results}
     assert len(client_ids) == 1
     assert len(results) == 10
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_save_truncated_checkpoint():
+    """Should truncate messages and save to DB."""
+    checkpoint_data = {
+        "channel_values": {
+            "messages": [
+                {"kwargs": {"id": "remove_me"}},
+                {"kwargs": {"id": "keep_me"}},
+                {"kwargs": {"id": "remove_me 2"}},
+            ]
+        }
+    }
+    checkpoint = await database_sync_to_async(CheckpointFactory)(
+        checkpoint=json.dumps(checkpoint_data)
+    )
+
+    await utils.save_truncated_checkpoint(checkpoint.thread_id, {"keep_me"})
+
+    await database_sync_to_async(checkpoint.refresh_from_db)()
+    saved = json.loads(checkpoint.checkpoint)
+    assert len(saved["channel_values"]["messages"]) == 1
+    assert saved["channel_values"]["messages"][0]["kwargs"]["id"] == "keep_me"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_save_truncated_checkpoint_no_checkpoint():
+    """Should not error when no checkpoint exists."""
+    await utils.save_truncated_checkpoint("nonexistent_thread", {"any"})
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+async def test_truncate_to_latest_human_message(mock_checkpointer):
+    """Should keep only messages from last HumanMessage onward."""
+    messages = [
+        SystemMessageFactory.create(),
+        HumanMessageFactory.create(content="first"),
+        AIMessage(content="response1"),
+        HumanMessageFactory.create(content="second"),
+        AIMessage(content="response2"),
+    ]
+    result = utils.truncate_to_latest_human_message(messages)
+    assert len(result) == 2
+    assert result[0].content == "second"
+    assert result[1].content == "response2"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+async def test_truncate_to_latest_human_message_missing(mock_checkpointer):
+    """Should return empty list when no HumanMessage found."""
+    messages = [SystemMessageFactory.create(), AIMessage(content="response")]
+    result = utils.truncate_to_latest_human_message(messages)
+    assert result == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+async def test_truncate_to_latest_human_message_empty(mock_checkpointer):
+    """Should return empty list for empty input."""
+    assert utils.truncate_to_latest_human_message([]) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
+    """Should filter checkpoint messages to only keep specified IDs."""
+    from ai_chatbots.utils import save_truncated_checkpoint
+
+    thread_id = mock_checkpointer.session.thread_id
+    keep_msg = HumanMessageFactory.create(content="keep")
+    checkpoint_data = {
+        "channel_values": {
+            "messages": [
+                {"kwargs": {"id": "remove_id"}},
+                {"kwargs": {"id": keep_msg.id}},
+            ]
+        }
+    }
+    checkpoint = await database_sync_to_async(CheckpointFactory)(
+        thread_id=thread_id,
+        checkpoint=json.dumps(checkpoint_data),
+    )
+
+    await save_truncated_checkpoint(thread_id, {keep_msg.id})
+
+    await database_sync_to_async(checkpoint.refresh_from_db)()
+    saved_data = json.loads(checkpoint.checkpoint)
+    assert len(saved_data["channel_values"]["messages"]) == 1
+    assert saved_data["channel_values"]["messages"][0]["kwargs"]["id"] == keep_msg.id

@@ -79,7 +79,7 @@ class TokenTrackingCallbackHandler(CallbackHandler):
 
     def set_trace_attributes(self):
         """Set trace attributes for PostHog"""
-        self._client.capture(
+        self._ph_client.capture(
             event="$ai_trace",
             distinct_id=self.bot.user_id,
             properties={

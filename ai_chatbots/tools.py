@@ -132,9 +132,10 @@ async def search_courses(
     params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
 
     valid_params = {
-        "resource_type": [rt.name for rt in kwargs.get("resource_type", [])] or None,
+        "resource_type": [rt.name for rt in (kwargs.get("resource_type") or [])]
+        or None,
         "free": kwargs.get("free"),
-        "offered_by": [o.name for o in kwargs.get("offered_by", [])] or None,
+        "offered_by": [o.name for o in (kwargs.get("offered_by") or [])] or None,
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})

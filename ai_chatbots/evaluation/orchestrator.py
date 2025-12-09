@@ -183,7 +183,9 @@ class EvaluationOrchestrator:
 
         if not test_cases:
             self.stdout.write("No test cases available - skipping evaluation")
-            return EvaluationResult(test_results=[], confident_link=None)
+            return EvaluationResult(
+                test_results=[], confident_link=None, test_run_id=None
+            )
 
         # Create AsyncConfig and log its settings
         async_config = AsyncConfig(
