@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.24.1
+Version 0.24.1 (Released January 05, 2026)
 --------------
 
 - Handle bad message state (#379)
