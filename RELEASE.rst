@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.24.1 (Released January 05, 2026)
+--------------
+
+- Handle bad message state (#379)
+- Updated versions of  langchain, langgraph, etc (#375)
+
 Version 0.23.0 (Released December 03, 2025)
 --------------
 
