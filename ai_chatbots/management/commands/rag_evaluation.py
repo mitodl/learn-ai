@@ -80,6 +80,25 @@ class Command(BaseCommand):
             help="Maximum number of test cases to run in parallel (default: 1)",
             default=1,
         )
+        parser.add_argument(
+            "--batch-size",
+            dest="batch_size",
+            required=False,
+            type=int,
+            help="Number of test cases to evaluate per batch to reduce memory usage "
+            "(default: 0 = no batching, all at once)",
+            default=10,
+        )
+        parser.add_argument(
+            "--error-log-file",
+            dest="error_log_file",
+            required=False,
+            help=(
+                "Specify a file to save error logs "
+                "(default: rag_evaluation_errors.log)"
+            ),
+            default="rag_evaluation_errors.log",
+        )
 
     def handle(self, **options):
         """Run the command using the new evaluation framework."""
@@ -101,6 +120,8 @@ class Command(BaseCommand):
         output_file = options["output_file"]
         timeout_seconds = options["timeout"]
         max_concurrent = options["max_concurrent"]
+        batch_size = options["batch_size"]
+        error_log_file = options["error_log_file"]
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:
@@ -135,6 +156,8 @@ class Command(BaseCommand):
                 use_prompts=use_prompts,
                 prompts_file=prompts_file,
                 max_concurrent=max_concurrent,
+                batch_size=batch_size,
+                error_log_file=error_log_file,
             )
         finally:
             # Clean up file resources if using DualOutputWrapper
