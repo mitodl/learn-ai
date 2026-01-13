@@ -768,3 +768,7 @@ CANVAS_SYLLABUS_DEMO_READABLE_IDS = get_list_of_str(
 )
 
 QUERY_BATCH_SIZE = get_int("QUERY_BATCH_SIZE", 500)
+
+MIT_LEARN_API_PROXY_BASE_URL = get_string(
+    name="MIT_LEARN_API_PROXY_BASE_URL", default="https://api.learn.mit.edu/api/"
+)
