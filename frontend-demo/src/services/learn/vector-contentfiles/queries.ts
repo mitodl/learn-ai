@@ -3,7 +3,8 @@ import type { PaginatedContentFileList } from "@mitodl/mit-learn-api-axios/v1"
 import axios from "axios"
 
 type VectorContentListOptions = {
-  edxModuleIds: string[]
+  q: string
+  group_by: string
 }
 
 const keys = {
@@ -28,12 +29,16 @@ const queries = {
        */
       queryFn: () => {
         const search = new URLSearchParams()
-        opts.edxModuleIds.forEach((id) => {
-          search.append("edx_module_id", id)
-        })
+        if (opts.q) {
+          search.append("q", opts.q)
+        }
+        if (opts.group_by) {
+          search.append("group_by", opts.group_by)
+        }
+
         return axios
           .get(
-            `${process.env.NEXT_PUBLIC_MIT_LEARN_API_BASE_URL}/api/v0/vector_content_files_search?${search.toString()}`,
+            `${process.env.NEXT_PUBLIC_MITOL_API_BASE_URL}/learn-api/v0/vector_content_files_search?${search.toString()}`,
           )
           .then((res) => res.data as PaginatedContentFileList)
       },
