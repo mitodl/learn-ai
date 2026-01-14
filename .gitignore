@@ -113,8 +113,6 @@ out
 docs/_site
 
 .pnp.*
-.yarn
-!.yarn/releases
 .next
 next-env.d.ts
 
