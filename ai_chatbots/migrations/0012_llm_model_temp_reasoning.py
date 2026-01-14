@@ -11,7 +11,9 @@ def upsert_models(apps, schema_editor):
     Populate the LLMModel table with initial data.
     """
     LLMModel = apps.get_model("ai_chatbots", "LLMModel")
-    with Path.open("ai_chatbots/fixtures/initial_llm_models.json") as llm_json:
+    with Path.open(
+        "ai_chatbots/fixtures/migrations/0012_llm_model_temp_reasoning.json"
+    ) as llm_json:
         for llm_model in json.load(llm_json):
             LLMModel.objects.update_or_create(
                 litellm_id=llm_model["litellm_id"],
