@@ -47,6 +47,45 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture(autouse=True)
+def _setup_test_llm_models():
+    """Create LLMModel entries for test models."""
+    from ai_chatbots.models import LLMModel
+
+    test_models = [
+        {
+            "litellm_id": "gpt-3.5-turbo",
+            "provider": "openai",
+            "name": "gpt-3.5-turbo",
+            "temperature": 0.1,
+        },
+        {
+            "litellm_id": "gpt-4",
+            "provider": "openai",
+            "name": "gpt-4",
+            "temperature": 0.1,
+        },
+        {
+            "litellm_id": "gpt-4o",
+            "provider": "openai",
+            "name": "gpt-4o",
+            "temperature": 0.2,
+        },
+        {
+            "litellm_id": "gpt-4-turbo",
+            "provider": "openai",
+            "name": "gpt-4-turbo",
+            "temperature": 0.3,
+        },
+        {"litellm_id": "openai/o9-turbo", "provider": "openai", "name": "o9-turbo"},
+    ]
+    for model_data in test_models:
+        LLMModel.objects.get_or_create(
+            litellm_id=model_data["litellm_id"],
+            defaults=model_data,
+        )
+
+
+@pytest.fixture(autouse=True)
 def mock_settings(settings):
     """Langsmith API should be blank for most tests"""
     os.environ["LANGSMITH_API_KEY"] = ""
