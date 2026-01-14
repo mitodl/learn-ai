@@ -197,10 +197,10 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
         == recommendation_consumer.scope["user"].global_id
     )
     mock_http_consumer_send.send_headers.assert_called_once()
-    assert recommendation_consumer.bot.llm.temperature == (
+    assert recommendation_consumer.bot.temperature == (
         temperature if temperature else settings.AI_DEFAULT_TEMPERATURE
     )
-    assert recommendation_consumer.bot.llm.model == (
+    assert recommendation_consumer.bot.model == (
         model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
     assert recommendation_consumer.bot.instructions == (
@@ -355,7 +355,9 @@ async def test_syllabus_create_chatbot(
     )
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
-    chatbot = syllabus_consumer.create_chatbot(serializer, mocker.Mock())
+    chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
+        serializer, mocker.Mock()
+    )
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.user_id == async_user.global_id
     assert chatbot.temperature == 0.7
@@ -405,7 +407,9 @@ async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
     )
     serializer.is_valid()
     await canvas_syllabus_consumer.prepare_response(serializer)
-    bot = canvas_syllabus_consumer.create_chatbot(serializer, mocker.Mock())
+    bot = await sync_to_async(canvas_syllabus_consumer.create_chatbot)(
+        serializer, mocker.Mock()
+    )
     assert bot.__class__ == consumers.CanvasSyllabusBot
 
 
@@ -841,7 +845,9 @@ async def test_video_gpt_create_chatbot(
     )
     serializer.is_valid(raise_exception=True)
     await video_gpt_consumer.prepare_response(serializer)
-    chatbot = video_gpt_consumer.create_chatbot(serializer, mocker.Mock())
+    chatbot = await sync_to_async(video_gpt_consumer.create_chatbot)(
+        serializer, mocker.Mock()
+    )
     assert isinstance(chatbot, VideoGPTBot)
     assert chatbot.user_id == async_user.global_id
     assert chatbot.temperature == 0.7

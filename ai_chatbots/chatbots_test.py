@@ -6,6 +6,7 @@ import re
 from unittest.mock import ANY, AsyncMock
 
 import pytest
+from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.conf import settings
 from langchain_community.chat_models import ChatLiteLLM
@@ -115,7 +116,7 @@ async def test_recommendation_bot_initialization_defaults(
             return_value=[],
         )
 
-    chatbot = ResourceRecommendationBot(
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
         "user",
         name=name,
         model=model,
@@ -168,7 +169,7 @@ async def test_recommendation_bot_tool(
     mock_client_patch = mock_httpx_async_client(
         search_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
-    chatbot = ResourceRecommendationBot("anonymous")
+    chatbot = await sync_to_async(ResourceRecommendationBot)("anonymous")
     search_parameters = {
         "q": "physics",
         "resource_type": ["course", "program"],
@@ -218,7 +219,9 @@ async def test_get_completion(
     expected_return_value = [b"Here ", b"are ", b"some ", b"results"]
     if debug:
         expected_return_value.append(comment_metadata)
-    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer
+    )
     mock_stream = mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.astream",
         return_value=mocker.Mock(
@@ -255,7 +258,7 @@ async def test_get_completion(
 @pytest.mark.asyncio
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
-    chatbot = ResourceRecommendationBot(
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     agent = chatbot.create_agent_graph()
@@ -301,7 +304,7 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = SyllabusBot(
+    chatbot = await sync_to_async(SyllabusBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     mock_create_agent.assert_called_once_with(
@@ -321,7 +324,7 @@ async def test_syllabus_bot_get_completion_state(
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
-    chatbot = SyllabusBot(
+    chatbot = await sync_to_async(SyllabusBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     extra_state = {
@@ -377,7 +380,7 @@ async def test_syllabus_bot_tool(
     mock_client_patch = mock_httpx_async_client(
         content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
     )
-    chatbot = SyllabusBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(SyllabusBot)("anonymous", mock_checkpointer)
 
     search_parameters = {
         "q": "main topics",
@@ -401,7 +404,9 @@ async def test_syllabus_bot_tool(
 @pytest.mark.asyncio
 async def test_get_tool_metadata(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected metadata"""
-    chatbot = ResourceRecommendationBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer
+    )
     mock_tool_content = {
         "metadata": {
             "parameters": {
@@ -466,7 +471,7 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
 @pytest.mark.asyncio
 async def test_get_tool_metadata_none(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns an empty dict JSON string"""
-    chatbot = SyllabusBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(SyllabusBot)("anonymous", mock_checkpointer)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
@@ -488,7 +493,7 @@ async def test_get_tool_metadata_none(mocker, mock_checkpointer):
 @pytest.mark.asyncio
 async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     """Test that the get_tool_metadata function returns the expected error response"""
-    chatbot = SyllabusBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(SyllabusBot)("anonymous", mock_checkpointer)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
         return_value=MockAsyncIterator(
@@ -528,7 +533,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
     settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
     model_name = "openai/o9-turbo"
     settings.AI_DEFAULT_RECOMMENDATION_MODEL = model_name
-    chatbot = ResourceRecommendationBot("user1", mock_checkpointer)
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user1", mock_checkpointer)
     if use_proxy:
         mock_create_proxy_user.assert_any_call("user1")
         assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
@@ -536,6 +541,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         mock_llm.assert_any_call(
             model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
             streaming=True,
+            model_kwargs={},
             **chatbot.proxy.get_api_kwargs(),
             **chatbot.proxy.get_additional_kwargs(chatbot),
         )
@@ -546,9 +552,164 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         mock_llm.assert_any_call(
             model=model_name,
             streaming=True,
-            **{},
-            **{},
+            model_kwargs={},
         )
+
+
+@pytest.mark.asyncio
+async def test_get_llm_with_reasoning_effort(mocker, mock_checkpointer):
+    """Test that get_llm passes reasoning_effort in model_kwargs when model_spec has it."""
+    from ai_chatbots.models import LLMModel
+
+    # Create a model with reasoning_effort
+    await sync_to_async(LLMModel.objects.update_or_create)(
+        litellm_id="test-reasoning-model",
+        defaults={
+            "provider": "openai",
+            "name": "test-reasoning",
+            "reasoning_effort": "high",
+        },
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="test-reasoning-model"
+    )
+
+    assert chatbot.llm.model_kwargs == {"reasoning_effort": "high"}
+
+
+@pytest.mark.asyncio
+async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
+    """Test that get_llm passes empty model_kwargs when model_spec has no reasoning_effort."""
+    from ai_chatbots.models import LLMModel
+
+    # Create a model without reasoning_effort
+    await sync_to_async(LLMModel.objects.update_or_create)(
+        litellm_id="test-no-reasoning-model",
+        defaults={
+            "provider": "openai",
+            "name": "test-no-reasoning",
+            "reasoning_effort": "",
+        },
+    )
+
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="test-no-reasoning-model"
+    )
+
+    assert chatbot.llm.model_kwargs == {}
+
+
+@pytest.mark.asyncio
+async def test_get_llm_model_not_found(mocker, mock_checkpointer):
+    """Test that get_llm handles missing model_spec gracefully."""
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+
+    # Use a model that doesn't exist in the database
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="nonexistent-model"
+    )
+
+    assert chatbot.llm.temperature is None
+    assert chatbot.llm.model_kwargs == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("temp_value", [0.25, None])
+async def test_get_llm_temperature_supported(mocker, mock_checkpointer, temp_value):
+    """Test that temperature is set when model_spec.temperature is not null."""
+    from ai_chatbots.models import LLMModel
+
+    await sync_to_async(LLMModel.objects.update_or_create)(
+        litellm_id="temp-supported-model",
+        defaults={
+            "provider": "openai",
+            "name": "temp-supported",
+            "temperature": temp_value,
+        },
+    )
+
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="temp-supported-model", temperature=temp_value
+    )
+
+    assert chatbot.llm.temperature == temp_value
+
+
+@pytest.mark.asyncio
+async def test_get_llm_temperature_not_supported(mocker, mock_checkpointer):
+    """Test that temperature is NOT set when model_spec.temperature is None."""
+    from ai_chatbots.models import LLMModel
+
+    await sync_to_async(LLMModel.objects.update_or_create)(
+        litellm_id="temp-not-supported-model",
+        defaults={
+            "provider": "openai",
+            "name": "temp-not-supported",
+        },
+    )
+
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="temp-not-supported-model", temperature=0.8
+    )
+
+    # Temperature should remain None since model_spec.temperature is None
+    assert chatbot.llm.temperature is None
+
+
+@pytest.mark.asyncio
+async def test_get_llm_binds_tools(mocker, mock_checkpointer):
+    """Test that get_llm binds tools when chatbot has tools."""
+    mock_llm_instance = mocker.Mock()
+    mock_bound_llm = mocker.Mock()
+    mock_llm_instance.bind_tools.return_value = mock_bound_llm
+    mocker.patch("ai_chatbots.chatbots.ChatLiteLLM", return_value=mock_llm_instance)
+
+    # ResourceRecommendationBot has tools by default
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    # Verify bind_tools was called
+    mock_llm_instance.bind_tools.assert_called_once()
+    assert chatbot.llm == mock_bound_llm
+
+
+@pytest.mark.asyncio
+async def test_get_llm_no_tools(mocker, mock_checkpointer):
+    """Test that get_llm does NOT bind tools when chatbot has no tools."""
+    mock_llm_instance = mocker.Mock()
+    mocker.patch("ai_chatbots.chatbots.ChatLiteLLM", return_value=mock_llm_instance)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    # Verify bind_tools was NOT called
+    mock_llm_instance.bind_tools.assert_not_called()
+    assert chatbot.llm == mock_llm_instance
 
 
 @pytest.mark.parametrize(
@@ -585,7 +746,7 @@ async def test_tutor_bot_intitiation(mocker, model, temperature, variant):
             return_value="problem_set",
         )
 
-    chatbot = TutorBot(
+    chatbot = await sync_to_async(TutorBot)(
         "user",
         name=name,
         model=model,
@@ -732,7 +893,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
         object_id=edx_module_id,
     )
 
-    chatbot = TutorBot(
+    chatbot = await sync_to_async(TutorBot)(
         "anonymous",
         checkpointer=checkpointer,
         edx_module_id=edx_module_id,
@@ -768,7 +929,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
 async def test_video_gpt_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
-    chatbot = VideoGPTBot(
+    chatbot = await sync_to_async(VideoGPTBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     mock_create_agent.assert_called_once_with(
@@ -845,7 +1006,7 @@ async def test_video_gpt_bot_get_completion_state(
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_VIDEO_GPT_MODEL = default_model
-    chatbot = VideoGPTBot(
+    chatbot = await sync_to_async(VideoGPTBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     extra_state = {
@@ -894,7 +1055,7 @@ async def test_video_gpt_bot_tool(
         video_transcript_content_chunk_results,
         patch_path="ai_chatbots.utils.get_async_http_client",
     )
-    chatbot = VideoGPTBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(VideoGPTBot)("anonymous", mock_checkpointer)
 
     search_parameters = {
         "q": "What is this video about?",
@@ -920,7 +1081,7 @@ async def test_video_gpt_bot_tool(
 async def test_bad_request(mocker, mock_checkpointer):
     """Test that the bad_request function logs the exception"""
     mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")
-    chatbot = VideoGPTBot("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(VideoGPTBot)("anonymous", mock_checkpointer)
     chatbot.agent.astream = mocker.Mock(
         side_effect=BadRequestError(
             response=mocker.Mock(
@@ -938,7 +1099,7 @@ async def test_bad_request(mocker, mock_checkpointer):
 @pytest.mark.asyncio
 async def test_get_completion_handles_value_error(mocker, mock_checkpointer):
     """Should call validate_and_clean_checkpoint, add system message, and retry on ValueError."""
-    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
 
     call_count = 0
     captured_state = None
@@ -973,7 +1134,7 @@ async def test_get_completion_handles_value_error(mocker, mock_checkpointer):
 @pytest.mark.parametrize("is_valid", [True, False])
 async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid):
     """Should not modify checkpoint when messages are valid."""
-    chatbot = ResourceRecommendationBot("user", mock_checkpointer)
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
     valid_messages = [HumanMessageFactory.create(), AIMessage(content="response")]
     mocker.patch.object(
         chatbot.agent,

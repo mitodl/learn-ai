@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import uuid4
 
 import litellm
+from asgiref.sync import sync_to_async
 from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
@@ -312,7 +313,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             checkpointer = await self.create_checkpointer(
                 thread_id, message_text, serializer
             )
-            self.bot = self.create_chatbot(serializer, checkpointer)
+            self.bot = await sync_to_async(self.create_chatbot)(
+                serializer, checkpointer
+            )
             extra_state = self.process_extra_state(serializer.validated_data)
             # Start to send the response, including the headers
             await self.start_response(thread_id=thread_id, status=200, cookies=cookies)

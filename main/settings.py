@@ -682,7 +682,7 @@ AI_HUMAN_MAX_CONVERSATION_MEMORY = get_int(
 )  # 6 human messages prior to the current message
 AI_UNSUPPORTED_TEMP_MODELS = get_list_of_str(
     name="AI_UNSUPPORTED_TEMP_MODELS",
-    default=["openai/o3-mini", "openai/gpt-5", "openai/gpt-5-mini"],
+    default=r"openai\/(o3-mini|gpt-5.*)",
 )
 LEARN_ACCESS_TOKEN = get_string(
     name="LEARN_ACCESS_TOKEN",
