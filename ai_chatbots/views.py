@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import QuerySet
+from django.http import HttpResponse, JsonResponse
+from django.views import View
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -30,7 +32,7 @@ from ai_chatbots.serializers import (
     SystemPromptSerializer,
     UserChatSessionSerializer,
 )
-from ai_chatbots.utils import get_django_cache
+from ai_chatbots.utils import get_django_cache, request_with_token
 from main.views import DefaultPagination
 
 
@@ -377,3 +379,40 @@ class SystemPromptViewSet(GenericViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+class ApiProxyView(View):
+    """
+    Proxy view for MIT Learn API.
+    Forwards requests from /learn-api/* to the learn API with an auth token.
+    """
+
+    def get(self, request, path):
+        try:
+            # Construct the target URL
+            url = f"{settings.MIT_LEARN_API_PROXY_BASE_URL}/{path}"
+
+            # Forward query parameters
+            # request.GET is a QueryDict, .dict() converts it to a standard dict
+            params = request.GET.dict()
+
+            # Make the request with the token
+            # Enable following redirects to handle cases where upstream api redirects
+            response = request_with_token(url, params, follow_redirects=True)
+
+            # Return the response content and status
+            try:
+                data = response.json()
+                return JsonResponse(data, status=response.status_code, safe=False)
+            except ValueError:
+                return HttpResponse(
+                    response.content,
+                    status=response.status_code,
+                    content_type=response.headers.get("Content-Type"),
+                )
+
+        except requests.RequestException as e:
+            return JsonResponse(
+                {"error": f"Failed to proxy request: {e!s}"},
+                status=500,
+            )
