@@ -14,7 +14,12 @@ const ContentFileSearchContent: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("")
 
   const { data, isLoading, error } = useQuery({
-    ...VectorContenfilesQueries.listing({ q: searchQuery, group_by: "key" }),
+    ...VectorContenfilesQueries.listing({
+      q: searchQuery,
+      group_by: "key",
+      platform: "edx",
+      group_size: 3,
+    }),
     enabled: !!searchQuery,
   })
 

@@ -5,6 +5,8 @@ import axios from "axios"
 type VectorContentListOptions = {
   q: string
   group_by: string
+  platform: string
+  group_size: number
 }
 
 const keys = {
@@ -21,16 +23,18 @@ const queries = {
     queryOptions({
       queryKey: keys.contentfilesListing(opts),
       /**
-       * TODO:
-       * There's a bug in @mitodl/mit-learn-api-axios... it thinks /contentfiles/ listing
-       * API requires a path parameter.
-       *
-       * For now, use axios.get instead.
+       * use axios to hit the proxy endpoint which adds a token
        */
       queryFn: () => {
         const search = new URLSearchParams()
         if (opts.q) {
           search.append("q", opts.q)
+        }
+        if (opts.platform) {
+          search.append("platform", opts.platform)
+        }
+        if (opts.group_size) {
+          search.append("group_size", opts.group_size.toString())
         }
         if (opts.group_by) {
           search.append("group_by", opts.group_by)
