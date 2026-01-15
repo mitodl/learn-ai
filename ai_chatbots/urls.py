@@ -36,4 +36,9 @@ v0_urls = [
 
 urlpatterns = [
     re_path(r"^api/v0/", include((v0_urls, "v0"))),
+    re_path(
+        r"^learn-api/(?P<path>.*)$",
+        views.ApiProxyView.as_view(),
+        name="learn_api_proxy",
+    ),
 ]
