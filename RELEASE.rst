@@ -1,6 +1,24 @@
 Release Notes
 =============
 
+Version 0.25.0
+--------------
+
+- Temperature and reasoning effort per LLM model (#389)
+- fix(deps): update react monorepo to v19.2.3 (#338)
+- chore(deps): update dependency type-fest to v5 (#350)
+- fix(deps): update django-health-check digest to ea25843 (#384)
+- chore(deps): update dependency eslint-config-next to v15.5.9 (#385)
+- chore(deps): update actions/setup-python digest to 83679a8 (#382)
+- RAG Evaluation bug fixes and enhancements (#388)
+- chore(deps): update dependency aiohttp to v3.13.3 [security] (#387)
+- chore(deps): update dependency langchain-core to v1.2.5 [security] (#386)
+- chore(deps): update codecov/codecov-action action to v5.5.2 (#383)
+- chore(deps): update dependency social-auth-app-django to v5.6.0 [security] (#381)
+- chore(deps): update actions/checkout digest to 93cb6ef (#377)
+- fix(deps): update dependency next to v15.5.8 [security] (#376)
+- chore(deps): update dependency social-auth-app-django to v5.6.0 [security] (#372)
+
 Version 0.24.1 (Released January 05, 2026)
 --------------
 
