@@ -1,0 +1,4 @@
+openapi/specs/*
+.yarn/
+.next/
+frontend-demo/.yarn/
