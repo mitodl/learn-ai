@@ -112,7 +112,6 @@ out
 # docs/bundler/jekyll
 docs/_site
 
-.pnp.*
 .next
 next-env.d.ts
 
@@ -128,5 +127,4 @@ github-pages/public
 # Storybook
 storybook-static/
 
-/**/.yarn/cache
 .swc
