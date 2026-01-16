@@ -65,6 +65,15 @@ def django_session():
 
 
 @pytest.fixture(autouse=True)
+def mock_check_throttles(mocker):
+    """Mock check_throttles to avoid needing ConsumerThrottleLimit DB entries."""
+    return mocker.patch(
+        "ai_chatbots.consumers.BaseBotHttpConsumer.check_throttles",
+        return_value=None,
+    )
+
+
+@pytest.fixture(autouse=True)
 def ai_settings(settings, mocker):
     """Assign default AI settings"""
     # Reset HTTP client singletons before each test

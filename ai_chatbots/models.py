@@ -104,6 +104,8 @@ class LLMModel(models.Model):
     provider = models.CharField(max_length=255)
     name = models.CharField(max_length=255)
     enabled = models.BooleanField(default=True)
+    temperature = models.FloatField(default=None, null=True)
+    reasoning_effort = models.CharField(max_length=16, blank=True)
 
     def __str__(self):
         return f"{self.provider} - {self.name}"
