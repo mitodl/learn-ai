@@ -35,6 +35,7 @@ from openai import BadRequestError
 from posthog.ai.langchain import CallbackHandler
 
 from ai_chatbots import tools
+from ai_chatbots.admin import LLMModel
 from ai_chatbots.api import (
     DjangoCheckpoint,
     MessageTruncationNode,
@@ -116,16 +117,24 @@ class BaseChatbot(ABC):
         Set it up to use a proxy, with required proxy kwargs, if applicable.
         Bind the LLM to any tools if they are present.
         """
+        model_spec = LLMModel.objects.filter(litellm_id=self.model).first()
         llm = ChatLiteLLM(
             model=f"{self.proxy_prefix}{self.model}",
             streaming=True,
+            # Set reasoning effort if specified for the model
+            model_kwargs={"reasoning_effort": model_spec.reasoning_effort}
+            if model_spec and model_spec.reasoning_effort
+            else {},
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
         )
-        # Set the temperature if it's supported by the model
-        if self.temperature and self.model not in settings.AI_UNSUPPORTED_TEMP_MODELS:
-            llm.temperature = self.temperature
+        # Set the temperature if appropriate
+        llm.temperature = (
+            self.temperature or model_spec.temperature
+            if (model_spec and model_spec.temperature is not None)
+            else None
+        )
         # Bind tools to the LLM if any
         if self.tools:
             llm = llm.bind_tools(self.tools)

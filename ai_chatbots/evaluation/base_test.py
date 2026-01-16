@@ -63,22 +63,28 @@ class TestBaseBotEvaluator:
     def test_evaluation_config_creation(self, mocker):
         """Test EvaluationConfig creation with all parameters."""
         mock_metrics = [mocker.Mock(), mocker.Mock()]
+        metric_thresholds = {"AnswerRelevancy": 0.7, "Hallucination": 0.0}
         config = EvaluationConfig(
             models=["gpt-4", "gpt-3.5"],
             evaluation_model="gpt-4",
             metrics=mock_metrics,
+            metric_thresholds=metric_thresholds,
             confident_api_key="test-key",
         )
 
         assert config.models == ["gpt-4", "gpt-3.5"]
         assert config.evaluation_model == "gpt-4"
         assert config.metrics == mock_metrics
+        assert config.metric_thresholds == metric_thresholds
         assert config.confident_api_key == "test-key"
 
     def test_evaluation_config_optional_api_key(self):
         """Test EvaluationConfig without API key."""
         config = EvaluationConfig(
-            models=["gpt-4"], evaluation_model="gpt-4", metrics=[]
+            models=["gpt-4"],
+            evaluation_model="gpt-4",
+            metrics=[],
+            metric_thresholds={},
         )
 
         assert config.confident_api_key is None
@@ -241,6 +247,33 @@ class TestConcreteBotEvaluator:
                 AIMessage(
                     content="Tool call",
                     additional_kwargs={"tool_calls": [mock_tool_call]},
+                ),
+            ]
+        }
+
+        tool_calls = evaluator.extract_tool_calls(response)
+        assert len(tool_calls) == 1
+        assert tool_calls[0].name == "test_tool"
+        assert tool_calls[0].input_parameters == {"arg": "value"}
+
+    def test_extract_tool_calls_dict_format(self, evaluator):
+        """Test tool calls extraction with dictionary format (from actual API)."""
+        # This is the format returned by the actual LiteLLM/OpenAI API
+        tool_call_dict = {
+            "id": "call_abc123",
+            "type": "function",
+            "function": {
+                "name": "test_tool",
+                "arguments": '{"arg": "value"}',
+            },
+        }
+
+        response = {
+            "messages": [
+                HumanMessage(content="User"),
+                AIMessage(
+                    content="Tool call",
+                    additional_kwargs={"tool_calls": [tool_call_dict]},
                 ),
             ]
         }

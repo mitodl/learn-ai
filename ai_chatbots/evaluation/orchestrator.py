@@ -1,7 +1,9 @@
 """Orchestrator for running RAG evaluations across multiple bots and models."""
 
 import os
+from datetime import UTC, datetime
 from json import JSONDecodeError
+from pathlib import Path
 from typing import Optional
 
 import deepeval
@@ -22,6 +24,9 @@ from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS
 from ai_chatbots.evaluation.reporting import EvaluationReporter
 from ai_chatbots.evaluation.timeout_wrapper import wrap_metrics_with_timeout
 from main.test_utils import load_json_with_settings
+
+# Constants
+ERROR_LOG_MIN_SIZE = 500  # Minimum file size to indicate errors beyond header
 
 
 class EvaluationOrchestrator:
@@ -84,6 +89,7 @@ class EvaluationOrchestrator:
             models=models,
             evaluation_model=evaluation_model,
             metrics=timeout_wrapped_metrics,
+            metric_thresholds=metric_thresholds,
             confident_api_key=os.environ.get("CONFIDENT_AI_API_KEY"),
         )
 
@@ -99,7 +105,7 @@ class EvaluationOrchestrator:
             self.stdout.write(f"Warning: {prompts_file} not found or invalid")
         return prompts_data
 
-    async def _collect_test_cases_for_bot(
+    async def _collect_and_evaluate_bot(  # noqa: C901, PLR0913
         self,
         bot_name: str,
         config: EvaluationConfig,
@@ -107,25 +113,41 @@ class EvaluationOrchestrator:
         data_file: Optional[str],
         use_prompts: Optional[bool],
         prompts_data: Optional[dict],
-    ) -> list:
-        """Collect test cases for a specific bot with all models and prompts."""
+        max_concurrent: int,
+        batch_size: int,
+        error_log_file: str,
+    ) -> EvaluationResult:
+        """Collect test cases for a bot and evaluate them immediately.
+
+        This processes one bot at a time, generating responses and evaluating them
+        in batches to avoid memory issues from collecting all test cases upfront.
+        """
         if bot_name not in BOT_EVALUATORS:
             self.stdout.write(f"Warning: Unknown bot '{bot_name}', skipping")
-            return []
+            return EvaluationResult(
+                test_results=[], confident_link=None, test_run_id=None
+            )
 
         bot_class, evaluator_class = BOT_EVALUATORS[bot_name]
-        evaluator = evaluator_class(bot_class, bot_name, data_file=data_file)
+        evaluator = evaluator_class(
+            bot_class,
+            bot_name,
+            data_file=data_file,
+            stdout=self.stdout,
+            error_log_file=error_log_file,
+        )
 
         # Load and validate test cases for this bot
         bot_test_cases = evaluator.load_test_cases()
         self.stdout.write(f"Loaded {len(bot_test_cases)} test cases for {bot_name}")
 
-        test_cases = []
-
         # Get prompts for this bot (default + alternatives)
         bot_prompts = [None]  # Default prompt (None means use bot's default)
         if use_prompts and bot_name in prompts_data:
             bot_prompts.extend(prompts_data[bot_name])
+
+        all_llm_test_cases = []
+        batch_results = []
 
         # Evaluate each model with each prompt
         for model in config.models:
@@ -149,19 +171,38 @@ class EvaluationOrchestrator:
                 )
 
                 try:
+                    # Generate bot responses concurrently (this is now parallel!)
                     model_test_cases = await evaluator.evaluate_model(
                         model,
                         bot_test_cases,
                         instructions=prompt_text,
                         prompt_label=prompt_label,
+                        max_concurrent=max_concurrent,
                     )
-                    test_cases.extend(model_test_cases)
+                    all_llm_test_cases.extend(model_test_cases)
 
-                    # Log responses for debugging
-                    for test_case in model_test_cases:
+                    # Process batches (loop until remaining < batch_size)
+                    while batch_size > 0 and len(all_llm_test_cases) >= batch_size:
+                        batch = all_llm_test_cases[:batch_size]
+                        remaining = all_llm_test_cases[batch_size:]
+
+                        batch_num = len(batch_results) + 1
                         self.stdout.write(
-                            f"Response for '{test_case.input}' ({prompt_label}): "
-                            f"{test_case.actual_output[:100]}..."
+                            f"\n===== Evaluating batch {batch_num} for {bot_name} "
+                            f"({len(batch)} test cases) ====="
+                        )
+
+                        batch_result = self._run_deepeval_evaluation(
+                            batch, config, max_concurrent
+                        )
+                        batch_results.append(batch_result)
+
+                        # Clear processed test cases to free memory
+                        all_llm_test_cases = remaining
+
+                        self.stdout.write(
+                            f"Batch {batch_num} complete: "
+                            f"{len(batch_result.test_results)} results"
                         )
 
                 except Exception as e:  # noqa: BLE001
@@ -170,7 +211,35 @@ class EvaluationOrchestrator:
                     )
                     continue
 
-        return test_cases
+        # Evaluate any remaining test cases
+        if all_llm_test_cases:
+            if batch_results:
+                # We've been batching, so process the final batch
+                batch_num = len(batch_results) + 1
+                self.stdout.write(
+                    f"\n===== Evaluating final batch {batch_num} for {bot_name} "
+                    f"({len(all_llm_test_cases)} test cases) ====="
+                )
+            else:
+                # No batching was done, evaluate all at once
+                num_cases = len(all_llm_test_cases)
+                self.stdout.write(
+                    f"\nEvaluating all {num_cases} test cases for {bot_name}"
+                )
+
+            final_result = self._run_deepeval_evaluation(
+                all_llm_test_cases, config, max_concurrent
+            )
+            batch_results.append(final_result)
+
+        # Merge all batch results for this bot
+        bot_result = self._merge_evaluation_results(batch_results)
+        self.stdout.write(
+            f"\nCompleted evaluation for {bot_name}: "
+            f"{len(bot_result.test_results)} total results"
+        )
+
+        return bot_result
 
     def _run_deepeval_evaluation(
         self, test_cases: list, config: EvaluationConfig, max_concurrent: int
@@ -211,6 +280,55 @@ class EvaluationOrchestrator:
             async_config=async_config,
         )
 
+    def _merge_evaluation_results(
+        self, results_list: list[EvaluationResult]
+    ) -> EvaluationResult:
+        """Merge multiple EvaluationResult objects into one."""
+        if not results_list:
+            return EvaluationResult(
+                test_results=[], confident_link=None, test_run_id=None
+            )
+
+        if len(results_list) == 1:
+            return results_list[0]
+
+        # Concatenate all test_results
+        all_test_results = []
+        for result in results_list:
+            all_test_results.extend(result.test_results)
+
+        # Use the first non-None confident_link and test_run_id
+        confident_link = next(
+            (r.confident_link for r in results_list if r.confident_link), None
+        )
+        test_run_id = next((r.test_run_id for r in results_list if r.test_run_id), None)
+
+        return EvaluationResult(
+            test_results=all_test_results,
+            confident_link=confident_link,
+            test_run_id=test_run_id,
+        )
+
+    def _initialize_error_log(self, error_log_file: str):
+        """Initialize error log file with header."""
+        try:
+            timestamp = datetime.now(tz=UTC).isoformat()
+            log_path = Path(error_log_file)
+
+            header = f"""
+{'#'*80}
+RAG EVALUATION ERROR LOG
+Started: {timestamp}
+{'#'*80}
+
+"""
+            with log_path.open("w", encoding="utf-8") as f:
+                f.write(header)
+
+            self.stdout.write(f"Error log initialized: {error_log_file}")
+        except Exception as e:  # noqa: BLE001
+            self.stdout.write(f"Warning: Failed to initialize error log: {e}")
+
     async def run_evaluation(  # noqa: PLR0913
         self,
         config: EvaluationConfig,
@@ -220,8 +338,29 @@ class EvaluationOrchestrator:
         use_prompts: Optional[bool] = True,
         prompts_file: Optional[str] = None,
         max_concurrent: Optional[int] = 10,
+        batch_size: Optional[int] = 0,
+        error_log_file: Optional[str] = None,
     ) -> EvaluationResult:
-        """Run evaluation across specified bots and models."""
+        """Run evaluation across specified bots and models.
+
+        This processes one bot at a time, generating responses and evaluating them
+        immediately to avoid memory issues. Results from all bots are accumulated
+        and summarized at the end.
+
+        Args:
+            config: Evaluation configuration with models and metrics
+            bot_names: List of bot names to evaluate (default: all bots)
+            data_file: Path to custom data file with test cases
+            use_prompts: Whether to use alternative prompts
+            prompts_file: Path to prompts file
+            max_concurrent: Maximum concurrent bot response generations
+            batch_size: Number of test cases per batch (0 = no batching)
+            error_log_file: Path to error log file (default: rag_evaluation_errors.log)
+        """
+        # Initialize error log file
+        error_log_file = error_log_file or "rag_evaluation_errors.log"
+        self._initialize_error_log(error_log_file)
+
         # Set up DeepEval authentication if API key is available
         if config.confident_api_key:
             deepeval.login(config.confident_api_key)
@@ -232,21 +371,76 @@ class EvaluationOrchestrator:
         # Load alternative prompts if enabled
         prompts_data = self._load_prompts_data(prompts_file) if use_prompts else {}
 
-        # Collect all test cases
-        test_cases = []
+        # Process each bot one at a time, accumulating results
+        all_bot_results = []
         for bot_name in bot_names:
-            bot_test_cases = await self._collect_test_cases_for_bot(
+            self.stdout.write(f"\n{'='*60}")
+            self.stdout.write(f"Processing bot: {bot_name}")
+            self.stdout.write(f"{'='*60}")
+
+            bot_result = await self._collect_and_evaluate_bot(
                 bot_name,
                 config,
                 data_file=data_file,
                 use_prompts=use_prompts,
                 prompts_data=prompts_data,
+                max_concurrent=max_concurrent,
+                batch_size=batch_size,
+                error_log_file=error_log_file,
             )
-            test_cases.extend(bot_test_cases)
+            all_bot_results.append(bot_result)
 
-        # Run evaluation and generate report
-        results = self._run_deepeval_evaluation(test_cases, config, max_concurrent)
-        self.reporter.generate_report(results, config.models, bot_names)
+        # Merge results from all bots
+        results = self._merge_evaluation_results(all_bot_results)
+
+        # Log final summary
+        self.stdout.write(f"\n{'='*60}")
+        self.stdout.write("EVALUATION COMPLETE - FINAL SUMMARY")
+        self.stdout.write(f"{'='*60}")
+        self.stdout.write(
+            f"\nTotal test results across all bots: {len(results.test_results)}"
+        )
+
+        # Check if error log file has content (errors occurred)
+        error_log_path = Path(error_log_file)
+        if error_log_path.exists():
+            file_size = error_log_path.stat().st_size
+            if file_size > ERROR_LOG_MIN_SIZE:  # More than just the header
+                self.stdout.write(
+                    f"\n⚠️  ERRORS DETECTED - See {error_log_file} for details"
+                )
+
+        # Log test results breakdown by model and bot
+        model_counts = {}
+        bot_counts = {}
+        for tr in results.test_results:
+            model = tr.additional_metadata.get("model", "unknown")
+            bot = tr.additional_metadata.get("bot_name", "unknown")
+            metrics_count = len(tr.metrics_data) if tr.metrics_data else 0
+
+            model_counts[model] = model_counts.get(model, 0) + 1
+            bot_counts[bot] = bot_counts.get(bot, 0) + 1
+
+            if metrics_count == 0:
+                self.stdout.write(
+                    f"WARNING: Test result for model {model} has no metrics_data"
+                )
+
+        self.stdout.write("\nResults by model:")
+        for model, count in model_counts.items():
+            self.stdout.write(f"  - {model}: {count} test results")
+
+        self.stdout.write("\nResults by bot:")
+        for bot, count in bot_counts.items():
+            self.stdout.write(f"  - {bot}: {count} test results")
+
+        # Generate final report
+        self.reporter.generate_report(
+            results,
+            config.models,
+            bot_names,
+            metric_thresholds=config.metric_thresholds,
+        )
 
         return results
 

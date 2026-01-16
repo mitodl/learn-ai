@@ -8,6 +8,9 @@ from deepeval.evaluate.types import EvaluationResult
 from django.conf import settings
 from django.core.management.base import OutputWrapper
 
+# Constants
+DEFAULT_PASS_THRESHOLD = 0.5  # Default threshold for metrics without explicit threshold
+
 
 class DualOutputWrapper:
     """Wrapper that writes to both stdout and a file simultaneously."""
@@ -107,6 +110,7 @@ class EvaluationReporter:
         bot_names: list[str],
         *,
         use_prompts: bool = True,
+        metric_thresholds: dict[str, float] | None = None,
     ) -> None:
         """Generate a comprehensive evaluation report."""
         self.stdout.write("\n" + "=" * 80)
@@ -117,7 +121,7 @@ class EvaluationReporter:
         df = self.create_results_dataframe(results)
 
         # Generate report sections
-        self.summarize_per_bot_model(df, models, bot_names)
+        self.summarize_per_bot_model(df, models, bot_names, metric_thresholds)
         self.model_comparison(df)
         if use_prompts:
             self.prompt_comparison(df)
@@ -147,8 +151,12 @@ class EvaluationReporter:
         ]
         return pd.DataFrame(data)
 
-    def summarize_per_bot_model(
-        self, df: pd.DataFrame, models: list[str], bot_names: list[str]
+    def summarize_per_bot_model(  # noqa: C901, PLR0912
+        self,
+        df: pd.DataFrame,
+        models: list[str],
+        bot_names: list[str],
+        metric_thresholds: dict[str, float] | None = None,
     ) -> None:
         """Summarize results per bot, model, and prompt."""
         self.stdout.write("\n📊 SUMMARY BY BOT, MODEL, PROMPT")
@@ -166,8 +174,10 @@ class EvaluationReporter:
                 self.stdout.write(f"\n🤖 {bot.upper()} BOT:")
                 bot_df = df[df["bot"] == bot]
 
+                has_results = False
                 for model in models:
                     if model in bot_df["model"].values:
+                        has_results = True
                         model_df = bot_df[bot_df["model"] == model]
 
                         # Get unique prompts for this bot/model combination
@@ -193,27 +203,36 @@ class EvaluationReporter:
                             )
 
                             # Group by metric and get mean scores
-                            metric_scores = prompt_df.groupby("metric")["score"].mean()
+                            metric_stats = prompt_df.groupby("metric").agg(
+                                score=("score", "mean")
+                            )
 
-                            for metric, score in metric_scores.items():
-                                metric_result = prompt_df[prompt_df["metric"] == metric]
-                                if not metric_result.empty:
-                                    actual_success = metric_result.iloc[0]["success"]
-                                    reason = metric_result.iloc[0]["reason"]
-                                    status = "✅ PASS" if actual_success else "❌ FAIL"
+                            for metric, row in metric_stats.iterrows():
+                                score = row["score"]
 
-                                    self.stdout.write(
-                                        f"      • {metric}: {score:.3f} {status}"
-                                    )
+                                # Determine PASS/FAIL based on threshold
+                                if metric_thresholds and metric in metric_thresholds:
+                                    threshold = metric_thresholds[metric]
+                                    # For inverse metrics, lower scores are better
+                                    if self.is_inverse_metric(metric):
+                                        overall_pass = score <= threshold
+                                    else:
+                                        overall_pass = score >= threshold
+                                else:
+                                    # Fallback: use default threshold
+                                    overall_pass = score > DEFAULT_PASS_THRESHOLD
 
-                                    # Show reason for failed tests
-                                    if (
-                                        not actual_success
-                                        and reason
-                                        and len(reason.strip()) > 0
-                                    ):
-                                        self.stdout.write(f"        └─ {reason}")
-                self.stdout.write("    No test cases defined for this bot")
+                                status = "✅ PASS" if overall_pass else "❌ FAIL"
+
+                                self.stdout.write(
+                                    f"      • {metric}: {score:.3f} {status}"
+                                )
+
+                if not has_results:
+                    self.stdout.write("  No test cases defined for this bot")
+            else:
+                self.stdout.write(f"\n🤖 {bot.upper()} BOT:")
+                self.stdout.write("  No test cases defined for this bot")
 
     def model_comparison(self, df: pd.DataFrame) -> None:
         """Compare models based on their average scores."""
@@ -340,6 +359,10 @@ class EvaluationReporter:
         """Display detailed results for each bot, model, and prompt."""
         self.stdout.write("\n\n📋 DETAILED RESULTS")
         self.stdout.write("-" * 50)
+
+        if df.empty or "bot" not in df.columns:
+            self.stdout.write("No detailed results to display")
+            return
 
         for bot in bot_names:
             bot_results = df[df["bot"] == bot]
