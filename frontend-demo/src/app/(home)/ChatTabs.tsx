@@ -10,7 +10,7 @@ import SyllabusCanvasContent from "./SyllabusCanvasContent"
 import AssessmentContent from "./AssessmentContent"
 import CanvasAssessmentContent from "./CanvasAssessmentContent"
 import VideoContent from "./VideoContent"
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
 
 export enum ChatTab {
   RecommendationGPT = "RecommendationGPT",
@@ -31,10 +31,20 @@ const ChatTabs = () => {
     window.history.pushState({}, "", url.toString())
   }
 
-  const [hasRendered, setHasRendered] = useState(false)
-  useEffect(() => {
-    setHasRendered(true)
-  }, [])
+  /*
+  On the server (SSR):
+    React calls getServerSnapshot() → returns false → component returns null
+
+  On the client:
+    React calls getSnapshot() → returns true → component renders normally
+
+  subscribe is a no-op because there's no external store to subscribe to
+  */
+  const hasRendered = useSyncExternalStore(
+    () => () => {}, // subscribe: no-op
+    () => true, // getSnapshot: always returns true on client
+    () => false, // getServerSnapshot: always returns false on server
+  )
   if (!hasRendered) {
     return null
   }
