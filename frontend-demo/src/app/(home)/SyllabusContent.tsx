@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { SYLLABUS_GPT_URL } from "@/services/ai/urls"
 import { type AiChatProps } from "@mitodl/smoot-design/ai"
 import Link from "@mui/material/Link"
@@ -77,19 +77,21 @@ const SyllabusContent = () => {
     syllabus_resource: DEFAULT_RESOURCE,
     syllabus_prompt: "",
   })
-  const [resourceParseError, setResourceParseError] = useState<string | null>(
-    null,
-  )
   const [resourceText, setResourceText] = useState(settings.syllabus_resource)
-  useEffect(() => {
-    const { id, errMsg } = getResourceId(resourceText)
-    setResourceParseError(errMsg)
 
-    const nextValue = String(id) ?? resourceText
+  // Compute derived state during render instead of in effect
+  const { id: parsedId, errMsg: resourceParseError } = useMemo(
+    () => getResourceId(resourceText),
+    [resourceText],
+  )
+
+  // Update settings when input changes and is valid
+  useEffect(() => {
+    const nextValue = String(parsedId) ?? resourceText
     if (settings.syllabus_resource !== nextValue) {
       setSettings({ syllabus_resource: nextValue })
     }
-  }, [resourceText, setSettings, settings.syllabus_resource])
+  }, [parsedId, resourceText, setSettings, settings.syllabus_resource])
 
   const resourceId = Number.isFinite(+settings.syllabus_resource)
     ? +settings.syllabus_resource
