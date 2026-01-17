@@ -39,7 +39,7 @@ services:
 
   watch:
     working_dir: /src
-    image: node:22.20
+    image: node:22.22
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
