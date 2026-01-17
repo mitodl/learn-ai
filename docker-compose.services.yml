@@ -119,7 +119,7 @@ services:
       - ./config/keycloak/realms:/opt/keycloak/data/import
 
   apigateway:
-    image: apache/apisix:3.13.0-debian # versions above this drop the local port on redirects
+    image: apache/apisix:3.14.1-debian # versions above this drop the local port on redirects
     depends_on:
       - keycloak
     env_file:
