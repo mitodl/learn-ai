@@ -67,7 +67,7 @@ ruff = "0.14.13"
 sentry-sdk = {extras = ["django", "langgraph"], version = "^2.37.1"}
 social-auth-app-django = "^5.2.0"
 social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
-starlette = "0.49.1"
+starlette = "0.52.1"
 ulid-py = "^1.0.0"
 granian = "^2.5.4"
 open-learning-ai-tutor = "^0.2.13"
