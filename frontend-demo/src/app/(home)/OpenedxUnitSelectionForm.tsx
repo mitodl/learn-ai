@@ -119,11 +119,11 @@ const ChosenUnitDisplay = ({
       </Stack>
       {unit && (
         <Link
-          sx={(theme) => ({
+          sx={{
             marginTop: "8px",
             wordBreak: "break-all",
-            typography: theme.typography.body3,
-          })}
+            typography: "body3",
+          }}
           href={unit.lms_web_url}
           target="_blank"
         >
