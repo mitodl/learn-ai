@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.25.0
+Version 0.25.0 (Released January 20, 2026)
 --------------
 
 - Temperature and reasoning effort per LLM model (#389)
