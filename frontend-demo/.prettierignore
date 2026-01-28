@@ -1,4 +1,6 @@
-openapi/specs/*
+api/src/generated/*
+out/*
+src/coverage/*
 .yarn/
 .next/
-frontend-demo/.yarn/
+.eslintrc.js

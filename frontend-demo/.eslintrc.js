@@ -18,7 +18,7 @@ module.exports = {
         ActionButton: "button",
         ActionButtonLink: "a",
       },
-    },
+    }
   },
   rules: {
     "@typescript-eslint/no-restricted-imports": [
