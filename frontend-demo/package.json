@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit",
     "lint-check": "eslint src/",
     "lint-fix": "yarn lint-check --fix",
-    "fmt-check": "prettier --ignore-path ./.gitignore --ignore-path ./prettierignore --config ./.prettierrc.json --check .",
-    "fmt-fix": "prettier --ignore-path ./.gitignore --ignore-path ./prettierignore --config ./.prettierrc.json --write .",
+    "fmt-check": "prettier --ignore-path ./.gitignore --ignore-path ./.prettierignore --config ./.prettierrc.json --check .",
+    "fmt-fix": "prettier --ignore-path ./.gitignore --ignore-path ./.prettierignore --config ./.prettierrc.json --write .",
     "start": "next dev -p 8003 & node dev-proxy-server.js",
     "build": "NODE_ENV=production next build",
     "preview": "NODE_ENV=production serve out -p 8003"
