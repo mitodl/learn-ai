@@ -1,0 +1,6 @@
+api/src/generated/*
+out/*
+src/coverage/*
+.yarn/
+.next/
+.eslintrc.js
