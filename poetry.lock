@@ -1855,7 +1855,7 @@ django = ">=3.2"
 
 [[package]]
 name = "django-health-check"
-version = "3.20.9.dev1+gea258434a"
+version = "3.21.1.dev14+g1e6cf18a4"
 description = "Monitor the health of your Django app and its connected services."
 optional = false
 python-versions = ">=3.10"
@@ -1865,12 +1865,20 @@ develop = false
 
 [package.dependencies]
 Django = ">=4.2"
+dnspython = ">=2.0.0"
+psutil = "*"
+
+[package.extras]
+celery = ["celery (>=5.0.0)"]
+kafka = ["kafka-python (>=2.0.0)"]
+rabbitmq = ["kombu (>=5.0.0)"]
+redis = ["redis (>=3.0.0)"]
 
 [package.source]
 type = "git"
 url = "https://github.com/revsys/django-health-check"
-reference = "ea258434ac626c7b1dc8f393fab19cb359fa855a"
-resolved_reference = "ea258434ac626c7b1dc8f393fab19cb359fa855a"
+reference = "1e6cf18a4e3ca73bf601eb94380185a7be7f9965"
+resolved_reference = "1e6cf18a4e3ca73bf601eb94380185a7be7f9965"
 
 [[package]]
 name = "django-hijack"
@@ -2016,6 +2024,27 @@ files = [
 
 [package.dependencies]
 django = ">=4.2"
+
+[[package]]
+name = "dnspython"
+version = "2.8.0"
+description = "DNS toolkit"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af"},
+    {file = "dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f"},
+]
+
+[package.extras]
+dev = ["black (>=25.1.0)", "coverage (>=7.0)", "flake8 (>=7)", "hypercorn (>=0.17.0)", "mypy (>=1.17)", "pylint (>=3)", "pytest (>=8.4)", "pytest-cov (>=6.2.0)", "quart-trio (>=0.12.0)", "sphinx (>=8.2.0)", "sphinx-rtd-theme (>=3.0.0)", "twine (>=6.1.0)", "wheel (>=0.45.0)"]
+dnssec = ["cryptography (>=45)"]
+doh = ["h2 (>=4.2.0)", "httpcore (>=1.0.0)", "httpx (>=0.28.0)"]
+doq = ["aioquic (>=1.2.0)"]
+idna = ["idna (>=3.10)"]
+trio = ["trio (>=0.30)"]
+wmi = ["wmi (>=1.5.1) ; platform_system == \"Windows\""]
 
 [[package]]
 name = "docstring-parser"
@@ -6582,7 +6611,7 @@ version = "7.1.3"
 description = "Cross-platform lib for process and system monitoring."
 optional = false
 python-versions = ">=3.6"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "psutil-7.1.3-cp313-cp313t-macosx_10_13_x86_64.whl", hash = "sha256:0005da714eee687b4b8decd3d6cc7c6db36215c9e74e5ad2264b90c3df7d92dc"},
     {file = "psutil-7.1.3-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:19644c85dcb987e35eeeaefdc3915d059dac7bd1167cdcdbf27e0ce2df0c08c0"},
@@ -10311,4 +10340,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13.7,<3.14"
-content-hash = "da3b017b0609d878800acedc22c0ea14c761f6ab3de337a3eea7c8cac52a5bd6"
+content-hash = "c69072dc660292593b3050cab37c98219fecb6d9883e965000df80c826c2c958"
