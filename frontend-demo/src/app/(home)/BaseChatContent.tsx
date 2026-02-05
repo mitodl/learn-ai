@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react"
 import { AiChatProvider, type AiChatProps } from "@mitodl/smoot-design/ai"
 import Typography from "@mui/material/Typography"
-import Grid from "@mui/material/Grid2"
+import Grid from "@mui/material/Grid"
 import TextareaAutosize from "@mui/material/TextareaAutosize"
 import { FormLabel } from "@mui/material"
 import CircularProgress from "@mui/material/CircularProgress"
