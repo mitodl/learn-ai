@@ -4,9 +4,10 @@ import axios from "axios"
 
 type VectorContentListOptions = {
   q: string
-  group_by: string
-  platform: string
-  group_size: number
+  group_by?: string
+  platform?: string
+  group_size?: number
+  file_extension?: string[]
 }
 
 const keys = {
@@ -27,8 +28,14 @@ const queries = {
        */
       queryFn: () => {
         const search = new URLSearchParams()
+        search.append("limit", "20")
         if (opts.q) {
           search.append("q", opts.q)
+        }
+        if (opts.file_extension) {
+          opts.file_extension.forEach((extension) => {
+            search.append("file_extension[]", extension)
+          })
         }
         if (opts.platform) {
           search.append("platform", opts.platform)
