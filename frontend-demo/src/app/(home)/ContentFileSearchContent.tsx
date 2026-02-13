@@ -5,7 +5,17 @@ import {
   SearchInput,
   type SearchInputProps,
 } from "@/components/SearchInput/SearchInput"
-import { Card, Typography, CircularProgress, Link } from "@mui/material"
+import {
+  Card,
+  Typography,
+  CircularProgress,
+  Link,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  type SelectChangeEvent,
+} from "@mui/material"
 import Grid from "@mui/material/Grid2"
 import Box from "@mui/material/Box"
 
@@ -71,13 +81,14 @@ const getContentTypeIcon = (type: string) => {
 const ContentFileSearchContent: React.FC = () => {
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [platform, setPlatform] = useState("")
 
   const { data, isLoading, error } = useQuery({
     ...VectorContenfilesQueries.listing({
       q: searchQuery,
       group_by: "key",
       group_size: 1,
-      platform: "edx",
+      platform: platform || undefined,
     }),
     enabled: !!searchQuery,
   })
@@ -90,6 +101,11 @@ const ContentFileSearchContent: React.FC = () => {
   const handleClear = () => {
     setInputValue("")
     setSearchQuery("")
+    setPlatform("")
+  }
+
+  const handlePlatformChange = (event: SelectChangeEvent) => {
+    setPlatform(event.target.value)
   }
 
   return (
@@ -98,7 +114,7 @@ const ContentFileSearchContent: React.FC = () => {
         Vector Based Content File Search
       </Typography>
 
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 4, display: "flex", gap: 2 }}>
         <SearchInput
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
@@ -106,8 +122,28 @@ const ContentFileSearchContent: React.FC = () => {
           onClear={handleClear}
           placeholder="Search for content..."
           fullWidth
-          size="medium"
+          size="large"
         />
+        <Box sx={{ minWidth: 200 }}>
+          <FormControl fullWidth>
+            <InputLabel id="platform-select-label">Platform</InputLabel>
+            <Select
+              labelId="platform-select-label"
+              id="platform-select"
+              value={platform}
+              label="Platform"
+              onChange={handlePlatformChange}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              <MenuItem value="mitxonline">MITx Online</MenuItem>
+              <MenuItem value="xpro">xPRO</MenuItem>
+              <MenuItem value="edx">edX</MenuItem>
+              <MenuItem value="ocw">OpenCourseWare</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
       </Box>
 
       {isLoading && (
