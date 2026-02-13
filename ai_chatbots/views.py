@@ -5,12 +5,12 @@ from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import QuerySet
 from django.http import HttpResponse, JsonResponse
-from django.views import View
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from open_learning_ai_tutor.prompts import get_system_prompt
 from rest_framework import mixins, status, viewsets
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -381,26 +381,18 @@ class SystemPromptViewSet(GenericViewSet):
         return Response(serializer.data)
 
 
-class ApiProxyView(View):
-    """
-    Proxy view for MIT Learn API.
-    Forwards requests from /learn-api/* to the learn API with an auth token.
-    """
+class ApiProxyView(ApiView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    versioning_class = None
 
     def get(self, request, path):
         try:
-            # Construct the target URL
             url = f"{settings.MIT_LEARN_API_PROXY_BASE_URL}/{path}"
-
-            # Forward query parameters
-            # request.GET is a QueryDict, .dict() converts it to a standard dict
             params = request.GET.dict()
 
-            # Make the request with the token
-            # Enable following redirects to handle cases where upstream api redirects
             response = request_with_token(url, params, follow_redirects=True)
 
-            # Return the response content and status
             try:
                 data = response.json()
                 return JsonResponse(data, status=response.status_code, safe=False)

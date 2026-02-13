@@ -1,6 +1,9 @@
 import { VectorContenfilesQueries } from "@/services/learn"
 import { useQuery } from "@tanstack/react-query"
+import { userQueries } from "@/services/ai"
 import React, { useState } from "react"
+import { ButtonLink } from "@mitodl/smoot-design"
+import { LOGIN_URL } from "@/constants"
 import {
   SearchInput,
   type SearchInputProps,
@@ -79,6 +82,7 @@ const getContentTypeIcon = (type: string) => {
 }
 
 const ContentFileSearchContent: React.FC = () => {
+  const me = useQuery(userQueries.me())
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [platform, setPlatform] = useState("")
@@ -106,6 +110,24 @@ const ContentFileSearchContent: React.FC = () => {
 
   const handlePlatformChange = (event: SelectChangeEvent) => {
     setPlatform(event.target.value)
+  }
+
+  if (me.data?.anonymous) {
+    return (
+      <>
+        <Typography
+          flex={1}
+          variant="h5"
+          sx={{ a: { textDecoration: "none", color: "inherit" } }}
+        >
+          You must&nbsp;
+          <ButtonLink variant="tertiary" href={LOGIN_URL}>
+            Login
+          </ButtonLink>
+          &nbsp;to use this feature
+        </Typography>
+      </>
+    )
   }
 
   return (
