@@ -1672,12 +1672,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/eslint-plugin-next@npm:15.5.9":
-  version: 15.5.9
-  resolution: "@next/eslint-plugin-next@npm:15.5.9"
+"@next/eslint-plugin-next@npm:15.5.12":
+  version: 15.5.12
+  resolution: "@next/eslint-plugin-next@npm:15.5.12"
   dependencies:
     fast-glob: "npm:3.3.1"
-  checksum: 10c0/28f926063eefc50bda9fad5bd338bcd74356764f56f201fae0cecd536d09b6aa8a94dc9b8dccbfc9b3356b532c672c08226f0d6f6003c5104833a01481d88292
+  checksum: 10c0/c9a88aa628ad77c8ab12112835227ef093db72846223ce559881b0fc99ce7b61324f1bcd987309b4682c397293f633f4ad4f38a3d8527a84c7b51521b89a7dd9
   languageName: node
   linkType: hard
 
@@ -4649,11 +4649,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-config-next@npm:15.5.9":
-  version: 15.5.9
-  resolution: "eslint-config-next@npm:15.5.9"
+"eslint-config-next@npm:15.5.12":
+  version: 15.5.12
+  resolution: "eslint-config-next@npm:15.5.12"
   dependencies:
-    "@next/eslint-plugin-next": "npm:15.5.9"
+    "@next/eslint-plugin-next": "npm:15.5.12"
     "@rushstack/eslint-patch": "npm:^1.10.3"
     "@typescript-eslint/eslint-plugin": "npm:^5.4.2 || ^6.0.0 || ^7.0.0 || ^8.0.0"
     "@typescript-eslint/parser": "npm:^5.4.2 || ^6.0.0 || ^7.0.0 || ^8.0.0"
@@ -4669,7 +4669,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/e74d5b402e08d79867cadf73f387f6c344dc011b84fb53a4d26d7299578fe893543e8aea59d8608f8e035a03ce124da40b1c40828a673300cd7a58923fe93bc8
+  checksum: 10c0/8aa69f8b9b767fda914ac6902775c13363cbe65c04e3f3c1b2bb6a95705ed0ae8044e625c33cab125cc95799358710acca721da5007649ca780dfdf2b9d1c8be
   languageName: node
   linkType: hard
 
@@ -10695,7 +10695,7 @@ __metadata:
     better-react-mathjax: "npm:^2.3.0"
     eslint: "npm:^8"
     eslint-config-mitodl: "npm:^2.1.0"
-    eslint-config-next: "npm:15.5.9"
+    eslint-config-next: "npm:15.5.12"
     eslint-config-prettier: "npm:^10.0.0"
     eslint-import-resolver-typescript: "npm:^4.0.0"
     eslint-plugin-import: "npm:^2.29.1"
