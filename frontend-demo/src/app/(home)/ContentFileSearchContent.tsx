@@ -92,6 +92,7 @@ const ContentFileSearchContent: React.FC = () => {
       q: searchQuery,
       group_by: "key",
       group_size: 1,
+      limit: 40,
       platform: platform || undefined,
     }),
     enabled: !!searchQuery,
@@ -130,6 +131,14 @@ const ContentFileSearchContent: React.FC = () => {
     )
   }
 
+  const results = data?.results?.filter((result) => {
+    if (!result.title || !result.url || !result.source_path) return false
+    const type = getContentType(result.source_path)
+    return allowedTypes.includes(type)
+  })
+  if (results) {
+    results.length = Math.min(results.length, 15)
+  }
   return (
     <Box sx={{ maxWidth: 960, mx: "auto", p: 2 }}>
       <Typography variant="h3" gutterBottom>
@@ -181,41 +190,34 @@ const ContentFileSearchContent: React.FC = () => {
       )}
 
       <Grid container spacing={2}>
-        {data?.results
-          ?.filter((result) => {
-            if (!result.title || !result.url || !result.source_path)
-              return false
-            const type = getContentType(result.source_path)
-            return allowedTypes.includes(type)
-          })
-          .map((result) => (
-            <Grid size={{ xs: 12 }} key={result.id}>
-              <Card variant="outlined" sx={{ p: 2 }}>
-                <Box display="flex" alignItems="center">
-                  <Box color="text.secondary" sx={{ paddingRight: "30px" }}>
-                    {getContentTypeIcon(getContentType(result.source_path))}
-                  </Box>
-                  <Box>
-                    <Typography variant="body3" color="text.primary">
-                      {result.platform?.name}
-                    </Typography>
-                    <Typography variant="body1" component="div">
-                      <Link
-                        href={result.url || ""}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {result.title}
-                      </Link>
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {result.run_title}
-                    </Typography>
-                  </Box>
+        {results?.map((result) => (
+          <Grid size={{ xs: 12 }} key={result.id}>
+            <Card variant="outlined" sx={{ p: 2 }}>
+              <Box display="flex" alignItems="center">
+                <Box color="text.secondary" sx={{ paddingRight: "30px" }}>
+                  {getContentTypeIcon(getContentType(result.source_path))}
                 </Box>
-              </Card>
-            </Grid>
-          ))}
+                <Box>
+                  <Typography variant="body3" color="text.primary">
+                    {result.platform?.name}
+                  </Typography>
+                  <Typography variant="body1" component="div">
+                    <Link
+                      href={result.url || ""}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {result.title}
+                    </Link>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {result.run_title}
+                  </Typography>
+                </Box>
+              </Box>
+            </Card>
+          </Grid>
+        ))}
         {data?.results?.length === 0 && (
           <Typography>No results found for "{searchQuery}"</Typography>
         )}

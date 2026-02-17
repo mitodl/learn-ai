@@ -11,6 +11,7 @@ type VectorContentListOptions = {
   platform?: string
   group_size?: number
   file_extension?: string[]
+  limit: number
 }
 
 type VectorContentFile = ContentFile & {
@@ -47,7 +48,9 @@ const queries = {
        */
       queryFn: () => {
         const search = new URLSearchParams()
-        search.append("limit", "20")
+        if (opts.limit) {
+          search.append("limit", opts.limit.toString())
+        }
         if (opts.q) {
           search.append("q", opts.q)
         }
