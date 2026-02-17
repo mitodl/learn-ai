@@ -1,4 +1,4 @@
-import { VectorContenfilesQueries } from "@/services/learn"
+import { queries as VectorContenfilesQueries } from "@/services/learn/vector-contentfiles/queries"
 import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import React, { useState } from "react"

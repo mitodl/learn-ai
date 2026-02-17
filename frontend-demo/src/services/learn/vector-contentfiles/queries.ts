@@ -1,5 +1,8 @@
 import { queryOptions } from "@tanstack/react-query"
-import type { PaginatedContentFileList } from "@mitodl/mit-learn-api-axios/v1"
+import type {
+  ContentFile,
+  PaginatedContentFileList,
+} from "@mitodl/mit-learn-api-axios/v1"
 import axios from "axios"
 
 type VectorContentListOptions = {
@@ -8,6 +11,22 @@ type VectorContentListOptions = {
   platform?: string
   group_size?: number
   file_extension?: string[]
+}
+
+type VectorContentFile = ContentFile & {
+  source_path: string
+  run_title?: string
+  platform?: {
+    name: string
+    code: string
+  }
+}
+
+type PaginatedVectorContentFileList = Omit<
+  PaginatedContentFileList,
+  "results"
+> & {
+  results: VectorContentFile[]
 }
 
 const keys = {
@@ -50,10 +69,14 @@ const queries = {
         return axios
           .get(
             `${process.env.NEXT_PUBLIC_MITOL_API_BASE_URL}/learn-api/v0/vector_content_files_search?${search.toString()}`,
+            {
+              withCredentials: true,
+            },
           )
-          .then((res) => res.data as PaginatedContentFileList)
+          .then((res) => res.data as PaginatedVectorContentFileList)
       },
     }),
 }
 
 export { queries }
+export type { VectorContentFile, PaginatedVectorContentFileList }
