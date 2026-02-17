@@ -410,3 +410,10 @@ def test_invalid_prompt_name(client):
     """A non-existent prompt returns 404."""
     response = client.get("/api/v0/prompts/invalid_prompt/")
     assert response.status_code == 404
+
+
+def test_api_proxy_view_403(client):
+    """Test ApiProxyView returns 403 for unauthorized users"""
+    url = reverse("ai:learn_api_proxy", kwargs={"path": "any/path"})
+    response = client.get(url)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
