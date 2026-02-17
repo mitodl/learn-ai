@@ -13,6 +13,7 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
+from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
@@ -381,7 +382,7 @@ class SystemPromptViewSet(GenericViewSet):
         return Response(serializer.data)
 
 
-class ApiProxyView(ApiView):
+class ApiProxyView(GenericAPIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     versioning_class = None
