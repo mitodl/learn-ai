@@ -382,6 +382,7 @@ class SystemPromptViewSet(GenericViewSet):
         return Response(serializer.data)
 
 
+@extend_schema(exclude=True)
 class ApiProxyView(GenericAPIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
