@@ -405,8 +405,8 @@ class ApiProxyView(GenericAPIView):
                     content_type=response.headers.get("Content-Type"),
                 )
 
-        except requests.RequestException as e:
+        except requests.RequestException:
             return JsonResponse(
-                {"error": f"Failed to proxy request: {e!s}"},
+                {"error": "Failed to proxy request"},
                 status=500,
             )
