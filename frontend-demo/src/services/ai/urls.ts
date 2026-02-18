@@ -6,6 +6,7 @@ const SYLLABUS_CANVAS_GPT_URL = `${BASE_URL}/http/demo_canvas_syllabus_agent/`
 const VIDEO_GPT_URL = `${BASE_URL}/http/video_gpt_agent/`
 const ASSESSMENT_GPT_URL = `${BASE_URL}/http/tutor_agent/`
 const CANVAS_ASSESSMENT_GPT_URL = `${BASE_URL}/http/demo_canvas_tutor_agent/`
+const CONTENTFILE_SEARCH_URL = `${BASE_URL}/http/contentfile_search/`
 export {
   RECOMMENDATION_GPT_URL,
   SYLLABUS_GPT_URL,
@@ -13,4 +14,5 @@ export {
   VIDEO_GPT_URL,
   ASSESSMENT_GPT_URL,
   CANVAS_ASSESSMENT_GPT_URL,
+  CONTENTFILE_SEARCH_URL,
 }

@@ -1,14 +1,17 @@
 """DRF API views for chat sessions and messages."""
 
+import httpx
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import QuerySet
+from django.http import HttpResponse, JsonResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from open_learning_ai_tutor.prompts import get_system_prompt
 from rest_framework import mixins, status, viewsets
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -30,7 +33,7 @@ from ai_chatbots.serializers import (
     SystemPromptSerializer,
     UserChatSessionSerializer,
 )
-from ai_chatbots.utils import get_django_cache
+from ai_chatbots.utils import get_django_cache, request_with_token
 from main.views import DefaultPagination
 
 
@@ -377,3 +380,33 @@ class SystemPromptViewSet(GenericViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+@extend_schema(exclude=True)
+class ApiProxyView(ApiView):
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    versioning_class = None
+
+    def get(self, request, path):
+        try:
+            url = settings.MIT_LEARN_API_PROXY_BASE_URL.rstrip("/") + f"/{path}"
+            params = request.GET.dict()
+
+            response = request_with_token(url, params, follow_redirects=True)
+
+            try:
+                data = response.json()
+                return JsonResponse(data, status=response.status_code, safe=False)
+            except ValueError:
+                return HttpResponse(
+                    response.content,
+                    status=response.status_code,
+                    content_type=response.headers.get("Content-Type"),
+                )
+
+        except httpx.HTTPError:
+            return JsonResponse(
+                {"error": "Failed to proxy request"},
+                status=500,
+            )

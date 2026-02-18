@@ -117,7 +117,7 @@ def get_async_http_client() -> httpx.AsyncClient:
     return http_client_manager.async_client
 
 
-def request_with_token(url, params, timeout: int = 30):
+def request_with_token(url, params, follow_redirects, timeout: int = 30):
     """
     Make a synchronous HTTP GET request with bearer token authentication.
 
@@ -138,6 +138,7 @@ def request_with_token(url, params, timeout: int = 30):
         params=params,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=timeout,
+        follow_redirects=follow_redirects,
     )
 
 

@@ -47,13 +47,17 @@ def test_request_with_token(mocker, settings):
     mocker.patch("ai_chatbots.utils.get_sync_http_client", return_value=mock_client)
 
     response = utils.request_with_token(
-        "https://api.example.com/test", {"param1": "value1"}, timeout=15
+        "https://api.example.com/test",
+        {"param1": "value1"},
+        follow_redirects=False,
+        timeout=15,
     )
 
     mock_client.get.assert_called_once_with(
         "https://api.example.com/test",
         params={"param1": "value1"},
         headers={"Authorization": "Bearer test_token_123"},
+        follow_redirects=False,
         timeout=15,
     )
     assert response.status_code == 200
