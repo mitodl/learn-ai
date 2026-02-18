@@ -70,7 +70,7 @@ social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
 starlette = "0.52.1"
 ulid-py = "^1.0.0"
 granian = "^2.5.4"
-open-learning-ai-tutor = "^0.2.13"
+open-learning-ai-tutor = "^0.2.14"
 httpx = "^0.28.1"
 opentelemetry-instrumentation-httpx = "^0.59b0"
 
