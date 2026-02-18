@@ -13,7 +13,6 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
-from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
@@ -383,14 +382,14 @@ class SystemPromptViewSet(GenericViewSet):
 
 
 @extend_schema(exclude=True)
-class ApiProxyView(GenericAPIView):
+class ApiProxyView(ApiView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
     versioning_class = None
 
     def get(self, request, path):
         try:
-            url = f"{settings.MIT_LEARN_API_PROXY_BASE_URL}/{path}"
+            url = settings.MIT_LEARN_API_PROXY_BASE_URL.rstrip("/") + f"/{path}"
             params = request.GET.dict()
 
             response = request_with_token(url, params, follow_redirects=True)
