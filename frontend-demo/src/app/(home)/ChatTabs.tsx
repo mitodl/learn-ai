@@ -50,11 +50,11 @@ const ChatTabs = () => {
           <Tab label="SyllabusCanvasGPT" value={ChatTab.SyllabusCanvasGPT} />
           <Tab label="VideoGPT" value={ChatTab.VideoGPT} />
           <Tab label="AssessmentGPT" value={ChatTab.AssessmentGPT} />
-          <Tab label="ContentFileSearch" value={ChatTab.ContentFileSearch} />
           <Tab
             label="CanvasAssessmentGPT"
             value={ChatTab.CanvasAssessmentGPT}
           />
+          <Tab label="ContentFileSearch" value={ChatTab.ContentFileSearch} />
         </TabList>
       </Box>
       <TabPanel value={ChatTab.RecommendationGPT}>
