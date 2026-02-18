@@ -14,8 +14,11 @@ from deepeval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    FaithfulnessMetric,
+    GEval,
     HallucinationMetric,
 )
+from deepeval.test_case import LLMTestCaseParams
 from django.core.management.base import OutputWrapper
 
 from ai_chatbots.api import get_langsmith_prompt
@@ -42,45 +45,106 @@ class EvaluationOrchestrator:
         evaluation_model: str,
         metric_thresholds: Optional[dict[str, float]] = None,
         timeout_seconds: int = 360,
+        *,
+        require_expected: bool = False,
     ) -> EvaluationConfig:
-        """Create evaluation configuration with metrics."""
-        if metric_thresholds is None:
-            metric_thresholds = {
-                "ContextualPrecision": 0.7,
-                "ContextualRelevancy": 0.5,
-                "ContextualRecall": 0.7,
-                "Hallucination": 0.0,
-                "AnswerRelevancy": 0.7,
-                "Faithfulness": 0.7,
-            }
+        """Create evaluation configuration with metrics.
 
-        metrics = [
-            ContextualPrecisionMetric(
-                threshold=metric_thresholds["ContextualPrecision"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            ContextualRelevancyMetric(
-                threshold=metric_thresholds["ContextualRelevancy"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            ContextualRecallMetric(
-                threshold=metric_thresholds["ContextualRecall"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            HallucinationMetric(
-                threshold=metric_thresholds["Hallucination"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            AnswerRelevancyMetric(
-                threshold=metric_thresholds["AnswerRelevancy"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-        ]
+        Args:
+            models: List of model IDs to evaluate.
+            evaluation_model: Model to use as the evaluation judge.
+            metric_thresholds: Optional custom thresholds per metric name.
+            timeout_seconds: Timeout for individual metric execution.
+            require_expected: If True, use metrics that require curated expected
+                answers (ContextualPrecision, ContextualRecall). If False
+                (default), use reference-free metrics (Faithfulness, GEval)
+                that evaluate quality without expected answers.
+        """
+        if require_expected:
+            if metric_thresholds is None:
+                metric_thresholds = {
+                    "ContextualPrecision": 0.7,
+                    "ContextualRelevancy": 0.5,
+                    "ContextualRecall": 0.7,
+                    "Hallucination": 0.0,
+                    "AnswerRelevancy": 0.7,
+                }
+
+            metrics = [
+                ContextualPrecisionMetric(
+                    threshold=metric_thresholds["ContextualPrecision"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                ContextualRelevancyMetric(
+                    threshold=metric_thresholds["ContextualRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                ContextualRecallMetric(
+                    threshold=metric_thresholds["ContextualRecall"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                HallucinationMetric(
+                    threshold=metric_thresholds["Hallucination"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                AnswerRelevancyMetric(
+                    threshold=metric_thresholds["AnswerRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+            ]
+        else:
+            if metric_thresholds is None:
+                metric_thresholds = {
+                    "Faithfulness": 0.7,
+                    "ContextualRelevancy": 0.5,
+                    "Hallucination": 0.0,
+                    "AnswerRelevancy": 0.7,
+                    "Helpfulness": 0.7,
+                }
+
+            metrics = [
+                FaithfulnessMetric(
+                    threshold=metric_thresholds["Faithfulness"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                ContextualRelevancyMetric(
+                    threshold=metric_thresholds["ContextualRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                HallucinationMetric(
+                    threshold=metric_thresholds["Hallucination"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                AnswerRelevancyMetric(
+                    threshold=metric_thresholds["AnswerRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                GEval(
+                    name="Helpfulness",
+                    criteria=(
+                        "Determine whether the response is helpful, accurate, "
+                        "and appropriate for an educational context. Consider "
+                        "whether it directly addresses the user's question, "
+                        "provides clear and understandable information, and "
+                        "would be useful to a student or learner."
+                    ),
+                    evaluation_params=[
+                        LLMTestCaseParams.INPUT,
+                        LLMTestCaseParams.ACTUAL_OUTPUT,
+                    ],
+                    model=evaluation_model,
+                    threshold=metric_thresholds["Helpfulness"],
+                ),
+            ]
 
         # Wrap metrics with timeout functionality
         timeout_wrapped_metrics = wrap_metrics_with_timeout(metrics, timeout_seconds)

@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from asgiref.sync import sync_to_async
 from deepeval.test_case import LLMTestCase, ToolCall
 
 # Constants for message parsing
@@ -232,7 +233,7 @@ class BaseBotEvaluator(ABC):
             """Process a single test case with semaphore limiting."""
             async with semaphore:
                 try:
-                    chatbot = self.create_bot_instance(
+                    chatbot = await sync_to_async(self.create_bot_instance)(
                         model, test_case, instructions=instructions
                     )
                     response = await self.collect_response(chatbot, test_case)

@@ -59,11 +59,11 @@ class TestEvaluationOrchestrator:
         models = ["gpt-4o"]
         evaluation_model = "gpt-4o"
         custom_thresholds = {
-            "ContextualPrecision": 0.9,
+            "Faithfulness": 0.9,
             "ContextualRelevancy": 0.8,
-            "ContextualRecall": 0.9,
             "Hallucination": 0.1,
             "AnswerRelevancy": 0.8,
+            "Helpfulness": 0.8,
         }
 
         config = orchestrator.create_evaluation_config(
@@ -73,6 +73,23 @@ class TestEvaluationOrchestrator:
         assert config.models == models
         assert config.evaluation_model == evaluation_model
         assert len(config.metrics) == NUM_METRICS
+
+    def test_create_evaluation_config_require_expected(self, orchestrator):
+        """Test evaluation config creation with require_expected=True."""
+        models = ["gpt-4o"]
+        evaluation_model = "gpt-4o"
+
+        config = orchestrator.create_evaluation_config(
+            models, evaluation_model, require_expected=True
+        )
+        assert isinstance(config, EvaluationConfig)
+        assert len(config.metrics) == NUM_METRICS
+
+        underlying_metric_names = [
+            m.base_metric.__class__.__name__ for m in config.metrics
+        ]
+        assert "ContextualPrecisionMetric" in underlying_metric_names
+        assert "ContextualRecallMetric" in underlying_metric_names
 
     @patch.dict(os.environ, {"CONFIDENT_AI_API_KEY": "test-api-key"})
     def test_create_evaluation_config_with_api_key(self, orchestrator):
@@ -438,7 +455,7 @@ class TestEvaluationConfigIntegration:
         return EvaluationOrchestrator(mock_stdout)
 
     def test_config_creation(self, mocker):
-        """Test config creation."""
+        """Test config creation with default reference-free metrics."""
         mock_stdout = mocker.Mock()
         orchestrator = EvaluationOrchestrator(mock_stdout)
         config = orchestrator.create_evaluation_config(
@@ -450,13 +467,13 @@ class TestEvaluationConfigIntegration:
 
         for metric in config.metrics:
             assert isinstance(metric, TimeoutMetricWrapper)
-            # Verify the underlying metric is the expected type
+            # Verify the underlying metric is the expected reference-free type
             underlying_metric_names = [
-                "ContextualPrecisionMetric",
+                "FaithfulnessMetric",
                 "ContextualRelevancyMetric",
-                "ContextualRecallMetric",
                 "HallucinationMetric",
                 "AnswerRelevancyMetric",
+                "GEval",
             ]
             assert metric.base_metric.__class__.__name__ in underlying_metric_names
 
