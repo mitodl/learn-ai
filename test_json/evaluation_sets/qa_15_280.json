@@ -1,0 +1,994 @@
+{
+  "canvas_syllabus": [
+    {
+      "question": "What are the basic steps in building a communication strategy?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I tailor the same message to two different audiences and get opposite reactions, did I do something wrong?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Why do some stories feel persuasive even when the data contradicts them?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The information retrieved does not directly answer the question about why some stories feel persuasive even when the data contradicts them. However, it does touch on related topics such as persuasive storytelling and communication strategies.\n\nKey points that may be relevant include:\n\nPersuasive Storytelling: The readings emphasize the importance of storytelling in persuasion, suggesting that narratives can engage audiences emotionally, making them more receptive to the message, even if it contradicts data.\n\nCialdini's Principles of Persuasion: The principles outlined (such as liking, reciprocity, consensus, consistency, authority, and scarcity) indicate that emotional and psychological factors can influence how persuasive a story is, regardless of factual accuracy.\n\nWIIFT (What's In It For Them): Framing arguments around audience benefits can enhance persuasion. This suggests that if a story resonates with the audience's values or needs, it may feel more convincing than data that does not connect on an emotional level.\n\nCognitive Constraints: The structure of a persuasive message and the use of vivid examples can help maintain audience engagement, which may lead to a stronger belief in the story being told, even against contradictory data.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How can I summarize feedback from a team into a single actionable insight?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To summarize feedback from a team into a single actionable insight, consider the following steps based on effective feedback practices:\n\nFocus on Specific Observations: Ensure that the feedback is rooted in specific behaviors rather than vague statements. For example, instead of saying \"Lisa is unprofessional,\" specify the behavior, such as \"Lisa missed deadlines on three occasions.\"\n\nSeparate Observation from Interpretation: Clearly distinguish between what was observed and the interpretation of that observation. This helps in reducing defensiveness and clarifying the feedback's intent.\n\nUse a Feedback Framework: Implement a structured approach to feedback. One effective framework includes:\n\nObservation: Describe the specific behavior observed.\nImpact: Explain how this behavior affected the team or project.\nFeelings: Share how the behavior made you feel (e.g., frustrated, concerned).\nEncourage Actionable Steps: After summarizing the feedback, suggest concrete next steps or changes that can be made. This could involve setting specific goals or timelines for improvement.\n\nMaintain Psychological Safety: Ensure that the feedback is delivered in a way that feels safe for the recipient, encouraging open dialogue and further discussion.\n\nBy following these guidelines, you can distill team feedback into a clear, actionable insight that promotes growth and improvement.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s the simplest formula for a persuasive narrative?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The simplest formula for a persuasive narrative can be structured using the \"Shield Framework,\" which emphasizes a clear and effective organization of your message. Here’s a breakdown of the key components:\n\nIntroduction: Start with a hook to attract attention and provide essential context. This sets the stage for your argument.\n\nBody: Present your supporting points. Each point should be backed by evidence. You can choose between a one-sided argument (focusing solely on benefits) or a two-sided argument (addressing potential negatives as well).\n\nConclusion: Recap your main points and provide a clear recommendation or next steps. This is where you reinforce your message and encourage action.\n\nWIIFT (What's In It For Them): Throughout your narrative, frame your points around the benefits for your audience. This helps to engage them and makes your argument more compelling.\n\nCialdini’s Principles of Persuasion: Consider using principles such as liking, reciprocity, consensus, consistency, authority, and scarcity to enhance your persuasive tactics.\n\nBy following this structured approach, you can create a persuasive narrative that is clear, engaging, and effective in achieving your communication objectives.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If a listener nods but later says they disagree, what went wrong in my message?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“List common pitfalls people fall into when trying to show vulnerability in leadership.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Does improving clarity always mean using fewer words?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The search did not return specific information directly addressing whether improving clarity always means using fewer words. However, it is generally understood in communication that clarity can sometimes be achieved through concise language, but it does not always equate to using fewer words. Effective communication often involves structuring messages clearly, which may require more words to ensure that the audience fully understands the context and details.\n\nIf you have any further questions or need additional information, feel free to ask!",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How would I test whether a communication strategy actually shifted behavior?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s the difference between a story that informs and one that motivates action?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If my audience has low trust in me, is it better to start with personal story or credentials?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“When someone gives vague feedback like ‘it didn’t land,’ what follow-up questions should I ask?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When receiving vague feedback like \"it didn’t land,\" it's important to ask follow-up questions that can help clarify the feedback and make it actionable. Here are some effective follow-up questions you might consider:\n\nCan you provide specific examples? - Ask for concrete instances where the feedback applies, which can help you understand what aspects were unclear or ineffective.\n\nWhat part of my message did you find unclear? - This question targets the specific elements of your communication that may not have resonated with the audience.\n\nHow did you expect the audience to respond? - Understanding the expected reaction can help you gauge what might have been missing in your delivery or content.\n\nWhat would you suggest I change for next time? - This invites constructive criticism and gives the feedback provider a chance to offer actionable advice.\n\nWas there a particular audience reaction that stood out to you? - This can help identify specific moments during your presentation that may have contributed to the feedback.\n\nWhat do you think would have made it land better? - This encourages the feedback giver to think critically about improvements and share their insights.\n\nThese questions not only help clarify the feedback but also demonstrate your willingness to learn and improve.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Can a persuasive strategy backfire if it’s too emotionally charged?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Why might two people interpret the same strategic message in totally different ways?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Two people might interpret the same strategic message in totally different ways due to several factors related to the communication strategy framework. Here are some key reasons:\n\nCommunicator-Audience Relationship: The identity, trust, and objectives of both the communicator and the audience play a significant role. If the audience does not trust the communicator or does not understand their credibility, they may interpret the message skeptically or differently.\n\nCultural Context: Different cultural backgrounds can influence how messages are perceived. Cultural norms and values shape the interpretation of messages, leading to varied understandings.\n\nMessage Structure and Delivery: The way a message is structured (direct vs. indirect) and delivered (tone, word choice, non-verbal cues) can significantly affect interpretation. For instance, a direct approach may be appreciated in some cultures, while others may prefer a more nuanced, indirect style.\n\nAudience Needs and Goals: Each audience member may have different needs, goals, and agendas, which can lead to different interpretations of the same message. If the message does not address their specific concerns or interests, they may misinterpret its intent.\n\nCognitive Constraints: The audience's cognitive load and memory can affect how they process information. If a message is complex or not well-structured, it may lead to misunderstandings.\n\nFeedback and Iteration: The response to a message can also vary based on how well the communicator adapts their message based on audience feedback. If the communicator fails to iterate on their message based on audience reactions, misinterpretations may persist.\n\nIn summary, the interpretation of strategic messages can vary widely due to differences in trust, cultural context, message structure, audience needs, cognitive constraints, and the iterative nature of communication.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Is the goal of feedback to make me feel better or to help me improve?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The goal of feedback is primarily to help individuals improve rather than simply to make them feel better. Effective feedback is intended to assist the recipient in reaching their work-related goals and enhancing their performance. It should be specific, based on observable behavior, and delivered in a way that is psychologically safe, which means it should not provoke defensiveness.\n\nFeedback can vary significantly based on cultural and audience contexts, including the directness of the feedback and the ratio of positive to negative comments. The most effective feedback is rooted in observations and the impact of behaviors, rather than personal judgments. This approach helps create a constructive environment where individuals can learn and grow from the feedback they receive.\n\nIn summary, while positive feelings can be a byproduct of receiving feedback, the primary aim is to foster improvement and development.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Create a mini communication plan for convincing a skeptical stakeholder to support a new process.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To create a mini communication plan for convincing a skeptical stakeholder to support a new process, consider the following structured approach based on persuasive communication strategies:\n\n1. Audience Analysis\nIdentify the Audience: Understand who the skeptical stakeholder is, including their position and concerns.\nAssess Credibility: Determine your credibility with this audience and how to establish trust.\n2. Communication Objective\nDefine the Goal: Clearly state what you want the stakeholder to do, believe, or understand as a result of your communication. This should be specific and measurable.\n3. Message Strategy\nWIIFT (What's In It For Them): Frame your message around the benefits for the stakeholder. Address what they stand to gain or lose from supporting the new process.\nArgument Type: Decide whether to use a one-sided argument (focusing solely on benefits) or a two-sided argument (acknowledging potential objections and countering them).\n4. Evidence and Support\nGather Evidence: Use compelling evidence to support your argument, such as data, case studies, or testimonials that resonate with the stakeholder's interests.\nPersuasive Tactics: Consider employing Cialdini’s principles of persuasion, such as:\nLiking: Build rapport and highlight similarities.\nReciprocity: Offer something of value to encourage a favorable response.\nAuthority: Use credible sources to back your claims.\n5. Delivery Strategy\nEngaging Introduction: Start with a hook that captures attention and sets the context for your message.\nClear Structure: Use a direct structure where the recommendation is stated upfront, followed by supporting arguments and evidence.\nEffective Conclusion: Summarize key points and provide a clear call to action.\n6. Q&A Management\nPrepare for Objections: Anticipate questions or objections from the stakeholder and prepare thoughtful responses.\nEngage Actively: During the Q&A, listen actively and respond in a way that reinforces your main message.\n7. Visual Aids (if applicable)\nIf using visual aids, ensure they are clear, uncluttered, and support your message without distracting from your delivery.\n8. Rehearsal and Feedback\nPractice: Rehearse your presentation multiple times to build confidence and refine your delivery.\nSeek Feedback: Get input from colleagues or mentors to improve your approach before the actual presentation.\nBy following this structured communication plan, you can effectively address the concerns of a skeptical stakeholder and increase the likelihood of gaining their support for the new process.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What assumptions am I making when I choose a particular story to open a meeting?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I get no questions after my presentation, should I assume everyone understood it?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "If you receive no questions after your presentation, it does not necessarily mean that everyone understood your content. The absence of questions could indicate several things:\n\nAudience Engagement: Some audience members may feel hesitant to ask questions, even if they have them. This could be due to a lack of confidence, fear of judgment, or simply being overwhelmed by the information presented.\n\nQ&A Management: It's important to set clear guidelines for audience participation at the start of your presentation. Encouraging questions and creating a welcoming environment can help facilitate audience engagement.\n\nActive Listening: During the Q&A, actively listen and paraphrase questions to ensure clarity and reinforce your main messages. This can help build rapport and encourage more audience interaction.\n\nPreparation for Questions: Anticipate potential questions and rehearse your responses. This preparation can help you manage the Q&A effectively and demonstrate your confidence and knowledge.\n\nIn summary, a lack of questions should prompt you to reflect on your presentation style and audience engagement strategies rather than assuming complete understanding.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How do I adapt my leadership story for a virtual audience versus in-person?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To adapt your leadership story for a virtual audience versus an in-person setting, consider the following key points:\n\nNon-Verbal Communication:\n\nIn virtual settings, leverage body language, facial expressions, eye contact, and gestures to connect with your audience. These non-verbal cues are crucial for engagement, especially when physical presence is absent.\nDelivery Techniques:\n\nVerbal Delivery: Use natural variation in your tone and emphasize key points. Pauses can be effective for emphasis, and it's important to avoid filler words.\nPractice and Preparation: Project confidence by practicing your delivery with the audience in mind. Reframe any anxiety as excitement to enhance your presence.\nAudience Connection:\n\nEngage with your audience by chatting with them ahead of time and maintaining genuine conversations. This helps build rapport and makes your delivery more relatable.\nManaging Q&A:\n\nDuring Q&A sessions, aim to address the entire audience rather than just the questioner. Use techniques like paraphrasing and clarifying questions to ensure understanding and reinforce your key messages.\nVisual Aids:\n\nIn virtual presentations, minimize clutter in visual aids to maintain focus. Use design best practices to enhance the impact of your visuals.\nCultural Considerations:\n\nBe aware of cultural differences that may affect communication styles and audience engagement. Adjust your approach to be inclusive and considerate of these dynamics.\nBy focusing on these aspects, you can effectively adapt your leadership story to resonate with both virtual and in-person audiences.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What are three quick ways to signal that a message is collaborative, not directive?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Describe how to structure feedback so the recipient sees it as useful, not threatening.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To structure feedback so that the recipient sees it as useful rather than threatening, consider the following key points:\n\nFocus on Observations and Impact: Frame your feedback by separating observations from interpretations. For example, instead of saying \"You were late to three meetings,\" you could say, \"I noticed you were late to three meetings, which delayed our work and made me feel frustrated.\" This approach emphasizes the behavior and its impact rather than making it personal.\n\nUse a Feedback Framework: Implement a structured approach to feedback that includes:\n\nObservation of Concrete Behavior: Clearly state what was observed without judgment.\nImpact on You or the Team: Explain how the behavior affected you or the team, which helps the recipient understand the consequences of their actions.\nEncourage a Positive Ratio: Maintain a healthy ratio of positive to negative feedback. This can help create a more balanced perspective and reduce defensiveness.\n\nCreate Psychological Safety: Ensure that the feedback is given in a way that feels safe for the recipient. This can involve choosing the right time and setting for the conversation, as well as being mindful of cultural differences in how feedback is received.\n\nAsk for Feedback Yourself: Before giving feedback, consider asking for feedback on your own performance. This can create a more collaborative atmosphere and reduce the perceived power imbalance.\n\nBe Specific and Actionable: Avoid vague statements and ensure that your feedback includes specific examples and actionable suggestions for improvement. This helps the recipient understand exactly what they can do differently.\n\nBy following these guidelines, feedback can be framed in a way that is constructive and supportive, fostering a more positive and productive dialogue.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Why does a story that worked in one context fail in another even with the same audience profile?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "A story that works in one context may fail in another, even with the same audience profile, due to several factors related to communication strategy. Here are some key reasons:\n\nContext and Relevance: The effectiveness of a story often depends on the context in which it is delivered. If the audience does not see the relevance of the story to their current situation or needs, it may not resonate with them.\n\nAudience Needs and Goals: Understanding the specific needs, goals, and benefits for the audience is crucial. If the story does not align with what the audience is seeking or their objectives, it may not have the desired impact.\n\nCultural Differences: Different contexts may involve varying cultural norms and expectations. A story that is well-received in one cultural setting may not translate effectively to another due to differences in values, communication styles, or social dynamics.\n\nMessage Adaptation: The way a message is adapted for different contexts can significantly affect its reception. This includes the tone, word choice, and the medium through which the story is delivered. If these elements do not match the audience's expectations or the context, the story may fail.\n\nTrust and Credibility: The relationship between the communicator and the audience plays a vital role. If the audience does not trust the communicator or if the communicator lacks credibility in the new context, the story may not be persuasive.\n\nDelivery Style: The manner in which a story is delivered—such as the use of visual aids, body language, and vocal tone—can also influence its effectiveness. A mismatch in delivery style for the new context can lead to disengagement.\n\nIn summary, the failure of a story in a different context can often be attributed to a lack of alignment with audience needs, cultural differences, inadequate adaptation of the message, and issues related to trust and delivery.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I lead with a problem instead of a vision, what might be the unintended effects?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s a common misconception about tailoring messages to diverse teams?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "A common misconception about tailoring messages to diverse teams is that simply translating the message into different languages or using simpler language is sufficient for effective communication. However, this approach often overlooks the deeper cultural nuances and dynamics at play within diverse teams.\n\nEffective communication requires understanding the unique backgrounds, experiences, and perspectives of team members. It involves recognizing and addressing potential barriers such as language proficiency, cultural differences, and social dynamics. For instance, fluent speakers should dial down their dominance in conversations, while less fluent speakers should be encouraged to engage more actively. Leaders play a crucial role in balancing participation and ensuring that all voices are heard.\n\nIn summary, effective communication in diverse teams goes beyond language; it requires a thoughtful approach that considers cultural context, inclusivity, and the dynamics of team interactions.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Compare two versions of an opening story: one personal, one data-driven. Which is better for buy-in?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How would you break down ‘strategic communication’ into what I can practice this week?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To break down \"strategic communication\" into practical steps you can practice this week, consider focusing on the following key areas:\n\nActive Listening: Practice active listening in your conversations. This involves fully concentrating, understanding, responding, and remembering what is being said. You can do this by summarizing what the other person has said before responding.\n\nGiving and Receiving Feedback: Engage in conversations where you can give and receive constructive feedback. This could be in a professional setting or with peers. Focus on being specific and supportive in your feedback.\n\nPersuasive Speaking: Work on developing persuasive arguments. You can practice this by preparing a short presentation on a topic of interest and presenting it to a friend or colleague. Pay attention to your tone, body language, and the structure of your argument.\n\nImpromptu Speaking: Challenge yourself to speak on a random topic for a few minutes without preparation. This will help you think on your feet and improve your verbal communication skills.\n\nCommunication Strategy Framework: Familiarize yourself with the communication strategy framework which includes understanding your audience, crafting your message, choosing the right channel, and evaluating the response. You can apply this framework to any communication you have this week, whether it’s an email, a meeting, or a presentation.\n\nBy focusing on these areas, you can enhance your strategic communication skills effectively within a week.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If feedback conflicts (one person says too much detail, another says not enough), how do I reconcile?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To reconcile conflicting feedback, consider the following strategies based on effective feedback practices:\n\nSeparate Observation from Interpretation: Focus on specific behaviors rather than personal judgments. For example, instead of saying \"You are too detailed,\" frame it as \"In the last report, there were several sections that were very detailed, which some found overwhelming.\"\n\nUse a Feedback Framework: Implement a structured approach to feedback that includes:\n\nObservation: State what you observed (e.g., \"You provided a lot of detail in your presentation\").\nImpact: Explain the effect of that behavior (e.g., \"Some team members felt it was too much information to process at once\").\nRequest for Change: Suggest a way to adjust (e.g., \"Could you summarize the key points next time?\").\nEncourage Clarification: When receiving conflicting feedback, ask for specific examples from each person to understand their perspectives better. This can help identify common ground or specific areas for improvement.\n\nConsider the Audience: Recognize that feedback can vary based on the audience's preferences and cultural backgrounds. What one person perceives as too detailed, another may find necessary. Understanding these differences can help tailor your approach.\n\nActive Listening: When receiving feedback, practice active listening. This involves paraphrasing what you heard, asking clarifying questions, and ensuring you understand the feedback before responding.\n\nSeek Consensus: If possible, bring the conflicting parties together to discuss their feedback. This can lead to a more unified understanding of the issues and how to address them.\n\nBy applying these strategies, you can effectively navigate and reconcile conflicting feedback, leading to improved communication and collaboration.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Does telling a story that shows failure always reduce my perceived competence?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s the minimal set of elements required to make a leadership story feel authentic?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“When is it okay to leave ambiguity in a message on purpose?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How do I prioritize multiple audience segments when they value different outcomes?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To prioritize multiple audience segments that value different outcomes, consider the following strategies based on the retrieved information:\n\nUnderstand Audience Needs: Begin by identifying the specific needs, goals, and preferences of each audience segment. This involves asking questions like \"Why does this matter to your specific audience?\" and \"What impact does this have on them?\" This understanding will help you frame your messages around the benefits that resonate most with each group.\n\nUtilize the WIIFT Framework: Focus on the \"What's In It For Them\" (WIIFT) principle. Tailor your arguments to highlight the benefits for each audience segment, ensuring that your communication is relevant and compelling. This approach increases engagement and the likelihood of achieving your objectives.\n\nApply Persuasive Tactics: Use Robert Cialdini's principles of persuasion, such as authority, scarcity, and reciprocity, to appeal to different segments effectively. For instance, emphasize unique benefits for segments that value exclusivity or leverage your credibility for those who prioritize expert opinions.\n\nAdapt Your Message Structure: Choose between direct or indirect message structures based on the audience's preferences and the context. A direct approach may be more effective for audiences that prefer clarity and speed, while an indirect approach might work better for those who appreciate a more nuanced discussion.\n\nIterate and Test Your Approach: After delivering your message, assess the audience's response. If the desired outcome isn't achieved, consider how you can adapt your message for different segments. This might involve refining your arguments or changing the delivery method to better align with audience expectations.\n\nBy employing these strategies, you can effectively prioritize and communicate with multiple audience segments, ensuring that each group's unique values and outcomes are addressed.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Explain in your own words what ‘narrative alignment’ means in a team setting.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I get consistently positive feedback but no behavioral change, what’s being missed?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The information retrieved suggests that consistently positive feedback without any behavioral change may indicate a few key issues:\n\nNature of Feedback: Feedback needs to be specific and based on observable behaviors that can be changed. If the feedback is vague or abstract, it may not provide clear guidance on what actions to take. For example, statements like \"Lisa is unprofessional\" do not specify what behaviors need to change.\n\nPsychological Safety: Effective feedback should be delivered in a way that feels safe for the recipient. If the feedback is perceived as judgmental or overly critical, it may lead to defensiveness rather than constructive change.\n\nActionable Insights: Feedback should include clear observations and the impact of behaviors. For instance, instead of saying \"You were late to meetings,\" it could be framed as \"Your lateness delayed our work, which caused frustration.\" This approach helps the recipient understand the consequences of their actions and encourages change.\n\nCultural and Audience Considerations: Feedback effectiveness can vary based on cultural contexts and the audience's expectations. Understanding these dynamics can help tailor feedback to be more impactful.\n\nListening and Engagement: The recipient's ability to listen and engage with the feedback is crucial. If they are not actively processing the feedback or are defensive, they may not implement changes.\n\nIn summary, to foster behavioral change, feedback should be specific, actionable, and delivered in a psychologically safe manner, while also considering cultural contexts and ensuring the recipient is engaged in the conversation.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What is the role of listening in shaping a communication strategy?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Listening plays a crucial role in shaping a communication strategy, particularly through the practice of active listening. Here are the key points regarding its importance:\n\nUnderstanding and Engagement: Active listening helps in gaining information and understanding the speaker's point of view. This understanding is essential for developing effective communication strategies that resonate with the audience.\n\nBuilding Trust: By listening attentively, communicators can help the speaker feel heard, which fosters trust and strengthens relationships. This trust is vital for effective communication and collaboration.\n\nHigh-Quality Listening Skills: The course emphasizes the skills of high-quality listening, which include:\n\nAttending (non-verbal cues like eye contact and engaged posture)\nEncouraging (using minimal encouragers and nodding)\nFollowing (paraphrasing and asking clarifying questions)\nCreating a Listening Ecosystem: Establishing environments that promote listening, such as one-on-one meetings, group discussions, and surveys, can enhance communication strategies.\n\nAvoiding Barriers: Recognizing and overcoming barriers to effective listening is essential. This includes staying neutral, non-judgmental, and listening without an agenda.\n\nIn summary, listening is not just a passive activity but an active engagement that shapes how messages are crafted, delivered, and received, ultimately influencing the effectiveness of a communication strategy.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How can I check if my story resonates before the main presentation?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To check if your story resonates before the main presentation, consider the following strategies:\n\nEngage with Your Audience: Connect with your audience ahead of time. This can involve informal chats or discussions to gauge their interests and reactions to your story.\n\nPractice with Intention: Rehearse your presentation with the audience in mind. This means thinking about how your story aligns with their interests and needs.\n\nUse Non-Verbal Cues: Pay attention to body language and facial expressions during practice sessions. These can provide insights into how your story is being received.\n\nAnticipate Questions: Prepare for potential questions from your audience that may arise from your story. This will help you understand their perspective and refine your message accordingly.\n\nSeek Feedback: After practicing, ask for feedback from peers or mentors. They can provide valuable insights into what resonates and what might need adjustment.\n\nSelf-Assessment: Record your practice sessions and review them. Focus on both verbal and non-verbal delivery to assess how effectively your story communicates your message.\n\nBy implementing these strategies, you can better ensure that your story resonates with your audience before the main presentation.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Is repeating key phrases in multiple parts of a talk a sign of clarity or redundancy?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s a mistaken belief about persuasion that causes people to overpromise results?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Draft a short ‘call to action’ that follows a story about a missed opportunity.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“When someone tells me they didn’t get my point, how do I know whether I should rephrase or defend the original?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How do I balance being concise and giving enough context to avoid misinterpretation?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To balance being concise while providing enough context to avoid misinterpretation, consider the following strategies:\n\nUse a Clear Structure: Organize your communication using a direct structure, such as the Shield Framework, which includes an introduction, body, and conclusion. This helps in presenting your points clearly and logically.\n\nHook and Essential Context: Start with a hook to grab attention and provide essential context that sets the stage for your message. This helps the audience understand the relevance of what you are saying.\n\nFocus on Audience Benefits (WIIFT): Frame your points around the \"What's In It For Them\" (WIIFT) concept. Ask yourself why your message matters to your audience and what impact it has on them. This ensures that your communication is relevant and engaging.\n\nUse Evidence Effectively: Support your arguments with strong, relevant evidence. Make sure the evidence is compelling for your specific audience, and test its accuracy and relevance.\n\nBe Direct but Considerate: While being concise, ensure that you do not omit critical information that could lead to misinterpretation. Use clear language and avoid jargon that may confuse the audience.\n\nEngage with Stories and Examples: Incorporate vivid examples or stories to illustrate your points. This keeps the audience engaged and helps them relate to the message.\n\nSummarize Key Points: At the end of your communication, recap the main points and provide next steps. This reinforces your message and clarifies any potential misunderstandings.\n\nBy applying these strategies, you can effectively balance conciseness with the necessary context to communicate your message clearly and avoid misinterpretation.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If multiple stakeholders have different preferred stories, how do I synthesize one coherent message?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Does using a metaphor always help comprehension?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What are signs my communication strategy is drifting from its original objective?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How would I structure a reflection report that shows growth in my communication skills?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To structure a reflection report that demonstrates growth in your communication skills, you can follow the guidelines provided in the course assignment for the \"Communication for Leaders\" class. Here’s a clear outline based on the information retrieved:\n\nStructure of the Reflection Report\nIntroduction\nBriefly introduce the purpose of the report and what you aim to reflect on regarding your communication skills.\n\nPart I: Accomplishments\nDescribe what you accomplished during the semester that contributed to your growth as a mindful leader and strategic communicator.\nInclude specific examples of skills you developed, such as active listening, giving and receiving feedback, persuasive speaking, and impromptu speaking.\n\nPart II: Critical Communication Experience\nShare a story that highlights a significant communication experience you had during the semester.\nThis could be a moment when you gave or received meaningful feedback or when you successfully communicated a persuasive argument.\n\nPart III: Future Goals\nOutline your specific and attainable communication goals for your remaining time at MIT Sloan and beyond.\nDiscuss how you plan to achieve these goals, referencing any strategies or skills you intend to focus on.\n\nConclusion\nSummarize the key takeaways from your reflection and reiterate your commitment to continuing your growth in communication skills.\n\nAdditional Tips\nLength and Format: The report should be two pages long, formatted in standard business style (12pt font, single-spaced, double-spaced between paragraphs).\nEvidence and Support: Support your reflections with evidence from course readings and feedback you received throughout the semester.\nClarity and Engagement: Ensure that your writing is clear, concise, and engaging, maintaining a professional tone throughout.\nBy following this structure, you can effectively showcase your growth in communication skills and provide a comprehensive reflection on your experiences and future aspirations.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Can feedback be too early or too late to be useful?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Feedback can indeed be too early or too late to be useful. The effectiveness of feedback is influenced by several factors, including timing, specificity, and the psychological safety of the environment in which it is given.\n\nTiming: Feedback is most effective when delivered in real-time or shortly after the observed behavior. Early feedback can help individuals adjust their actions promptly, while delayed feedback may lose relevance and impact.\n\nSpecificity: Feedback should be specific and based on observable behaviors that can be changed. Vague or abstract feedback is often non-actionable and can lead to confusion.\n\nPsychological Safety: The manner in which feedback is delivered matters. It should be intended to help the recipient and provided in a way that feels safe and constructive. Feedback that feels judgmental or overly critical can lead to defensiveness and hinder learning.\n\nCultural Considerations: Different cultures may have varying norms regarding feedback, including the directness and ratio of positive to negative comments. Understanding these differences can enhance the effectiveness of feedback across diverse audiences.\n\nIn summary, feedback is most useful when it is timely, specific, and delivered in a supportive manner, taking into account the cultural context of the individuals involved.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I over-index on audience approval, could that dilute the strategic intent of my message?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Over-indexing on audience approval can indeed dilute the strategic intent of your message. The key points to consider are:\n\nUnderstanding the Communicator-Audience Relationship: It's crucial to know who you are as a communicator and who your audience is. This includes understanding your credibility with them and what they want from your message.\n\nMessage Structure: The structure of your message is a strategic choice. A direct structure (where the recommendation is presented upfront) is often preferred as it improves audience comprehension and is results-oriented. If you focus too much on pleasing the audience, you might compromise the clarity and effectiveness of your message.\n\nWIIFT (What's In It For Them): Framing your message around the benefits for the audience is essential. However, if you overly tailor your message to gain approval, you may lose sight of the core message and strategic intent.\n\nPersuasive Tactics: Utilizing persuasive tactics, such as Cialdini's principles, can help engage the audience without compromising your message's integrity. It's important to balance audience engagement with the need to convey your strategic objectives clearly.\n\nFeedback and Iteration: After delivering your message, assess whether you received the desired response. If not, consider how to adapt your message for future audiences without losing its strategic intent.\n\nIn summary, while audience approval is important, it should not come at the expense of your message's clarity and strategic goals.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What questions should I ask after a lab session to uncover hidden misunderstandings within the core team?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "After a lab session, you can ask the following questions to uncover hidden misunderstandings within your core team:\n\nWhat did you learn from observing others?\nWhat surprised you during the session?\nWhat worked well, and what didn’t work well?\nWhat key observations did you make?\nWere there any moments where you felt unclear or confused?\nWhat assumptions did you make about your teammates during the lab?\nHow did you feel about the feedback you received? Was it clear and actionable?\nWhat could we do differently in future sessions to improve understanding?\nThese questions encourage reflection and open dialogue, helping to identify any misunderstandings or areas for improvement in team communication and collaboration.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How might cultural norms affect the perceived strength of a leadership story?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Cultural norms can significantly influence the perceived strength of a leadership story in various ways:\n\nFeedback Dynamics: Different cultures have varying expectations regarding feedback. For instance, some cultures may prefer direct feedback, while others might value a more indirect approach. This can affect how a leadership story is received, as the audience's cultural background may shape their interpretation of the story's message and intent.\n\nCommunication Styles: Cultural norms dictate how leaders communicate. For example, in cultures that value hierarchy, a leader's story might be perceived as more authoritative and impactful. Conversely, in egalitarian cultures, a more collaborative storytelling approach may resonate better. The effectiveness of a leadership story can thus depend on how well it aligns with the audience's cultural expectations.\n\nInclusion and Engagement: Leaders must be aware of in-group and out-group dynamics influenced by cultural norms. A story that engages a diverse audience may require the leader to balance their communication style to include less fluent speakers and ensure that all voices are heard. This inclusivity can enhance the perceived strength of the story.\n\nSocial Distance: Factors such as location and identity can create social distance, affecting how a leadership story is perceived. Leaders who acknowledge and address these factors in their storytelling can foster a stronger connection with their audience, thereby enhancing the story's impact.\n\nIn summary, understanding and adapting to cultural norms is crucial for leaders to craft compelling stories that resonate with their audience, ultimately affecting the perceived strength of their leadership narrative.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Compare a strategy that leads with ‘why this matters’ versus ‘what we’re doing.’ When is each appropriate?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The information retrieved discusses the importance of structuring persuasive messages effectively, particularly in the context of leading with \"why this matters\" versus \"what we're doing.\"\n\nLeading with \"Why This Matters\":\n\nThis approach emphasizes the significance of the message to the audience, focusing on the benefits and impacts relevant to them. It answers the question, \"Why should I care?\" by framing the argument around the audience's needs and interests.\nThis strategy is particularly effective when the audience may be skeptical or when the stakes are high. It helps to build trust and engagement by connecting emotionally with the audience and highlighting the relevance of the topic to their specific situation.\nLeading with \"What We're Doing\":\n\nThis strategy focuses on the actions being taken or proposed, often presenting the details of a plan or initiative upfront. It answers the question, \"What are we doing?\" and is more results-oriented.\nThis approach is suitable for audiences that are already familiar with the context or when the decision-making process is straightforward and requires quick action. It is often preferred in business settings where clarity and efficiency are paramount.\nWhen to Use Each Approach:\n\nUse \"why this matters\" when you need to persuade an audience that may not see the immediate relevance of your message or when you want to foster a deeper connection and understanding.\nUse \"what we're doing\" when the audience is already engaged or when the focus is on executing a plan where the rationale is less critical than the actions themselves.\nIn summary, the choice between these strategies should be guided by the audience's familiarity with the topic, their emotional engagement, and the urgency of the decision at hand.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If someone walks out mid-presentation, what are the possible communication failures I should consider?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When someone walks out mid-presentation, several potential communication failures could be at play:\n\nLack of Clarity and Structure: If the presentation lacks a clear structure or fails to explicitly state the main message and recommendations, the audience may feel lost or disengaged. This includes not having a clear introduction or conclusion that summarizes key points.\n\nPoor Visual Design: Slides that are cluttered, difficult to read, or do not follow best practices can detract from the message. If the visuals do not effectively support the spoken content, the audience may lose interest.\n\nIneffective Transitions: If transitions between speakers or topics are not clear, it can confuse the audience and disrupt the flow of the presentation.\n\nTiming Issues: Presentations that exceed the allotted time can frustrate the audience, leading to disengagement. It's important to manage time effectively to keep the audience's attention.\n\nInadequate Engagement: Failing to engage the audience through interactive elements, such as Q&A sessions or addressing audience needs, can result in a lack of connection, prompting some to leave.\n\nFailure to Address Questions: If the Q&A session is poorly managed—such as not clearly identifying who will answer questions or failing to reinforce key messages—audience members may feel their concerns are not being addressed.\n\nLack of Team Support: If team members do not visibly support each other during the presentation, it can create a perception of disorganization or lack of confidence.\n\nThese factors can contribute to a negative audience experience, potentially leading to someone walking out during the presentation.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Create a checklist I can use before delivering a strategic message to ensure alignment with goals.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Here’s a checklist you can use before delivering a strategic message to ensure alignment with your goals:\n\nUnderstand Your Audience:\n\nWho is your audience? (Identify specific individuals or groups)\nWhat are their goals and agendas?\nWhat is your credibility with them?\nDefine Your Objectives:\n\nWhat do you want your audience to do, believe, or understand as a result of your message?\nIs your objective specific and reasonable?\nCraft Your Message:\n\nWhat is your core message? (Summarize it in one sentence)\nWhat structure will you use? (Direct or indirect)\nWill you use a one-sided or two-sided argument? Why?\nEvidence and Support:\n\nWhat evidence will you use to support your argument? (e.g., data, stories)\nIs the evidence credible, current, and aligned with your supporting points?\nDelivery Strategy:\n\nHow will you grab the audience's attention in your introduction?\nWhat visual aids will you use, and how will they support your message?\nHow will you manage transitions if multiple presenters are involved?\nQ&A Management:\n\nWhat guidelines will you set for audience participation?\nWhat questions or objections do you anticipate from your audience?\nPractice and Rehearsal:\n\nHow will you prepare to ensure you are confident and engaging?\nDetail your rehearsal plan (number of practice runs, audience feedback).\nFeedback and Iteration:\n\nAfter delivering your message, how will you assess its effectiveness?\nWhat metrics will you use to define success? (Did you get the response you wanted?)\nBy following this checklist, you can enhance your strategic message delivery and ensure it aligns with your goals.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Is it wrong to simplify complex issues too much in a leadership narrative to ensure understanding?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The search did not return specific information directly addressing the question of whether it is wrong to simplify complex issues in a leadership narrative to ensure understanding. However, it is important to consider the context of communication in leadership.\n\nIn leadership communication, simplifying complex issues can be a double-edged sword. On one hand, it can help make the message more accessible and understandable for a wider audience, which is crucial for effective leadership. On the other hand, oversimplification can lead to misunderstandings or a lack of depth in addressing the issues at hand.\n\nKey points to consider include:\n\nAudience Understanding: Leaders must balance the need for clarity with the complexity of the issues they are addressing. Tailoring the message to the audience's level of understanding is essential.\nInclusion: Effective communication strategies often involve mitigating language-based challenges and ensuring that all audience members feel included in the conversation.\nCognitive Constraints: Understanding how audiences process information can guide leaders in structuring their messages effectively, ensuring that they are both engaging and informative.\nIn summary, while simplifying complex issues can enhance understanding, it is crucial for leaders to maintain a balance to avoid losing the essence of the issues being discussed.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What assumptions underlie the idea that every persuasive story needs a hero?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "I couldn't find any relevant information regarding the assumptions underlying the idea that every persuasive story needs a hero. If you have any other questions or need information on a different topic, feel free to ask!",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Write two versions of a message to rally a team—one using urgency, one using purpose—and explain the trade-offs.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Urgency Message\nSubject: Immediate Action Required: Upcoming Deadline!\n\nHi Team,\n\nI hope this message finds you well. I want to bring to your immediate attention that we have a critical deadline approaching next week. It is essential that we finalize our project deliverables by Friday to ensure we meet our commitments.\n\nI need everyone to prioritize their tasks and focus on completing their sections as soon as possible. If you encounter any obstacles, please reach out to me immediately so we can address them together.\n\nLet’s pull together and make sure we hit this deadline. Your hard work and dedication are crucial to our success!\n\nBest,\n[Your Name]\n\nPurpose Message\nSubject: Let's Collaborate for Our Shared Goals!\n\nHi Team,\n\nI hope you’re all doing well. As we continue to work on our project, I want to take a moment to emphasize the importance of our collective efforts. Each of you brings unique strengths to the table, and together, we can achieve our goals more effectively.\n\nI encourage everyone to share their ideas and insights as we move forward. Collaboration is key to our success, and I believe that by working together, we can create something truly impactful.\n\nLet’s keep the lines of communication open and support one another as we strive for excellence!\n\nBest,\n[Your Name]\n\nTrade-offs\nUrgency Message:\n\nPros: Creates a sense of immediate action and prioritization, motivating the team to focus on deadlines.\nCons: May induce stress or anxiety among team members, potentially leading to burnout if overused.\nPurpose Message:\n\nPros: Fosters a collaborative and supportive environment, encouraging team members to engage and contribute.\nCons: May lack the immediate drive needed to meet tight deadlines, as it focuses more on long-term goals rather than urgent tasks.\nBoth approaches have their merits and can be effective depending on the context and the specific needs of the team at that moment.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How do I spot when feedback is actually about the messenger and not the message?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To determine when feedback is about the messenger rather than the message, consider the following insights:\n\nNature of Feedback: Feedback that focuses on personal attributes (e.g., \"Lisa is unprofessional\") rather than specific behaviors or actions is often about the messenger. Effective feedback should be specific and based on observable behaviors that can be changed.\n\nVagueness and Abstract Assertions: Statements that are vague or abstract (e.g., \"Blayne adds no value\") do not provide actionable insights and may reflect biases against the individual rather than the content of their work.\n\nLack of Specific Examples: Feedback that lacks concrete examples (e.g., \"Katie is not a team player\") tends to be more about the person than their actions. Effective feedback should include specific instances that illustrate the behavior in question.\n\nBroad Generalizations: Comments that make broad generalizations (e.g., \"We just can’t trust Edmond\") often indicate that the feedback is more about the individual's character rather than their specific actions or contributions.\n\nPsychological Safety: Feedback should be delivered in a way that is psychologically safe, meaning it should not attack the person but rather focus on the impact of their behavior. This helps in distinguishing between feedback on the messenger versus the message.\n\nCultural Context: Feedback can vary significantly across cultures. Understanding the cultural context can help in interpreting whether feedback is directed at the messenger or the message.\n\nBy focusing on these aspects, you can better identify when feedback is more about the individual delivering it rather than the content being discussed.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Why do some people respond better to stories about values than to stories about outcomes?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I’m preparing a strategic briefing for senior leadership, what’s the biggest difference from briefing peers?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When preparing a strategic briefing for senior leadership, the biggest difference compared to briefing peers lies in the audience's expectations and the level of detail required. Here are some key distinctions:\n\nAudience Understanding: Senior leaders often have a broader perspective and are focused on strategic implications rather than operational details. Therefore, your briefing should emphasize high-level insights and strategic recommendations rather than granular data.\n\nCredibility and Trust: Establishing credibility is crucial when addressing senior leadership. You need to demonstrate a strong understanding of the organization's challenges and opportunities, and how your recommendations align with their strategic goals.\n\nMessage Structure: The structure of your presentation should be direct and action-oriented. Start with your key recommendation (often referred to as BLUF - Bottom Line Up Front), followed by supporting arguments and evidence. This contrasts with peer briefings, which may allow for more exploratory discussions.\n\nPersuasive Strategy: When briefing senior leaders, it's essential to frame your arguments around what's in it for them (WIIFT). Highlight the benefits of your recommendations and how they align with the organization's objectives.\n\nQ&A Management: Be prepared for more challenging questions from senior leaders. They may probe deeper into the implications of your recommendations, so anticipate potential objections and prepare to address them effectively.\n\nIn summary, when briefing senior leadership, focus on strategic insights, establish credibility, use a clear and direct message structure, emphasize benefits, and be ready for rigorous questioning.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s a common myth about ‘authenticity’ that actually makes people sound inauthentic?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“When should I explicitly surface the assumptions behind a strategy versus leaving them implicit?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How can I tell if a story is resonating emotionally versus just being understood intellectually?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I get conflicting feedback about my tone, how do I determine which direction aligns with strategic intent?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When dealing with conflicting feedback about your tone, it's essential to consider several factors to align your communication with your strategic intent:\n\nUnderstand the Audience and Culture: Feedback can vary significantly based on the audience and cultural context. Different cultures may have different norms regarding directness and the use of positive versus negative feedback. Recognizing these differences can help you interpret feedback more effectively.\n\nFeedback Intent: Remember the intention behind the feedback. Effective feedback is meant to help you improve and should be specific, actionable, and delivered in a psychologically safe manner. If feedback feels vague or personal, it may not be constructive.\n\nCommunication Strategy Framework: Utilize a communication strategy framework that considers the communicator, audience, channel, culture, message creation, adaptation, delivery, and response. This framework can help you analyze the feedback and determine which aspects align with your strategic goals.\n\nEvaluate the Source and Context: Consider who is providing the feedback and the context in which it was given. Feedback from someone who understands your strategic objectives may carry more weight than feedback from someone less familiar with your goals.\n\nIterate and Adapt: After evaluating the feedback, think about how you can adapt your communication style to better align with your strategic intent while still being authentic to yourself. If certain feedback resonates more with your objectives, focus on those aspects in your future communications.\n\nBy applying these considerations, you can navigate conflicting feedback about your tone and ensure that your communication aligns with your strategic intent.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Give me a quick rubric for evaluating whether my weekly lab communication practice is improving.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To evaluate your weekly lab communication practice, you can use the following rubric based on the criteria outlined in the course materials:\n\nRubric for Evaluating Lab Communication Practice\n\nStrategy\nProfessional: Clear understanding of progress and goals for improvement; needs of the audience are fully met.\nCompetent: Some progress is discernible, but goals may not be fully clear; needs of the audience are partially met.\nDeveloping: Little to no clarity on progress or goals; needs of the audience are not met.\n\nStructure\nProfessional: Well-organized with a clear introduction, logical transitions, and a strong conclusion.\nCompetent: Some organizational issues; transitions may be unclear, and the conclusion may lack impact.\nDeveloping: Poor organization; lacks clear transitions and a definitive conclusion.\n\nContent/Evidence\nProfessional: Detailed and relevant examples that clearly connect to communication goals.\nCompetent: Examples provided but may lack detail or connection to goals.\nDeveloping: Vague or irrelevant examples; goals are stated at a high level without specifics.\n\nWriting Style\nProfessional: Clear, concise sentences; coherent paragraphs; engaging tone.\nCompetent: Some sentences may be lengthy or unclear; paragraphs may contain multiple ideas.\nDeveloping: Difficult to understand due to poor sentence structure; paragraphs lack coherence.\n\nDocument Design\nProfessional: Follows best practices for formatting; clear organization with appropriate use of headings and lists.\nCompetent: Some formatting inconsistencies; may not fully adhere to best practices.\nDeveloping: Lacks organization; many formatting issues present.\n\nParticipation and Engagement\nActively participate in discussions and provide constructive feedback to peers.\nListen attentively and show interest in others' contributions.\n\nScoring\nUse a scale from 1 to 10 to rate your performance in each category, where 10 indicates exceptional performance and 1 indicates significant issues.\nThis rubric can help you reflect on your communication skills and identify areas for improvement as you practice in your lab sessions.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Does lengthening a story to include more context always help people relate better?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s an effective way to invite dissent in a way that still preserves psychological safety?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To effectively invite dissent while preserving psychological safety, consider the following strategies based on the retrieved information:\n\nCreate a Safe Environment: Ensure that the atmosphere is conducive to open dialogue. This involves making it clear that all opinions are valued and that dissent is not only acceptable but encouraged.\n\nUse Constructive Feedback Frameworks: When providing feedback or inviting dissent, focus on observations and their impacts rather than personal judgments. For example, instead of saying \"You are wrong,\" you might say, \"I noticed that this approach led to some challenges; what do you think about exploring alternatives?\"\n\nEncourage Participation: Actively solicit input from all team members, especially those who may be less vocal. This can be done by asking open-ended questions and encouraging quieter members to share their thoughts.\n\nBalance Positive and Negative Feedback: Maintain a healthy ratio of positive to negative feedback. This helps to reinforce that the intention behind the feedback is to improve outcomes rather than to criticize.\n\nPractice Active Listening: When dissent is expressed, listen attentively and validate the speaker's feelings. This can help reduce defensiveness and foster a more open exchange of ideas.\n\nBe Mindful of Cultural Differences: Recognize that feedback styles can vary significantly across cultures. Tailor your approach to fit the cultural context of your team members to ensure that dissent is invited in a way that feels safe for everyone.\n\nBy implementing these strategies, you can create an environment where dissent is welcomed and psychological safety is preserved, leading to more productive discussions and better outcomes.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I feel like I’m ‘selling’ rather than ‘leading’ when persuading, what can I do to reframe it?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To reframe your approach from feeling like you're \"selling\" to \"leading\" when persuading, consider the following strategies based on the principles of effective persuasion:\n\nFocus on Audience Benefits (WIIFT): Frame your message around the benefits for your audience. Ask yourself, \"Why does this matter to them?\" and \"What impact does this have on them?\" This shifts the focus from what you want to sell to what the audience stands to gain.\n\nUse Cialdini's Principles of Persuasion: Incorporate principles such as:\nLiking: Build rapport and highlight similarities with your audience.\nReciprocity: Offer something of value to encourage a favorable response.\nConsensus: Show that others have made similar choices or taken similar actions.\nConsistency: Encourage commitments that align with their values or previous actions.\nAuthority: Establish your credibility and expertise subtly.\nScarcity: Highlight unique benefits or limited opportunities.\n\nStructure Your Message Effectively: Use a clear structure for your persuasive message. The \"Shield Framework\" can help you organize your points logically, starting with a strong recommendation followed by supporting evidence. This clarity can enhance your leadership presence.\n\nEngage Through Storytelling: Use stories or vivid examples to connect emotionally with your audience. This can make your message more relatable and compelling, moving it away from a sales pitch to a narrative that inspires action.\n\nPractice Active Listening: During interactions, listen to your audience's concerns and feedback. This not only shows respect but also allows you to adjust your message to better align with their needs and perspectives.\n\nBy implementing these strategies, you can transform your persuasive efforts from a sales-oriented approach to one that embodies leadership and inspires your audience to take action.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Draft a 2-sentence narrative opener that sets up a leadership decision and why it matters.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“How do I decide whether to use a personal anecdote or a third-party example to build credibility?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To decide whether to use a personal anecdote or a third-party example to build credibility, consider the following points:\n\nAudience Trust: Personal anecdotes can be effective in environments where there is a high level of trust and a positive bias towards the speaker. They help create a connection and can make the message more relatable. In contrast, third-party examples are often more suitable in situations where the audience may have lower trust or negative biases, as they can lend authority and credibility to your argument.\n\nNature of the Argument: If the decision is quick and non-controversial, personal anecdotes may suffice. However, for high-stakes situations or controversial topics, third-party examples are usually necessary to provide a balanced view and address potential counterarguments.\n\nEvidence Quality: Regardless of the choice, ensure that the evidence (whether personal or third-party) is compelling, accurate, current, and relevant to the audience. This includes evaluating the source of the evidence and ensuring it aligns with the supporting points of your argument.\n\nFraming the Message: Always frame your points around the audience's benefits (WIIFT - \"What's In It For Them\"). This helps in making your argument more persuasive, whether you choose a personal story or an external example.\n\nIn summary, choose personal anecdotes for relatable, trust-filled contexts and third-party examples for authoritative, credibility-focused arguments, especially in high-stakes situations.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“What’s a quick way to reframe a message when initial feedback says it ‘felt off’ without losing the original intent?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To effectively reframe a message when initial feedback indicates it \"felt off,\" consider the following strategies based on the retrieved information:\n\nSeparate Observation from Interpretation: Focus on specific behaviors rather than making broad judgments. For example, instead of saying \"Your presentation was confusing,\" you might say, \"I noticed that some points in your presentation could benefit from clearer examples.\"\n\nUse the Feedback Framework: Structure your feedback using the observation-impact model. For instance, you could say, \"I observed that the tone of your message might have come across as too direct. This could lead to misunderstandings about your intent.\"\n\nFrame Around Audience Benefits (WIIFT): Reframe your message to highlight the benefits for the audience. For example, instead of saying, \"We need to change our approach,\" you could say, \"Adjusting our approach will help us connect better with our audience and achieve our goals more effectively.\"\n\nBe Specific and Actionable: Provide clear, actionable suggestions rather than vague feedback. Instead of saying, \"It felt off,\" specify what could be improved, such as, \"Adding a personal story could make your message more relatable.\"\n\nEncourage a Collaborative Tone: Use inclusive language that invites collaboration. For example, \"How about we explore ways to adjust this message together to ensure it resonates better with our audience?\"\n\nBy applying these strategies, you can maintain the original intent of your message while addressing the feedback constructively.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“If I try to be transparent about uncertainty, could that ever weaken my perceived leadership?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The information retrieved suggests that being transparent about uncertainty can actually enhance your leadership rather than weaken it. Here are some key points:\n\nAuthenticity and Connection: Transparency fosters genuine conversations and helps build rapport with your audience. When leaders openly acknowledge uncertainty, it can create a more relatable and trustworthy image.\n\nEncouraging a Learning Culture: By being open about uncertainties, leaders can promote a culture of learning and problem-solving. This approach encourages team members to share their thoughts and contribute to discussions, leading to better collaboration.\n\nManaging Expectations: Acknowledging uncertainty allows leaders to set realistic expectations. This can help mitigate anxiety and prepare the team for potential challenges, reinforcing the leader's credibility.\n\nActive Listening and Engagement: Engaging with team members about uncertainties can enhance communication. It encourages active listening and allows leaders to address concerns directly, which can strengthen their position as effective communicators.\n\nIn summary, rather than diminishing perceived leadership, transparency about uncertainty can enhance it by fostering trust, encouraging collaboration, and improving communication within teams.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Create a short pre-mortem conversation prompt to surface communication risks before a major presentation.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To facilitate a pre-mortem conversation aimed at surfacing communication risks before a major presentation, consider using the following prompt:\n\nPre-Mortem Conversation Prompt: \"Imagine that our presentation has just concluded, and it did not go as planned. What specific communication failures might have contributed to this outcome? Let's discuss potential risks such as misunderstandings, lack of engagement, or failure to address audience questions effectively. How can we proactively address these issues to ensure our message is clear and impactful?\"\n\nThis prompt encourages team members to think critically about possible pitfalls and fosters a collaborative approach to mitigating risks before the presentation.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“When multiple stories compete in a single narrative, how do I layer them without confusing the audience?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“Why might a peer perceive my strategic message as manipulative even if I intend it to be collaborative?”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "A peer might perceive your strategic message as manipulative, even if your intention is to be collaborative, due to several factors related to communication strategy and audience perception:\n\nLack of Context and WIIFT (What's In It For Them): If your message does not clearly articulate the benefits for the audience or lacks context, it may come across as self-serving or insincere. This can lead to perceptions of manipulation rather than collaboration.\n\nTrust and Credibility: The level of trust between you and your audience plays a crucial role. If there is a low level of trust or if your credibility is not established, your message may be viewed with skepticism, leading to interpretations of manipulation.\n\nMessage Structure: The way you structure your message (direct vs. indirect) can influence how it is received. A poorly structured message may confuse the audience or make them feel that you are trying to hide your true intentions.\n\nTone and Word Choice: The tone of your message and the specific words you choose can significantly impact how it is perceived. A tone that seems overly aggressive or persuasive may be interpreted as manipulative.\n\nAudience Needs and Goals: If your message does not address the audience's needs or goals, it may seem disconnected from their interests, leading them to feel manipulated rather than engaged in a collaborative effort.\n\nCialdini’s Principles of Persuasion: If you employ persuasive tactics without transparency or authenticity, it may backfire. Audiences can sense when they are being persuaded through manipulation rather than genuine collaboration.\n\nIn summary, to avoid being perceived as manipulative, ensure that your communication is clear, contextually relevant, and aligned with the audience's interests and needs. Establishing trust and credibility, using appropriate tone and structure, and being transparent about your intentions are key to fostering a collaborative perception.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "“List three quick questions I can ask after a lab to check if my leadership storytelling made the intended point.”",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the three main objectives of Communication for Leaders (15.280)?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The three main objectives of the course \"Communication for Leaders (15.280)\" are:\n\nUse a strategic communication framework for professional communication: This involves understanding and applying a structured approach to effectively convey messages in a professional setting.\n\nDevelop and deliver persuasive arguments: Students will learn how to create and present compelling arguments in both presentations and written documents.\n\nCommunicate effectively and interpersonally within a group: The course emphasizes the importance of interpersonal communication skills, enabling students to interact and collaborate effectively within teams.\n\nThese objectives aim to enhance students' communication skills through practical exercises and feedback.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How many persuasive presentations are required in this course?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "In the course, there are two required persuasive presentations:\n\nPersuasive Presentation I: This is a 5-minute presentation followed by a 3-minute Q&A session. It is scheduled outside of class time and does not allow for visual aids.\n\nPersuasive Presentation II: This is an 8-minute interactive presentation, also scheduled outside of class time, where you can use visual aids and are encouraged to invite questions throughout the presentation.\n\nAdditionally, there is a team persuasive presentation that lasts 15 minutes and includes 5 minutes of Q&A, focusing on a recommendation for a specific audience.\n\nOverall, you will be involved in multiple persuasive presentations throughout the course.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do I give negative feedback to my core teammate without long term consequences?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To give negative feedback to your core teammate without long-term consequences, consider the following strategies based on effective feedback principles:\n\nFocus on Specific Behaviors: Frame your feedback around specific, observable behaviors rather than personal attributes. For example, instead of saying \"You are unprofessional,\" you might say, \"I noticed you were late to three meetings, which delayed our work.\"\n\nUse a Feedback Framework: Employ a structured approach that includes:\n\nObservation: Clearly state what you observed.\nImpact: Explain how this behavior affected the team or project.\nFeelings: Share how it made you feel (e.g., \"I felt frustrated because it impacted our timeline\").\nCreate a Safe Environment: Ensure that the feedback is given in a psychologically safe context. This means choosing a private setting and being respectful and constructive in your tone.\n\nBalance Positive and Negative Feedback: Maintain a healthy ratio of positive to negative feedback. This helps to reinforce good behaviors while addressing areas for improvement.\n\nEncourage Dialogue: Invite your teammate to share their perspective. This can help reduce defensiveness and foster a collaborative approach to resolving issues.\n\nBe Timely: Provide feedback as close to the event as possible. This makes the feedback more relevant and actionable.\n\nFollow Up: After giving feedback, check in with your teammate to see how they are progressing and to reinforce positive changes.\n\nBy focusing on specific behaviors, using a structured framework, and fostering an open dialogue, you can provide constructive feedback that minimizes the risk of long-term negative consequences.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do I structure persuasive presentation 2 for a specific audience?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To structure your persuasive presentation effectively for a specific audience, consider the following key elements based on the information retrieved:\n\nUnderstand Your Audience:\nIdentify who your audience is, including specific names and positions. Understand their biases, feelings about the information, and their information needs.\nEstablish your credibility with the audience to build trust.\n\nDefine Your Objective:\nClearly state what you want your audience to do as a result of your presentation. This should be specific and measurable.\n\nCraft Your Core Message:\nSummarize your core message in one sentence. This should be memorable and repeated throughout your presentation.\n\nChoose Your Argument Type:\nDecide whether to use a one-sided argument (focusing solely on the benefits of your recommendation) or a two-sided argument (addressing potential objections). Choose based on your audience's trust level and the stakes involved.\n\nStructure Your Presentation:\nIntroduction: Start with a hook to grab attention, provide essential context, and preview your main points.\nBody: Use the Shield Framework to organize supporting points and evidence. Each point should be backed by credible evidence.\nConclusion: Recap your main points and provide a clear call to action.\n\nEngage with Q&A:\nSet guidelines for audience participation at the start. Anticipate questions and prepare responses that reinforce your main message.\n\nDelivery and Rehearsal:\nPractice your delivery to ensure confidence and engagement. Focus on both verbal and non-verbal communication skills.\n\nVisual Aids (if applicable):\nIf using visual aids, ensure they are clear, uncluttered, and support your argument effectively.\nBy following these guidelines, you can create a persuasive presentation that resonates with your specific audience and encourages them to take the desired action.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What makes an absence \"excused\" versus \"unexcused\"?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "An absence is classified as \"excused\" or \"unexcused\" based on the reason for the absence and the policies set by the institution. Here’s a summary of the distinctions:\n\nExcused Absences:\nThese are typically granted for valid reasons such as religious observance, illness, or emergencies.\nStudents may also receive up to two excused absences per course for unavoidable professional development conflicts, provided they notify their faculty or TAs in advance.\nFor medical and religious holiday absences, the class participation average will be adjusted based on the number of sessions attended.\n\nUnexcused Absences:\nAbsences due to personal travel, interviews, or other non-emergency activities are considered unexcused.\nStudents will receive a zero for class participation credit for any unexcused absence, and faculty are not obligated to assist students in catching up on missed work.\nIn summary, excused absences are recognized for specific, justifiable reasons, while unexcused absences do not meet these criteria and carry penalties regarding participation grades.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What topics should I avoid for my persuasive presentations?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What topic should I pick for my PP1?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "For your PP1 (Persuasive Presentation I), you should choose a business subject that you can present to a non-Sloan audience, aiming to persuade them to enact a change or pursue a specific course of action. Here are some key points to consider when selecting your topic:\n\nAudience Specificity: Ensure that your topic is tailored to a specific audience outside of the Sloan community. Understanding their interests and challenges will help you craft a more persuasive argument.\n\nClear Objective: Your presentation should have a clear and reasonable objective. Think about what you want your audience to do, believe, or understand as a result of your presentation.\n\nStructure and Evidence: Use a well-structured argument supported by robust evidence. Consider employing persuasive tactics, such as Cialdini's principles, to enhance your argument's effectiveness.\n\nTime Constraints: Remember that you have a limited time (5 minutes for the presentation and 3 minutes for Q&A), so keep your topic focused and manageable.\n\nEngagement: Think about how you can engage your audience and make your presentation interactive, especially during the Q&A segment.\n\nBy focusing on these aspects, you can select a compelling topic that resonates with your audience and meets the assignment's requirements.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How should I format my written assignments according to the course requirements?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To format your written assignments according to the course requirements, follow these guidelines:\n\nFile Format: Submit your assignments in one of the following formats: .doc, .docx, or .pdf.\n\nGeneral Formatting:\nUse standard U.S. business format.\nThe text should be single-spaced within paragraphs and double-spaced between them.\nUse a 12-point font size.\n\nContent Structure:\nInclude an introduction that previews the report and sets the tone.\nEnsure clear transitions between sentences and paragraphs.\nConclude with a definitive ending that restates important takeaways.\n\nProofreading:\nEnsure your document is adequately proofread to minimize grammar, punctuation, and spelling mistakes.\n\nBest Practices:\nUse subheadings and lists to organize content clearly.\nMaintain consistency in formatting throughout the document.\n\nSubmission Details:\nAssignments should be submitted via the designated platform (e.g., Canvas) by the specified due dates.\nBy adhering to these formatting guidelines, you will meet the course's expectations for written assignments.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How should I apply course concepts into my professional communication style?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To effectively apply course concepts into your professional communication style, consider the following strategies derived from the course content:\n\nUse a Strategic Communication Framework: Understand the components of effective communication, which include the communicator, audience, channel, culture, message creation, adaptation, delivery, and response. This framework helps you tailor your communication to meet the needs of your audience.\n\nDevelop Persuasive Arguments: Focus on crafting clear and compelling messages. Use structured approaches like the \"Shield Framework\" to organize your arguments and ensure they are supported by evidence. This will enhance your credibility and the effectiveness of your communication.\n\nPractice Active Listening: Engage in active listening to understand your audience better. This involves being present in conversations, asking clarifying questions, and responding thoughtfully to feedback. It helps build trust and rapport.\n\nAdapt Your Message: Tailor your communication style based on the audience's preferences and the context. Consider factors such as cultural differences and the medium of communication (e.g., in-person, email, or virtual meetings).\n\nUtilize Visual Aids: When delivering presentations, use visual aids effectively to enhance understanding and retention. Minimize clutter and focus on key messages to keep your audience engaged.\n\nManage Q&A Sessions: Prepare for audience questions by anticipating potential inquiries and structuring your responses to reinforce your key messages. This demonstrates confidence and control during interactions.\n\nSeek and Provide Feedback: Regularly seek feedback on your communication style and be open to constructive criticism. This will help you identify areas for improvement and refine your approach over time.\n\nBy integrating these concepts into your professional communication, you can enhance your effectiveness and build stronger connections with your audience.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How can I communicate to an intercultural audience for persuasive presentation 2?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To effectively communicate to an intercultural audience during your persuasive presentation, consider the following strategies based on the retrieved information:\n\nUnderstand Your Audience: Identify the cultural norms and values of your audience. This understanding will help you tailor your message to resonate with them. Consider their biases and what they stand to gain or lose from your presentation.\n\nStructure Your Message: Use a clear structure for your presentation. You can choose between a direct or indirect approach depending on your audience's preferences. The Shield Framework can help organize your supporting points and evidence effectively.\n\nEngagement Techniques:\nSolicit Participation: Encourage less fluent speakers to participate, making the presentation more inclusive.\nManage Q&A: Prepare for questions and objections. Set guidelines for audience participation at the start of your presentation to foster engagement.\nUse Persuasive Strategies: Incorporate Cialdini's principles of persuasion, such as reciprocity, authority, and social proof, to enhance your argument's effectiveness.\n\nDelivery Matters:\nVerbal and Non-verbal Communication: Pay attention to your tone, pace, and body language. Use eye contact and gestures to connect with your audience.\nPractice: Rehearse your presentation multiple times to build confidence and ensure smooth delivery.\nFocus on WIIFT (What's In It For Them): Frame your arguments around the benefits for your audience. Clearly articulate how your recommendations will positively impact them.\n\nBy applying these strategies, you can enhance your persuasive presentation and effectively communicate with an intercultural audience.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Does my persuasive presentation outline follow the SHIELD framework?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Your persuasive presentation outline should align with the SHIELD framework, which is designed to help you structure your arguments effectively. Here’s a summary of the key components of the SHIELD framework based on the information retrieved:\n\nContext: Clearly define your role, audience, and your credibility with them. Understand how your audience feels about the information and what their information needs are.\n\nStrategy: Identify your communication objective—what you want your audience to do as a result of your presentation. This should be specific and measurable. Also, summarize your core message in one sentence and decide whether to use a one-sided or two-sided argument.\n\nEvidence: Provide supporting points with credible and relevant evidence. Each point should be framed around the audience's benefits (WIIFT - What's In It For Them).\n\nManaging Q&A: Set guidelines for audience participation and anticipate questions or objections. Prepare to address these effectively.\n\nVisual Aids: If applicable, ensure that any visual aids enhance the persuasive element of your presentation and are clear and uncluttered.\n\nDelivery & Rehearsal Plan: Prepare thoroughly to deliver your presentation confidently. Detail your rehearsal plan to ensure a cohesive delivery.\n\nStructure: Use either a direct or indirect structure for your presentation. The direct structure presents the recommendation first, followed by supporting arguments, while the indirect structure builds up to the recommendation.\n\nMake sure your outline incorporates these elements to effectively follow the SHIELD framework. If you have specific sections of your outline that you would like to discuss or need help with, feel free to share!",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can you outline my persuasive presentation topic?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "For your persuasive presentation, here are some key points to consider based on the information retrieved:\n\nObjective: Your presentation should aim to persuade a specific audience to accept a recommendation or take a specific course of action. Clearly define what you want your audience to do as a result of your presentation.\n\nAudience: Identify your audience in detail, including their names and positions. Understand their biases and how they feel about the information you will present. This will help you tailor your message effectively.\n\nStructure: Use a clear structure for your presentation:\n\nIntroduction: Start with a hook to grab attention and provide essential context.\nBody: Present your main points supported by evidence. You can use the Shield Framework to organize your arguments.\nConclusion: Recap your main points and provide a clear call to action.\nPersuasive Strategies: Consider using Cialdini's principles of persuasion, such as:\n\nReciprocity: Encourage a give-and-take relationship.\nScarcity: Highlight unique benefits or exclusive information.\nAuthority: Establish credibility through expertise.\nQ&A Management: Prepare for questions from your audience. Set guidelines for audience participation and anticipate key questions they may ask.\n\nDelivery: Practice your delivery to ensure you appear confident and engaging. Pay attention to both verbal and non-verbal communication.\n\nVisual Aids: If allowed, use visual aids to enhance your message, ensuring they are clear and support your arguments.\n\nSelf-Assessment: After your presentation, assess your performance to identify strengths and areas for improvement.\n\nBy focusing on these elements, you can create a compelling persuasive presentation that effectively engages your audience and encourages them to take action.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are some things I should include in my user's manual to share with my core team?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When creating a user's manual to share with your core team, consider including the following elements based on the assignment details:\n\nPersonal Information: Start with your name, team name, and cohort.\n\nCommunication Preferences:\n\nDescribe how you prefer to communicate (style, channel, frequency, time of day).\nInclude what you value in a working relationship.\nStrengths and Development Areas:\n\nIdentify your strengths as a communicator.\nDiscuss the communication and interpersonal skills you are currently working on and how your team can assist you.\nFeedback Preferences:\n\nExplain how you prefer to give and receive feedback.\nShare what you find easy and challenging about providing constructive feedback.\nConflict Resolution: Describe how you tend to react to conflict.\n\nCultural and Language Norms: Mention any cultural or language norms that are important for your team to understand.\n\nIdiosyncrasies: List any personal quirks or preferences that your teammates should know about to work effectively with you.\n\nGoals: Outline your overall goals while working with the team and any near-term leadership skills you wish to develop.\n\nDocument Structure: Use headers to organize the content clearly and maintain a professional yet informal tone.\n\nSubmission Details: Remember to submit your manual by the specified deadline and bring hard copies to share with your teammates.\n\nThis manual serves as a tool for self-reflection and helps your colleagues understand how to engage with you productively.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can you analyze this video of my persuasive presentation to write my self-assessment?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "I could not find any relevant information regarding analyzing videos or writing self-assessments for presentations.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are some questions I should prepare to get during my persuasive presentation 2?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can you give me examples of persuasive emails?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Here are some examples of persuasive emails based on the retrieved information:\n\nSubject: New Policy for Approval of High-Value Contracts\n\nDear Procurement Managers,\n\nI hope this message finds you well.\n\nAs part of our ongoing efforts to improve efficiency and control costs across DRW Technologies, I am implementing a new policy regarding the approval process for high-value contracts. Effective immediately, all contracts with a value of $250,000 or more must be submitted for review and approval by my office at least two weeks prior to the intended signing date. This policy is designed to ensure that we are making the most informed and strategic decisions possible, aligning our procurement activities with the company’s broader financial goals.\n\nI understand that this represents a change in our current processes, and I am committed to working closely with each of you to ensure a smooth transition. If you have any contracts currently in the pipeline that meet this threshold, please forward them to my office as soon as possible.\n\nThank you for your cooperation and for your continued dedication to DRW Technologies.\n\nBest regards,\nEd Claiborne\nCorporate Vice President of Procurement\nDRW Technologies\nSubject: Let’s Connect on Procurement Strategies\n\nHi Team,\n\nI hope you’re all doing well. As you know, I’ve recently stepped into the role of Corporate VP of Procurement here at DRW, and I’m excited to get to know each of you better.\n\nAs I’m getting up to speed, I’d love to have some one-on-one virtual meetings with each of you over the next few weeks. These chats will help me understand your current procurement strategies, any challenges you’re facing, and how we can work together to make things run even smoother.\n\nI’ve noticed that many of you have already started sharing vendor information with each other, which is encouraging. I’m keen to hear more about how we can build on that collaboration to strengthen our overall procurement efforts.\n\nUltimately, my goal is to help you hit your targets more easily—whether that’s through cost savings, better vendor relationships, or simplifying processes. I’m confident we can find solutions that work well for everyone.\n\nYou’ll see a meeting request from my office soon. If there’s a specific time that suits you best, just let me know—I’ll do my best to accommodate.\n\nThanks for all the hard work you’re doing. I’m looking forward to our conversations and to seeing how we can drive even more success together.\n\nBest,\nEd Claiborne\nCorporate VP of Procurement\nDRW Technologies\nThese examples illustrate how to structure persuasive emails by clearly stating the purpose, providing context, and inviting collaboration or action from the recipients.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are some non-verbal body language cues to show that I'm listening?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To show that you're actively listening through non-verbal body language cues, consider the following behaviors:\n\nEngaged Posture: Sit or stand in a way that shows you are attentive. Lean slightly forward to indicate interest.\n\nEye Contact: Maintain appropriate eye contact with the speaker to demonstrate that you are focused on them and what they are saying.\n\nFacial Expressions: Use facial expressions that reflect your understanding and engagement, such as nodding or smiling at appropriate moments.\n\nDevices Away: Put away any distractions, such as phones or laptops, to show that you are fully present in the conversation.\n\nMinimal Encouragers: Use small verbal cues like \"uh-huh\" or \"I see\" to encourage the speaker to continue without interrupting them.\n\nNodding: Nod your head occasionally to signal that you are following along and agree with what is being said.\n\nSilence: Allow for pauses in the conversation, giving the speaker time to think and express themselves fully.\n\nThese cues help create a supportive listening environment and show the speaker that you value their input.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How can I make sure I minimize bias in my feedback?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To minimize bias in your feedback, consider the following strategies:\n\nUnderstand Cultural Differences: Feedback can vary significantly based on cultural backgrounds. Be aware of how direct or indirect feedback is perceived in different cultures, and adjust your approach accordingly.\n\nUse a Structured Framework: Implement a feedback framework that focuses on observations and impacts rather than personal judgments. For example, instead of saying \"You are unprofessional,\" specify the behavior: \"You were late to three meetings, which delayed our work and made me feel frustrated.\"\n\nFocus on Specific Behaviors: Ensure that your feedback is specific and actionable. Avoid vague statements and instead provide clear examples of behaviors that can be changed.\n\nEncourage Psychological Safety: Create an environment where the recipient feels safe to receive feedback. This can reduce defensiveness and promote openness to the feedback provided.\n\nBalance Positive and Negative Feedback: Maintain a healthy ratio of positive to constructive feedback. This helps in reinforcing good behaviors while addressing areas for improvement without overwhelming the recipient.\n\nBe Mindful of Biases: Recognize your own biases, especially those related to gender or cultural stereotypes. For instance, be aware that women may receive feedback that emphasizes teamwork over individual accomplishments, which can be limiting.\n\nPractice Active Listening: When receiving feedback, listen to understand rather than to respond. This can help clarify any misunderstandings and ensure that the feedback is fully comprehended.\n\nAsk for Feedback on Your Feedback: After giving feedback, invite the recipient to share their thoughts on how the feedback was delivered. This can help you refine your approach and reduce bias in future interactions.\n\nBy implementing these strategies, you can create a more equitable feedback process that minimizes bias and fosters growth.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How can I make my slides better?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To improve your slides, consider the following best practices based on the information retrieved:\n\nMinimize Clutter: Ensure that your slides are not overcrowded with text or images. Focus on one main point per slide to enhance clarity.\n\nUse Visual Aids Effectively: Differentiate between documents and visual aids. Visual aids should support your presentation rather than stand alone. Incorporate graphs, images, and minimal text to convey your message more effectively.\n\nDesign Best Practices:\n\nUse headlines that clearly indicate the key takeaway of each slide.\nFollow the rule of thirds in your layout to create a visually appealing design.\nMaximize the data-ink ratio, meaning use visuals that convey information without unnecessary embellishments.\nStructure Your Presentation: Include an agenda or executive summary slide to outline the flow of your presentation. Ensure that your slides tell a clear story and have a logical structure.\n\nEngage Your Audience: Use animations judiciously to direct attention to key parts of your visuals. Allow time for your audience to process the information presented.\n\nFeedback and Iteration: After creating your slides, seek feedback from peers. Ask if the slides have clear headlines, if there is excess text that can be edited, and if the overall structure is effective.\n\nBy implementing these strategies, you can create more impactful and engaging slides for your presentations.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do I showcase data in my slides?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To effectively showcase data in your slides, consider the following guidelines:\n\nVisual Aids: Incorporate various types of visuals to support your presentation. At a minimum, include:\n\nOne slide with text only.\nOne slide featuring a graph.\nOne slide with an image.\nAn agenda or executive summary slide.\nDesign Best Practices:\n\nEnsure each slide has a clear headline that indicates the key takeaway.\nLimit clutter by avoiding excess text; aim for one main point per slide.\nUse animations judiciously to direct the audience's attention to key parts of the visuals.\nProvide context for visuals when necessary, allowing the audience time to process the information.\nEngagement with the Audience:\n\nFocus on the audience rather than the slides during your presentation.\nUse pauses to give the audience time to absorb the visuals.\nStructure your slides to tell a clear story, ensuring they have an agenda and logical flow.\nFeedback and Improvement:\n\nAfter your presentation, seek feedback on your visuals. Consider questions like:\nWas there one point per slide?\nDid the slides have clear headlines?\nWas there any clutter that could be edited out?\nDid the slides effectively communicate a clear story?\nBy following these tips, you can enhance the persuasiveness and clarity of your presentation through effective data visualization.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What should I put on my slide as I'm doing the introduction?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "For your introduction slide, consider including the following elements:\n\nAgenda/Executive Summary Slide: This should outline the main points you will cover during your presentation. It helps set the context for your audience.\n\nClear Headlines: Each slide should have a headline that indicates the key takeaway. This helps the audience understand the focus of each slide.\n\nOne Point Per Slide: Aim to convey a single idea or point on each slide to avoid clutter and enhance clarity.\n\nVisual Aids: If applicable, include visuals such as graphs or images that support your message. Ensure these visuals are designed to minimize clutter and maximize impact.\n\nEngagement: Start with a hook or essential context to attract attention and engage your audience right from the beginning.\n\nCall to Action: Conclude your introduction with a clear statement of what you want your audience to do or take away from your presentation.\n\nBy incorporating these elements, your introduction slide will effectively set the stage for your presentation.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can you grade my persuasive presentation outline based on the provided rubric?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "I found detailed information regarding the grading rubric for a persuasive presentation. Here’s a summary of the key criteria used to evaluate your outline:\n\nStrategy:\nClear and measurable communication objective.\nA core message that is concise and memorable.\nEstablishment of WIIFT (What's In It For Them) to persuade the audience.\n\nStructure:\nAppropriate choice of direct or indirect structure based on audience analysis.\nAn engaging introduction that sets context and previews the presentation.\nA conclusion that reiterates the core message and includes a call to action.\n\nEvidence:\nUse of credible and relevant evidence to support the argument.\nProper citation of sources.\n\nQ&A Management:\nClear guidelines for audience participation.\nActive listening and rapport-building during Q&A.\nCredible responses that reinforce the main message.\n\nDelivery:\nEngaging verbal delivery with variation in tone and pace.\nConfident non-verbal delivery, including eye contact and posture.\nAdherence to time constraints for both the presentation and Q&A.\n\nisual Aids (if used):\nEffective design that supports the message.\nClear and uncluttered slides with cited sources.\n\nMake sure your outline addresses these criteria effectively to maximize your grade. If you have specific elements of your outline you'd like feedback on, feel free to share!",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Which Cialdini principle is the most effective for my persuasive presentation?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "In your persuasive presentation, you can effectively utilize several of Cialdini's principles of persuasion. Here’s a summary of the key principles and their effectiveness:\n\nLiking: People are more likely to say yes to those they like. Building rapport and highlighting similarities can enhance your persuasive power.\n\nReciprocity: This principle suggests that people feel obliged to return favors. Offering something of value can encourage your audience to reciprocate by agreeing with your proposal.\n\nConsensus (Social Proof): People tend to follow the lead of similar others. Demonstrating that others have accepted your idea can strengthen your argument.\n\nConsistency: Individuals prefer to align with their commitments. Encouraging public commitments can make your audience more likely to agree with your proposal.\n\nAuthority: People defer to experts. Subtly emphasizing your credentials or calling on the expertise of others can enhance your credibility.\n\nScarcity: Highlighting unique benefits or exclusive information can create a sense of urgency, making your audience more inclined to act.\n\nTo maximize the effectiveness of your presentation, consider which principle resonates most with your audience and the context of your message. Using these principles authentically and ethically can significantly enhance your persuasive efforts.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can you help me understand the communicator audience framework?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The Communicator Audience Framework is a strategic communication model that emphasizes the relationship between the communicator and the audience. Here’s a summary of its key components:\n\nUnderstanding the Communicator-Audience Relationship:\n\nIdentity: Who are you as the communicator? What is your credibility with the audience?\nTrust: What is the level of trust between you and the audience?\nObjective: What do you want to achieve with your communication? Is it specific and reasonable?\nAudience Needs: What do audience members want? What are their goals and agendas?\nMessage Development:\n\nCreation: Structure your message with clear arguments, facts, and persuasive tactics. Use stories and examples to enhance engagement.\nAdaptation: Tailor your message to fit the audience's preferences and the context (e.g., in-person, virtual, email).\nDelivery: Consider the style and visual aids used in your presentation. The tone, word choice, and non-verbal cues are crucial for effective delivery.\nResponse and Success Metrics:\n\nDefine what success looks like. Did you achieve the desired response? If not, how can you adjust your message for future communications?\nCultural Considerations:\n\nBe aware of the cultural context and norms that may affect how your message is received.\nIterative Process:\n\nCommunication is not a one-time event; it requires iteration based on feedback and audience response.\nThis framework encourages communicators to be strategic and thoughtful in their approach, ensuring that messages are not only delivered but also received effectively.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do I figure out if my delivery has enough variation?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To determine if your delivery has enough variation, consider the following key points based on the retrieved information:\n\nVerbal Variation: Strive for natural variation in your tone, pace, and volume. This includes using pauses for emphasis and avoiding filler words. A dynamic and engaging verbal delivery can significantly enhance your presentation.\n\nNon-Verbal Variation: Pay attention to your body language, which includes posture, facial expressions, eye contact, and gestures. These elements should complement your verbal message and help you connect with your audience.\n\nDynamism and Congruence: Aim for dynamism in both verbal and non-verbal delivery choices. Ensure that your verbal messages align with your non-verbal cues to create a cohesive and engaging presentation.\n\nEngagement with the Audience: Engage your audience through both verbal and non-verbal means. This can involve making eye contact, using gestures, and being present in the moment to foster a connection.\n\nPractice and Preparation: Rehearse your presentation with the audience in mind. Genuine conversations and interactions can help you gauge the effectiveness of your delivery and make necessary adjustments.\n\nBy focusing on these aspects, you can enhance the variation in your delivery, making it more effective and engaging for your audience.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are best communciation practices for diverse teams?",
+      "extra_state": {
+        "course_id": ["28803-15.280_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Here are some best communication practices for diverse teams based on the retrieved information:\n\nMitigate Language-Based Challenges:\nFluent Speakers: Should dial down their dominance in conversations. This includes slowing down their speech, using familiar language, checking for understanding, and actively listening.\nLess Fluent Speakers: Should engage more by resisting avoidance behaviors, being aware of group dynamics, checking for understanding, and asking clarifying questions.\nLeaders: Need to balance their speaking and listening, actively draw contributions from all team members, especially less fluent speakers, and be prepared to define and interpret content.\n\nAddress Social Distance:\nRecognize that factors such as location, identity, and technology can create social distance within teams. Leaders should work to bridge these gaps to foster inclusion.\n\nIn-Group/Out-Group Dynamics:\nLeaders should be aware of these dynamics and strive to be inclusive, ensuring that all voices are heard and valued.\n\nActive Listening:\nEncourage behaviors associated with listening, such as maintaining eye contact, using engaged posture, and providing minimal encouragers to show attentiveness.\n\nFeedback Mechanisms:\nEstablish clear frameworks for giving and receiving feedback that consider cultural differences and promote understanding.\n\nCultural Awareness:\nEncourage team members to share their cultural norms and communication preferences to enhance mutual understanding and collaboration.\n\nBy implementing these practices, diverse teams can improve their communication effectiveness and foster a more inclusive environment.",
+      "expected_tools": ["search_content_files"]
+    }
+  ]
+}
