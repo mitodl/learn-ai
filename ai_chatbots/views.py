@@ -1,5 +1,6 @@
 """DRF API views for chat sessions and messages."""
 
+import httpx
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
@@ -404,7 +405,7 @@ class ApiProxyView(ApiView):
                     content_type=response.headers.get("Content-Type"),
                 )
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             return JsonResponse(
                 {"error": "Failed to proxy request"},
                 status=500,
