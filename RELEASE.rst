@@ -1,6 +1,22 @@
 Release Notes
 =============
 
+Version 0.25.1
+--------------
+
+- Vector based contentfile search demo (#416)
+- chore(deps): update dependency langchain-core to v1.2.11 [security] (#413)
+- fix(deps): update dependency django to v4.2.28 [security] (#411)
+- chore(deps): update yarn to v4.12.0 (#24)
+- fix(deps): update dependency starlette to v0.52.1 (#403)
+- fix(deps): update dependency drf-spectacular to ^0.29.0 (#401)
+- chore(deps): update quay.io/keycloak/keycloak docker tag to v26.5 (#400)
+- chore(deps): update node.js to v22.22.0 (#399)
+- chore(deps): update dependency bpython to ^0.26 (#398)
+- chore(deps): update apache/apisix docker tag to v3.14.1 (#397)
+- fix(deps): update dependency ruff to v0.14.13 (#396)
+- chore(deps): update nginx docker tag to v1.29.4 (#394)
+
 Version 0.25.0 (Released January 20, 2026)
 --------------
 
