@@ -81,7 +81,7 @@ const getContentTypeIcon = (type: string) => {
   }
 }
 
-const ContentFileSearchContent: React.FC = () => {
+const LearningMaterialsSearchContent: React.FC = () => {
   const me = useQuery(userQueries.me())
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -142,7 +142,7 @@ const ContentFileSearchContent: React.FC = () => {
   return (
     <Box sx={{ maxWidth: 960, mx: "auto", p: 2 }}>
       <Typography variant="h3" gutterBottom>
-        Vector Based Content File Search
+        Learning Materials Search
       </Typography>
 
       <Box sx={{ mb: 4, display: "flex", gap: 2 }}>
@@ -226,4 +226,4 @@ const ContentFileSearchContent: React.FC = () => {
   )
 }
 
-export default ContentFileSearchContent
+export default LearningMaterialsSearchContent

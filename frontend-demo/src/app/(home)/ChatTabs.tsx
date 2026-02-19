@@ -9,7 +9,7 @@ import SyllabusContent from "./SyllabusContent"
 import SyllabusCanvasContent from "./SyllabusCanvasContent"
 import AssessmentContent from "./AssessmentContent"
 import CanvasAssessmentContent from "./CanvasAssessmentContent"
-import ContentFileSearchContent from "./ContentFileSearchContent"
+import LearningMaterialsSearchContent from "./LearningMaterialsSearchContent"
 import VideoContent from "./VideoContent"
 import { useEffect, useState } from "react"
 
@@ -20,7 +20,7 @@ export enum ChatTab {
   VideoGPT = "VideoGPT",
   AssessmentGPT = "AssessmentGPT",
   CanvasAssessmentGPT = "CanvasAssessmentGPT",
-  ContentFileSearch = "ContentFileSearch",
+  LearningMaterialsSearch = "LearningMaterialsSearch",
 }
 
 const ChatTabs = () => {
@@ -54,7 +54,10 @@ const ChatTabs = () => {
             label="CanvasAssessmentGPT"
             value={ChatTab.CanvasAssessmentGPT}
           />
-          <Tab label="ContentFileSearch" value={ChatTab.ContentFileSearch} />
+          <Tab
+            label="LearningMaterialsSearch"
+            value={ChatTab.LearningMaterialsSearch}
+          />
         </TabList>
       </Box>
       <TabPanel value={ChatTab.RecommendationGPT}>
@@ -75,8 +78,8 @@ const ChatTabs = () => {
       <TabPanel value={ChatTab.CanvasAssessmentGPT}>
         <CanvasAssessmentContent />
       </TabPanel>
-      <TabPanel value={ChatTab.ContentFileSearch}>
-        <ContentFileSearchContent />
+      <TabPanel value={ChatTab.LearningMaterialsSearch}>
+        <LearningMaterialsSearchContent />
       </TabPanel>
     </TabContext>
   )
