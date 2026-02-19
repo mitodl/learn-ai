@@ -463,7 +463,13 @@ class TestEvaluationReporter:
         models = ["gpt-4", "gpt-3.5"]
         bot_names = ["recommendation", "syllabus"]
 
-        reporter.generate_report(mock_evaluation_results, models, bot_names)
+        reporter.generate_report(
+            mock_evaluation_results,
+            models,
+            bot_names,
+            evaluation_model="gpt-4o-mini",
+            metric_names=["ContextualRelevancy", "AnswerRelevancy"],
+        )
 
         # Verify report sections were generated
         assert mock_stdout.write.call_count > 0
@@ -473,10 +479,12 @@ class TestEvaluationReporter:
 
         # Check for report sections
         assert "RAG EVALUATION REPORT" in output_text
+        assert "RUN CONFIGURATION" in output_text
         assert "SUMMARY BY BOT, MODEL, PROMPT" in output_text
         assert "MODEL COMPARISON" in output_text
         assert "PROMPT COMPARISON" in output_text
         assert "OVERALL PERFORMANCE" in output_text
+        assert "COMPOSITE LEADERBOARD" in output_text
         assert "DETAILED RESULTS" in output_text
 
     def test_empty_dataframe_handling(self, reporter):
@@ -490,6 +498,154 @@ class TestEvaluationReporter:
         reporter.model_comparison(df)
         reporter.overall_performance(df)
         reporter.detailed_results(df, models, bot_names)
+
+    def test_run_manifest(self, reporter, mock_stdout):
+        """Test run manifest displays configuration."""
+        reporter.run_manifest(
+            ["gpt-4o", "claude-3"],
+            ["recommendation", "syllabus"],
+            evaluation_model="gpt-4o-mini",
+            metric_names=["Faithfulness", "Hallucination", "AnswerRelevancy"],
+            metric_thresholds={"Faithfulness": 0.7, "Hallucination": 0.0},
+            use_prompts=True,
+        )
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+        assert "RUN CONFIGURATION" in output_text
+        assert "gpt-4o" in output_text
+        assert "claude-3" in output_text
+        assert "gpt-4o-mini" in output_text
+        assert "recommendation" in output_text
+        assert "Faithfulness" in output_text
+        assert "Prompt sweep: enabled" in output_text
+
+    def test_run_manifest_prompts_disabled(self, reporter, mock_stdout):
+        """Test run manifest shows prompts disabled."""
+        reporter.run_manifest(
+            ["gpt-4o"],
+            ["tutor"],
+            evaluation_model="gpt-4o-mini",
+            metric_names=["AnswerRelevancy"],
+            use_prompts=False,
+        )
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+        assert "Prompt sweep: disabled" in output_text
+
+    def test_composite_leaderboard_default_weights(self, reporter, mock_stdout):
+        """Test composite leaderboard with equal (default) weights."""
+        data = [
+            {
+                "bot": "recommendation",
+                "model": "gpt-4",
+                "metric": "Faithfulness",
+                "score": 0.9,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-4",
+                "metric": "AnswerRelevancy",
+                "score": 0.8,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-3.5",
+                "metric": "Faithfulness",
+                "score": 0.7,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-3.5",
+                "metric": "AnswerRelevancy",
+                "score": 0.6,
+            },
+        ]
+        df = pd.DataFrame(data)
+
+        reporter.composite_leaderboard(df)
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+        assert "COMPOSITE LEADERBOARD" in output_text
+        assert "gpt-4" in output_text
+        assert "recommendation" in output_text
+        assert "equal (default)" in output_text
+
+    def test_composite_leaderboard_custom_weights(self, reporter, mock_stdout):
+        """Test composite leaderboard with custom metric weights."""
+        data = [
+            {
+                "bot": "recommendation",
+                "model": "gpt-4",
+                "metric": "Faithfulness",
+                "score": 0.9,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-4",
+                "metric": "AnswerRelevancy",
+                "score": 0.4,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-3.5",
+                "metric": "Faithfulness",
+                "score": 0.5,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-3.5",
+                "metric": "AnswerRelevancy",
+                "score": 0.9,
+            },
+        ]
+        df = pd.DataFrame(data)
+
+        reporter.composite_leaderboard(
+            df,
+            metric_weights={"Faithfulness": 3.0, "AnswerRelevancy": 1.0},
+        )
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+        assert "COMPOSITE LEADERBOARD" in output_text
+        assert "Metric weights used" in output_text
+
+    def test_composite_leaderboard_with_hallucination(self, reporter, mock_stdout):
+        """Test composite leaderboard correctly normalizes inverse metrics."""
+        data = [
+            {
+                "bot": "recommendation",
+                "model": "gpt-4",
+                "metric": "Hallucination",
+                "score": 0.1,
+            },
+            {
+                "bot": "recommendation",
+                "model": "gpt-3.5",
+                "metric": "Hallucination",
+                "score": 0.5,
+            },
+        ]
+        df = pd.DataFrame(data)
+
+        reporter.composite_leaderboard(df)
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        # gpt-4 has lower hallucination (0.1), normalized = 0.9, should rank first
+        ranking_lines = [c for c in calls if "gpt-4" in c and "1." in c]
+        assert len(ranking_lines) > 0
+
+    def test_composite_leaderboard_empty_df(self, reporter, mock_stdout):
+        """Test composite leaderboard handles empty DataFrame."""
+        df = pd.DataFrame()
+        reporter.composite_leaderboard(df)
+
+        calls = [call[0][0] for call in mock_stdout.write.call_args_list]
+        output_text = " ".join(calls)
+        assert "No data for composite leaderboard" in output_text
 
 
 class TestSummaryReporter:
@@ -653,10 +809,12 @@ class TestReportingIntegration:
         # Check all major sections are present
         required_sections = [
             "RAG EVALUATION REPORT",
+            "RUN CONFIGURATION",
             "SUMMARY BY BOT, MODEL, PROMPT",
             "MODEL COMPARISON",
             "PROMPT COMPARISON",
             "OVERALL PERFORMANCE",
+            "COMPOSITE LEADERBOARD",
             "DETAILED RESULTS",
         ]
 

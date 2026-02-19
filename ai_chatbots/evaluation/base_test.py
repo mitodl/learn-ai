@@ -290,6 +290,58 @@ class TestConcreteBotEvaluator:
         tool_calls = evaluator.extract_tool_calls(response)
         assert tool_calls == []
 
+    def test_extract_tool_results_different_position(self, evaluator):
+        """Test tool results found when JSON message is not at index 2."""
+        response = {
+            "messages": [
+                HumanMessage(content="User"),
+                AIMessage(content="Thinking..."),
+                AIMessage(content="Still thinking..."),
+                AIMessage(content='{"results": [{"chunk_content": "Found it"}]}'),
+                AIMessage(content="Final answer"),
+            ]
+        }
+        test_case = TestCaseSpec(question="Test", expected_tools=["test_tool"])
+        results = evaluator.extract_tool_results(response, test_case)
+        assert len(results) == 1
+        assert results[0]["chunk_content"] == "Found it"
+
+    def test_extract_tool_calls_different_position(self, evaluator, mocker):
+        """Test tool calls found when tool call message is not at index 1."""
+        mock_tool_call = mocker.Mock()
+        mock_tool_call.function.name = "search"
+        mock_tool_call.function.arguments = '{"q": "test"}'
+
+        response = {
+            "messages": [
+                HumanMessage(content="User"),
+                AIMessage(content="Let me think..."),
+                AIMessage(
+                    content="Calling tool",
+                    additional_kwargs={"tool_calls": [mock_tool_call]},
+                ),
+                AIMessage(content="Result"),
+            ]
+        }
+        tool_calls = evaluator.extract_tool_calls(response)
+        assert len(tool_calls) == 1
+        assert tool_calls[0].name == "search"
+
+    def test_extract_tool_results_single_message(self, evaluator):
+        """Test tool results extraction with TutorBot-style single message."""
+        response = {
+            "messages": [AIMessage(content="Here is the answer to your question.")]
+        }
+        test_case = TestCaseSpec(question="Test", expected_tools=["tutor_tool"])
+        results = evaluator.extract_tool_results(response, test_case)
+        assert results == []
+
+    def test_extract_tool_calls_single_message(self, evaluator):
+        """Test tool calls extraction with TutorBot-style single message."""
+        response = {"messages": [AIMessage(content="Here is the answer.")]}
+        tool_calls = evaluator.extract_tool_calls(response)
+        assert tool_calls == []
+
     def test_create_llm_test_case(self, evaluator, mocker):
         """Test LLM test case creation."""
         test_case = TestCaseSpec(
@@ -329,6 +381,49 @@ class TestConcreteBotEvaluator:
         assert llm_test_case.additional_metadata["bot_name"] == "test_bot"
         assert llm_test_case.additional_metadata["model"] == "gpt-4o"
         assert llm_test_case.additional_metadata["prompt_label"] == "default"
+
+    def test_create_llm_test_case_warns_on_empty_extraction(self, evaluator, caplog):
+        """Test that warnings are logged when tools expected but extraction is empty."""
+        import logging
+
+        test_case = TestCaseSpec(
+            question="Test",
+            expected_output="Expected",
+            expected_tools=["search_tool"],
+        )
+        response = {
+            "messages": [
+                HumanMessage(content="User message"),
+                AIMessage(content="Direct answer with no tools"),
+            ]
+        }
+
+        with caplog.at_level(logging.WARNING, logger="ai_chatbots.evaluation.base"):
+            evaluator.create_llm_test_case(test_case, response, "gpt-4o", "default")
+
+        assert "Empty tool results" in caplog.text
+        assert "Empty tool calls" in caplog.text
+        assert "search_tool" in caplog.text
+
+    def test_create_llm_test_case_no_warning_without_expected_tools(
+        self, evaluator, caplog
+    ):
+        """Test that no warning is logged when no tools were expected."""
+        import logging
+
+        test_case = TestCaseSpec(question="Test", expected_output="Expected")
+        response = {
+            "messages": [
+                HumanMessage(content="User message"),
+                AIMessage(content="Answer"),
+            ]
+        }
+
+        with caplog.at_level(logging.WARNING, logger="ai_chatbots.evaluation.base"):
+            evaluator.create_llm_test_case(test_case, response, "gpt-4o", "default")
+
+        assert "Empty tool results" not in caplog.text
+        assert "Empty tool calls" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_evaluate_model(self, evaluator):

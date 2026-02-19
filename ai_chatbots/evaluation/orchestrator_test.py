@@ -171,6 +171,8 @@ class TestEvaluationOrchestrator:
             ["test_bot"],
             use_prompts=True,
             metric_thresholds=config.metric_thresholds,
+            evaluation_model="gpt-4o",
+            metric_names=mocker.ANY,
         )
         assert result == mock_results
 
@@ -401,6 +403,49 @@ class TestEvaluationOrchestrator:
             c for c in calls if c.kwargs["prompt_label"] == mock_prompts_data[1]["name"]
         )
         assert call.kwargs["instructions"] == mock_get_langsmith.return_value
+
+    @pytest.mark.asyncio
+    async def test_tutor_bot_skips_non_default_prompts(self, orchestrator, mocker):
+        """Test that TutorBot skips non-default prompts in prompt sweep."""
+        from deepeval.evaluate.types import EvaluationResult
+
+        mock_load_json = mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.load_json_with_settings"
+        )
+        mock_load_json.return_value = {
+            "tutor": [{"name": "alt_prompt", "text": "custom instructions"}]
+        }
+
+        mock_evaluator = mocker.Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        mock_deepeval.evaluate.return_value = EvaluationResult(
+            test_results=[], confident_link=None, test_run_id=None
+        )
+        mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"tutor": (mocker.Mock(), mocker.Mock(return_value=mock_evaluator))},
+        )
+
+        config = orchestrator.create_evaluation_config(
+            models=["gpt-4"], evaluation_model="gpt-4o"
+        )
+        config.confident_api_key = None
+
+        await orchestrator.run_evaluation(config, bot_names=["tutor"], use_prompts=True)
+
+        # evaluate_model called only once (default prompt), not twice
+        calls = mock_evaluator.evaluate_model.call_args_list
+        assert len(calls) == 1
+        assert calls[0].kwargs["prompt_label"] == "default"
+
+        # Verify skip message was logged
+        write_calls = [str(c) for c in orchestrator.stdout.write.call_args_list]
+        assert any("Skipping prompt" in s and "tutor" in s for s in write_calls)
 
     @pytest.mark.asyncio
     async def test_run_evaluation_with_data_file(self, orchestrator, mocker):

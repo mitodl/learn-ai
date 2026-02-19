@@ -31,6 +31,9 @@ from main.test_utils import load_json_with_settings
 # Constants
 ERROR_LOG_MIN_SIZE = 500  # Minimum file size to indicate errors beyond header
 
+# Bots that ignore custom instructions/prompts - skip prompt sweeps for these
+BOTS_WITHOUT_PROMPT_SUPPORT: set[str] = {"tutor"}
+
 
 class EvaluationOrchestrator:
     """Orchestrates evaluation across multiple bots and models."""
@@ -169,7 +172,7 @@ class EvaluationOrchestrator:
             self.stdout.write(f"Warning: {prompts_file} not found or invalid")
         return prompts_data
 
-    async def _collect_and_evaluate_bot(  # noqa: C901, PLR0913
+    async def _collect_and_evaluate_bot(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         bot_name: str,
         config: EvaluationConfig,
@@ -216,6 +219,15 @@ class EvaluationOrchestrator:
         # Evaluate each model with each prompt
         for model in config.models:
             for prompt in bot_prompts:
+                # Skip non-default prompts for bots that don't support them
+                if prompt is not None and bot_name in BOTS_WITHOUT_PROMPT_SUPPORT:
+                    prompt_name = prompt.get("name", "unknown")
+                    self.stdout.write(
+                        f"Skipping prompt '{prompt_name}' for {bot_name} "
+                        f"(bot does not support custom instructions)"
+                    )
+                    continue
+
                 # Resolve prompt details
                 if prompt is None:
                     prompt_label = "default"
@@ -499,12 +511,15 @@ Started: {timestamp}
             self.stdout.write(f"  - {bot}: {count} test results")
 
         # Generate final report
+        metric_names = [m.__name__ for m in config.metrics]
         self.reporter.generate_report(
             results,
             config.models,
             bot_names,
             use_prompts=use_prompts,
             metric_thresholds=config.metric_thresholds,
+            evaluation_model=config.evaluation_model,
+            metric_names=metric_names,
         )
 
         return results
