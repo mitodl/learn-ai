@@ -234,9 +234,9 @@ class TestEvaluationOrchestrator:
 
     @pytest.mark.asyncio
     async def test_run_evaluation_evaluator_error(
-        self, orchestrator, mock_stdout, mock_evaluator, mocker
+        self, orchestrator, mock_evaluator, mocker
     ):
-        """Test evaluation run with evaluator error."""
+        """Test evaluation run with evaluator error raises immediately."""
         config = orchestrator.create_evaluation_config(
             models=["gpt-4"], evaluation_model="gpt-4o"
         )
@@ -247,24 +247,13 @@ class TestEvaluationOrchestrator:
             side_effect=Exception("Test error")
         )
 
-        # Mock external dependencies
-        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
         mocker.patch(
             "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
             {"test_bot": (mocker.Mock(), mock_evaluator_class)},
         )
 
-        from deepeval.evaluate.types import EvaluationResult
-
-        mock_deepeval.evaluate.return_value = EvaluationResult(
-            test_results=[], confident_link=None, test_run_id=None
-        )
-        orchestrator.reporter.generate_report = mocker.Mock()
-
-        result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
-        mock_stdout.write.assert_called()
-        assert result.test_results == []
-        mock_deepeval.evaluate.assert_not_called()
+        with pytest.raises(RuntimeError, match="Test error"):
+            await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
     @pytest.mark.asyncio
     async def test_run_evaluation_multiple_models(

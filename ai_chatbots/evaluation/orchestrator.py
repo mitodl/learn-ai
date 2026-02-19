@@ -281,11 +281,9 @@ class EvaluationOrchestrator:
                             f"{len(batch_result.test_results)} results"
                         )
 
-                except Exception as e:  # noqa: BLE001
-                    self.stdout.write(
-                        f"Error on {bot_name} with {model} and {prompt_label}: {e}"
-                    )
-                    continue
+                except Exception as e:
+                    msg = f"Error on {bot_name} with {model} and {prompt_label}: {e}"
+                    raise RuntimeError(msg) from e
 
         # Evaluate any remaining test cases
         if all_llm_test_cases:
