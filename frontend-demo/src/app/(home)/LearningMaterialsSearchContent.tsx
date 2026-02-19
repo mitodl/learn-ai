@@ -81,7 +81,7 @@ const getContentTypeIcon = (type: string) => {
   }
 }
 
-const LearningMaterialSearchContent: React.FC = () => {
+const LearningMaterialsSearchContent: React.FC = () => {
   const me = useQuery(userQueries.me())
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -226,4 +226,4 @@ const LearningMaterialSearchContent: React.FC = () => {
   )
 }
 
-export default LearningMaterialSearchContent
+export default LearningMaterialsSearchContent
