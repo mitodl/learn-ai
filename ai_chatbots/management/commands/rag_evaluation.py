@@ -86,7 +86,7 @@ class Command(BaseCommand):
             required=False,
             type=int,
             help="Number of test cases to evaluate per batch to reduce memory usage "
-            "(default: 0 = no batching, all at once)",
+            "(default: 10, 0 = no batching)",
             default=10,
         )
         parser.add_argument(
@@ -98,6 +98,17 @@ class Command(BaseCommand):
                 "(default: rag_evaluation_errors.log)"
             ),
             default="rag_evaluation_errors.log",
+        )
+        parser.add_argument(
+            "--require-expected",
+            dest="require_expected",
+            action="store_true",
+            help=(
+                "Use metrics that require curated expected answers "
+                "(ContextualPrecision, ContextualRecall). Without this flag, "
+                "reference-free metrics are used (Faithfulness, GEval) that "
+                "evaluate quality without expected answers."
+            ),
         )
 
     def handle(self, **options):
@@ -122,6 +133,7 @@ class Command(BaseCommand):
         max_concurrent = options["max_concurrent"]
         batch_size = options["batch_size"]
         error_log_file = options["error_log_file"]
+        require_expected = options["require_expected"]
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:
@@ -139,6 +151,7 @@ class Command(BaseCommand):
                 models=models,
                 evaluation_model=evaluation_model,
                 timeout_seconds=timeout_seconds,
+                require_expected=require_expected,
             )
 
             # Validate bot names if provided

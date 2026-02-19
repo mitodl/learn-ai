@@ -59,11 +59,11 @@ class TestEvaluationOrchestrator:
         models = ["gpt-4o"]
         evaluation_model = "gpt-4o"
         custom_thresholds = {
-            "ContextualPrecision": 0.9,
+            "Faithfulness": 0.9,
             "ContextualRelevancy": 0.8,
-            "ContextualRecall": 0.9,
             "Hallucination": 0.1,
             "AnswerRelevancy": 0.8,
+            "Helpfulness": 0.8,
         }
 
         config = orchestrator.create_evaluation_config(
@@ -73,6 +73,23 @@ class TestEvaluationOrchestrator:
         assert config.models == models
         assert config.evaluation_model == evaluation_model
         assert len(config.metrics) == NUM_METRICS
+
+    def test_create_evaluation_config_require_expected(self, orchestrator):
+        """Test evaluation config creation with require_expected=True."""
+        models = ["gpt-4o"]
+        evaluation_model = "gpt-4o"
+
+        config = orchestrator.create_evaluation_config(
+            models, evaluation_model, require_expected=True
+        )
+        assert isinstance(config, EvaluationConfig)
+        assert len(config.metrics) == NUM_METRICS
+
+        underlying_metric_names = [
+            m.base_metric.__class__.__name__ for m in config.metrics
+        ]
+        assert "ContextualPrecisionMetric" in underlying_metric_names
+        assert "ContextualRecallMetric" in underlying_metric_names
 
     @patch.dict(os.environ, {"CONFIDENT_AI_API_KEY": "test-api-key"})
     def test_create_evaluation_config_with_api_key(self, orchestrator):
@@ -152,7 +169,10 @@ class TestEvaluationOrchestrator:
             mock_results,
             ["gpt-4"],
             ["test_bot"],
+            use_prompts=True,
             metric_thresholds=config.metric_thresholds,
+            evaluation_model="gpt-4o",
+            metric_names=mocker.ANY,
         )
         assert result == mock_results
 
@@ -214,9 +234,9 @@ class TestEvaluationOrchestrator:
 
     @pytest.mark.asyncio
     async def test_run_evaluation_evaluator_error(
-        self, orchestrator, mock_stdout, mock_evaluator, mocker
+        self, orchestrator, mock_evaluator, mocker
     ):
-        """Test evaluation run with evaluator error."""
+        """Test evaluation run with evaluator error raises immediately."""
         config = orchestrator.create_evaluation_config(
             models=["gpt-4"], evaluation_model="gpt-4o"
         )
@@ -227,24 +247,13 @@ class TestEvaluationOrchestrator:
             side_effect=Exception("Test error")
         )
 
-        # Mock external dependencies
-        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
         mocker.patch(
             "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
             {"test_bot": (mocker.Mock(), mock_evaluator_class)},
         )
 
-        from deepeval.evaluate.types import EvaluationResult
-
-        mock_deepeval.evaluate.return_value = EvaluationResult(
-            test_results=[], confident_link=None, test_run_id=None
-        )
-        orchestrator.reporter.generate_report = mocker.Mock()
-
-        result = await orchestrator.run_evaluation(config, bot_names=["test_bot"])
-        mock_stdout.write.assert_called()
-        assert result.test_results == []
-        mock_deepeval.evaluate.assert_not_called()
+        with pytest.raises(RuntimeError, match="Test error"):
+            await orchestrator.run_evaluation(config, bot_names=["test_bot"])
 
     @pytest.mark.asyncio
     async def test_run_evaluation_multiple_models(
@@ -385,6 +394,49 @@ class TestEvaluationOrchestrator:
         assert call.kwargs["instructions"] == mock_get_langsmith.return_value
 
     @pytest.mark.asyncio
+    async def test_tutor_bot_skips_non_default_prompts(self, orchestrator, mocker):
+        """Test that TutorBot skips non-default prompts in prompt sweep."""
+        from deepeval.evaluate.types import EvaluationResult
+
+        mock_load_json = mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.load_json_with_settings"
+        )
+        mock_load_json.return_value = {
+            "tutor": [{"name": "alt_prompt", "text": "custom instructions"}]
+        }
+
+        mock_evaluator = mocker.Mock()
+        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
+
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        mock_deepeval.evaluate.return_value = EvaluationResult(
+            test_results=[], confident_link=None, test_run_id=None
+        )
+        mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"tutor": (mocker.Mock(), mocker.Mock(return_value=mock_evaluator))},
+        )
+
+        config = orchestrator.create_evaluation_config(
+            models=["gpt-4"], evaluation_model="gpt-4o"
+        )
+        config.confident_api_key = None
+
+        await orchestrator.run_evaluation(config, bot_names=["tutor"], use_prompts=True)
+
+        # evaluate_model called only once (default prompt), not twice
+        calls = mock_evaluator.evaluate_model.call_args_list
+        assert len(calls) == 1
+        assert calls[0].kwargs["prompt_label"] == "default"
+
+        # Verify skip message was logged
+        write_calls = [str(c) for c in orchestrator.stdout.write.call_args_list]
+        assert any("Skipping prompt" in s and "tutor" in s for s in write_calls)
+
+    @pytest.mark.asyncio
     async def test_run_evaluation_with_data_file(self, orchestrator, mocker):
         """Test evaluation run with data_file parameter."""
         config = orchestrator.create_evaluation_config(
@@ -438,7 +490,7 @@ class TestEvaluationConfigIntegration:
         return EvaluationOrchestrator(mock_stdout)
 
     def test_config_creation(self, mocker):
-        """Test config creation."""
+        """Test config creation with default reference-free metrics."""
         mock_stdout = mocker.Mock()
         orchestrator = EvaluationOrchestrator(mock_stdout)
         config = orchestrator.create_evaluation_config(
@@ -450,13 +502,13 @@ class TestEvaluationConfigIntegration:
 
         for metric in config.metrics:
             assert isinstance(metric, TimeoutMetricWrapper)
-            # Verify the underlying metric is the expected type
+            # Verify the underlying metric is the expected reference-free type
             underlying_metric_names = [
-                "ContextualPrecisionMetric",
+                "FaithfulnessMetric",
                 "ContextualRelevancyMetric",
-                "ContextualRecallMetric",
                 "HallucinationMetric",
                 "AnswerRelevancyMetric",
+                "GEval",
             ]
             assert metric.base_metric.__class__.__name__ in underlying_metric_names
 

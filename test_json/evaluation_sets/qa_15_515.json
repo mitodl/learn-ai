@@ -1,0 +1,864 @@
+{
+  "canvas_syllabus": [
+    {
+      "question": "Original flagged questions",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is the definition of accrual accounting?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Definition of Accrual Accounting\nAccrual accounting is a method where revenues and expenses are recognized when they are earned or incurred, regardless of when cash is actually received or paid. This means that revenue can be recognized at the same time, before, or after cash is collected, and expenses can be recognized at the same time, before, or after cash is disbursed. The key principles involved are the revenue recognition principle and the matching principle, which states that expenses should be matched to the revenues they help generate in the same accounting period.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the four primary financial statements?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Four Primary Financial Statements\nThe four primary financial statements are:\n\nIncome Statement: This statement measures a company's profitability over a specific period, detailing revenues, expenses, and net income or loss.\n\nBalance Sheet: It provides a snapshot of a company's financial position at a specific point in time, listing assets, liabilities, and shareholders' equity.\n\nStatement of Stockholders' Equity: This statement tracks changes in equity accounts over a period, including contributions from shareholders and retained earnings.\n\nStatement of Cash Flows: It reports the cash inflows and outflows from operating, investing, and financing activities over a period, helping assess the company's liquidity and cash management.\n\nThese statements collectively provide a comprehensive view of a company's financial health and performance.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What does COGS stand for in financial accounting?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "COGS (Cost of Goods Sold): COGS represents the direct costs attributable to the production of the goods sold by a company. It includes costs such as materials and labor directly used to create the product. The calculation of COGS is crucial for determining gross profit and is impacted by inventory accounting methods like FIFO (First-In-First-Out) and LIFO (Last-In-First-Out). Under FIFO, COGS is typically lower during periods of rising prices, resulting in higher gross profit, while LIFO results in higher COGS and lower gross profit.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is depreciation?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are intangible assets?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Intangible Assets: Intangible assets are non-physical assets that provide future economic benefits to a company. Examples include patents, trademarks, copyrights, and goodwill. Unlike tangible assets, intangible assets are not always recorded on the balance sheet unless they are acquired. Intangible assets with finite useful lives are amortized over their useful life, while those with indefinite lives, such as goodwill, are not amortized but are tested for impairment annually.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is the purpose of the Statement of Cash Flows?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The Statement of Cash Flows serves to report on the cash inflows and outflows related to a company's operating, investing, and financing activities over a specific period. It helps external users assess the amount, timing, and uncertainty of future cash flows, which is crucial for evaluating a firm's ability to meet its obligations, such as paying debts, dividends, and capital expenditures. This statement complements the income statement by providing insights into cash management, as net income alone does not indicate cash availability.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the three sections of a Statement of Cash Flows?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The Statement of Cash Flows is divided into three main sections:\nOperating Activities: This section includes cash flows from the core business operations, such as cash received from customers and cash paid to suppliers and employees.\n\nInvesting Activities: This section reflects cash flows related to the acquisition and disposal of long-term assets, such as property, plant, and equipment (PPE), and investments in securities.\n\nFinancing Activities: This section covers cash flows from transactions with the company's owners and creditors, including issuing or repurchasing stock, borrowing, and repaying debt.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is stockholders equity?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Stockholders' equity represents the owners' claim on the assets of a company after all liabilities have been deducted. It consists of two main components:\nContributed Capital: This includes funds raised through the issuance of stock.\n\nRetained Earnings: This is the accumulated profits that have not been distributed as dividends to shareholders.\n\nIn essence, stockholders' equity reflects the net worth of the company from the shareholders' perspective, indicating their residual interest in the company's assets.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is the matching principle in accounting?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Matching Principle in Accounting: The matching principle states that expenses should be recognized in the same period as the revenues they help to generate. This means that expenses affect retained earnings when they are matched to the same period as the associated revenue, ensuring that financial statements reflect the true profitability of a company during a specific period.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What does PPE stand for?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "PPE Meaning: PPE stands for \"Property, Plant, and Equipment.\" It refers to tangible fixed assets that are used in the operations of a business and are expected to provide economic benefits over a long period. These assets are not intended for resale and include items like buildings, machinery, and equipment.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does accrual accounting differ from cash-basis accounting?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Accrual Accounting vs. Cash-Basis Accounting: Accrual accounting recognizes revenues when they are earned and expenses when they are incurred, regardless of when cash is exchanged. In contrast, cash-basis accounting recognizes revenues and expenses only when cash is received or paid. This means that accrual accounting provides a more accurate picture of a company's financial position by matching income and expenses to the period in which they occur.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Why is revenue recognized when earned, not when cash is received?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Revenue Recognition When Earned: Revenue is recognized when it is earned, not when cash is received, because the revenue recognition principle states that revenues affect retained earnings when the earnings process is substantially complete and cash collection is reasonably assured. This approach ensures that financial statements accurately reflect the company's performance during a specific period, regardless of cash flow timing.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does inventory valuation affect COGS?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Why do companies use different depreciation methods?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is the difference between amortization and depreciation?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Difference between amortization and depreciation\nAmortization and depreciation are both methods of allocating the cost of an asset over its useful life, but they apply to different types of assets:\n\nDepreciation:\n\nApplicable Assets: Used for tangible assets (e.g., machinery, vehicles, buildings).\nMethod: Common methods include straight-line, declining balance, and units of production.\nPurpose: To allocate the cost of a physical asset over its useful life, reflecting wear and tear or obsolescence.\nAmortization:\n\nApplicable Assets: Used for intangible assets (e.g., patents, copyrights, trademarks).\nMethod: Typically calculated using the straight-line method, where the cost is spread evenly over the asset's useful life.\nPurpose: To allocate the cost of an intangible asset over its useful life, reflecting the consumption of the asset's economic benefits.\nIn summary, while both processes serve to match costs with revenues over time, depreciation is for tangible assets, and amortization is for intangible assets.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Does recognizing revenue increase cash?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How is goodwill different from other intangible assets?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Goodwill differs from other intangible assets in several key ways:\n\nDefinition and Recognition: Goodwill is defined as the excess of the purchase price over the fair value of net tangible and identifiable intangible assets acquired during a business combination. It is recognized only when a company acquires another company, whereas other intangible assets (like patents or trademarks) can be recognized independently of acquisitions.\n\nAmortization: Goodwill is not amortized; instead, it is tested for impairment at least annually. In contrast, identifiable intangible assets are typically amortized over their estimated useful lives.\n\nImpairment Testing: Both goodwill and intangible assets with indefinite useful lives are tested for impairment at least annually. However, the impairment testing process for goodwill is distinct, as it involves comparing the fair value of the reporting unit to its carrying amount, while identifiable intangible assets may be assessed individually unless they are inseparable from other assets.\n\nNature of Value: Goodwill often reflects intangible factors such as brand reputation, customer relationships, and expected synergies from acquisitions, which are more challenging to quantify compared to identifiable intangible assets that have specific legal protections and measurable economic benefits.\n\nReporting: Goodwill is recorded on the balance sheet as a long-term asset, but firms are not allowed to report their own internally generated goodwill. Only purchased goodwill is recognized.\n\nIn summary, goodwill is a unique intangible asset that arises specifically from acquisitions, is not amortized, and reflects a company's potential for future growth and synergies, while other intangible assets are typically identifiable, amortized, and can be recognized independently of acquisitions.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does a lease affect a company's balance sheet under ASC 842?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Under ASC 842, leases significantly impact a company's balance sheet and income statement. Here’s a summary of how leases are treated:\n\nBalance Sheet\nRight-of-Use Asset: Both finance and operating leases require the lessee to recognize a right-of-use asset on the balance sheet. This asset is measured at the present value of the lease payments.\nLease Liability: Correspondingly, a lease liability is also recorded, which represents the obligation to make future lease payments, also measured at the present value of those payments.\n\nIncome Statement\nFinance Leases: The right-of-use asset is amortized over the lease term, leading to an amortization expense. Interest expense is recorded on the lease liability, calculated as the interest rate applied to the outstanding lease liability. This results in higher expenses in the earlier periods of the lease due to the combination of amortization and interest expenses.\nOperating Leases:The lease expense is typically recognized on a straight-line basis over the lease term, resulting in a single lease expense amount each period.\nThere is no separate amortization or interest expense recorded, which leads to a smoother expense recognition pattern compared to finance leases.\n\nKey Differences\nFinance Leases: Higher expenses in the early years due to amortization and interest, leading to a decreasing asset value over time.\nOperating Leases: Consistent lease expense recognized each period, resulting in a relatively higher asset value on the balance sheet throughout the lease term compared to finance leases.\nOverall, both types of leases are now \"on-balance sheet,\" meaning they are recorded as assets and liabilities, which enhances transparency in financial reporting.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How are deferred tax liabilities created?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do you interpret common-size financial statements?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Common-size financial statements are a useful tool for analyzing and comparing financial data across different companies or time periods. Here's how to interpret them:\n\nDefinition: Common-size financial statements express each line item as a percentage of a base figure. For income statements, this is typically total sales or revenues, while for balance sheets, it is total assets.\n\nPurpose: The primary purpose of common-size statements is to facilitate comparisons. By converting figures into percentages, you can easily compare companies of different sizes or assess changes over time within the same company.\n\nIncome Statements: In a common-size income statement, each expense is shown as a percentage of total revenue. For example, if a company has total revenues of $100,000 and cost of goods sold of $60,000, the cost of goods sold would be represented as 60%. This allows you to see what portion of revenue is consumed by various expenses, helping to assess profitability.\n\nBalance Sheets: In a common-size balance sheet, each asset, liability, and equity item is expressed as a percentage of total assets. For instance, if total assets are $1,000,000 and cash is $100,000, cash would be represented as 10%. This helps in understanding the structure of a company's assets and liabilities relative to its total assets.\n\nComparison Across Firms: By using common-size statements, analysts can compare financial performance across firms in the same industry, regardless of their size. For example, if two companies have different total revenues, common-size percentages allow for a direct comparison of their cost structures and profitability.\n\nTrend Analysis: Common-size statements can also be used to analyze trends over time within the same company. By looking at how the percentages change from year to year, you can identify improvements or deteriorations in financial performance.\n\nIn summary, common-size financial statements are essential for financial analysis, enabling comparisons and trend assessments that are not possible with raw financial data alone.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How would you record an equipment purchase using accrual accounting?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do you calculate depreciation using the straight-line method?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To calculate depreciation using the straight-line method, you can follow this formula:\n\nDepreciation Expense per Year = (Acquisition Cost - Salvage Value) / Estimated Useful Life\n\nHere's a breakdown of the components:\n\nAcquisition Cost: The initial cost of the asset.\nSalvage Value: The estimated value of the asset at the end of its useful life.\nEstimated Useful Life: The period over which the asset is expected to be used.\nExample Calculation:\nIf an asset is purchased for $20,000, has a salvage value of $5,000, and an estimated useful life of 5 years, the calculation would be:\n\nDepreciation Expense per Year = ($20,000 - $5,000) / 5 = $3,000\nThis means that each year, $3,000 will be recorded as depreciation expense for that asset.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How would you journalize the sale of inventory for cash?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "If a customer pays in advance, how is that recorded under accrual accounting?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How would you classify operating vs. financing cash flows?\n\nNote from Joe: I am not sure what the answer is and wonder what the bot will say",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Operating and financing cash flows are two distinct categories of cash flows reported in a company's statement of cash flows. Here's a summary of each:\n\nOperating Cash Flows (OCF): These are cash flows from ongoing, regular, core business activities. Examples include cash received from the sale of goods and services, payments for inventory, salaries and wages paid, loan interest payments, and income tax payments. Operating cash flow is crucial as it is the primary source of cash to meet recurring financial obligations, such as paying debts and dividends.\n\nFinancing Cash Flows:These cash flows relate to activities that involve external sources of financing. Examples include cash received from issuing stock or bonds, cash paid for dividends, and repayments of debt.Financing cash flows reflect how a company raises capital and returns value to its shareholders.\n\nIn summary, operating cash flows are essential for day-to-day operations and sustainability, while financing cash flows are related to how a company funds its operations and growth through external financing.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "If a company earns revenue but hasn't received cash, should it be recorded?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do you apply the equity method to an investment in a 30% owned affiliate?\n\nNote from Joe:\nWe do not cover in class - curious what the bot will say.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To apply the equity method to an investment in a 30% owned affiliate, follow these key steps:\n\nSignificant Influence: Since owning 30% of the affiliate typically indicates significant influence, you will account for the investment using the equity method.\n\nInitial Investment: Record the initial investment at cost. For example, if you purchase shares for $1,000,000, you would make the following journal entry:\n\nDebit: Investment in Affiliate (+A) $1,000,000\nCredit: Cash (-A) $1,000,000\nRecognizing Income: Each period, recognize your share of the affiliate's net income. If the affiliate reports a net income of $100,000, your share (30%) would be $30,000. Record this as:\n\nDebit: Investment in Affiliate (+A) $30,000\nCredit: Investment Income (+R, +SE) $30,000\nDividends Received: If the affiliate pays dividends, reduce the investment account by the amount received. For instance, if you receive $40,000 in dividends, the entry would be:\n\nDebit: Cash (+A) $12,000 (30% of $40,000)\nCredit: Investment in Affiliate (-A) $12,000\nEnding Balance Calculation: At the end of the period, calculate the ending balance of the investment account. For example:\n\nBeginning balance: $1,000,000\nPlus: Share of income: $30,000\nMinus: Dividends received: $12,000\nEnding balance: $1,018,000\nThis method ensures that the investment reflects your share of the affiliate's performance and adjusts for any dividends received.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How should a long-term lease be recorded under the new accounting rules?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Under the new accounting rules, specifically ASC 842 for US GAAP, long-term leases are classified into two main types: finance leases (also known as ownership leases) and operating leases (rental leases).\n\nFinance Leases\nRecognition: A finance lease is recorded on the balance sheet as both an asset and a liability. The asset is recognized as a \"right-of-use\" asset, and the liability is recorded as a lease obligation.\nMeasurement: Both the asset and liability are measured at the present value of the lease payments or the fair value of the asset, whichever is lower.\n\nAmortization: The lease asset is amortized over time, similar to property, plant, and equipment (PPE). The amortization expense is recognized in the income statement.\n\nInterest Expense: The lease liability incurs interest, which is also recorded as an expense in the income statement.\n\nOperating Leases\nRecognition: Operating leases are also recorded on the balance sheet as a right-of-use asset and a lease liability.\n\nExpense Recognition: Lease expense is generally recognized on a straight-line basis over the lease term, which creates a smoother impact on earnings compared to finance leases.\n\nAmortization of Incentives: Any lease incentives received are amortized on a straight-line basis over the lease term.\n\nKey Differences\nFinance leases typically result in higher expenses in the early years due to the combination of interest and amortization, while operating leases have a consistent expense each period. Under IFRS, all leases are treated as finance leases, whereas US GAAP allows for both finance and operating lease classifications.\n\nIn summary, both types of leases are now recognized on the balance sheet, reflecting a significant change from previous standards where many leases could remain off-balance-sheet.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do you calculate basic earnings per share?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "To calculate basic earnings per share (EPS), you can use the following formula:\n\nBasic EPS = (Net Income - Preferred Dividends) / Weighted Average Shares Outstanding\n\nHere's a breakdown of the components:\n\nNet Income: This is the total profit of the company after all expenses, taxes, and costs have been deducted.\nPreferred Dividends: If the company has issued preferred stock, any dividends that need to be paid to preferred shareholders should be subtracted from net income.\nWeighted Average Shares Outstanding: This is the average number of shares of common stock that were outstanding during the reporting period, adjusted for any stock splits or buybacks.\nFor example, if a company has a net income of $234,000, pays $6,000 in preferred dividends, and has 45,000 weighted average shares outstanding, the basic EPS would be calculated as follows:\n\nBasic EPS = ($234,000 - $6,000) / 45,000 = $5.20 per share\n\nThis calculation provides a measure of the earnings available to each share of common stock, which is a key indicator of a company's profitability.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "If a company sells a long-lived asset, what happens to the financial statements?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Compare how Walmart and Amazon differ in their cash flow profiles.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does the choice between FIFO and LIFO impact net income and inventory?\n\nFrom Joe: most likely to be \"it depends\"",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The choice between FIFO (First-In-First-Out) and LIFO (Last-In-First-Out) significantly impacts both net income and inventory valuation, especially in an environment of rising prices. Here's a summary of the key differences:\nCost of Goods Sold (COGS):\nFIFO: Under FIFO, the oldest inventory costs are used first when calculating COGS. This typically results in a lower COGS during periods of inflation, as older, cheaper costs are matched against current revenues.   LIFO: Conversely, LIFO uses the most recent inventory costs first, leading to a higher COGS in inflationary times. This is because newer, more expensive inventory is recognized as sold first.\n\nGross Profit:\nFIFO: Since COGS is lower, FIFO generally results in a higher gross profit.    LIFO: With a higher COGS, LIFO results in lower gross profit.\n\nNet Income:\nFIFO: Higher gross profit leads to higher net income under FIFO.     LIFO: Lower gross profit results in lower net income under LIFO.\n\nEnding Inventory:\nFIFO: The ending inventory on the balance sheet is valued higher under FIFO because it reflects the costs of the most recent purchases, which are typically higher in an inflationary environment.\nLIFO: The ending inventory is valued lower under LIFO, as it reflects older, cheaper costs.\n\nTax Implications:\nCompanies often prefer LIFO for tax purposes because it reduces taxable income due to the higher COGS, thus lowering tax liabilities. However, this can also lead to lower reported earnings, which may affect investor perceptions.\n\nComparability:\nThe choice of inventory accounting method can affect financial ratios and comparability with other firms, especially those using different methods (e.g., FIFO vs. LIFO).\nIn summary, FIFO generally results in higher net income and inventory values during inflation, while LIFO can provide tax advantages but results in lower reported earnings and inventory values.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Does depreciation expense reduce a company's cash balance directly?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Depreciation expense does not directly reduce a company's cash balance. It is a non-cash expense that is deducted in the computation of net income. While it reduces reported income, it does not affect cash flow directly. Instead, depreciation is adjusted in the cash flow statement to convert net income to cash flow from operations. Thus, while depreciation affects financial statements, it does not impact cash balances directly.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Analyze the impact of an aggressive revenue recognition policy on financial ratios.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "An aggressive revenue recognition policy can lead to inflated revenue figures, which may misrepresent a company's financial health. This can result in higher profitability ratios (like profit margin) in the short term, but it may also lead to volatility in earnings and potential future adjustments. Managers may accelerate revenue recognition to meet performance targets, which can distort financial ratios and mislead stakeholders about the company's actual performance and sustainability. For example, if revenues are recognized prematurely, it may inflate the current ratio and other profitability metrics, but could lead to issues if those revenues are not realized in cash",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What financial ratios best assess liquidity and solvency?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Liquidity Ratios:\nCurrent Ratio: Current Assets / Current Liabilities. This ratio indicates whether a company can cover its short-term obligations with its short-term assets.\nQuick Ratio: (Current Assets - Inventories) / Current Liabilities. This ratio provides a more stringent measure of liquidity by excluding inventory from current assets.\nWorking Capital: Current Assets - Current Liabilities. This measure indicates the short-term financial health of a company.\n\nSolvency Ratios:\nDebt-to-Equity Ratio: Total Liabilities / Total Equity. This ratio measures the relative proportion of shareholders' equity and debt used to finance a company's assets.\nTimes Interest Earned (TIE): Earnings Before Interest and Taxes (EBIT) / Interest Expense. This ratio assesses a company's ability to meet its interest obligations from its operating income.\nLeverage Ratio: Total Assets / Total Equity. This ratio indicates the degree to which a company is financing its operations through debt versus wholly owned funds.\nThese ratios provide insights into a company's ability to meet its short-term and long-term obligations, helping stakeholders assess financial stability and risk.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How can financial statement analysis uncover earnings management?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Financial Statement Analysis and Earnings Management: Financial statement analysis can uncover earnings management by identifying discrepancies between reported earnings and cash flows, as well as unusual patterns in revenue recognition and expense timing.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the red flags for potential accounting manipulation in FTX-style fraud?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Red flags for potential accounting manipulation, particularly in cases like FTX, include:\n\nLack of internal controls and oversight.\nSignificant related-party transactions that are not disclosed.\nUse of complex financial instruments or structures that obscure true financial health.\nFrequent changes in accounting policies or estimates that favor earnings smoothing.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does leverage affect a firm's return on equity?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Leverage and Return on Equity (ROE): Leverage affects a firm's return on equity by amplifying the returns to shareholders when the return on assets (ROA) exceeds the cost of borrowing. Specifically, if ROE is greater than ROA, it indicates a positive return on financial leverage. As leverage increases, ROE can increase significantly, but it also raises the risk of financial distress if the firm's performance deteriorates.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do changes in tax law impact deferred tax assets and liabilities?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Impact of Changes in Tax Law on Deferred Tax Assets and Liabilities: Changes in tax law, such as the reduction of the U.S. corporate tax rate from 35% to 21%, can significantly impact deferred tax assets (DTAs) and liabilities (DTLs). A lower tax rate reduces the value of DTAs, as future tax benefits from these assets will be less valuable. Companies may need to write down DTAs if they expect insufficient future income to utilize them, leading to charges against earnings.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How would you assess the quality of earnings from the income statement?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Assessing the Quality of Earnings from the Income Statement: The quality of earnings can be assessed by examining the consistency of reported earnings with cash flows, the sustainability of earnings growth, and the presence of non-recurring items. Analysts often look for:\n\nEarnings management practices, such as income smoothing.\nThe relationship between net income and cash flows from operations.\nThe impact of one-time gains or losses on reported earnings.\nThe use of non-GAAP measures that may obscure true performance.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Should leases always be capitalized for transparency?\n\nFrom Joe: I am not sure what the answer is and wonder what the bot will say",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Leases should be capitalized for transparency, especially under the new accounting standards that require all leases to be recorded on the balance sheet as both an asset and a liability. This change aims to provide a clearer picture of a company's financial obligations and overall financial health.\n\nHistorically, many leases were treated as off-balance-sheet items, which meant that companies did not have to report them as liabilities. This could mislead investors and lenders about the true financial position of a company. By capitalizing leases, firms can present a more accurate representation of their financial commitments, which is crucial for stakeholders who rely on financial statements for decision-making.\n\nThe new rules create a more predictable impact on earnings by ensuring that lease expenses are recognized consistently over time. This approach enhances comparability across firms and helps investors better assess a company's leverage and risk profile. Overall, capitalizing leases contributes to greater transparency in financial reporting.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Is using goodwill impairment a reliable signal of firm performance?\n\nFrom Joe: I am not sure what the answer is and wonder what the bot will say",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Goodwill impairment can serve as a significant indicator of a firm's performance, but it has its limitations and implications that need to be understood.\n\nDefinition and Process: Goodwill impairment occurs when the fair value of goodwill falls below its book value. Companies are required to review goodwill for impairment at least annually or when triggering events occur. This involves comparing the fair value of reporting units (where goodwill is allocated) to their carrying value, often using discounted cash flow models or market multiples.\n\nImpact on Financial Statements: When goodwill is impaired, the company must write down the value of goodwill, which results in a loss recognized on the income statement. This can significantly affect reported earnings, often leading to a negative market reaction. For instance, large write-downs, such as Microsoft's $5.3 billion impairment related to aQuantive, can lead to substantial declines in stock prices and calls for management accountability.\n\nMarket Interpretation: Investors often interpret goodwill impairments as a signal that the market value of the acquired segment has fallen below its book value. This can indicate poor acquisition decisions or operational challenges, which may limit future growth prospects and raise concerns about management's effectiveness.\n\nCorrelation with Performance: While goodwill impairment can indicate declining firm performance, it is not always a direct reflection of operational issues. For example, impairments can coincide with broader market downturns or industry-specific challenges, making it essential to consider the context in which impairments occur.\n\nLimitations: The assessment of goodwill impairment relies heavily on management's estimates of future cash flows and market conditions, which can be subjective and prone to error. This subjectivity can lead to variability in impairment recognition across firms and industries.\n\nIn summary, while goodwill impairment can be a reliable signal of firm performance, it should be analyzed in conjunction with other financial metrics and contextual factors to gain a comprehensive understanding of a company's health.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Should investors favor companies with high asset turnover or high profit margin?\n\nFrom Joe: I am not sure what the answer is and wonder what the bot will say",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Investors should consider both asset turnover and profit margin when evaluating companies, as both metrics provide valuable insights into financial performance.\n\nAsset Turnover: This measures how efficiently a company generates revenue from its assets. A higher asset turnover indicates that a company is using its assets more effectively to produce sales. It is generally desirable for companies to have a higher asset turnover, as it reflects productivity and can enhance shareholder value.\n\nProfit Margin: This indicates how much profit a company makes for each dollar of sales. A higher profit margin suggests that a company retains more profit from its sales, which can be a sign of strong pricing power or cost management.\n\nBalancing Both Metrics: The relationship between asset turnover and profit margin can vary by industry and business model. Some industries may favor high asset turnover (like retail), while others may prioritize high profit margins (like software). Companies can achieve the same return on assets (ROA) through different combinations of profit margin and asset turnover, so the best choice depends on the specific context of the company and its industry.\n\nIn summary, investors should not favor one metric over the other universally; instead, they should analyze both in conjunction with the company's business model and industry standards to make informed investment decisions.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Is net income always a reliable indicator of a company's health?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Net income is often considered one of the most important outputs from the accounting system, as it reflects a firm's performance over a period based on accrual accounting. However, there are potential issues with relying solely on net income as an indicator of a company's health. For example, larger firms may have larger income figures, and some expenses and revenues may be non-cash items. Additionally, financing choices can affect net income, as interest is expensed while dividends are not. Therefore, while net income is significant, it should not be the only metric used to evaluate a company's financial health.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can a company be profitable but have negative operating cash flow?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Yes, a company can be profitable while having negative operating cash flow. This situation often arises when a company has high levels of accounts receivable or inventory, which can inflate net income while cash is not being generated from operations. For instance, a company might report profits due to accrued revenues but may not have received cash payments from customers. In the long run, operating cash flow is crucial for meeting obligations, as net income alone does not pay the bills.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Evaluate whether Tesla's equity structure benefits or harms investors.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Tesla's equity structure has raised concerns among investors due to its reliance on external financing and the significant dilution of shares. Over the years, Tesla has raised substantial capital through equity offerings, which has more than doubled its shares outstanding since its IPO. This dilution can harm existing shareholders by reducing their ownership percentage and potentially impacting earnings per share. Additionally, Tesla has faced challenges in achieving consistent profitability and positive operating cash flow, raising questions about its long-term sustainability and ability to meet financial obligations. While the company's growth potential and innovative products may attract investors, the risks associated with its equity structure and cash flow issues warrant careful consideration.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How would you assess a firm's risk from its long-term debt position?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Assessing a Firm's Risk from Long-Term Debt Position: To assess a firm's risk from its long-term debt position, you can analyze various solvency measures, such as the debt-to-equity ratio and times interest earned ratio. A higher debt-to-equity ratio indicates greater reliance on debt financing, which can increase the risk of default. Conversely, a higher times interest earned ratio suggests that the firm is better positioned to meet its interest obligations, thus lowering perceived risk. Monitoring these ratios helps in understanding the firm's financial leverage and overall risk profile.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Is it ever acceptable to expense R&D rather than capitalize it?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Should revenue be recognized for partially completed contracts?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Revenue Recognition for Partially Completed Contracts: Revenue can be recognized for partially completed contracts using the percentage-of-completion method, which is based on the costs incurred relative to the total estimated costs of the contract. This method allows firms to recognize revenue over time as they fulfill their performance obligations. For example, if a firm incurs 30% of the total expected costs in the first year, it can recognize 30% of the total contract revenue in that year. This approach is particularly common in long-term contracts where performance obligations are fulfilled over time.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "When is it ethical to defer recognizing an expense?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The ethical considerations surrounding the deferral of recognizing an expense primarily revolve around the principles of accrual accounting and the matching principle. Here are the key points:\n\nAccrual Accounting: Expenses should be recognized when they contribute to the generation of revenue, regardless of when cash is paid. This means that expenses can be recognized at the same time, before, or after cash is collected.\n\nMatching Principle: Expenses must be matched to the revenues they help generate in the same accounting period. This ensures that financial statements accurately reflect the company's performance.\n\nDeferred Recognition: It is generally acceptable to defer recognizing an expense if it aligns with the matching principle. For example, if a company incurs costs that will benefit future periods, it may be ethical to defer recognizing those expenses until the related revenue is recognized.\n\nConsistency and Transparency: Ethical accounting practices require consistency in how expenses are recognized over time. Inconsistent treatment can lead to scrutiny from auditors and potential legal issues from investors who may argue that management is not being truthful in their accounting.\n\nPotential Ethical Issues: Deliberately deferring expenses to manipulate earnings can be considered unethical. This includes practices that may mislead stakeholders about the company's financial health.\n\nIn summary, it is ethical to defer recognizing an expense when it is consistent with accrual accounting principles and the matching principle, provided that it does not mislead stakeholders or violate accounting standards.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Draft a journal entry for acquiring a building with both cash and debt financing.\n\nFrom Joe: we do not cover journals in class - curious what the bot will say.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Design a system for tracking inventory using the FIFO method.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Create a reconciliation between net income and operating cash flow using indirect method.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Propose an alternative way for a company to disclose lease obligations transparently.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Develop a financial case analysis comparing two firms with different depreciation policies.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Construct a simplified financial statement from a given list of transactions.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Formulate a set of accounting policies for a startup's intangible asset recognition.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Devise a scenario in which a company manipulates earnings and suggest controls to prevent it.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Create a visual dashboard for comparing liquidity and solvency ratios across companies.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Synthesize data from Tesla's equity structure and propose changes to optimize capital costs.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Questions from Joe",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What is the difference between unearned revenue and deferred revenue?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The terms \"unearned revenue\" and \"deferred revenue\" are often used interchangeably in accounting, as they both refer to payments received by a company for goods or services that have not yet been delivered or performed. Here’s a summary of their meanings based on the retrieved information:\n\nUnearned Revenue: This is recorded when a company receives payment in advance of delivering goods or services. It represents a liability on the balance sheet because the company has an obligation to provide the service or product in the future. For example, if a customer pays for a subscription service upfront, that payment is considered unearned revenue until the service is provided.\n\nDeferred Revenue: This term is essentially synonymous with unearned revenue. It refers to the same concept where the revenue is recognized over time as the service is performed or the product is delivered. Deferred revenue is also recorded as a liability until the revenue can be recognized.\n\nIn summary, both terms describe the same accounting concept where revenue is recognized only after the corresponding goods or services have been delivered, and they are recorded as liabilities until that point.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does a write-off of an accounts receivable affect total assets?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "A write-off of accounts receivable affects total assets by reducing the accounts receivable balance, but it does not change the total assets overall. This is because the write-off reduces both the accounts receivable (an asset) and the allowance for uncollectible accounts (a contra asset) by the same amount, resulting in no net effect on total assets.\n\nWhen a company writes off an uncollectible account, it recognizes the reduction in value of that asset. The write-off is recorded by debiting the allowance for doubtful accounts and crediting accounts receivable. This means that while the accounts receivable decreases, the allowance for doubtful accounts also decreases by the same amount, keeping the total assets unchanged.\n\nIn summary, the write-off reduces the accounts receivable but does not affect the total assets since the decrease in one asset is offset by a decrease in the contra asset.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How would you record the write-off of an accounts receivable of $3,000?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What happens if an account that was written off is eventually paid?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When an account that was previously written off is eventually paid, the following steps typically occur:\n\nReinstatement of the Account: The previously written-off account is reinstated in the accounting records. This means that the accounts receivable is increased, and the allowance for uncollectible accounts is decreased by the amount that was recovered.\n\nRecording the Payment: Once the account is reinstated, the payment received is recorded. This involves increasing cash (or another asset account) and decreasing accounts receivable by the amount paid.\n\nImpact on Financial Statements: The reinstatement and payment will affect both the balance sheet and the income statement. The reinstatement will not impact the income statement directly since the bad debt expense was already recognized when the account was initially written off. However, it may improve the cash flow position of the company.\n\nIn summary, recovering a previously written-off account involves reinstating the account in the financial records and recording the payment, which positively affects cash flow without impacting the income statement again.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Does professor weber ever test you on the details of individual cases?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "The search results did not provide specific information regarding whether Professor Weber tests students on the details of individual cases. Therefore, I could not find any relevant information to answer your question.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Can you make a mock midterm that has 5 questions similar to the first question on old midterms and provide a solution.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "I could not find any relevant information regarding mock midterm questions or solutions similar to the first question on old midterms. If you have any other specific questions or need assistance with a different topic, feel free to ask!",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are all of the transactions a firm would record if they bought a truck for 10,000 on Jan 1, 2020 if has 5 years useful life and zero salvage value, and it was sold on Jan 1, 2022 for 12,000?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When a firm purchases a truck for $10,000 on January 1, 2020, with a useful life of 5 years and zero salvage value, and then sells it for $12,000 on January 1, 2022, the following transactions would be recorded:\nPurchase of the Truck (January 1, 2020):\nDebit: Truck (Asset) $10,000\nCredit: Cash (Asset) $10,000\n\nThis entry records the acquisition of the truck.\nDepreciation Expense (for each year):\nThe annual depreciation expense is calculated using the straight-line method: [ \\text{Annual Depreciation} = \\frac{\\text{Cost} - \\text{Salvage Value}}{\\text{Useful Life}} = \\frac{10,000 - 0}{5} = 2,000 ]\nFor Year 1 (2020):\nDebit: Depreciation Expense $2,000\nCredit: Accumulated Depreciation (Contra Asset) $2,000\n\nFor Year 2 (2021):\nDebit: Depreciation Expense $2,000\nCredit: Accumulated Depreciation (Contra Asset) $2,000\nAfter two years, the total accumulated depreciation would be $4,000.\n\nSale of the Truck (January 1, 2022):\nDebit: Cash (Asset) $12,000\nDebit: Accumulated Depreciation $4,000 (to remove it from the books)\nCredit: Truck (Asset) $10,000 (to remove the truck's cost from the books)\nCredit: Gain on Sale of Truck (Revenue) $6,000 (calculated as Cash received - (Cost - Accumulated Depreciation) = $12,000 - ($10,000 - $4,000))\nSummary of Transactions:  \nPurchase: Truck $10,000\nDepreciation: $2,000 for 2020 and $2,000 for 2021\nSale: Cash $12,000, Gain on Sale $6,000\nThese entries reflect the financial impact of the truck's acquisition, depreciation, and eventual sale.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the implications of the following transaction for deferred taxes at 12/31/2020 if the tax depreciation rate is 40% for year 1.  The bought a truck for 10,000 on Jan 1, 2020 if has 5 years useful life and zero salvage value.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the different accounting treatments a firm can use in accounting for the value of a financial security?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Firms can use several accounting treatments for the value of financial securities, which are classified based on the intent of the acquirer. Here are the main categories:\n\nHeld-to-Maturity (HTM):\nType: Debt securities only.\nAccounting Treatment: These are recorded at amortized cost. Changes in fair value are not recognized on the balance sheet or income statement until the securities are sold.\n\nTrading Securities:\nType: Can include both debt and equity securities.\nAccounting Treatment: These are recorded at fair value, with changes in fair value recognized in the income statement. This means unrealized gains and losses affect net income.\nAvailable-for-Sale (AFS):\n\nType: Primarily debt securities (equity securities were previously included but are now generally not classified as AFS).\nAccounting Treatment: These are recorded at fair value, but changes in fair value are recognized in other comprehensive income (OCI) rather than the income statement. This means unrealized gains and losses do not affect net income until realized.\n\nSummary of Effects on Financial Statements:\nHeld-to-Maturity: No effect on balance sheet or income statement for changes in fair value.\nTrading Securities: Changes in fair value affect both the balance sheet and the income statement.\nAvailable-for-Sale: Changes in fair value affect the balance sheet but not the income statement; instead, they affect OCI.\nThese classifications help determine how financial securities are reported and how their value fluctuations impact a firm's financial statements.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "In which lecture did we cover the sale of a fixed asset?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Am I responsible for the accounting rules under IFRS in this class?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "A goodwill balance of 10 million is appraised to be worth 12 million, what transaction do I record?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When you have a goodwill balance of $10 million that is appraised to be worth $12 million, you need to record the transaction as follows:\n\nGoodwill Recognition: Goodwill is recognized as the excess of the purchase price over the fair value of net identifiable assets acquired. In your case, if the appraisal indicates an increase in value, you would typically not adjust the goodwill on your balance sheet unless there is an impairment or a new acquisition.\n\nImpairment Testing: Goodwill is not amortized but is tested for impairment at least annually. If the fair value of the goodwill is determined to be less than its carrying amount, an impairment loss must be recognized.\n\nRecording the Transaction: If you are simply appraising the goodwill and not making any transactions (like a sale or acquisition), you do not need to record any journal entries. However, if this appraisal is part of a transaction (like an acquisition), you would record the goodwill at the new fair value if it is part of the purchase price allocation.\n\nIn summary, if the appraisal is just for internal purposes and does not involve a transaction, no entry is needed. If it is part of an acquisition, you would record the goodwill at the fair value determined during the acquisition process.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "the salvage value of an asset increases how does that affect the depreciation expense I will record in the next quarter?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Interest rates are increasing in the macro economy, and a firm plans on repurchasing its bonds, will this result in gains or losses on the repurchase?  Why?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Assistant said:\nWhen a firm repurchases its bonds in an environment of increasing interest rates, the outcome in terms of gains or losses depends on the relationship between the market value of the bonds and their book value.\n\nMarket Value vs. Book Value: The market price of bonds typically reflects the firm's economic conditions and macroeconomic factors, such as interest rates. If interest rates increase, the market value of existing bonds usually decreases. This is because new bonds are likely issued at higher rates, making existing bonds with lower rates less attractive.\n\nGains or Losses on Repurchase:\n\nIf the firm repurchases the bonds for less than their book value, it will record a gain. This occurs when the market value of the bonds has decreased due to rising interest rates.\nConversely, if the firm repurchases the bonds for more than their book value, it will incur a loss. This situation is less common when interest rates are rising, as typically, the market value of the bonds would be lower.\nAccounting Treatment: The gain or loss from the early retirement of debt is recorded on the income statement. For example, if the bonds are repurchased at a market value that is lower than the book value, the difference is recognized as a gain, which can positively impact the firm's financial performance.\n\nIn summary, if a firm repurchases its bonds when interest rates are increasing, it is likely to realize a gain on the repurchase, as the market value of the bonds would typically be lower than their book value.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "I don’t understand how to account for zero coupon bonds, can you give me an example and explain how the accounting works.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "Will I be tested on the accounting for net operating losses",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "If there is an increase in inflation, and inventory on the balance sheet is increasing, how will the increase in inflation affect the income statements?  Which accounts will be affected?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "An increase in inflation can significantly impact the income statement, particularly through the cost of goods sold (COGS) and gross profit, depending on the inventory accounting method used (FIFO or LIFO).\n\nCost of Goods Sold (COGS):\nUnder LIFO (Last-In, First-Out), COGS will be higher during inflationary periods because the most recently purchased (and more expensive) inventory is recognized first. This results in lower gross profit and net income.\nUnder FIFO (First-In, First-Out), COGS will be lower since the older, cheaper inventory costs are recognized first. This leads to higher gross profit and net income.\n\nGross Profit:\nWith LIFO, gross profit decreases due to higher COGS, while with FIFO, gross profit increases due to lower COGS.\n\nEnding Inventory:\nUnder LIFO, ending inventory on the balance sheet will be lower because it reflects the older, cheaper costs. Conversely, FIFO will show a higher ending inventory value as it reflects the more recent, higher costs.\n\nIn summary, the accounts affected by an increase in inflation include:\nCOGS: Higher under LIFO, lower under FIFO.\nGross Profit: Lower under LIFO, higher under FIFO.\nEnding Inventory: Lower under LIFO, higher under FIFO.\nThis distinction is crucial for financial reporting and tax implications, as companies may choose their inventory accounting method based on the desired impact on their financial statements.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "What are the tax implications of marking a trading security to market value (but not selling it.  Will I be tested on this?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "I have 10,000 of unearned revenue on my accounting records, and I perform the services associated with this account, which accounts are affected by this transaction?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When you perform services associated with unearned revenue, the following accounts are affected:\n\nUnearned Revenue (Liability): This account decreases because you are recognizing the revenue that was previously recorded as a liability. You will make a debit entry to this account.\n\nService Revenue (Revenue): This account increases as you recognize the revenue earned from the services performed. You will make a credit entry to this account.\n\nFor example, if you have $10,000 in unearned revenue and you perform the services, you would record the following journal entry:\n\nDebit Unearned Revenue: $10,000\nCredit Service Revenue: $10,000\nThis entry reflects that you have fulfilled your obligation to provide services, thus converting the liability into earned revenue.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How does this transaction affect Operating cash flows:  I have 10,000 of unearned revenue on my accounting records, and I perform the services associated with this account.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "I recognize 10,000 of depreciation expense, how does this transaction affect ROA, the leverage ratio (total liabilities over total assets) and the current ratio.",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Here's how a $10,000 depreciation expense affects the financial ratios you mentioned:\n\nReturn on Assets (ROA):\n\nThe ROA is calculated as Net Income divided by Total Assets. Since depreciation expense reduces net income (as it is an expense), an increase in depreciation will lower net income, which in turn decreases ROA. However, the total assets will also decrease due to the increase in accumulated depreciation, but the effect on net income is more significant, leading to a lower ROA.\nLeverage Ratio (Total Liabilities / Total Assets):\n\nThe leverage ratio is calculated by dividing total liabilities by total assets. When depreciation is recognized, it increases accumulated depreciation (a contra asset), which reduces total assets. If total liabilities remain unchanged, this will result in a higher leverage ratio, indicating increased financial leverage.\nCurrent Ratio (Current Assets / Current Liabilities):\n\nThe current ratio is calculated by dividing current assets by current liabilities. Depreciation does not directly affect current assets or current liabilities, as it is related to long-term assets. Therefore, the current ratio remains unchanged as a result of recognizing depreciation expense.\nIn summary:\n\nROA decreases due to lower net income.\nLeverage Ratio increases due to a decrease in total assets.\nCurrent Ratio remains unchanged.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "In which classes did we cover financing leases?  Can you provide an example of the accounting transactions underlying a financing lease?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "Classes Covering Financing Leases\nFinancing leases, also referred to as ownership leases, are covered in advanced accounting topics within the course. The focus is on understanding how financing leases impact a firm's balance sheet and income statement.\n\nExample of Accounting Transactions Underlying a Financing Lease - Here’s a simplified example of the accounting transactions for a financing lease:\n\nInitial Recognition: When the lease agreement is signed, the lessee records the right-of-use asset and the lease liability at the present value of the lease payments.\n\nJournal Entry:\nDebit Right-of-Use Asset (PP&E) for the present value of lease payments.\nCredit Lease Obligation (Liability) for the same amount.\nAnnual Lease Payment: Each year, the lessee makes a lease payment, which consists of both principal and interest.\n\nJournal Entry:\nDebit Interest Expense (calculated on the outstanding lease liability).\nDebit Lease Obligation (for the principal portion).\nCredit Cash (for the total lease payment).\nAmortization: The right-of-use asset is amortized over the lease term.\n\nJournal Entry:\nDebit Amortization Expense (for the amortization amount).\nCredit Accumulated Amortization (for the same amount).\nExample Calculation\nFor instance, if a company enters into a financing lease with annual payments of $5,000,000 for 20 years at an implicit interest rate of 10%, the present value of the lease payments would be calculated using the present value of an annuity formula. The initial entry would recognize the asset and liability at approximately $42,567,800.\nSummary of Transactions\nInitial Entry: Record asset and liability at present value.\nAnnual Payments: Split between interest expense and principal reduction.\nAmortization: Recognize amortization expense annually.\nThis structure ensures that both the asset and liability are reflected on the balance sheet, and the expenses are recognized in the income statement over the lease term.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "How do we account for the 10,000 expenditure on R&D?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When accounting for a $10,000 expenditure on Research and Development (R&D), the treatment depends on the accounting standards being followed (US GAAP or IFRS).\n\nUnder US GAAP:\n\nR&D costs must be expensed when incurred. This means that the entire $10,000 would be recorded as an R&D expense in the income statement, reducing net income for that period. Consequently, this expense does not appear as an asset on the balance sheet, which can lead to a decrease in retained earnings.\nExample entry:\n\nDebit R&D Expense: $10,000\nCredit Cash (or Accounts Payable): $10,000\nUnder IFRS:\n\nThe treatment is slightly different. Research costs are still expensed as incurred, but development costs can be capitalized if they meet certain criteria (e.g., if they are expected to generate future economic benefits). If part of the expenditure is for development that qualifies for capitalization, that portion can be recorded as an asset and amortized over its useful life.\nExample entry if $5,000 is capitalized as a development asset:\n\nDebit Development Asset: $5,000\nDebit R&D Expense: $5,000\nCredit Cash (or Accounts Payable): $10,000\nIn summary, under US GAAP, the entire expenditure is expensed, while under IFRS, part of it may be capitalized if it meets the criteria for development costs.",
+      "expected_tools": ["search_content_files"]
+    },
+    {
+      "question": "I sell a financial security that I bought for 10,000, and has appreciated in value by 1000 per year over the last two years.  The selling price is 13,000 and it is classified as trading, what transaction do I record?  Why?  What happens if it were available for sale?",
+      "extra_state": {
+        "course_id": ["28751-15.515_FA24"],
+        "collection_name": [null],
+        "exclude_canvas": [false]
+      },
+      "expected_output": "When you sell a financial security classified as a trading security, you need to record the transaction as follows:\n\nTransaction Recording for Trading Securities:\n\nSince the security was purchased for $10,000 and has appreciated to a selling price of $13,000, you will recognize a realized gain of $3,000 on the income statement. This is because changes in market value for trading securities are reflected in the income statement.\nThe journal entry would typically involve debiting cash for $13,000, crediting the trading security account for $10,000, and recognizing the gain of $3,000 in the income statement.\nIf the Security Were Classified as Available for Sale:\n\nFor available-for-sale securities, the unrealized gains or losses are recorded in Other Comprehensive Income (OCI) and do not affect the income statement until the security is sold.\nUpon selling the security, you would still recognize the gain of $3,000, but the accounting treatment would involve transferring any unrealized gains from OCI to retained earnings upon realization. The journal entry would debit cash for $13,000, credit the available-for-sale security account for $10,000, and recognize the gain in the income statement, while also adjusting the OCI accordingly.\nIn summary, the key difference lies in how unrealized gains are treated: they affect the income statement for trading securities but are recorded in OCI for available-for-sale securities until realized.",
+      "expected_tools": ["search_content_files"]
+    }
+  ]
+}

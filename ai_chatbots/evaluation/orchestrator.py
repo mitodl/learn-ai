@@ -14,8 +14,11 @@ from deepeval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    FaithfulnessMetric,
+    GEval,
     HallucinationMetric,
 )
+from deepeval.test_case import LLMTestCaseParams
 from django.core.management.base import OutputWrapper
 
 from ai_chatbots.api import get_langsmith_prompt
@@ -27,6 +30,9 @@ from main.test_utils import load_json_with_settings
 
 # Constants
 ERROR_LOG_MIN_SIZE = 500  # Minimum file size to indicate errors beyond header
+
+# Bots that ignore custom instructions/prompts - skip prompt sweeps for these
+BOTS_WITHOUT_PROMPT_SUPPORT: set[str] = {"tutor"}
 
 
 class EvaluationOrchestrator:
@@ -42,45 +48,106 @@ class EvaluationOrchestrator:
         evaluation_model: str,
         metric_thresholds: Optional[dict[str, float]] = None,
         timeout_seconds: int = 360,
+        *,
+        require_expected: bool = False,
     ) -> EvaluationConfig:
-        """Create evaluation configuration with metrics."""
-        if metric_thresholds is None:
-            metric_thresholds = {
-                "ContextualPrecision": 0.7,
-                "ContextualRelevancy": 0.5,
-                "ContextualRecall": 0.7,
-                "Hallucination": 0.0,
-                "AnswerRelevancy": 0.7,
-                "Faithfulness": 0.7,
-            }
+        """Create evaluation configuration with metrics.
 
-        metrics = [
-            ContextualPrecisionMetric(
-                threshold=metric_thresholds["ContextualPrecision"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            ContextualRelevancyMetric(
-                threshold=metric_thresholds["ContextualRelevancy"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            ContextualRecallMetric(
-                threshold=metric_thresholds["ContextualRecall"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            HallucinationMetric(
-                threshold=metric_thresholds["Hallucination"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-            AnswerRelevancyMetric(
-                threshold=metric_thresholds["AnswerRelevancy"],
-                model=evaluation_model,
-                include_reason=True,
-            ),
-        ]
+        Args:
+            models: List of model IDs to evaluate.
+            evaluation_model: Model to use as the evaluation judge.
+            metric_thresholds: Optional custom thresholds per metric name.
+            timeout_seconds: Timeout for individual metric execution.
+            require_expected: If True, use metrics that require curated expected
+                answers (ContextualPrecision, ContextualRecall). If False
+                (default), use reference-free metrics (Faithfulness, GEval)
+                that evaluate quality without expected answers.
+        """
+        if require_expected:
+            if metric_thresholds is None:
+                metric_thresholds = {
+                    "ContextualPrecision": 0.7,
+                    "ContextualRelevancy": 0.5,
+                    "ContextualRecall": 0.7,
+                    "Hallucination": 0.0,
+                    "AnswerRelevancy": 0.7,
+                }
+
+            metrics = [
+                ContextualPrecisionMetric(
+                    threshold=metric_thresholds["ContextualPrecision"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                ContextualRelevancyMetric(
+                    threshold=metric_thresholds["ContextualRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                ContextualRecallMetric(
+                    threshold=metric_thresholds["ContextualRecall"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                HallucinationMetric(
+                    threshold=metric_thresholds["Hallucination"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                AnswerRelevancyMetric(
+                    threshold=metric_thresholds["AnswerRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+            ]
+        else:
+            if metric_thresholds is None:
+                metric_thresholds = {
+                    "Faithfulness": 0.7,
+                    "ContextualRelevancy": 0.5,
+                    "Hallucination": 0.0,
+                    "AnswerRelevancy": 0.7,
+                    "Helpfulness": 0.7,
+                }
+
+            metrics = [
+                FaithfulnessMetric(
+                    threshold=metric_thresholds["Faithfulness"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                ContextualRelevancyMetric(
+                    threshold=metric_thresholds["ContextualRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                HallucinationMetric(
+                    threshold=metric_thresholds["Hallucination"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                AnswerRelevancyMetric(
+                    threshold=metric_thresholds["AnswerRelevancy"],
+                    model=evaluation_model,
+                    include_reason=True,
+                ),
+                GEval(
+                    name="Helpfulness",
+                    criteria=(
+                        "Determine whether the response is helpful, accurate, "
+                        "and appropriate for an educational context. Consider "
+                        "whether it directly addresses the user's question, "
+                        "provides clear and understandable information, and "
+                        "would be useful to a student or learner."
+                    ),
+                    evaluation_params=[
+                        LLMTestCaseParams.INPUT,
+                        LLMTestCaseParams.ACTUAL_OUTPUT,
+                    ],
+                    model=evaluation_model,
+                    threshold=metric_thresholds["Helpfulness"],
+                ),
+            ]
 
         # Wrap metrics with timeout functionality
         timeout_wrapped_metrics = wrap_metrics_with_timeout(metrics, timeout_seconds)
@@ -105,7 +172,7 @@ class EvaluationOrchestrator:
             self.stdout.write(f"Warning: {prompts_file} not found or invalid")
         return prompts_data
 
-    async def _collect_and_evaluate_bot(  # noqa: C901, PLR0913
+    async def _collect_and_evaluate_bot(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         bot_name: str,
         config: EvaluationConfig,
@@ -152,6 +219,15 @@ class EvaluationOrchestrator:
         # Evaluate each model with each prompt
         for model in config.models:
             for prompt in bot_prompts:
+                # Skip non-default prompts for bots that don't support them
+                if prompt is not None and bot_name in BOTS_WITHOUT_PROMPT_SUPPORT:
+                    prompt_name = prompt.get("name", "unknown")
+                    self.stdout.write(
+                        f"Skipping prompt '{prompt_name}' for {bot_name} "
+                        f"(bot does not support custom instructions)"
+                    )
+                    continue
+
                 # Resolve prompt details
                 if prompt is None:
                     prompt_label = "default"
@@ -205,11 +281,9 @@ class EvaluationOrchestrator:
                             f"{len(batch_result.test_results)} results"
                         )
 
-                except Exception as e:  # noqa: BLE001
-                    self.stdout.write(
-                        f"Error on {bot_name} with {model} and {prompt_label}: {e}"
-                    )
-                    continue
+                except Exception as e:
+                    msg = f"Error on {bot_name} with {model} and {prompt_label}: {e}"
+                    raise RuntimeError(msg) from e
 
         # Evaluate any remaining test cases
         if all_llm_test_cases:
@@ -435,11 +509,15 @@ Started: {timestamp}
             self.stdout.write(f"  - {bot}: {count} test results")
 
         # Generate final report
+        metric_names = [m.__name__ for m in config.metrics]
         self.reporter.generate_report(
             results,
             config.models,
             bot_names,
+            use_prompts=use_prompts,
             metric_thresholds=config.metric_thresholds,
+            evaluation_model=config.evaluation_model,
+            metric_names=metric_names,
         )
 
         return results

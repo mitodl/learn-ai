@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -9,11 +10,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from asgiref.sync import sync_to_async
 from deepeval.test_case import LLMTestCase, ToolCall
 
-# Constants for message parsing
-MIN_MESSAGES_FOR_TOOL_RESULTS = 3
-MIN_MESSAGES_FOR_TOOL_CALLS = 2
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,6 +130,27 @@ class BaseBotEvaluator(ABC):
         retrieval_context = self.extract_retrieval_context(tool_results)
         tool_calls = self.extract_tool_calls(response)
 
+        if test_case.expected_tools:
+            if not tool_results:
+                log.warning(
+                    "Empty tool results for %s (model=%s, prompt=%s) "
+                    "despite expected_tools=%s. "
+                    "Retrieval context metrics will evaluate against empty context.",
+                    self.bot_name,
+                    model,
+                    prompt_label,
+                    test_case.expected_tools,
+                )
+            if not tool_calls:
+                log.warning(
+                    "Empty tool calls for %s (model=%s, prompt=%s) "
+                    "despite expected_tools=%s.",
+                    self.bot_name,
+                    model,
+                    prompt_label,
+                    test_case.expected_tools,
+                )
+
         return LLMTestCase(
             name=f"{self.bot_name}-{model}-{prompt_label}",
             additional_metadata={
@@ -150,18 +171,22 @@ class BaseBotEvaluator(ABC):
     def extract_tool_results(
         self, response: dict[str, Any], test_case: TestCaseSpec
     ) -> list[dict[str, Any]]:
-        """Extract tool results from response."""
-        if (
-            not test_case.expected_tools
-            or len(response["messages"]) < MIN_MESSAGES_FOR_TOOL_RESULTS
-        ):
+        """Extract tool results by scanning for JSON with 'results' key."""
+        if not test_case.expected_tools:
             return []
 
-        try:
-            tool_message = response["messages"][2]
-            return json.loads(tool_message.content).get("results", [])
-        except (json.JSONDecodeError, KeyError, IndexError):
-            return []
+        for message in response.get("messages", []):
+            content = getattr(message, "content", None)
+            if not content or not isinstance(content, str):
+                continue
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict) and "results" in parsed:
+                    return parsed["results"]
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        return []
 
     def extract_retrieval_context(
         self, tool_results: list[dict[str, Any]]
@@ -175,32 +200,33 @@ class BaseBotEvaluator(ABC):
         ]
 
     def extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
-        """Extract tool calls from response."""
-        if len(response["messages"]) < MIN_MESSAGES_FOR_TOOL_CALLS:
-            return []
+        """Extract tool calls by scanning for message with tool_calls."""
+        for message in response.get("messages", []):
+            if not hasattr(message, "additional_kwargs"):
+                continue
+            tool_calls_data = message.additional_kwargs.get("tool_calls", [])
+            if not tool_calls_data:
+                continue
 
-        tool_message = response["messages"][1]
-        if not hasattr(tool_message, "additional_kwargs"):
-            return []
-
-        tool_calls = tool_message.additional_kwargs.get("tool_calls", [])
-        result = []
-        for t in tool_calls:
-            # Handle both dict format (from actual API) and object format (from mocks)
-            if isinstance(t, dict):
-                function_data = t.get("function", {})
-                name = function_data.get("name", "")
-                arguments = function_data.get("arguments", "{}")
-            else:
-                name = t.function.name
-                arguments = t.function.arguments
-            result.append(
-                ToolCall(
-                    input_parameters=json.loads(arguments),
-                    name=name,
+            result = []
+            for t in tool_calls_data:
+                # Handle both dict (API) and object (mock) formats
+                if isinstance(t, dict):
+                    function_data = t.get("function", {})
+                    name = function_data.get("name", "")
+                    arguments = function_data.get("arguments", "{}")
+                else:
+                    name = t.function.name
+                    arguments = t.function.arguments
+                result.append(
+                    ToolCall(
+                        input_parameters=json.loads(arguments),
+                        name=name,
+                    )
                 )
-            )
-        return result
+            return result
+
+        return []
 
     async def evaluate_model(
         self,
@@ -232,7 +258,7 @@ class BaseBotEvaluator(ABC):
             """Process a single test case with semaphore limiting."""
             async with semaphore:
                 try:
-                    chatbot = self.create_bot_instance(
+                    chatbot = await sync_to_async(self.create_bot_instance)(
                         model, test_case, instructions=instructions
                     )
                     response = await self.collect_response(chatbot, test_case)

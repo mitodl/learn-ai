@@ -1,5 +1,6 @@
 """Reporting classes for RAG evaluation results."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, TextIO
 
@@ -103,7 +104,7 @@ class EvaluationReporter:
             return 1.0 - score
         return score
 
-    def generate_report(
+    def generate_report(  # noqa: PLR0913
         self,
         results: EvaluationResult,
         models: list[str],
@@ -111,11 +112,24 @@ class EvaluationReporter:
         *,
         use_prompts: bool = True,
         metric_thresholds: dict[str, float] | None = None,
+        metric_weights: dict[str, float] | None = None,
+        evaluation_model: str = "",
+        metric_names: list[str] | None = None,
     ) -> None:
         """Generate a comprehensive evaluation report."""
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write("RAG EVALUATION REPORT")
         self.stdout.write("=" * 80)
+
+        # Run configuration manifest
+        self.run_manifest(
+            models,
+            bot_names,
+            evaluation_model=evaluation_model,
+            metric_names=metric_names or [],
+            metric_thresholds=metric_thresholds,
+            use_prompts=use_prompts,
+        )
 
         # Create DataFrame for easier analysis
         df = self.create_results_dataframe(results)
@@ -126,6 +140,7 @@ class EvaluationReporter:
         if use_prompts:
             self.prompt_comparison(df)
         self.overall_performance(df)
+        self.composite_leaderboard(df, metric_weights=metric_weights)
         self.detailed_results(df, models, bot_names)
 
         self.stdout.write("\n" + "=" * 80)
@@ -199,7 +214,7 @@ class EvaluationReporter:
                                 else "Default Prompt"
                             )
                             self.stdout.write(
-                                f"\n    🎯 {prompt_msg} ({passes}/{total} tests passed)"
+                                f"\n    🎯 {prompt_msg} ({passes}/{total} metric checks passed)"  # noqa: E501
                             )
 
                             # Group by metric and get mean scores
@@ -352,6 +367,114 @@ class EvaluationReporter:
                     "Default Prompt" if prompt == "default" else f"Prompt {prompt}"
                 )
                 self.stdout.write(f"  {i + 1}. {prompt_display}: {avg_score:.3f}")
+
+    def run_manifest(  # noqa: PLR0913
+        self,
+        models: list[str],
+        bot_names: list[str],
+        *,
+        evaluation_model: str,
+        metric_names: list[str],
+        metric_thresholds: dict[str, float] | None = None,
+        use_prompts: bool = True,
+    ) -> None:
+        """Display run configuration at the top of the report."""
+        self.stdout.write("\n📝 RUN CONFIGURATION")
+        self.stdout.write("-" * 50)
+        self.stdout.write(
+            f"  Timestamp: {datetime.now(tz=UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        )
+        self.stdout.write(f"  Models evaluated: {', '.join(models)}")
+        if evaluation_model:
+            self.stdout.write(f"  Judge model: {evaluation_model}")
+        self.stdout.write(f"  Bots: {', '.join(bot_names)}")
+        if metric_names:
+            self.stdout.write(f"  Metrics: {', '.join(metric_names)}")
+        if metric_thresholds:
+            threshold_strs = [f"{k}={v}" for k, v in sorted(metric_thresholds.items())]
+            self.stdout.write(f"  Thresholds: {', '.join(threshold_strs)}")
+        self.stdout.write(f"  Prompt sweep: {'enabled' if use_prompts else 'disabled'}")
+
+    def composite_leaderboard(
+        self,
+        df: pd.DataFrame,
+        *,
+        metric_weights: dict[str, float] | None = None,
+    ) -> None:
+        """Display a composite leaderboard with optional metric weights.
+
+        Produces a ranked table of model+bot combinations. Default weights
+        are equal across all metrics.
+        """
+        self.stdout.write("\n\n🏅 COMPOSITE LEADERBOARD")
+        self.stdout.write("-" * 50)
+
+        if df.empty or not all(
+            col in df.columns for col in ["model", "bot", "metric", "score"]
+        ):
+            self.stdout.write("No data for composite leaderboard")
+            return
+
+        # Normalize scores (invert hallucination etc.)
+        df_norm = df.copy()
+        df_norm["normalized_score"] = df_norm.apply(
+            lambda row: self.normalize_score_for_aggregation(
+                row["metric"], row["score"]
+            ),
+            axis=1,
+        )
+
+        # Determine and normalize weights
+        all_metrics = df_norm["metric"].unique()
+        raw_weights = {m: (metric_weights or {}).get(m, 1.0) for m in all_metrics}
+        weight_sum = sum(raw_weights.values())
+        norm_weights = {m: w / weight_sum for m, w in raw_weights.items()}
+
+        # Apply weights per row
+        df_norm["weighted_score"] = df_norm.apply(
+            lambda row: row["normalized_score"] * norm_weights.get(row["metric"], 0.0),
+            axis=1,
+        )
+
+        # Composite score per model+bot: sum weighted scores, average across test cases
+        metric_count = len(all_metrics)
+        grouped = df_norm.groupby(["model", "bot"]).agg(
+            total_weighted=("weighted_score", "sum"),
+            metric_rows=("weighted_score", "count"),
+        )
+        grouped["n_test_cases"] = grouped["metric_rows"] / max(metric_count, 1)
+        grouped["composite_score"] = grouped["total_weighted"] / grouped[
+            "n_test_cases"
+        ].clip(lower=1)
+        composite = grouped.reset_index().sort_values(
+            "composite_score", ascending=False
+        )
+
+        # Display per model+bot
+        self.stdout.write("\nRanking by Model + Bot:")
+        for rank, (_, row) in enumerate(composite.iterrows(), 1):
+            self.stdout.write(
+                f"  {rank}. {row['model']} / {row['bot']}: "
+                f"{row['composite_score']:.3f}"
+            )
+
+        # Per-model aggregate
+        model_composite = (
+            composite.groupby("model")["composite_score"]
+            .mean()
+            .sort_values(ascending=False)
+        )
+        self.stdout.write("\nRanking by Model (avg across bots):")
+        for rank, (model, score) in enumerate(model_composite.items(), 1):
+            self.stdout.write(f"  {rank}. {model}: {score:.3f}")
+
+        # Show weights
+        if metric_weights:
+            self.stdout.write("\nMetric weights used:")
+            for m, w in sorted(norm_weights.items()):
+                self.stdout.write(f"  {m}: {w:.3f}")
+        else:
+            self.stdout.write("\nMetric weights: equal (default)")
 
     def detailed_results(
         self, df: pd.DataFrame, models: list[str], bot_names: list[str]
