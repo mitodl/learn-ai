@@ -503,6 +503,7 @@ Started: {timestamp}
             results,
             config.models,
             bot_names,
+            use_prompts=use_prompts,
             metric_thresholds=config.metric_thresholds,
         )
 

@@ -169,6 +169,7 @@ class TestEvaluationOrchestrator:
             mock_results,
             ["gpt-4"],
             ["test_bot"],
+            use_prompts=True,
             metric_thresholds=config.metric_thresholds,
         )
         assert result == mock_results

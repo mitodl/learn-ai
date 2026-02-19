@@ -199,7 +199,7 @@ class EvaluationReporter:
                                 else "Default Prompt"
                             )
                             self.stdout.write(
-                                f"\n    🎯 {prompt_msg} ({passes}/{total} tests passed)"
+                                f"\n    🎯 {prompt_msg} ({passes}/{total} metric checks passed)"  # noqa: E501
                             )
 
                             # Group by metric and get mean scores

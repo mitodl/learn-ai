@@ -86,7 +86,7 @@ class Command(BaseCommand):
             required=False,
             type=int,
             help="Number of test cases to evaluate per batch to reduce memory usage "
-            "(default: 0 = no batching, all at once)",
+            "(default: 10, 0 = no batching)",
             default=10,
         )
         parser.add_argument(
