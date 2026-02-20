@@ -87,7 +87,7 @@ const SyllabusContent = () => {
 
   // Update settings when input changes and is valid
   useEffect(() => {
-    const nextValue = String(parsedId) ?? resourceText
+    const nextValue = parsedId !== null ? String(parsedId) : resourceText
     if (settings.syllabus_resource !== nextValue) {
       setSettings({ syllabus_resource: nextValue })
     }
