@@ -87,11 +87,19 @@ const SyllabusContent = () => {
 
   // Update settings when input changes and is valid
   useEffect(() => {
-    const nextValue = parsedId !== null ? String(parsedId) : resourceText
-    if (settings.syllabus_resource !== nextValue) {
-      setSettings({ syllabus_resource: nextValue })
+    if (resourceParseError === null && parsedId !== null) {
+      const nextValue = String(parsedId)
+      if (settings.syllabus_resource !== nextValue) {
+        setSettings({ syllabus_resource: nextValue })
+      }
     }
-  }, [parsedId, resourceText, setSettings, settings.syllabus_resource])
+  }, [parsedId, resourceParseError, setSettings, settings.syllabus_resource])
+
+  // Sync resourceText with settings when settings change (e.g., when navigating back to tab)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional sync from URL params to local state
+    setResourceText(settings.syllabus_resource)
+  }, [settings.syllabus_resource])
 
   const resourceId = Number.isFinite(+settings.syllabus_resource)
     ? +settings.syllabus_resource
