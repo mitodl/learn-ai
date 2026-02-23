@@ -276,8 +276,6 @@ TIME_ZONE = "UTC"
 
 USE_I18N = True
 
-USE_L10N = True
-
 USE_TZ = True
 
 # Social Auth configurations - [START]
@@ -432,7 +430,14 @@ if MITOL_USE_S3 and (
     AWS_SECRET_ACCESS_KEY, or AWS_STORAGE_BUCKET_NAME"
     raise ImproperlyConfigured(msg)
 if MITOL_USE_S3:
-    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 
 # django cache back-ends

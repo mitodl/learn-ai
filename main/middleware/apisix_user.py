@@ -32,7 +32,7 @@ class ApisixUserMiddleware(PersistentRemoteUserMiddleware):
             if self.force_logout_if_no_header and request.user.is_authenticated:
                 log.debug("Forcing user logout due to missing APISIX headers.")
                 logout(request)
-            return None
+            return
 
         if apisix_user:
             if request.user.is_authenticated and request.user != apisix_user:
@@ -53,5 +53,3 @@ class ApisixUserMiddleware(PersistentRemoteUserMiddleware):
             )
 
         request.api_gateway_userdata = decode_apisix_headers(request)
-
-        return self.get_response(request)
