@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { SYLLABUS_CANVAS_GPT_URL } from "@/services/ai/urls"
 import { type AiChatProps } from "@mitodl/smoot-design/ai"
 import TextField from "@mui/material/TextField"
@@ -27,25 +27,28 @@ const SyllabusCanvasContent = () => {
     syllabus_readable_id: DEFAULT_READABLE_ID,
     syllabus_prompt: "",
   })
-  const [resourceParseError, setResourceParseError] = useState<string | null>(
-    null,
-  )
   const [readableIdText, setReadableIdText] = useState(
     settings.syllabus_readable_id,
   )
-  useEffect(() => {
-    const { id, errMsg } = getReadableId(readableIdText)
-    setResourceParseError(errMsg)
 
-    if (errMsg === null && id !== null) {
-      if (settings.syllabus_readable_id !== id) {
-        setSettings({ syllabus_readable_id: id })
+  // Compute derived state during render instead of in effect
+  const { id: parsedId, errMsg: resourceParseError } = useMemo(
+    () => getReadableId(readableIdText),
+    [readableIdText],
+  )
+
+  // Update settings when input changes and is valid
+  useEffect(() => {
+    if (resourceParseError === null && parsedId !== null) {
+      if (settings.syllabus_readable_id !== parsedId) {
+        setSettings({ syllabus_readable_id: parsedId })
       }
     }
-  }, [readableIdText, setSettings, settings.syllabus_readable_id])
+  }, [parsedId, resourceParseError, setSettings, settings.syllabus_readable_id])
 
   // Sync readableIdText with settings when settings change (e.g., when navigating back to tab)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional sync from URL params to local state
     setReadableIdText(settings.syllabus_readable_id)
   }, [settings.syllabus_readable_id])
 
