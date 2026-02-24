@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.25.2
+Version 0.25.2 (Released February 24, 2026)
 --------------
 
 - rename title of content search (#420)
