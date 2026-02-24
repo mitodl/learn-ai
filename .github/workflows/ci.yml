@@ -49,6 +49,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      - name: Install deepeval
+        run: uv pip install deepeval --no-deps
+
       - name: Tests
         run: |
           uv run ./manage.py collectstatic --noinput --clear
