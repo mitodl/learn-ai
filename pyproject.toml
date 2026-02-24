@@ -40,7 +40,7 @@ dependencies = [
     "langchain-core>=1.1.0,<2",
     "langchain-litellm>=0.5.0,<0.6",
     "langchain-openai>=1.1.0,<2",
-    "langgraph>=1.0.4,<2",
+    "langgraph==1.0.4",
     "langmem>=0.0.30,<0.0.31",
     "langsmith>=0.7.0,<0.8",
     "litellm>=1.53.5,<2",
@@ -108,6 +108,7 @@ dev = [
 [tool.uv]
 package = false
 default-groups = "all"
+constraint-dependencies = ["langgraph-checkpoint<3"]
 
 [tool.uv.sources]
 django-health-check = { git = "https://github.com/revsys/django-health-check", rev = "ea258434ac626c7b1dc8f393fab19cb359fa855a" }
