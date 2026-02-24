@@ -1,6 +1,27 @@
 Release Notes
 =============
 
+Version 0.26.0
+--------------
+
+- Update Django to 5.x (#423)
+- update dependency eslint-plugin-react-hooks to v7 and fix tests (#390)
+- Fix material UI upgrade (#391)
+- fix(deps): update dependency ruff to v0.15.2 (#430)
+- fix(deps): update dependency langsmith to ^0.7.0 (#402)
+- fix(deps): update dependency langchain-litellm to ^0.5.0 (#429)
+- chore(deps): update dependency responses to ^0.26.0 (#428)
+- chore(deps): update apache/apisix docker tag to v3.15.0 (#427)
+- chore(deps): update nginx docker tag to v1.29.5 (#424)
+- chore(deps): update dependency faker to v40 (#406)
+- chore(deps): update dependency jest-extended to v7 (#407)
+- chore(deps): update actions/setup-python digest to a309ff8 (#408)
+- chore(deps): update dependency eslint-config-next to v15.5.12 (#409)
+- chore(deps): update dependency axios to v1.13.5 [security] (#412)
+- fix(deps): update dependency next to v15.5.10 [security] (#414)
+- Updated RAG evaluation with metrics that don't require expected answers (#417)
+- Revert apisix version and add "renovate:ignore" (#422)
+
 Version 0.25.2 (Released February 24, 2026)
 --------------
 
