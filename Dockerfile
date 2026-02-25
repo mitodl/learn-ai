@@ -23,7 +23,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml /src
 COPY uv.lock /src
-RUN chown -R mitodl:mitodl /src
+RUN mkdir -p /opt/venv && chown -R mitodl:mitodl /src /opt/venv
 
 USER mitodl
 WORKDIR /src
