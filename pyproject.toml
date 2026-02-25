@@ -53,7 +53,7 @@ dependencies = [
     "opentelemetry-instrumentation-redis>=0.52b0",
     "opentelemetry-instrumentation-requests>=0.52b0",
     "opentelemetry-sdk>=1.31.0",
-    "posthog>=7.0.1,<8",
+    "posthog>=5.4.0,<8",
     "psycopg>=3.2.4,<4",
     "psycopg-pool>=3.2.4,<4",
     "pygithub>=2.0.0,<3",
@@ -69,7 +69,7 @@ dependencies = [
     "open-learning-ai-tutor>=0.2.14,<0.3",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
-    "django-health-check>=4.0.6",
+    "django-health-check>=3.0.0,<4",
 ]
 
 [dependency-groups]
@@ -103,7 +103,7 @@ dev = [
     "google-genai>=1.9.0",
     "chromadb>=1.0.13,<2",
     "pandas>=2.3.0,<3",
-    "deepeval>=2.6.6",
+    "deepeval>=3.8.0,<4",
 ]
 
 [tool.uv]
