@@ -22,7 +22,6 @@ dependencies = [
     "django-cache-memoize>=0.2.0,<0.3",
     "django-filter>=25.1,<26",
     "django-guardian>=3.0.0,<4",
-    "django-health-check",
     "django-hijack>=3.4.1,<4",
     "django-ipware>=7.0.0,<8",
     "django-oauth-toolkit>=3.0.0,<4",
@@ -70,6 +69,7 @@ dependencies = [
     "open-learning-ai-tutor>=0.2.14,<0.3",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
+    "django-health-check>=4.0.6",
 ]
 
 [dependency-groups]
@@ -103,15 +103,13 @@ dev = [
     "google-genai>=1.9.0",
     "chromadb>=1.0.13,<2",
     "pandas>=2.3.0,<3",
+    "deepeval>=2.6.6",
 ]
 
 [tool.uv]
 package = false
 default-groups = "all"
 constraint-dependencies = ["langgraph-checkpoint<3"]
-
-[tool.uv.sources]
-django-health-check = { git = "https://github.com/revsys/django-health-check", rev = "ea258434ac626c7b1dc8f393fab19cb359fa855a" }
 
 [tool.uv.build-backend]
 module-root = ""

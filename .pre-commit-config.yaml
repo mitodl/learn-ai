@@ -55,7 +55,7 @@ repos:
           - --exclude-files
           - "test_.*.py"
           - --exclude-files
-          - poetry.lock
+          - uv.lock
           - --exclude-files
           - yarn.lock
           - --exclude-files
