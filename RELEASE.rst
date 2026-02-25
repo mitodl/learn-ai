@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.26.0
+Version 0.26.0 (Released February 25, 2026)
 --------------
 
 - Update Django to 5.x (#423)
