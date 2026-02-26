@@ -19,7 +19,6 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.generic.base import RedirectView
-from health_check.views import HealthCheckView
 from rest_framework.routers import DefaultRouter
 
 from main.views import FeaturesViewSet, index
@@ -53,7 +52,7 @@ urlpatterns = (
         re_path(r"^hijack/", include("hijack.urls", namespace="hijack")),
         re_path(r"", include("openapi.urls")),
         re_path(r"^$", index, name="learn-ai-index"),
-        path("health/", HealthCheckView.as_view(), name="health_check_view"),
+        re_path(r"^health/", include("health_check.urls")),
     ]
     + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
