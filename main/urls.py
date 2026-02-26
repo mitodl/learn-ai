@@ -54,6 +54,7 @@ urlpatterns = (
         re_path(r"", include("openapi.urls")),
         re_path(r"^$", index, name="learn-ai-index"),
         path("health/", HealthCheckView.as_view(), name="health_check_view"),
+        path("health/<str:subset>/", HealthCheckView.as_view(), name="health_check_subset_view"),
     ]
     + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
