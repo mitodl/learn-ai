@@ -53,7 +53,7 @@ dependencies = [
     "opentelemetry-instrumentation-redis>=0.52b0",
     "opentelemetry-instrumentation-requests>=0.52b0",
     "opentelemetry-sdk>=1.31.0",
-    "posthog>=5.4.0,<8",
+    "posthog>=7.0.1,<8",
     "psycopg>=3.2.4,<4",
     "psycopg-pool>=3.2.4,<4",
     "pygithub>=2.0.0,<3",
@@ -103,7 +103,6 @@ dev = [
     "google-genai>=1.9.0",
     "chromadb>=1.0.13,<2",
     "pandas>=2.3.0,<3",
-    "deepeval>=3.8.0,<4",
 ]
 
 [tool.uv]

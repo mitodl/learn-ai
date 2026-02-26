@@ -35,7 +35,7 @@ jobs:
         run: sudo apt-get update -y
 
       - name: Apt install
-        run: cat Aptfile | sudo xargs apt-get install
+        run: cat Aptfile | sudo xargs apt-get install -y
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -47,6 +47,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --locked
+
+      - name: Install deepeval (without resolving posthog constraint)
+        run: uv pip install --no-deps 'deepeval>=3.8.0,<4'
 
       - name: Tests
         run: |
