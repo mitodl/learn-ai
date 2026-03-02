@@ -10,42 +10,25 @@ RUN apt-get update
 RUN apt-get install -y $(grep -vE "^\s*#" apt.txt  | tr "\n" " ")
 RUN apt-get update && apt-get install libpq-dev postgresql-client -y
 
-# pip
-RUN curl --silent --location https://bootstrap.pypa.io/get-pip.py | python3 -
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Add, and run as, non-root user.
 RUN mkdir /src
 RUN adduser --disabled-password --gecos "" mitodl
 RUN mkdir /var/media && chown -R mitodl:mitodl /var/media
 
-## Set some poetry config
-ENV  \
-  POETRY_VERSION=1.7.1 \
-  POETRY_VIRTUALENVS_CREATE=true \
-  POETRY_CACHE_DIR='/tmp/cache/poetry' \
-  POETRY_HOME='/home/mitodl/.local' \
-  VIRTUAL_ENV="/opt/venv"
-ENV PATH="$VIRTUAL_ENV/bin:$POETRY_HOME/bin:$PATH"
-
-# Install poetry
-RUN pip install "poetry==$POETRY_VERSION"
+ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml /src
-COPY poetry.lock /src
-RUN chown -R mitodl:mitodl /src
-RUN mkdir ${VIRTUAL_ENV} && chown -R mitodl:mitodl ${VIRTUAL_ENV}
+COPY uv.lock /src
+RUN mkdir -p /opt/venv && chown -R mitodl:mitodl /src /opt/venv
 
-## Install poetry itself, and pre-create a venv with predictable name
 USER mitodl
-RUN curl -sSL https://install.python-poetry.org \
-  | \
-  POETRY_VERSION=${POETRY_VERSION} \
-  POETRY_HOME=${POETRY_HOME} \
-  python3 -q
 WORKDIR /src
-RUN python3 -m venv $VIRTUAL_ENV
-RUN poetry install
-RUN poetry run pip install deepeval --no-deps
+RUN uv sync --frozen --no-install-project
+RUN uv pip install deepeval --no-deps
 
 # Add project
 USER root
@@ -70,7 +53,7 @@ ENV MAILGUN_KEY="fake_mailgun_key"
 ENV MAILGUN_SENDER_DOMAIN="other.fake.site"
 ENV MITOL_COOKIE_DOMAIN="localhost"
 ENV MITOL_COOKIE_NAME="cookie_monster"
-RUN python3 manage.py collectstatic --noinput --clear
+RUN uv run python3 manage.py collectstatic --noinput --clear
 
 RUN apt-get clean && apt-get purge
 

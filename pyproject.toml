@@ -1,114 +1,121 @@
-[tool.poetry]
+[project]
 name = "learn-ai"
 version = "0.71.0"
 description = "AI applications for MIT Open Learning."
-license = "BSD-3"
+authors = [{ name = "MIT ODL" }]
+requires-python = ">=3.13.7,<3.14"
 readme = "README.md"
-packages = []
-authors  = ["MIT ODL"]
+license = "BSD-3"
+dependencies = [
+    "Django>=5.2.11,<6",
+    "aiohttp>=3.12.15,<4",
+    "beautifulsoup4>=4.13.4,<5",
+    "boto3>=1.35.81,<2",
+    "celery>=5.3.1,<6",
+    "channels>=4.2.0,<5",
+    "channels-redis>=4.2.1,<5",
+    "configargparse>=1.7.1,<2",
+    "dj-database-url>=2.0.0,<3",
+    "dj-static>=0.0.6,<0.0.7",
+    "django-anymail[mailgun]>=13.0,<14",
+    "django-bitfield>=2.2.0,<3",
+    "django-cache-memoize>=0.2.0,<0.3",
+    "django-filter>=25.1,<26",
+    "django-guardian>=3.0.0,<4",
+    "django-hijack>=3.4.1,<4",
+    "django-ipware>=7.0.0,<8",
+    "django-oauth-toolkit>=3.0.0,<4",
+    "django-redis>=5.2.0,<6",
+    "django-scim2>=0.19.1,<0.20",
+    "django-server-status>=0.7.0,<0.8",
+    "django-storages>=1.13.2,<2",
+    "djangorestframework>=3.14.0,<4",
+    "drf-jwt>=1.19.2,<2",
+    "drf-spectacular>=0.29.0,<0.30",
+    "gunicorn>=23.0.0,<24",
+    "ipython>=9.0.0,<10",
+    "langchain>=1.1.0,<2",
+    "langchain-community>=0.4.1,<0.5",
+    "langchain-core>=1.1.0,<2",
+    "langchain-litellm>=0.5.0,<0.6",
+    "langchain-openai>=1.1.0,<2",
+    "langgraph==1.0.4",
+    "langmem>=0.0.30,<0.0.31",
+    "langsmith>=0.7.0,<0.8",
+    "litellm>=1.53.5,<2",
+    "markdown2>=2.5.2,<3",
+    "named-enum>=1.4.0,<2",
+    "opentelemetry-api>=1.31.0",
+    "opentelemetry-exporter-otlp>=1.31.0",
+    "opentelemetry-instrumentation-celery>=0.52b0",
+    "opentelemetry-instrumentation-django>=0.52b0",
+    "opentelemetry-instrumentation-psycopg>=0.52b0",
+    "opentelemetry-instrumentation-redis>=0.52b0",
+    "opentelemetry-instrumentation-requests>=0.52b0",
+    "opentelemetry-sdk>=1.31.0",
+    "posthog>=7.0.1,<8",
+    "psycopg>=3.2.4,<4",
+    "psycopg-pool>=3.2.4,<4",
+    "pygithub>=2.0.0,<3",
+    "redis>=5.0.0,<6",
+    "requests>=2.31.0,<3",
+    "ruff==0.15.2",
+    "sentry-sdk[django, langgraph]>=2.37.1,<3",
+    "social-auth-app-django>=5.6.0,<6",
+    "social-auth-core[openidconnect]>=4.4.2,<5",
+    "starlette==0.52.1",
+    "ulid-py>=1.0.0,<2",
+    "granian>=2.5.4,<3",
+    "open-learning-ai-tutor>=0.2.14,<0.3",
+    "httpx>=0.28.1,<0.29",
+    "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
+    "django-health-check>=3.0.0,<4",
+]
 
+[dependency-groups]
+dev = [
+    "bpython>=0.26,<0.27",
+    "ddt>=1.6.0,<2",
+    "django-debug-toolbar>=6.0.0,<7",
+    "factory_boy>=3.3.0,<4",
+    "faker>=40.0.0,<41",
+    "ipdb>=0.13.13,<0.14",
+    "nplusone>=1.0.0,<2",
+    "pdbpp>=0.11.0,<0.12",
+    "pytest>=9.0.2,<10",
+    "pytest-cov>=7.0.0,<8",
+    "pytest-django>=4.5.2,<5",
+    "pytest-env>=1.0.0,<2",
+    "pytest-freezegun>=0.4.2,<0.5",
+    "pytest-mock>=3.10.0,<4",
+    "responses>=0.26.0,<0.27",
+    "ruff>=0.15.0,<0.16",
+    "safety>=3.0.0,<4",
+    "semantic-version>=2.10.0,<3",
+    "freezegun>=1.4.0,<2",
+    "pytest-xdist[psutil]>=3.6.1,<4",
+    "anys>=0.3.0,<0.4",
+    "locust>=2.31.2,<3",
+    "pytest-asyncio>=1.0.0,<2",
+    "jupyter>=1.1.1,<2",
+    "portalocker",
+    "ollama",
+    "google-genai>=1.9.0",
+    "chromadb>=1.0.13,<2",
+    "pandas>=3.0.1,<4",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.13.7,<3.14"
-Django = "^5.2.11"
-aiohttp = "^3.12.15"
-beautifulsoup4 = "^4.13.4"
-boto3 = "^1.35.81"
-celery = "^5.3.1"
-channels = {version = "^4.2.0"}
-channels-redis = "^4.2.1"
-configargparse = "^1.7.1"
-dj-database-url = "^2.0.0"
-dj-static = "^0.0.6"
-django-anymail = {extras = ["mailgun"], version = "^13.0"}
-django-bitfield = "^2.2.0"
-django-cache-memoize = "^0.2.0"
-django-filter = "^25.1"
-django-guardian = "^3.0.0"
-django-health-check = { git = "https://github.com/revsys/django-health-check", rev="ea258434ac626c7b1dc8f393fab19cb359fa855a" }  # pragma: allowlist secret
-django-hijack = "^3.4.1"
-django-ipware = "^7.0.0"
-django-oauth-toolkit = "^3.0.0"
-django-redis = "^5.2.0"
-django-scim2 = "^0.19.1"
-django-server-status = "^0.7.0"
-django-storages = "^1.13.2"
-djangorestframework = "^3.14.0"
-drf-jwt = "^1.19.2"
-drf-spectacular = "^0.29.0"
-gunicorn = "^23.0.0"
-ipython = "^9.0.0"
-langchain = "^1.1.0"
-langchain-community = "^0.4.1"
-langchain-core = "^1.1.0"
-langchain-litellm = "^0.5.0"
-langchain-openai = "^1.1.0"
-langgraph = "^1.0.4"
-langmem = "^0.0.30"
-langsmith = "^0.7.0"
-litellm = "^1.53.5"
-markdown2 = "^2.5.2"
-named-enum = "^1.4.0"
-opentelemetry-api = ">=1.31.0"
-opentelemetry-exporter-otlp = ">=1.31.0"
-opentelemetry-instrumentation-celery = ">=0.52b0"
-opentelemetry-instrumentation-django = ">=0.52b0"
-opentelemetry-instrumentation-psycopg = ">=0.52b0"
-opentelemetry-instrumentation-redis = ">=0.52b0"
-opentelemetry-instrumentation-requests = ">=0.52b0"
-opentelemetry-sdk = ">=1.31.0"
-posthog = "^7.0.1"
-psycopg = "^3.2.4"
-psycopg-pool = "^3.2.4"
-pygithub = "^2.0.0"
-redis = "^5.0.0"
-requests = "^2.31.0"
-ruff = "0.15.2"
-sentry-sdk = {extras = ["django", "langgraph"], version = "^2.37.1"}
-social-auth-app-django = "^5.6.0"
-social-auth-core = {extras = ["openidconnect"], version = "^4.4.2"}
-starlette = "0.52.1"
-ulid-py = "^1.0.0"
-granian = "^2.5.4"
-open-learning-ai-tutor = "^0.2.14"
-httpx = "^0.28.1"
-opentelemetry-instrumentation-httpx = "^0.59b0"
+[tool.uv]
+package = false
+default-groups = "all"
+constraint-dependencies = ["langgraph-checkpoint<3"]
 
-[tool.poetry.group.dev.dependencies]
-bpython = "^0.26"
-ddt = "^1.6.0"
-django-debug-toolbar = "^6.0.0"
-factory_boy = "^3.3.0"
-faker = "^40.0.0"
-ipdb = "^0.13.13"
-nplusone = "^1.0.0"
-pdbpp = "^0.11.0"
-pytest = "^8.0.0"
-pytest-cov = "^7.0.0"
-pytest-django = "^4.5.2"
-pytest-env = "^1.0.0"
-pytest-freezegun = "^0.4.2"
-pytest-mock = "^3.10.0"
-responses = "^0.26.0"
-ruff = "^0.15.0"
-safety = "^3.0.0"
-semantic-version = "^2.10.0"
-freezegun = "^1.4.0"
-pytest-xdist = { version = "^3.6.1", extras = ["psutil"] }
-anys = "^0.3.0"
-locust = "^2.31.2"
-pytest-asyncio = "^1.0.0"
-jupyter = "^1.1.1"
-# DeepEval dependencies
-portalocker = "*"
-ollama = "*"
-google-genai = ">=1.9.0"
-chromadb = "^1.0.13"
-pandas = "^2.3.0"
+[tool.uv.build-backend]
+module-root = ""
 
 [build-system]
-requires = ["poetry_core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"
 
 [tool.ruff]
 target-version = "py311"

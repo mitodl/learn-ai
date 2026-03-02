@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.26.0"
+VERSION = "0.26.1"
 
 log = logging.getLogger()
 
@@ -114,10 +114,6 @@ INSTALLED_APPS = (
     "ai_chatbots",
     "health_check",
     "health_check.cache",
-    "health_check.contrib.migrations",
-    "health_check.contrib.celery_ping",
-    "health_check.contrib.redis",
-    "health_check.contrib.db_heartbeat",
 )
 
 HEALTH_CHECK = {
@@ -125,30 +121,27 @@ HEALTH_CHECK = {
         # The 'startup' subset includes checks that must pass before the application can
         # start.
         "startup": [
-            "MigrationsHealthCheck",  # Ensures database migrations are applied.
-            "CacheBackend",  # Verifies the cache backend is operational.
-            "RedisHealthCheck",  # Confirms Redis is reachable and functional.
-            "DatabaseHeartBeatCheck",  # Checks the database connection is alive.
+            "health_check.backends.MigrationsHealthCheck",  # Migrations applied.
+            "health_check.cache.CacheBackend",  # Cache operational.
+            "health_check.backends.DatabaseBackend",  # Database alive.
         ],
         # The 'liveness' subset includes checks to determine if the application is
         # running.
-        "liveness": ["DatabaseHeartBeatCheck"],  # Minimal check to ensure the app is
-        # alive.
+        "liveness": [
+            "health_check.backends.DatabaseBackend",  # Minimal check.
+        ],
         # The 'readiness' subset includes checks to determine if the application is
         # ready to serve requests.
         "readiness": [
-            "CacheBackend",  # Ensures the cache is ready for use.
-            "RedisHealthCheck",  # Confirms Redis is ready for use.
-            "DatabaseHeartBeatCheck",  # Verifies the database is ready for queries.
+            "health_check.cache.CacheBackend",  # Cache ready.
+            "health_check.backends.DatabaseBackend",  # Database ready.
         ],
         # The 'full' subset includes all available health checks for a comprehensive
         # status report.
         "full": [
-            "MigrationsHealthCheck",  # Ensures database migrations are applied.
-            "CacheBackend",  # Verifies the cache backend is operational.
-            "RedisHealthCheck",  # Confirms Redis is reachable and functional.
-            "DatabaseHeartBeatCheck",  # Checks the database connection is alive.
-            "CeleryPingHealthCheck",  # Verifies Celery workers are responsive.
+            "health_check.backends.MigrationsHealthCheck",  # Migrations applied.
+            "health_check.cache.CacheBackend",  # Cache operational.
+            "health_check.backends.DatabaseBackend",  # Database alive.
         ],
     }
 }

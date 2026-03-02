@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+Version 0.26.1
+--------------
+
+- Learning Material search refinements (#438)
+- chore(deps): update dependency pandas to v3 (#432)
+- chore(deps): update dependency pytest to v9 (#433)
+- chore: migrate from poetry/pip to uv for dependency management (#435)
+
 Version 0.26.0 (Released February 25, 2026)
 --------------
 
