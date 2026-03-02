@@ -107,6 +107,7 @@ INSTALLED_APPS = (
     "hijack.contrib.admin",
     "guardian",
     "channels",
+    "mitol.observability.apps.ObservabilityConfig",
     # Put our apps after this point
     "main",
     "openapi",
@@ -342,61 +343,10 @@ DJANGO_LOG_LEVEL = get_string("DJANGO_LOG_LEVEL", "INFO")
 OS_LOG_LEVEL = get_string("OS_LOG_LEVEL", "INFO")
 
 # For logging to a remote syslog host
-LOG_HOST = get_string("MITOL_LOG_HOST", "localhost")
-LOG_HOST_PORT = get_int("MITOL_LOG_HOST_PORT", 514)
-
 HOSTNAME = platform.node().split(".")[0]
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "filters": {"require_debug_false": {"()": "django.utils.log.RequireDebugFalse"}},
-    "formatters": {
-        "verbose": {
-            "format": (
-                "[%(asctime)s] %(levelname)s %(process)d [%(name)s] "
-                "%(filename)s:%(lineno)d - "
-                f"[{HOSTNAME}] - %(message)s"
-            ),
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        }
-    },
-    "handlers": {
-        "console": {
-            "level": LOG_LEVEL,
-            "class": "logging.StreamHandler",
-            "formatter": "verbose",
-        },
-        "syslog": {
-            "level": LOG_LEVEL,
-            "class": "logging.handlers.SysLogHandler",
-            "facility": "local7",
-            "formatter": "verbose",
-            "address": (LOG_HOST, LOG_HOST_PORT),
-        },
-        "mail_admins": {
-            "level": "ERROR",
-            "filters": ["require_debug_false"],
-            "class": "django.utils.log.AdminEmailHandler",
-        },
-    },
-    "loggers": {
-        "django": {
-            "propagate": True,
-            "level": DJANGO_LOG_LEVEL,
-            "handlers": ["console", "syslog"],
-        },
-        "django.request": {
-            "handlers": ["mail_admins"],
-            "level": DJANGO_LOG_LEVEL,
-            "propagate": True,
-        },
-        "opensearch": {"level": OS_LOG_LEVEL},
-        "nplusone": {"handlers": ["console"], "level": "ERROR"},
-        "boto3": {"handlers": ["console"], "level": "ERROR"},
-    },
-    "root": {"handlers": ["console", "syslog"], "level": LOG_LEVEL},
-}
+# LOGGING is provided by mitol-django-observability (structlog-based, JSON in prod)
+from mitol.observability.settings.logging import LOGGING  # noqa: E402, F401
 
 STATUS_TOKEN = get_string("STATUS_TOKEN", "")
 
