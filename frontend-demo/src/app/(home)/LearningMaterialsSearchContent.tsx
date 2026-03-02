@@ -1,4 +1,7 @@
-import { queries as VectorContenfilesQueries } from "@/services/learn/vector-contentfiles/queries"
+import {
+  queries as VectorContenfilesQueries,
+  type VectorContentFile,
+} from "@/services/learn/vector-contentfiles/queries"
 import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import React, { useState } from "react"
@@ -81,7 +84,7 @@ const getContentTypeIcon = (type: string) => {
   }
 }
 
-const getOcwIcon = (result) => {
+const getOcwIcon = (result: VectorContentFile) => {
   if (result.content_type === "video") {
     return <RiVidicon2Fill />
   }
@@ -96,7 +99,7 @@ const getOcwIcon = (result) => {
   return <RiFileTextFill />
 }
 
-const getResultIcon = (result) => {
+const getResultIcon = (result: VectorContentFile) => {
   if (result.platform?.code === "ocw") {
     return getOcwIcon(result)
   }
