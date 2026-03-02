@@ -56,7 +56,7 @@ const queries = {
         }
         if (opts.file_extension) {
           opts.file_extension.forEach((extension) => {
-            search.append("file_extension[]", extension)
+            search.append("file_extension", extension)
           })
         }
         if (opts.platform) {

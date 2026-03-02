@@ -81,6 +81,28 @@ const getContentTypeIcon = (type: string) => {
   }
 }
 
+const getOcwIcon = (result) => {
+  if (result.content_type === "video") {
+    return <RiVidicon2Fill />
+  }
+  const featureTypes = result.content_feature_type || []
+  if (featureTypes.includes("Exams")) return <RiQuestionMark />
+  if (featureTypes.includes("Lecture Notes")) return <RiBookOpenFill />
+  if (featureTypes.includes("Assignments")) return <RiListOrdered />
+  if (featureTypes.includes("Laboratory Assignments"))
+    return <RiSplitCellsHorizontal />
+  if (featureTypes.includes("Projects")) return <RiCodeSSlashFill />
+  if (featureTypes.includes("Recitation Notes")) return <RiFileTextFill />
+  return <RiFileTextFill />
+}
+
+const getResultIcon = (result) => {
+  if (result.platform?.code === "ocw") {
+    return getOcwIcon(result)
+  }
+  return getContentTypeIcon(getContentType(result.source_path || ""))
+}
+
 const LearningMaterialsSearchContent: React.FC = () => {
   const me = useQuery(userQueries.me())
   const [inputValue, setInputValue] = useState("")
@@ -132,7 +154,11 @@ const LearningMaterialsSearchContent: React.FC = () => {
   }
 
   const results = data?.results?.filter((result) => {
-    if (!result.title || !result.url || !result.source_path) return false
+    if (!result.title || !result.url) return false
+    if (result.platform?.code === "ocw") {
+      return true
+    }
+    if (!result.source_path) return false
     const type = getContentType(result.source_path)
     return allowedTypes.includes(type)
   })
@@ -190,12 +216,12 @@ const LearningMaterialsSearchContent: React.FC = () => {
       )}
 
       <Grid container spacing={2}>
-        {results?.map((result) => (
-          <Grid size={{ xs: 12 }} key={result.id}>
+        {results?.map((result, index) => (
+          <Grid size={{ xs: 12 }} key={`${result.id}-${index}`}>
             <Card variant="outlined" sx={{ p: 2 }}>
               <Box display="flex" alignItems="center">
                 <Box color="text.secondary" sx={{ paddingRight: "30px" }}>
-                  {getContentTypeIcon(getContentType(result.source_path))}
+                  {getResultIcon(result)}
                 </Box>
                 <Box>
                   <Typography variant="body3" color="text.primary">
