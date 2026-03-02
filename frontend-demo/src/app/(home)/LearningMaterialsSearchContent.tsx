@@ -217,7 +217,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
 
       <Grid container spacing={2}>
         {results?.map((result, index) => (
-          <Grid size={{ xs: 12 }} key={`${result.id}-${index}`}>
+          <Grid item xs={12} key={`${result.id}-${index}`}>
             <Card variant="outlined" sx={{ p: 2 }}>
               <Box display="flex" alignItems="center">
                 <Box color="text.secondary" sx={{ paddingRight: "30px" }}>
