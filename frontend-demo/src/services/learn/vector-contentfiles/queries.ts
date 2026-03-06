@@ -10,6 +10,8 @@ type VectorContentListOptions = {
   group_by?: string
   platform?: string
   group_size?: number
+  url__isnull?: boolean
+  title__isnull?: boolean
   file_extension?: string[]
   limit: number
 }
@@ -67,6 +69,12 @@ const queries = {
         }
         if (opts.group_by) {
           search.append("group_by", opts.group_by)
+        }
+        if (opts.url__isnull !== undefined) {
+          search.append("url__isnull", opts.url__isnull.toString())
+        }
+        if (opts.title__isnull !== undefined) {
+          search.append("title__isnull", opts.title__isnull.toString())
         }
 
         return axios
