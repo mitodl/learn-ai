@@ -51,6 +51,9 @@ const allowedTypes = [
 ]
 
 const getContentType = (sourcePath: string) => {
+  if (!sourcePath) {
+    return "static"
+  }
   if (sourcePath.endsWith(".srt")) {
     return "video"
   }
@@ -117,7 +120,9 @@ const LearningMaterialsSearchContent: React.FC = () => {
       q: searchQuery,
       group_by: "key",
       group_size: 1,
-      limit: 40,
+      limit: 30,
+      url__isnull: false,
+      title__isnull: false,
       platform: platform || undefined,
     }),
     enabled: !!searchQuery,
@@ -161,7 +166,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
     if (result.platform?.code === "ocw") {
       return true
     }
-    if (!result.source_path) return false
+    //if (!result.source_path) return false
     const type = getContentType(result.source_path)
     return allowedTypes.includes(type)
   })
