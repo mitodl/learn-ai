@@ -2337,16 +2337,17 @@ wheels = [
 
 [[package]]
 name = "langchain-litellm"
-version = "0.5.1"
+version = "0.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "langchain-core" },
     { name = "litellm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/fa/088dd2e3426aa413991afb67aef4c4e79ff3c0e4c25f753842bfaf4ec43f/langchain_litellm-0.5.1.tar.gz", hash = "sha256:1af5743c424456ce12c59cbf08b4774fbc9025124b6de8249713864242db57e1", size = 18869, upload-time = "2026-02-11T00:56:40.631Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d1/bd/96f2fbaf6274d97b463d787691f1ba9298f977c40361bbfc86f622f793e5/langchain_litellm-0.6.1.tar.gz", hash = "sha256:e1dae0c547ad577235998c40700e88a1fec74741c2e010831feff37d57ecb229", size = 332978, upload-time = "2026-03-01T20:35:33.16Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b9/6f/84c8cef2cd5a20e94222de93cc57645102087dff616d5054755b97db51b1/langchain_litellm-0.5.1-py3-none-any.whl", hash = "sha256:3726c050eaaeb0b8aad0c8ceefae549917b185d176859866375f97d1d0ed6748", size = 19954, upload-time = "2026-02-11T00:56:41.717Z" },
+    { url = "https://files.pythonhosted.org/packages/63/ac/cf509fa91e90fea069e40c8d9fea2f89eb0b0acf8a6e33e76ec17c1fc4f5/langchain_litellm-0.6.1-py3-none-any.whl", hash = "sha256:c62b49b3a151d1cee912ba79156cac120d12e572f4ade27557eaeb37a67d6571", size = 24862, upload-time = "2026-03-01T20:35:34.444Z" },
 ]
 
 [[package]]
@@ -2617,7 +2618,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.1.0,<2" },
     { name = "langchain-community", specifier = ">=0.4.1,<0.5" },
     { name = "langchain-core", specifier = ">=1.1.0,<2" },
-    { name = "langchain-litellm", specifier = ">=0.5.0,<0.6" },
+    { name = "langchain-litellm", specifier = ">=0.6.1,<0.7" },
     { name = "langchain-openai", specifier = ">=1.1.0,<2" },
     { name = "langgraph", specifier = "==1.0.4" },
     { name = "langmem", specifier = ">=0.0.30,<0.0.31" },
