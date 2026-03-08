@@ -39,7 +39,7 @@ dependencies = [
     "langchain-core>=1.1.0,<2",
     "langchain-litellm>=0.6.1,<0.7",
     "langchain-openai>=1.1.0,<2",
-    "langgraph==1.0.4",
+    "langgraph==1.0.10",
     "langmem>=0.0.30,<0.0.31",
     "langsmith>=0.7.0,<0.8",
     "litellm>=1.53.5,<2",
