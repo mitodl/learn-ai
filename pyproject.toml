@@ -3,7 +3,7 @@ name = "learn-ai"
 version = "0.71.0"
 description = "AI applications for MIT Open Learning."
 authors = [{ name = "MIT ODL" }]
-requires-python = ">=3.13.7,<3.14"
+requires-python = ">=3.14.3,<3.15"
 readme = "README.md"
 license = "BSD-3"
 dependencies = [
