@@ -96,11 +96,11 @@ class TimeoutMetricWrapper(BaseMetric):
             def target(result=result):
                 try:
                     score = method(test_case)
-                    self.score = self.base_metric.score
-                    self.success = self.base_metric.success
-                    self.reason = getattr(self.base_metric, "reason", None)
-                    self.error = getattr(self.base_metric, "error", None)
                     result["score"] = score
+                    result["base_score"] = self.base_metric.score
+                    result["base_success"] = self.base_metric.success
+                    result["base_reason"] = getattr(self.base_metric, "reason", None)
+                    result["base_error"] = getattr(self.base_metric, "error", None)
                     result["completed"] = True
                 except Exception as e:  # noqa: BLE001
                     result["error"] = str(e)
@@ -122,7 +122,11 @@ class TimeoutMetricWrapper(BaseMetric):
                 last_error = "Execution failed to complete"
                 continue
 
-            # Success
+            # Success - copy to self only from the main thread
+            self.score = result["base_score"]
+            self.success = result["base_success"]
+            self.reason = result["base_reason"]
+            self.error = result["base_error"]
             return result["score"]
 
         # All retries exhausted
