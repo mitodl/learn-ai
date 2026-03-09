@@ -1,6 +1,21 @@
 Release Notes
 =============
 
+Version 0.26.2
+--------------
+
+- Shanbady/learning material search filter null (#442)
+- fix(deps): update dependency langchain-litellm to >=0.6.1,<0.7 (#448)
+- chore(deps): update postgres docker tag to v18.3 (#447)
+- chore(deps): update dependency pdbpp to >=0.12.1,<0.13 (#446)
+- fix(deps): update dependency ruff to v0.15.5 (#445)
+- chore(deps): update node.js to v22.22.1 (#443)
+- chore(deps): update dependency django to v5.2.12 [security] (#441)
+- Learning Material search refinements (#438)
+- chore(deps): update dependency pandas to v3 (#432)
+- chore(deps): update dependency pytest to v9 (#433)
+- chore: migrate from poetry/pip to uv for dependency management (#435)
+
 Version 0.26.0 (Released February 25, 2026)
 --------------
 
