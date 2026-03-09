@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.26.2
+Version 0.26.2 (Released March 09, 2026)
 --------------
 
 - Shanbady/learning material search filter null (#442)
