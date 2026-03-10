@@ -546,7 +546,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
         async def call_model(state: dict, config: RunnableConfig) -> dict:
             messages = state.get("llm_input_messages") or state["messages"]
             response = await self.llm.ainvoke([system_message, *messages], config)
-            return {"messages": [response]}
+            return {"messages": [response], "sub_agent_tool_content": None}
 
         def route_after_tools(state: dict) -> str:
             """Route to sub-agent if routing fields set, else back to agent."""
@@ -649,7 +649,7 @@ class SyllabusBot(TruncatingChatbot):
         async def call_model(state: dict, config: RunnableConfig) -> dict:
             messages = state.get("llm_input_messages") or state["messages"]
             response = await self.llm.ainvoke([system_message, *messages], config)
-            return {"messages": [response]}
+            return {"messages": [response], "sub_agent_tool_content": None}
 
         def route_after_tools(state: dict) -> str:
             """Route to sub-agent if routing fields set, else back to agent."""
