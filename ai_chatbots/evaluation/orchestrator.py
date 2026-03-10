@@ -42,12 +42,14 @@ class EvaluationOrchestrator:
         self.stdout = stdout
         self.reporter = EvaluationReporter(stdout)
 
-    def create_evaluation_config(
+    def create_evaluation_config(  # noqa: PLR0913
         self,
         models: list[str],
         evaluation_model: str,
         metric_thresholds: Optional[dict[str, float]] = None,
         timeout_seconds: int = 360,
+        max_retries: int = 3,
+        retry_delay: float = 5.0,
         *,
         require_expected: bool = False,
     ) -> EvaluationConfig:
@@ -58,6 +60,8 @@ class EvaluationOrchestrator:
             evaluation_model: Model to use as the evaluation judge.
             metric_thresholds: Optional custom thresholds per metric name.
             timeout_seconds: Timeout for individual metric execution.
+            max_retries: Maximum retries per metric on timeout/error.
+            retry_delay: Base delay in seconds between retries (exponential backoff).
             require_expected: If True, use metrics that require curated expected
                 answers (ContextualPrecision, ContextualRecall). If False
                 (default), use reference-free metrics (Faithfulness, GEval)
@@ -149,8 +153,10 @@ class EvaluationOrchestrator:
                 ),
             ]
 
-        # Wrap metrics with timeout functionality
-        timeout_wrapped_metrics = wrap_metrics_with_timeout(metrics, timeout_seconds)
+        # Wrap metrics with timeout and retry functionality
+        timeout_wrapped_metrics = wrap_metrics_with_timeout(
+            metrics, timeout_seconds, max_retries, retry_delay
+        )
 
         return EvaluationConfig(
             models=models,

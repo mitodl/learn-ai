@@ -110,6 +110,25 @@ class Command(BaseCommand):
                 "evaluate quality without expected answers."
             ),
         )
+        parser.add_argument(
+            "--max-retries",
+            dest="max_retries",
+            required=False,
+            type=int,
+            help="Max retries per metric on timeout/error (default: 3)",
+            default=3,
+        )
+        parser.add_argument(
+            "--retry-delay",
+            dest="retry_delay",
+            required=False,
+            type=float,
+            help=(
+                "Base delay in seconds between retries with exponential "
+                "backoff and jitter (default: 5.0)"
+            ),
+            default=5.0,
+        )
 
     def handle(self, **options):
         """Run the command using the new evaluation framework."""
@@ -134,6 +153,8 @@ class Command(BaseCommand):
         batch_size = options["batch_size"]
         error_log_file = options["error_log_file"]
         require_expected = options["require_expected"]
+        max_retries = options["max_retries"]
+        retry_delay = options["retry_delay"]
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:
@@ -151,6 +172,8 @@ class Command(BaseCommand):
                 models=models,
                 evaluation_model=evaluation_model,
                 timeout_seconds=timeout_seconds,
+                max_retries=max_retries,
+                retry_delay=retry_delay,
                 require_expected=require_expected,
             )
 
