@@ -1,6 +1,9 @@
 import type { AiChatProps } from "@mitodl/smoot-design/ai"
 import { useSearchParams } from "next/navigation"
 import { useId, useMemo, useRef, useState } from "react"
+const FEEDBACK_API_URL = process.env.NEXT_PUBLIC_AI_FEEDBACK_URL
+const CSRF_COOKIE_NAME =
+  process.env.NEXT_PUBLIC_AI_CSRF_COOKIE_NAME ?? "csrftoken"
 
 /**
  * Convenience for AiChat component to compute requestOpts settings
@@ -15,6 +18,9 @@ const getRequestOpts = <Body extends Record<string, unknown>>({
 }): AiChatProps["requestOpts"] => {
   return {
     apiUrl,
+    feedbackApiUrl: FEEDBACK_API_URL,
+    csrfCookieName: CSRF_COOKIE_NAME,
+    csrfHeaderName: "X-CSRFToken",
     fetchOpts: { credentials: "include" },
     transformBody: (messages) => {
       return {
@@ -55,6 +61,9 @@ const useRequestOpts = <Body extends Record<string, unknown>>({
   const requestOpts = useMemo(() => {
     const opts: AiChatProps["requestOpts"] = {
       apiUrl,
+      feedbackApiUrl: FEEDBACK_API_URL,
+      csrfCookieName: CSRF_COOKIE_NAME,
+      csrfHeaderName: "X-CSRFToken",
       fetchOpts: { credentials: "include" },
       transformBody: (messages) => {
         const clearHistory = clearHistoryRef.current
