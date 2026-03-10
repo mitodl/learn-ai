@@ -25,41 +25,52 @@ from main.utils import now_in_utc
 log = logging.getLogger(__name__)
 
 
+def _parse_tool_content(content_str: str, thread_id: str) -> dict:
+    """Parse a tool message content string into metadata dict."""
+    try:
+        content = json.loads(content_str or "{}")
+    except json.JSONDecodeError:
+        return {}
+    if "results" in content or "metadata" in content:
+        return {
+            "metadata": {
+                "search_url": content.get("metadata", {}).get("search_url"),
+                "search_parameters": content.get("metadata", {}).get("parameters", []),
+                "search_results": content.get("results", []),
+                "citation_sources": content.get("citation_sources", []),
+                "thread_id": thread_id,
+            }
+        }
+    return {}
+
+
 def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
     """
     Return the metadata for a bot search tool.
     """
-    tool_messages = (
-        []
-        if not latest_state
-        else [
-            t
-            for t in latest_state.values.get("messages", [])
-            if t and t.__class__ == ToolMessage
-        ]
-    )
-    if tool_messages:
-        msg_content = tool_messages[-1].content
-        try:
-            content = json.loads(msg_content or "{}")
-            return {
-                "metadata": {
-                    "search_url": content.get("metadata", {}).get("search_url"),
-                    "search_parameters": content.get("metadata", {}).get(
-                        "parameters", []
-                    ),
-                    "search_results": content.get("results", []),
-                    "citation_sources": content.get("citation_sources", []),
-                    "thread_id": thread_id,
-                }
-            }
-        except json.JSONDecodeError:
-            log.exception(
-                "Error parsing tool metadata, not valid JSON: %s", msg_content
-            )
-            return {"error": "Error parsing tool metadata", "content": msg_content}
-    else:
+    if not latest_state:
         return {}
+
+    # Check sub-agent tool content first (propagated from sub-agent nodes)
+    sub_content = latest_state.values.get("sub_agent_tool_content")
+    if sub_content:
+        result = _parse_tool_content(sub_content, thread_id)
+        if result:
+            return result
+
+    # Fall back to checking ToolMessages in the conversation
+    tool_messages = [
+        t
+        for t in latest_state.values.get("messages", [])
+        if t and t.__class__ == ToolMessage
+    ]
+    # Iterate in reverse to find the most recent tool message with valid
+    # search metadata (routing tool messages aren't JSON search results)
+    for tool_msg in reversed(tool_messages):
+        result = _parse_tool_content(tool_msg.content, thread_id)
+        if result:
+            return result
+    return {}
 
 
 def get_langsmith_prompt(prompt_name: str) -> str:

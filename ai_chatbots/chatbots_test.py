@@ -28,6 +28,8 @@ from ai_chatbots.chatbots import (
     VideoGPTBot,
     get_canvas_problem_set,
     get_problem_from_edx_block,
+    run_recommendation_node,
+    run_syllabus_node,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -291,42 +293,21 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     agent = chatbot.create_agent_graph()
-    for node in ("agent", "tools", "pre_model_hook"):
+    for node in ("agent", "tools", "pre_model_hook", "run_syllabus"):
         assert node in agent.nodes
     graph = agent.get_graph()
     tool = graph.nodes["tools"].data.tools_by_name["search_courses"]
     assert tool.args_schema == SearchToolSchema
     assert tool.coroutine.__name__ == "search_courses"
     edges = graph.edges
-    assert len(edges) == 5
-    summary_edge = edges[3]
-    for test_condition in (
-        summary_edge.source == "pre_model_hook",
-        summary_edge.target == "agent",
-        not summary_edge.conditional,
-    ):
-        assert test_condition
-    tool_agent_edge = edges[4]
-    for test_condition in (
-        tool_agent_edge.source == "tools",
-        tool_agent_edge.target == "pre_model_hook",
-        not tool_agent_edge.conditional,
-    ):
-        assert test_condition
-    agent_tool_edge = edges[2]
-    for test_condition in (
-        agent_tool_edge.source == "agent",
-        agent_tool_edge.target == "tools",
-        agent_tool_edge.conditional,
-    ):
-        assert test_condition
-    agent_end_edge = edges[1]
-    for test_condition in (
-        agent_end_edge.source == "agent",
-        agent_end_edge.target == "__end__",
-        agent_end_edge.conditional,
-    ):
-        assert test_condition
+    edge_set = {(e.source, e.target, e.conditional) for e in edges}
+    # Core edges for the orchestrating graph
+    assert ("pre_model_hook", "agent", False) in edge_set
+    assert ("agent", "tools", True) in edge_set
+    assert ("agent", "__end__", True) in edge_set
+    # tools has conditional edges (to pre_model_hook or run_syllabus)
+    # run_syllabus/pre_model_hook may not appear in get_graph() edges
+    # since conditional routing depends on runtime state
 
 
 @pytest.mark.asyncio
@@ -521,7 +502,7 @@ async def test_get_tool_metadata_none(mocker, mock_checkpointer):
 
 @pytest.mark.asyncio
 async def test_get_tool_metadata_error(mocker, mock_checkpointer):
-    """Test that the get_tool_metadata function returns the expected error response"""
+    """Test that get_tool_metadata returns empty dict when no valid JSON tool messages"""
     chatbot = await sync_to_async(SyllabusBot)("anonymous", mock_checkpointer)
     mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
@@ -543,10 +524,7 @@ async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     )
     metadata = await chatbot.get_tool_metadata()
 
-    assert metadata == {
-        "error": "Error parsing tool metadata",
-        "content": "Could not connect to api",
-    }
+    assert metadata == {}
 
 
 @pytest.mark.parametrize("use_proxy", [True, False])
@@ -1126,125 +1104,6 @@ async def test_bad_request(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
-async def test_send_chunks_single_sub_agent(mocker, mock_checkpointer):
-    """send_chunks should stream sub-agent tokens and suppress the parent summary."""
-    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
-
-    async def fake_events(state, config, version):
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="parent-before")},
-        }
-        yield {"event": "on_tool_start", "name": "ask_syllabus_bot", "data": {}}
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="sub-agent-token")},
-        }
-        yield {"event": "on_tool_end", "name": "ask_syllabus_bot", "data": {}}
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="parent-summary")},
-        }
-
-    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
-
-    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
-    assert "parent-before" in chunks
-    assert "sub-agent-token" in chunks
-    assert "parent-summary" not in chunks
-
-
-@pytest.mark.asyncio
-async def test_send_chunks_multi_sub_agent(mocker, mock_checkpointer):
-    """send_chunks should stream tokens from multiple sub-agents without suppression."""
-    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
-
-    async def fake_events(state, config, version):
-        # First sub-agent
-        yield {"event": "on_tool_start", "name": "ask_syllabus_bot", "data": {}}
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="from-sub1")},
-        }
-        yield {"event": "on_tool_end", "name": "ask_syllabus_bot", "data": {}}
-        # Second sub-agent
-        yield {"event": "on_tool_start", "name": "ask_recommendation_bot", "data": {}}
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="from-sub2")},
-        }
-        yield {"event": "on_tool_end", "name": "ask_recommendation_bot", "data": {}}
-        # Parent final response (should be suppressed)
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="parent-summary")},
-        }
-
-    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
-
-    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
-    assert "from-sub1" in chunks
-    assert "from-sub2" in chunks
-    assert "parent-summary" not in chunks
-
-
-@pytest.mark.asyncio
-async def test_send_chunks_returns_early_on_suppression(mocker, mock_checkpointer):
-    """send_chunks should return as soon as the parent starts restating, not drain the stream."""
-    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
-
-    events_consumed = 0
-
-    async def fake_events(state, config, version):
-        nonlocal events_consumed
-        events_consumed += 1
-        yield {"event": "on_tool_start", "name": "ask_syllabus_bot", "data": {}}
-        events_consumed += 1
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="sub-token")},
-        }
-        events_consumed += 1
-        yield {"event": "on_tool_end", "name": "ask_syllabus_bot", "data": {}}
-        # First parent token triggers early return; the generator is closed
-        # before reaching subsequent yields
-        events_consumed += 1
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="parent-1")},
-        }
-        # These should never be reached
-        events_consumed += 1
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="parent-2")},
-        }
-        events_consumed += 1
-        yield {
-            "event": "on_chat_model_stream",
-            "name": "",
-            "data": {"chunk": AIMessageChunkFactory.create(content="parent-3")},
-        }
-
-    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
-
-    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
-    assert chunks == ["sub-token"]
-    # Should stop after yielding the first suppressed parent token (4 events),
-    # not drain all 6
-    assert events_consumed == 4
-
-
-@pytest.mark.asyncio
 async def test_send_chunks_no_sub_agents(mocker, mock_checkpointer):
     """send_chunks should pass through all tokens when no sub-agents are invoked."""
     chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
@@ -1290,6 +1149,148 @@ async def test_send_chunks_skips_empty_content(mocker, mock_checkpointer):
 
     chunks = [c async for c in chatbot.send_chunks({"messages": []})]
     assert chunks == ["real"]
+
+
+@pytest.mark.asyncio
+async def test_route_to_syllabus_returns_command():
+    """route_to_syllabus should return a Command with correct goto and update."""
+    from langchain_core.messages import ToolMessage as LCToolMessage
+    from langgraph.types import Command
+
+    from ai_chatbots.tools import route_to_syllabus
+
+    result = await route_to_syllabus.ainvoke(
+        {"q": "prerequisites", "readable_id": "MIT+6.00.1x", "tool_call_id": "call_123"}
+    )
+    assert isinstance(result, Command)
+    assert not result.goto
+    assert result.update["sub_query"] == "prerequisites"
+    assert result.update["sub_course_id"] == "MIT+6.00.1x"
+    assert len(result.update["messages"]) == 1
+    assert isinstance(result.update["messages"][0], LCToolMessage)
+    assert result.update["messages"][0].tool_call_id == "call_123"
+
+
+@pytest.mark.asyncio
+async def test_route_to_recommendation_returns_command():
+    """route_to_recommendation should return a Command with correct goto and update."""
+    from langgraph.types import Command
+
+    from ai_chatbots.tools import route_to_recommendation
+
+    result = await route_to_recommendation.ainvoke(
+        {"q": "machine learning courses", "tool_call_id": "call_456"}
+    )
+    assert isinstance(result, Command)
+    assert not result.goto
+    assert result.update["sub_query"] == "machine learning courses"
+
+
+@pytest.mark.asyncio
+async def test_run_syllabus_node(mocker, mock_checkpointer):
+    """run_syllabus_node should create a SyllabusBot and return an AIMessage."""
+    tool_content = json.dumps({"results": [{"id": "1", "chunk_content": "Calculus"}]})
+    mock_ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessageFactory.create(content=tool_content),
+                AIMessage(content="Course covers calculus"),
+            ]
+        }
+    )
+    mock_bot = mocker.Mock()
+    mock_bot.agent = mocker.Mock()
+    mock_bot.agent.ainvoke = mock_ainvoke
+
+    mocker.patch(
+        "ai_chatbots.chatbots.SyllabusBot",
+        return_value=mock_bot,
+    )
+
+    state = {
+        "sub_query": "what topics?",
+        "sub_course_id": "MIT+18.01",
+        "user_id": "user123",
+    }
+    config = {"configurable": {"thread_id": "test"}}
+    result = await run_syllabus_node(state, config)
+
+    assert result["messages"][0].content == "Course covers calculus"
+    assert result["sub_query"] is None
+    assert result["sub_course_id"] is None
+    assert result["sub_agent_tool_content"] == tool_content
+    mock_ainvoke.assert_called_once_with(
+        {"messages": [HumanMessage("what topics?")], "course_id": ["MIT+18.01"]},
+        config,
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_recommendation_node(mocker, mock_checkpointer):
+    """run_recommendation_node should create a ResourceRecommendationBot and return an AIMessage."""
+    tool_content = json.dumps({"results": [{"title": "ML Course"}]})
+    mock_ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessageFactory.create(content=tool_content),
+                AIMessage(content="Try these courses"),
+            ]
+        }
+    )
+    mock_bot = mocker.Mock()
+    mock_bot.agent = mocker.Mock()
+    mock_bot.agent.ainvoke = mock_ainvoke
+
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot",
+        return_value=mock_bot,
+    )
+
+    state = {"sub_query": "similar to 6.00.1x", "user_id": "user456"}
+    config = {"configurable": {"thread_id": "test"}}
+    result = await run_recommendation_node(state, config)
+
+    assert result["messages"][0].content == "Try these courses"
+    assert result["sub_query"] is None
+    assert result["sub_agent_tool_content"] == tool_content
+    mock_ainvoke.assert_called_once_with(
+        {"messages": [HumanMessage("similar to 6.00.1x")]},
+        config,
+    )
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_no_cross_calling_tools(mock_checkpointer):
+    """Bots created with include_sub_agents=False should not include routing tools."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, include_sub_agents=False
+    )
+    tool_names = [t.name for t in chatbot.tools]
+    assert "search_courses" in tool_names
+    assert "route_to_syllabus" not in tool_names
+
+
+@pytest.mark.asyncio
+async def test_recommendation_bot_no_sub_agents_uses_create_react_agent(
+    mocker, mock_checkpointer
+):
+    """When include_sub_agents=False, should use create_react_agent (TruncatingChatbot)."""
+    mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, include_sub_agents=False
+    )
+    mock_create_agent.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_syllabus_bot_with_recommendations_has_run_recommendation_node(
+    mock_checkpointer,
+):
+    """SyllabusBot with enable_course_recommendations should have run_recommendation node."""
+    chatbot = await sync_to_async(SyllabusBot)(
+        "user", mock_checkpointer, enable_course_recommendations=True
+    )
+    assert "run_recommendation" in chatbot.agent.nodes
 
 
 @pytest.mark.asyncio

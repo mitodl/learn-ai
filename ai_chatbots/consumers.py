@@ -439,6 +439,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
         """Process extra state parameters if any"""
         return {
             "search_url": [data.get("search_url") or settings.AI_MIT_SEARCH_URL],
+            "user_id": self.user_id,
         }
 
     def create_chatbot(
@@ -500,6 +501,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
             "exclude_canvas": [str(not user or user.is_anonymous or not user.is_staff)],
+            "user_id": self.user_id,
         }
         if related_courses:
             params["related_courses"] = related_courses

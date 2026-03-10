@@ -7,9 +7,10 @@ from typing import Annotated, Optional
 import pydantic
 from django.conf import settings
 from httpx import RequestError
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
+from langchain_core.messages import ToolMessage
+from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
+from langgraph.types import Command
 from pydantic import Field
 
 from ai_chatbots.constants import LearningResourceType, OfferedBy
@@ -230,8 +231,8 @@ class SearchRelatedCourseContentFilesToolSchema(pydantic.BaseModel):
     )
 
 
-class AskSyllabusBotSchema(pydantic.BaseModel):
-    """Ask a detailed question about a specific MIT learning resource's content."""
+class RouteSyllabusSchema(pydantic.BaseModel):
+    """Route to syllabus expert for detailed course information."""
 
     q: str = Field(
         description="The user's question about the course or learning resource"
@@ -241,7 +242,7 @@ class AskSyllabusBotSchema(pydantic.BaseModel):
     )
 
 
-class AskRecommendationBotSchema(pydantic.BaseModel):
+class RouteRecommendationSchema(pydantic.BaseModel):
     """Find MIT learning resources similar to or related to a topic."""
 
     q: str = Field(
@@ -391,43 +392,49 @@ async def get_video_transcript_chunk(
         return json.dumps({"error": "An error occurred while getting the transcript"})
 
 
-@tool(args_schema=AskSyllabusBotSchema)
-async def ask_syllabus_bot(q: str, readable_id: str, config: RunnableConfig) -> str:
+@tool(args_schema=RouteSyllabusSchema)
+async def route_to_syllabus(
+    q: str,
+    readable_id: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
     """
-    Ask a detailed question about a specific MIT learning resource's content.
+    Route to the syllabus expert for detailed course information.
     Use this when the user wants specific information about a course or resource
-    found via search_courses.
+    found via search_courses. Pass the readable_id from search results.
     """
-    from asgiref.sync import sync_to_async
-
-    from ai_chatbots.chatbots import SyllabusBot
-
-    bot = await sync_to_async(SyllabusBot)(
-        user_id="system",
-        checkpointer=None,
-        thread_id=None,
-    )
-    return await bot.get_single_response(
-        message=q,
-        extra_state={"course_id": [readable_id]},
-        config=config,
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Routing to syllabus expert for {readable_id}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
+            "sub_query": q,
+            "sub_course_id": readable_id,
+        },
     )
 
 
-@tool(args_schema=AskRecommendationBotSchema)
-async def ask_recommendation_bot(q: str, config: RunnableConfig) -> str:
+@tool(args_schema=RouteRecommendationSchema)
+async def route_to_recommendation(
+    q: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
     """
     Search for MIT learning resources matching a description.
     Use this when the user asks for courses similar to or related to
     the current one.
     """
-    from asgiref.sync import sync_to_async
-
-    from ai_chatbots.chatbots import ResourceRecommendationBot
-
-    bot = await sync_to_async(ResourceRecommendationBot)(
-        user_id="system",
-        checkpointer=None,
-        thread_id=None,
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Routing to recommendation expert for: {q}",
+                    tool_call_id=tool_call_id,
+                )
+            ],
+            "sub_query": q,
+        },
     )
-    return await bot.get_single_response(message=q, config=config)

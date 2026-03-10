@@ -38,6 +38,7 @@ def recommendation_consumer(async_user, django_session):
         "session": django_session,
     }
     consumer.channel_name = "test_channel"
+    consumer.user_id = async_user.global_id
     return consumer
 
 
@@ -51,6 +52,7 @@ def syllabus_consumer(async_user, django_session):
         "session": django_session,
     }
     consumer.channel_name = "test_syllabus_channel"
+    consumer.user_id = async_user.global_id
     return consumer
 
 
@@ -64,6 +66,7 @@ def canvas_syllabus_consumer(async_user, django_session):
         "session": django_session,
     }
     consumer.channel_name = "test_syllabus_canvas_channel"
+    consumer.user_id = async_user.global_id
     return consumer
 
 
@@ -206,7 +209,10 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
     assert recommendation_consumer.bot.instructions == (
         instructions if instructions else prompts.PROMPT_RECOMMENDATION
     )
-    default_state = {"search_url": [settings.AI_MIT_SEARCH_URL]}
+    default_state = {
+        "search_url": [settings.AI_MIT_SEARCH_URL],
+        "user_id": recommendation_consumer.user_id,
+    }
     mock_completion.assert_called_once_with(message, extra_state=default_state)
     assert (
         mock_http_consumer_send.send_body.call_count
@@ -382,6 +388,7 @@ def test_syllabus_process_extra_state(syllabus_consumer, request_params):
         "course_id": [request_params.get("course_id")],
         "collection_name": [request_params.get("collection_name", None)],
         "exclude_canvas": ["True"],
+        "user_id": syllabus_consumer.user_id,
     }
 
 
@@ -393,6 +400,7 @@ def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
         "course_id": ["MITx+6.00.1x"],
         "collection_name": [None],
         "exclude_canvas": ["False"],
+        "user_id": canvas_syllabus_consumer.user_id,
     }
 
 
@@ -615,6 +623,7 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
             "course_id": [payload["course_id"]],
             "collection_name": [payload["collection_name"]],
             "exclude_canvas": ["True"],
+            "user_id": syllabus_consumer.user_id,
         },
     )
     assert await UserChatSession.objects.filter(
