@@ -13,7 +13,7 @@ import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
@@ -189,6 +189,44 @@ class BaseChatbot(ABC):
         # compile and return the agent graph
         return agent_graph.compile(checkpointer=self.checkpointer)
 
+    async def get_single_response(
+        self,
+        message: str,
+        extra_state: dict | None = None,
+        config: dict | None = None,
+    ) -> str:
+        """
+        Run the agent with ainvoke for sub-agent tool use.
+
+        When called from a parent bot's tool, pass the parent's
+        RunnableConfig so the child's LLM streaming tokens propagate
+        through the parent's callback chain (enabling real-time
+        streaming in the parent's astream output).
+
+        Returns a JSON string with the agent's response and any inner
+        tool metadata (search results, citations).
+        """
+        if not self.agent:
+            error = "Create agent before running"
+            raise ValueError(error)
+        state = {
+            "messages": [HumanMessage(message)],
+            **(extra_state or {}),
+        }
+        run_config = config or self.config
+        result = await self.agent.ainvoke(state, run_config)
+        response_text = result["messages"][-1].content
+
+        output = {"response": response_text}
+        tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+        if tool_messages:
+            try:
+                inner_metadata = json.loads(tool_messages[-1].content or "{}")
+                output.update(inner_metadata)
+            except json.JSONDecodeError:
+                pass
+        return json.dumps(output)
+
     async def get_latest_history(self) -> dict:
         """Get the most recent state history"""
         async for state in self.agent.aget_state_history(self.config):
@@ -264,19 +302,49 @@ class BaseChatbot(ABC):
             return [callback_handler]
         return []
 
+    SUB_AGENT_TOOLS = frozenset({"ask_syllabus_bot", "ask_recommendation_bot"})
+
     async def send_chunks(self, state) -> AsyncGenerator[str, None]:
-        """Yield the response in chunks"""
-        response_generator = self.agent.astream(
-            state,
-            self.config,
-            stream_mode="messages",
-        )
-        async for chunk in response_generator:
-            if (
-                isinstance(chunk[0], AIMessage | AIMessageChunk)
-                and chunk[1].get("langgraph_node") != "pre_model_hook"
-            ):
-                yield chunk[0].content
+        """Yield the response in chunks using astream_events.
+
+        Uses astream_events (v2) instead of astream(stream_mode="messages")
+        so that LLM streaming tokens from nested sub-agent invocations
+        (within tool calls) are captured in real-time.
+
+        During sub-agent tool execution, the child bot's LLM tokens are
+        yielded immediately for real-time streaming. After the sub-agent
+        completes, the parent's restating response is suppressed.
+        """
+        in_sub_agent = False
+        suppress_parent = False
+
+        async for event in self.agent.astream_events(state, self.config, version="v2"):
+            kind = event["event"]
+
+            if kind == "on_tool_start" and event["name"] in self.SUB_AGENT_TOOLS:
+                in_sub_agent = True
+                suppress_parent = False
+                continue
+
+            if kind == "on_tool_end" and event["name"] in self.SUB_AGENT_TOOLS:
+                in_sub_agent = False
+                suppress_parent = True
+                continue
+
+            if kind != "on_chat_model_stream":
+                continue
+
+            chunk = event["data"]["chunk"]
+            if not chunk.content:
+                continue
+
+            # Once the parent starts restating after a sub-agent already
+            # streamed, stop consuming events so the HTTP stream can close
+            # immediately instead of waiting for the full parent generation.
+            if suppress_parent and not in_sub_agent:
+                return
+
+            yield chunk.content
 
     async def get_completion(
         self,
@@ -446,7 +514,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
 
     def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
-        return [tools.search_courses, tools.search_content_files]
+        return [tools.search_courses, tools.ask_syllabus_bot]
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -488,8 +556,10 @@ class SyllabusBot(TruncatingChatbot):
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
         enable_related_courses: Optional[bool] = False,
+        enable_course_recommendations: Optional[bool] = False,
     ):
         self.enable_related_courses = enable_related_courses
+        self.enable_course_recommendations = enable_course_recommendations
         super().__init__(
             user_id,
             name=name,
@@ -506,6 +576,8 @@ class SyllabusBot(TruncatingChatbot):
         bot_tools = [tools.search_content_files]
         if self.enable_related_courses:
             bot_tools.append(tools.search_related_course_content_files)
+        if self.enable_course_recommendations:
+            bot_tools.append(tools.ask_recommendation_bot)
         return bot_tools
 
     async def get_tool_metadata(self) -> str:

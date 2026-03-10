@@ -7,6 +7,7 @@ from typing import Annotated, Optional
 import pydantic
 from django.conf import settings
 from httpx import RequestError
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
@@ -139,7 +140,8 @@ async def search_courses(
         "certification": kwargs.get("certification"),
     }
     params.update({k: v for k, v in valid_params.items() if v is not None})
-    search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
+    search_url = (state.get("search_url") or [None])[-1] if state else None
+    search_url = search_url or settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
         response = await async_request_with_token(
@@ -228,6 +230,25 @@ class SearchRelatedCourseContentFilesToolSchema(pydantic.BaseModel):
     )
 
 
+class AskSyllabusBotSchema(pydantic.BaseModel):
+    """Ask a detailed question about a specific MIT learning resource's content."""
+
+    q: str = Field(
+        description="The user's question about the course or learning resource"
+    )
+    readable_id: str = Field(
+        description="The readable_id of the learning resource from search results"
+    )
+
+
+class AskRecommendationBotSchema(pydantic.BaseModel):
+    """Find MIT learning resources similar to or related to a topic."""
+
+    q: str = Field(
+        description="Description of what kind of courses or resources to find"
+    )
+
+
 class VideoGPTToolSchema(pydantic.BaseModel):
     """Schema for searching MIT contentfiles for to a particular video transcript."""
 
@@ -294,9 +315,9 @@ async def search_content_files(
     """
 
     url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state.get("course_id", [None])[-1] or readable_id
-    collection_name = state.get("collection_name", [None])[-1]
-    exclude_canvas = state.get("exclude_canvas", ["True"])[-1]
+    course_id = (state.get("course_id") or [None])[-1] or readable_id
+    collection_name = (state.get("collection_name") or [None])[-1]
+    exclude_canvas = (state.get("exclude_canvas") or ["True"])[-1]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -316,7 +337,7 @@ async def search_related_course_content_files(
     JSON string, along with metadata about the query parameters used.
     """
     url = settings.AI_MIT_SYLLABUS_URL
-    collection_name = state.get("collection_name", [None])[-1]
+    collection_name = (state.get("collection_name") or [None])[-1]
     related_courses = state["related_courses"]
     params = {
         "q": q,
@@ -368,3 +389,45 @@ async def get_video_transcript_chunk(
     except Exception:
         log.exception("Error querying MIT API for transcripts")
         return json.dumps({"error": "An error occurred while getting the transcript"})
+
+
+@tool(args_schema=AskSyllabusBotSchema)
+async def ask_syllabus_bot(q: str, readable_id: str, config: RunnableConfig) -> str:
+    """
+    Ask a detailed question about a specific MIT learning resource's content.
+    Use this when the user wants specific information about a course or resource
+    found via search_courses.
+    """
+    from asgiref.sync import sync_to_async
+
+    from ai_chatbots.chatbots import SyllabusBot
+
+    bot = await sync_to_async(SyllabusBot)(
+        user_id="system",
+        checkpointer=None,
+        thread_id=None,
+    )
+    return await bot.get_single_response(
+        message=q,
+        extra_state={"course_id": [readable_id]},
+        config=config,
+    )
+
+
+@tool(args_schema=AskRecommendationBotSchema)
+async def ask_recommendation_bot(q: str, config: RunnableConfig) -> str:
+    """
+    Search for MIT learning resources matching a description.
+    Use this when the user asks for courses similar to or related to
+    the current one.
+    """
+    from asgiref.sync import sync_to_async
+
+    from ai_chatbots.chatbots import ResourceRecommendationBot
+
+    bot = await sync_to_async(ResourceRecommendationBot)(
+        user_id="system",
+        checkpointer=None,
+        thread_id=None,
+    )
+    return await bot.get_single_response(message=q, config=config)

@@ -489,6 +489,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            enable_course_recommendations=True,
         )
 
     def process_extra_state(self, data: dict) -> dict:
@@ -562,6 +563,7 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            enable_course_recommendations=True,
         )
 
 

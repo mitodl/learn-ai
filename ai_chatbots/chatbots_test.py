@@ -95,11 +95,11 @@ def mock_settings(settings):
 
 
 @pytest.fixture(autouse=True)
-def mock_openai_astream(mocker):
-    """Mock the CompiledStateGraph astream function"""
+def mock_openai_astream_events(mocker):
+    """Mock the CompiledStateGraph astream_events function"""
     return mocker.patch(
-        "ai_chatbots.chatbots.CompiledStateGraph.astream",
-        return_value="Here are some results",
+        "ai_chatbots.chatbots.CompiledStateGraph.astream_events",
+        return_value=MockAsyncIterator([]),
     )
 
 
@@ -239,59 +239,49 @@ async def test_get_completion(
     posthog_settings, mocker, mock_checkpointer, debug, search_results
 ):
     """Test that the ResourceRecommendationBot get_completion method returns expected values."""
+    tool_content = json.dumps(
+        {
+            "metadata": {"search_parameters": {"q": "physics"}},
+            "results": search_results,
+        }
+    )
+    mock_state = mocker.Mock()
+    mock_state.values = {"messages": [ToolMessageFactory.create(content=tool_content)]}
     mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
-        return_value=MockAsyncIterator(
-            [
-                ToolMessageFactory.create(content="Here "),
-            ]
-        ),
+        return_value=MockAsyncIterator([mock_state]),
     )
     user_msg = "I want to learn physics"
-    metadata = {
-        "metadata": {
-            "search_parameters": {"q": "physics"},
-        },
-        "search_results": search_results,
-    }
-    comment_metadata = f"\n\n<!-- {json.dumps(metadata)} -->\n\n".encode()
-    expected_return_value = [b"Here ", b"are ", b"some ", b"results"]
-    if debug:
-        expected_return_value.append(comment_metadata)
+    content_values = [b"Here ", b"are ", b"some ", b"results"]
     chatbot = await sync_to_async(ResourceRecommendationBot)(
         "anonymous", mock_checkpointer
     )
-    mock_stream = mocker.patch(
-        "ai_chatbots.chatbots.CompiledStateGraph.astream",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(
-                    [
-                        (
-                            AIMessageChunkFactory.create(content=val),
-                            {"langgraph_node": "agent"},
-                        )
-                        for val in expected_return_value
-                    ]
-                )
-            )
+    mock_stream_events = mocker.patch(
+        "ai_chatbots.chatbots.CompiledStateGraph.astream_events",
+        return_value=MockAsyncIterator(
+            [
+                {
+                    "event": "on_chat_model_stream",
+                    "name": "ChatLiteLLM",
+                    "data": {
+                        "chunk": AIMessageChunkFactory.create(content=val),
+                    },
+                }
+                for val in content_values
+            ]
         ),
     )
-    chatbot.search_parameters = metadata["metadata"]["search_parameters"]
-    chatbot.search_results = metadata["search_results"]
-    chatbot.search_parameters = {"q": "physics"}
-    chatbot.search_results = search_results
     results = ""
     async for chunk in chatbot.get_completion(user_msg, debug=debug):
         results += str(chunk)
-    mock_stream.assert_called_once_with(
+    mock_stream_events.assert_called_once_with(
         {"messages": [HumanMessage(user_msg)]},
         chatbot.config,
-        stream_mode="messages",
+        version="v2",
     )
     if debug:
         assert '<!-- {"metadata"' in results
-    assert "".join([value.decode() for value in expected_return_value]) in results
+    assert "Here are some results" in results
 
 
 @pytest.mark.asyncio
@@ -359,7 +349,7 @@ async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
 @pytest.mark.asyncio
 async def test_syllabus_bot_get_completion_state(
-    mock_checkpointer, mock_openai_astream, default_model
+    mock_checkpointer, mock_openai_astream_events, default_model
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_SYLLABUS_MODEL = default_model
@@ -372,10 +362,10 @@ async def test_syllabus_bot_get_completion_state(
     }
     state = SyllabusAgentState(messages=[HumanMessage("hello")], **extra_state)
     async for _ in chatbot.get_completion("hello", extra_state=extra_state):
-        mock_openai_astream.assert_called_once_with(
+        mock_openai_astream_events.assert_called_once_with(
             state,
             chatbot.config,
-            stream_mode="messages",
+            version="v2",
         )
     assert chatbot.llm.model == default_model
 
@@ -1041,7 +1031,7 @@ async def test_get_canvas_problem_set(mock_httpx_async_client):
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
 @pytest.mark.asyncio
 async def test_video_gpt_bot_get_completion_state(
-    mock_checkpointer, mock_openai_astream, default_model
+    mock_checkpointer, mock_openai_astream_events, default_model
 ):
     """Proper state should get passed along by get_completion"""
     settings.AI_DEFAULT_VIDEO_GPT_MODEL = default_model
@@ -1059,10 +1049,10 @@ async def test_video_gpt_bot_get_completion_state(
     async for _ in chatbot.get_completion(
         "What is this video about?", extra_state=extra_state
     ):
-        mock_openai_astream.assert_called_once_with(
+        mock_openai_astream_events.assert_called_once_with(
             state,
             chatbot.config,
-            stream_mode="messages",
+            version="v2",
         )
     assert chatbot.llm.model == default_model
 
@@ -1121,7 +1111,7 @@ async def test_bad_request(mocker, mock_checkpointer):
     """Test that the bad_request function logs the exception"""
     mock_log = mocker.patch("ai_chatbots.chatbots.log.exception")
     chatbot = await sync_to_async(VideoGPTBot)("anonymous", mock_checkpointer)
-    chatbot.agent.astream = mocker.Mock(
+    chatbot.agent.astream_events = mocker.Mock(
         side_effect=BadRequestError(
             response=mocker.Mock(
                 json=mocker.Mock(return_value={"error": {"message": "Bad request"}})
@@ -1131,8 +1121,175 @@ async def test_bad_request(mocker, mock_checkpointer):
         )
     )
     async for _ in chatbot.get_completion("hello"):
-        chatbot.agent.astream.assert_called_once()
+        chatbot.agent.astream_events.assert_called_once()
         mock_log.assert_called_once_with("Bad request error")
+
+
+@pytest.mark.asyncio
+async def test_send_chunks_single_sub_agent(mocker, mock_checkpointer):
+    """send_chunks should stream sub-agent tokens and suppress the parent summary."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    async def fake_events(state, config, version):
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="parent-before")},
+        }
+        yield {"event": "on_tool_start", "name": "ask_syllabus_bot", "data": {}}
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="sub-agent-token")},
+        }
+        yield {"event": "on_tool_end", "name": "ask_syllabus_bot", "data": {}}
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="parent-summary")},
+        }
+
+    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
+
+    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
+    assert "parent-before" in chunks
+    assert "sub-agent-token" in chunks
+    assert "parent-summary" not in chunks
+
+
+@pytest.mark.asyncio
+async def test_send_chunks_multi_sub_agent(mocker, mock_checkpointer):
+    """send_chunks should stream tokens from multiple sub-agents without suppression."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    async def fake_events(state, config, version):
+        # First sub-agent
+        yield {"event": "on_tool_start", "name": "ask_syllabus_bot", "data": {}}
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="from-sub1")},
+        }
+        yield {"event": "on_tool_end", "name": "ask_syllabus_bot", "data": {}}
+        # Second sub-agent
+        yield {"event": "on_tool_start", "name": "ask_recommendation_bot", "data": {}}
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="from-sub2")},
+        }
+        yield {"event": "on_tool_end", "name": "ask_recommendation_bot", "data": {}}
+        # Parent final response (should be suppressed)
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="parent-summary")},
+        }
+
+    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
+
+    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
+    assert "from-sub1" in chunks
+    assert "from-sub2" in chunks
+    assert "parent-summary" not in chunks
+
+
+@pytest.mark.asyncio
+async def test_send_chunks_returns_early_on_suppression(mocker, mock_checkpointer):
+    """send_chunks should return as soon as the parent starts restating, not drain the stream."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    events_consumed = 0
+
+    async def fake_events(state, config, version):
+        nonlocal events_consumed
+        events_consumed += 1
+        yield {"event": "on_tool_start", "name": "ask_syllabus_bot", "data": {}}
+        events_consumed += 1
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="sub-token")},
+        }
+        events_consumed += 1
+        yield {"event": "on_tool_end", "name": "ask_syllabus_bot", "data": {}}
+        # First parent token triggers early return; the generator is closed
+        # before reaching subsequent yields
+        events_consumed += 1
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="parent-1")},
+        }
+        # These should never be reached
+        events_consumed += 1
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="parent-2")},
+        }
+        events_consumed += 1
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="parent-3")},
+        }
+
+    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
+
+    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
+    assert chunks == ["sub-token"]
+    # Should stop after yielding the first suppressed parent token (4 events),
+    # not drain all 6
+    assert events_consumed == 4
+
+
+@pytest.mark.asyncio
+async def test_send_chunks_no_sub_agents(mocker, mock_checkpointer):
+    """send_chunks should pass through all tokens when no sub-agents are invoked."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    async def fake_events(state, config, version):
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="hello")},
+        }
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content=" world")},
+        }
+
+    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
+
+    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
+    assert chunks == ["hello", " world"]
+
+
+@pytest.mark.asyncio
+async def test_send_chunks_skips_empty_content(mocker, mock_checkpointer):
+    """send_chunks should skip chunks with empty content."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+
+    async def fake_events(state, config, version):
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="")},
+        }
+        yield {
+            "event": "on_chat_model_stream",
+            "name": "",
+            "data": {"chunk": AIMessageChunkFactory.create(content="real")},
+        }
+        yield {"event": "on_tool_start", "name": "some_other_tool", "data": {}}
+        yield {"event": "on_tool_end", "name": "some_other_tool", "data": {}}
+
+    mocker.patch.object(chatbot.agent, "astream_events", side_effect=fake_events)
+
+    chunks = [c async for c in chatbot.send_chunks({"messages": []})]
+    assert chunks == ["real"]
 
 
 @pytest.mark.asyncio
