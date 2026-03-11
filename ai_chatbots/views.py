@@ -107,10 +107,10 @@ class ChatMessageViewSet(
     def get_queryset(self):
         thread_id = self.kwargs["thread_id"]
         return (
-            DjangoCheckpoint.objects.filter(thread_id=thread_id)
+            DjangoCheckpoint.objects.filter(thread_id=thread_id, checkpoint_ns="")
             .select_related("rating")
             .extra(where=[self.message_filter])  # noqa: S610 - just a hardcoded filter
-            .order_by("metadata__step")
+            .order_by("id")
         )
 
     def get_object(self):
@@ -122,7 +122,9 @@ class ChatMessageViewSet(
 
         try:
             return (
-                DjangoCheckpoint.objects.filter(thread_id=thread_id, id=checkpoint_id)
+                DjangoCheckpoint.objects.filter(
+                    thread_id=thread_id, id=checkpoint_id, checkpoint_ns=""
+                )
                 .select_related("rating")
                 .extra(where=[self.message_filter])  # noqa: S610 - just a hardcoded filter
                 .get()

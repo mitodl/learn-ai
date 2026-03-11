@@ -235,10 +235,12 @@ class RouteSyllabusSchema(pydantic.BaseModel):
     """Route to syllabus expert for detailed course information."""
 
     q: str = Field(
-        description="The user's question about the course or learning resource"
+        max_length=1024,
+        description="The user's question about the course or learning resource",
     )
     readable_id: str = Field(
-        description="The readable_id of the learning resource from search results"
+        max_length=256,
+        description="The readable_id of the learning resource from search results",
     )
 
 
@@ -246,7 +248,8 @@ class RouteRecommendationSchema(pydantic.BaseModel):
     """Find MIT learning resources similar to or related to a topic."""
 
     q: str = Field(
-        description="Description of what kind of courses or resources to find"
+        max_length=1024,
+        description="Description of what kind of courses or resources to find",
     )
 
 
@@ -404,6 +407,7 @@ async def route_to_syllabus(
     found via search_courses. Pass the readable_id from search results.
     """
     return Command(
+        goto="run_syllabus",
         update={
             "messages": [
                 ToolMessage(
@@ -428,6 +432,7 @@ async def route_to_recommendation(
     the current one.
     """
     return Command(
+        goto="run_recommendation",
         update={
             "messages": [
                 ToolMessage(

@@ -93,7 +93,12 @@ class BaseChatbot(ABC):
         )
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
-        self.config = {"configurable": {"thread_id": self.thread_id}}
+        self.config = {
+            "configurable": {
+                "thread_id": self.thread_id,
+                "user_id": self.user_id,
+            }
+        }
         self.checkpointer = checkpointer
         if settings.AI_PROXY_CLASS:
             self.proxy = import_string(
@@ -403,6 +408,45 @@ class TruncatingChatbot(BaseChatbot):
             prompt=self.instructions,
         )
 
+    def _build_sub_agent_graph(
+        self,
+        sub_agent_node_name: str,
+        sub_agent_node_fn: callable,
+    ) -> CompiledStateGraph:
+        """Build a graph with sub-agent routing support.
+
+        Create a 4-node graph: pre_model_hook → agent → tools → sub_agent_node.
+        After tools run, routes to the sub-agent node if routing fields are
+        set in state, otherwise loops back to pre_model_hook.
+        """
+        pre_model_hook = MessageTruncationNode()
+        system_message = SystemMessage(content=self.instructions)
+
+        async def call_model(state: dict, config: RunnableConfig) -> dict:
+            messages = state.get("llm_input_messages") or state["messages"]
+            response = await self.llm.ainvoke([system_message, *messages], config)
+            return {"messages": [response], "sub_agent_tool_content": None}
+
+        def route_after_tools(state: dict) -> str:
+            """Route to sub-agent if routing fields set, else back to agent."""
+            if state.get("sub_query"):
+                return sub_agent_node_name
+            return "pre_model_hook"
+
+        workflow = StateGraph(self.STATE_CLASS)
+        workflow.add_node("pre_model_hook", pre_model_hook)
+        workflow.add_node("agent", call_model)
+        workflow.add_node("tools", ToolNode(tools=self.tools))
+        workflow.add_node(sub_agent_node_name, sub_agent_node_fn)
+
+        workflow.set_entry_point("pre_model_hook")
+        workflow.add_edge("pre_model_hook", "agent")
+        workflow.add_conditional_edges("agent", tools_condition)
+        workflow.add_conditional_edges("tools", route_after_tools)
+        workflow.add_edge(sub_agent_node_name, END)
+
+        return workflow.compile(checkpointer=self.checkpointer)
+
 
 class RecommendationAgentState(SummaryState):
     """
@@ -414,82 +458,73 @@ class RecommendationAgentState(SummaryState):
     # Sub-agent routing fields (set by Command-returning tools)
     sub_query: Optional[str]
     sub_course_id: Optional[str]
-    user_id: Optional[str]
     llm_input_messages: Optional[list]
     # Tool metadata from sub-agent (search results JSON for UI display)
     sub_agent_tool_content: Optional[str]
 
 
-async def run_syllabus_node(state: dict, config: RunnableConfig) -> dict:
-    """Run a SyllabusBot sub-agent.
+async def _run_sub_agent_node(
+    config: RunnableConfig,
+    *,
+    bot_class: type,
+    bot_kwargs: dict,
+    invoke_state: dict,
+    fields_to_clear: list[str],
+) -> dict:
+    """Run a sub-agent node: create a stateless bot, invoke it, propagate results.
 
-    Creates a stateless SyllabusBot (no checkpointer, no cross-calling tools)
-    and invokes it with the parent's config so LLM tokens propagate through
-    the parent's astream_events.
+    Creates a fresh bot instance with no checkpointer and invokes it with the
+    parent's config so LLM tokens propagate through astream_events.
     """
     from asgiref.sync import sync_to_async
 
-    user_id = state.get("user_id") or "system"
-    sub_query = state["sub_query"]
-    sub_course_id = state["sub_course_id"]
-    log.debug(
-        "Running syllabus sub-agent for course=%s user=%s", sub_course_id, user_id
-    )
-    bot = await sync_to_async(SyllabusBot)(
+    user_id = config.get("configurable", {}).get("user_id", "system")
+    log.debug("Running %s sub-agent for user=%s", bot_class.__name__, user_id)
+    bot = await sync_to_async(bot_class)(
         user_id=user_id,
         checkpointer=None,
         thread_id=None,
+        **bot_kwargs,
     )
-    result = await bot.agent.ainvoke(
-        {"messages": [HumanMessage(sub_query)], "course_id": [sub_course_id]},
-        config,
-    )
+    result = await bot.agent.ainvoke(invoke_state, config)
     # Extract the last ToolMessage content for metadata propagation to the UI
     sub_tool_content = None
     for msg in reversed(result["messages"]):
         if isinstance(msg, ToolMessage):
             sub_tool_content = msg.content
             break
-    return {
+    output = {
         "messages": [AIMessage(content=result["messages"][-1].content)],
-        "sub_query": None,
-        "sub_course_id": None,
         "sub_agent_tool_content": sub_tool_content,
     }
+    for field in fields_to_clear:
+        output[field] = None
+    return output
+
+
+async def run_syllabus_node(state: dict, config: RunnableConfig) -> dict:
+    """Run a SyllabusBot sub-agent for detailed course information."""
+    return await _run_sub_agent_node(
+        config,
+        bot_class=SyllabusBot,
+        bot_kwargs={},
+        invoke_state={
+            "messages": [HumanMessage(state["sub_query"])],
+            "course_id": [state["sub_course_id"]],
+        },
+        fields_to_clear=["sub_query", "sub_course_id"],
+    )
 
 
 async def run_recommendation_node(state: dict, config: RunnableConfig) -> dict:
-    """Run a ResourceRecommendationBot sub-agent.
-
-    Creates a stateless ResourceRecommendationBot (no checkpointer,
-    no cross-calling tools) and invokes it with the parent's config.
-    """
-    from asgiref.sync import sync_to_async
-
-    user_id = state.get("user_id") or "system"
-    sub_query = state["sub_query"]
-    log.debug("Running recommendation sub-agent for user=%s", user_id)
-    bot = await sync_to_async(ResourceRecommendationBot)(
-        user_id=user_id,
-        checkpointer=None,
-        thread_id=None,
-        include_sub_agents=False,
-    )
-    result = await bot.agent.ainvoke(
-        {"messages": [HumanMessage(sub_query)]},
+    """Run a ResourceRecommendationBot sub-agent for course recommendations."""
+    return await _run_sub_agent_node(
         config,
+        bot_class=ResourceRecommendationBot,
+        bot_kwargs={"enable_syllabus_sub_agent": False},
+        invoke_state={"messages": [HumanMessage(state["sub_query"])]},
+        fields_to_clear=["sub_query"],
     )
-    # Extract the last ToolMessage content for metadata propagation to the UI
-    sub_tool_content = None
-    for msg in reversed(result["messages"]):
-        if isinstance(msg, ToolMessage):
-            sub_tool_content = msg.content
-            break
-    return {
-        "messages": [AIMessage(content=result["messages"][-1].content)],
-        "sub_query": None,
-        "sub_agent_tool_content": sub_tool_content,
-    }
 
 
 class ResourceRecommendationBot(TruncatingChatbot):
@@ -513,10 +548,10 @@ class ResourceRecommendationBot(TruncatingChatbot):
         temperature: Optional[float] = None,
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
-        include_sub_agents: bool = True,
+        enable_syllabus_sub_agent: bool = False,
     ):
         """Initialize the AI search agent service"""
-        self.include_sub_agents = include_sub_agents
+        self.enable_syllabus_sub_agent = enable_syllabus_sub_agent
         super().__init__(
             user_id,
             name=name,
@@ -531,42 +566,15 @@ class ResourceRecommendationBot(TruncatingChatbot):
     def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
         bot_tools = [tools.search_courses]
-        if self.include_sub_agents:
+        if self.enable_syllabus_sub_agent:
             bot_tools.append(tools.route_to_syllabus)
         return bot_tools
 
     def create_agent_graph(self) -> CompiledStateGraph:
         """Build agent graph with sub-agent routing when sub-agents enabled."""
-        if not self.include_sub_agents:
+        if not self.enable_syllabus_sub_agent:
             return super().create_agent_graph()
-
-        pre_model_hook = MessageTruncationNode()
-        system_message = SystemMessage(content=self.instructions)
-
-        async def call_model(state: dict, config: RunnableConfig) -> dict:
-            messages = state.get("llm_input_messages") or state["messages"]
-            response = await self.llm.ainvoke([system_message, *messages], config)
-            return {"messages": [response], "sub_agent_tool_content": None}
-
-        def route_after_tools(state: dict) -> str:
-            """Route to sub-agent if routing fields set, else back to agent."""
-            if state.get("sub_course_id"):
-                return "run_syllabus"
-            return "pre_model_hook"
-
-        workflow = StateGraph(self.STATE_CLASS)
-        workflow.add_node("pre_model_hook", pre_model_hook)
-        workflow.add_node("agent", call_model)
-        workflow.add_node("tools", ToolNode(tools=self.tools))
-        workflow.add_node("run_syllabus", run_syllabus_node)
-
-        workflow.set_entry_point("pre_model_hook")
-        workflow.add_edge("pre_model_hook", "agent")
-        workflow.add_conditional_edges("agent", tools_condition)
-        workflow.add_conditional_edges("tools", route_after_tools)
-        workflow.add_edge("run_syllabus", END)
-
-        return workflow.compile(checkpointer=self.checkpointer)
+        return self._build_sub_agent_graph("run_syllabus", run_syllabus_node)
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""
@@ -589,7 +597,6 @@ class SyllabusAgentState(SummaryState):
     exclude_canvas: Annotated[Optional[list[str]], add]
     # Sub-agent routing fields (set by Command-returning tools)
     sub_query: Optional[str]
-    user_id: Optional[str]
     llm_input_messages: Optional[list]
     # Tool metadata from sub-agent (search results JSON for UI display)
     sub_agent_tool_content: Optional[str]
@@ -614,7 +621,7 @@ class SyllabusBot(TruncatingChatbot):
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
         enable_related_courses: Optional[bool] = False,
-        enable_course_recommendations: Optional[bool] = False,
+        enable_course_recommendations: bool = False,
     ):
         self.enable_related_courses = enable_related_courses
         self.enable_course_recommendations = enable_course_recommendations
@@ -642,34 +649,9 @@ class SyllabusBot(TruncatingChatbot):
         """Build agent graph with sub-agent routing when recommendations enabled."""
         if not self.enable_course_recommendations:
             return super().create_agent_graph()
-
-        pre_model_hook = MessageTruncationNode()
-        system_message = SystemMessage(content=self.instructions)
-
-        async def call_model(state: dict, config: RunnableConfig) -> dict:
-            messages = state.get("llm_input_messages") or state["messages"]
-            response = await self.llm.ainvoke([system_message, *messages], config)
-            return {"messages": [response], "sub_agent_tool_content": None}
-
-        def route_after_tools(state: dict) -> str:
-            """Route to sub-agent if routing fields set, else back to agent."""
-            if state.get("sub_query"):
-                return "run_recommendation"
-            return "pre_model_hook"
-
-        workflow = StateGraph(self.STATE_CLASS)
-        workflow.add_node("pre_model_hook", pre_model_hook)
-        workflow.add_node("agent", call_model)
-        workflow.add_node("tools", ToolNode(tools=self.tools))
-        workflow.add_node("run_recommendation", run_recommendation_node)
-
-        workflow.set_entry_point("pre_model_hook")
-        workflow.add_edge("pre_model_hook", "agent")
-        workflow.add_conditional_edges("agent", tools_condition)
-        workflow.add_conditional_edges("tools", route_after_tools)
-        workflow.add_edge("run_recommendation", END)
-
-        return workflow.compile(checkpointer=self.checkpointer)
+        return self._build_sub_agent_graph(
+            "run_recommendation", run_recommendation_node
+        )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""

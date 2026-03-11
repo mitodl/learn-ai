@@ -290,7 +290,10 @@ async def test_get_completion(
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        enable_syllabus_sub_agent=True,
     )
     agent = chatbot.create_agent_graph()
     for node in ("agent", "tools", "pre_model_hook", "run_syllabus"):
@@ -1163,7 +1166,7 @@ async def test_route_to_syllabus_returns_command():
         {"q": "prerequisites", "readable_id": "MIT+6.00.1x", "tool_call_id": "call_123"}
     )
     assert isinstance(result, Command)
-    assert not result.goto
+    assert result.goto == "run_syllabus"
     assert result.update["sub_query"] == "prerequisites"
     assert result.update["sub_course_id"] == "MIT+6.00.1x"
     assert len(result.update["messages"]) == 1
@@ -1182,7 +1185,7 @@ async def test_route_to_recommendation_returns_command():
         {"q": "machine learning courses", "tool_call_id": "call_456"}
     )
     assert isinstance(result, Command)
-    assert not result.goto
+    assert result.goto == "run_recommendation"
     assert result.update["sub_query"] == "machine learning courses"
 
 
@@ -1202,17 +1205,17 @@ async def test_run_syllabus_node(mocker, mock_checkpointer):
     mock_bot.agent = mocker.Mock()
     mock_bot.agent.ainvoke = mock_ainvoke
 
-    mocker.patch(
+    mock_cls = mocker.patch(
         "ai_chatbots.chatbots.SyllabusBot",
         return_value=mock_bot,
     )
+    mock_cls.__name__ = "SyllabusBot"
 
     state = {
         "sub_query": "what topics?",
         "sub_course_id": "MIT+18.01",
-        "user_id": "user123",
     }
-    config = {"configurable": {"thread_id": "test"}}
+    config = {"configurable": {"thread_id": "test", "user_id": "user123"}}
     result = await run_syllabus_node(state, config)
 
     assert result["messages"][0].content == "Course covers calculus"
@@ -1241,13 +1244,14 @@ async def test_run_recommendation_node(mocker, mock_checkpointer):
     mock_bot.agent = mocker.Mock()
     mock_bot.agent.ainvoke = mock_ainvoke
 
-    mocker.patch(
+    mock_cls = mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot",
         return_value=mock_bot,
     )
+    mock_cls.__name__ = "ResourceRecommendationBot"
 
-    state = {"sub_query": "similar to 6.00.1x", "user_id": "user456"}
-    config = {"configurable": {"thread_id": "test"}}
+    state = {"sub_query": "similar to 6.00.1x"}
+    config = {"configurable": {"thread_id": "test", "user_id": "user456"}}
     result = await run_recommendation_node(state, config)
 
     assert result["messages"][0].content == "Try these courses"
@@ -1261,9 +1265,9 @@ async def test_run_recommendation_node(mocker, mock_checkpointer):
 
 @pytest.mark.asyncio
 async def test_sub_agent_no_cross_calling_tools(mock_checkpointer):
-    """Bots created with include_sub_agents=False should not include routing tools."""
+    """Bots created with enable_syllabus_sub_agent=False should not include routing tools."""
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, include_sub_agents=False
+        "user", mock_checkpointer, enable_syllabus_sub_agent=False
     )
     tool_names = [t.name for t in chatbot.tools]
     assert "search_courses" in tool_names
@@ -1274,10 +1278,10 @@ async def test_sub_agent_no_cross_calling_tools(mock_checkpointer):
 async def test_recommendation_bot_no_sub_agents_uses_create_react_agent(
     mocker, mock_checkpointer
 ):
-    """When include_sub_agents=False, should use create_react_agent (TruncatingChatbot)."""
+    """When enable_syllabus_sub_agent=False, should use create_react_agent (TruncatingChatbot)."""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
     await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, include_sub_agents=False
+        "user", mock_checkpointer, enable_syllabus_sub_agent=False
     )
     mock_create_agent.assert_called_once()
 

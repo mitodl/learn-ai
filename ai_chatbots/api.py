@@ -41,6 +41,8 @@ def _parse_tool_content(content_str: str, thread_id: str) -> dict:
                 "thread_id": thread_id,
             }
         }
+    if content_str and content_str.strip():
+        log.debug("Tool content not parseable as search metadata: %.200s", content_str)
     return {}
 
 
