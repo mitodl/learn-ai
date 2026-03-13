@@ -1,6 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+from http.cookies import SimpleCookie
 from typing import Optional
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.middleware.csrf import _get_new_csrf_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -46,6 +48,28 @@ from main.utils import decode_value, format_seconds
 from users.models import User
 
 log = logging.getLogger(__name__)
+
+
+def build_csrf_cookie_header():
+    """Build a Set-Cookie header tuple for a new CSRF token."""
+    csrf_cookie_name = settings.CSRF_COOKIE_NAME
+    cookie = SimpleCookie()
+    cookie[csrf_cookie_name] = _get_new_csrf_string()
+    cookie[csrf_cookie_name]["max-age"] = settings.CSRF_COOKIE_AGE
+    cookie[csrf_cookie_name]["path"] = settings.CSRF_COOKIE_PATH
+    cookie[csrf_cookie_name]["samesite"] = settings.CSRF_COOKIE_SAMESITE
+
+    if settings.CSRF_COOKIE_DOMAIN:
+        cookie[csrf_cookie_name]["domain"] = settings.CSRF_COOKIE_DOMAIN
+    if settings.CSRF_COOKIE_SECURE:
+        cookie[csrf_cookie_name]["secure"] = True
+    if settings.CSRF_COOKIE_HTTPONLY:
+        cookie[csrf_cookie_name]["httponly"] = True
+
+    return (
+        b"Set-Cookie",
+        cookie.output(header="", sep="").strip().encode("utf-8"),
+    )
 
 
 class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
@@ -263,6 +287,11 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     for cookie in cookies
                 ]
             )
+
+        # Set CSRF cookie if not already present in the request
+        request_cookies = self.scope.get("cookies") or {}
+        if settings.CSRF_COOKIE_NAME not in request_cookies:
+            headers.append(build_csrf_cookie_header())
 
         await self.send_headers(status=status, headers=headers)
         self.headers_sent = True

@@ -673,20 +673,17 @@ async def test_handle_errors(
             }
         )
     else:
-        mock_send.assert_any_call(
-            {
-                "type": "http.response.start",
-                "status": expected_status,
-                "headers": [
-                    (b"Cache-Control", b"no-cache"),
-                    (
-                        b"Content-Type",
-                        b"application/json",
-                    ),
-                    (b"Connection", b"close"),
-                ],
-            }
+        # Find the http.response.start call and verify status + base headers
+        start_call = next(
+            call
+            for call in mock_send.call_args_list
+            if call.args and call.args[0].get("type") == "http.response.start"
         )
+        start_msg = start_call.args[0]
+        assert start_msg["status"] == expected_status
+        assert (b"Cache-Control", b"no-cache") in start_msg["headers"]
+        assert (b"Content-Type", b"application/json") in start_msg["headers"]
+        assert (b"Connection", b"close") in start_msg["headers"]
         mock_send.assert_any_call(
             {
                 "type": "http.response.body",
