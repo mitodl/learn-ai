@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.27.0
+--------------
+
+- Fix AI response ratings API endpoint (#455)
+- Handle RAG evaluation timeouts better (#451)
+- Forbid renovate from updating apisix version (#454)
+
 Version 0.26.2 (Released March 09, 2026)
 --------------
 
