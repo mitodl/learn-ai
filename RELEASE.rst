@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.27.0
+Version 0.27.0 (Released March 16, 2026)
 --------------
 
 - Fix AI response ratings API endpoint (#455)
