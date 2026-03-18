@@ -682,8 +682,10 @@ APISIX_USERDATA_MAP = {
     },
 }
 
-# OpenTelemetry configuration
-OPENTELEMETRY_ENABLED = get_bool("OPENTELEMETRY_ENABLED", default=False)
+# OpenTelemetry configuration (consumed by mitol-django-observability plugin).
+# OTel is activated when OPENTELEMETRY_ENDPOINT (or OTEL_EXPORTER_OTLP_ENDPOINT
+# env var) is set, or when DEBUG=True. The old OPENTELEMETRY_ENABLED flag is no
+# longer supported; set OPENTELEMETRY_ENDPOINT to enable tracing.
 OPENTELEMETRY_SERVICE_NAME = get_string("OPENTELEMETRY_SERVICE_NAME", "learn-ai")
 OPENTELEMETRY_INSECURE = get_bool("OPENTELEMETRY_INSECURE", default=True)
 OPENTELEMETRY_ENDPOINT = get_string("OPENTELEMETRY_ENDPOINT", None)
