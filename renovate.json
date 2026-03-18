@@ -9,6 +9,10 @@
     },
     {
       "matchSourceUrls": ["https://github.com/ckeditor/ckeditor5"]
+    },
+    {
+      "matchPackageNames": ["apache/apisix"],
+      "enabled": false
     }
   ]
 }
