@@ -1067,6 +1067,43 @@ wheels = [
 ]
 
 [[package]]
+name = "django-stubs"
+version = "6.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "django-stubs-ext" },
+    { name = "types-pyyaml" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ff/9a/78b442ab9254436b3195bffaf4e52d54aa32ac2b47ee1f8481f4614abb01/django_stubs-6.0.1.tar.gz", hash = "sha256:e1ca63634221b57a55e16562b9b6d1849aeee2cabfd0fc026084dbe8aa893366", size = 272906, upload-time = "2026-03-18T08:10:18.366Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/be/e9280ae94339f49d17af63b2ec508c9f11031196426a04cbdec1b0878d4a/django_stubs-6.0.1-py3-none-any.whl", hash = "sha256:d885044bd0876610f3eb969d6b5ed22f386002a879fdcb369cd8efa0502dbbce", size = 535867, upload-time = "2026-03-18T08:10:16.192Z" },
+]
+
+[[package]]
+name = "django-stubs-ext"
+version = "6.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8e/2f/58034804c7290c183bbb6f97392c98f7188786db68f5b7f66f8abb377ece/django_stubs_ext-6.0.1.tar.gz", hash = "sha256:633b280f89c0cbb7e3ce2f2f842e0acc43d8091378e75f84921d6be675d052dc", size = 6673, upload-time = "2026-03-18T08:08:56.811Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c8/67/cf947df79857407f16f6afe8004830544df22ad14edfddfbe17d3ad7d4c8/django_stubs_ext-6.0.1-py3-none-any.whl", hash = "sha256:17415759b9a3f4b4da7998ac3b08c7dc5137f9a019490b918aece1a8a4c2ade4", size = 10169, upload-time = "2026-03-18T08:08:55.58Z" },
+]
+
+[[package]]
+name = "django-webpack-loader"
+version = "3.2.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/4a/83aa8a9729d5c85e928e96fe42b2cde5db8f636e05de57f5f0235a52a64b/django_webpack_loader-3.2.3.tar.gz", hash = "sha256:81092499af8e0c9b3a0bad21324aca6e2ad786133b19248dae213eb9661a17f7", size = 17991, upload-time = "2025-12-09T16:59:52.871Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6b/73/79ca8f2fa733a75e3feb21dc7bc67868d9a0156761ee99ac041aef268739/django_webpack_loader-3.2.3-py2.py3-none-any.whl", hash = "sha256:d070bfe8ea5bd6ed48810a8d247204bb7f672573bdb6a7b589f6b75998a45993", size = 20940, upload-time = "2025-12-09T16:59:51.313Z" },
+]
+
+[[package]]
 name = "djangorestframework"
 version = "3.16.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2519,17 +2556,15 @@ dependencies = [
     { name = "langsmith" },
     { name = "litellm" },
     { name = "markdown2" },
+    { name = "mitol-django-observability" },
     { name = "named-enum" },
     { name = "open-learning-ai-tutor" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-instrumentation-celery" },
     { name = "opentelemetry-instrumentation-django" },
     { name = "opentelemetry-instrumentation-httpx" },
     { name = "opentelemetry-instrumentation-psycopg" },
     { name = "opentelemetry-instrumentation-redis" },
     { name = "opentelemetry-instrumentation-requests" },
-    { name = "opentelemetry-sdk" },
     { name = "posthog" },
     { name = "psycopg" },
     { name = "psycopg-pool" },
@@ -2619,17 +2654,15 @@ requires-dist = [
     { name = "langsmith", specifier = ">=0.7.0,<0.8" },
     { name = "litellm", specifier = ">=1.53.5,<2" },
     { name = "markdown2", specifier = ">=2.5.2,<3" },
+    { name = "mitol-django-observability", specifier = ">=2026.1.0" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
     { name = "open-learning-ai-tutor", specifier = ">=0.2.14,<0.3" },
-    { name = "opentelemetry-api", specifier = ">=1.31.0" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.31.0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-django", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-httpx", specifier = ">=0.59b0,<0.60" },
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.31.0" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },
@@ -2817,6 +2850,45 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9d/55/d01f0c4b45ade6536c51170b9043db8b2ec6ddf4a35c7ea3f5f559ac935b/mistune-3.2.0.tar.gz", hash = "sha256:708487c8a8cdd99c9d90eb3ed4c3ed961246ff78ac82f03418f5183ab70e398a", size = 95467, upload-time = "2025-12-23T11:36:34.994Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9b/f7/4a5e785ec9fbd65146a27b6b70b6cdc161a66f2024e4b04ac06a67f5578b/mistune-3.2.0-py3-none-any.whl", hash = "sha256:febdc629a3c78616b94393c6580551e0e34cc289987ec6c35ed3f4be42d0eee1", size = 53598, upload-time = "2025-12-23T11:36:33.211Z" },
+]
+
+[[package]]
+name = "mitol-django-common"
+version = "2025.6.20"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "django-redis" },
+    { name = "django-stubs" },
+    { name = "django-webpack-loader" },
+    { name = "factory-boy" },
+    { name = "pytest" },
+    { name = "pytz" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4b/0e/b4dda829f5119338da3f8c7bd63a2350131bd4f84bd2f0e373c34921f520/mitol_django_common-2025.6.20.tar.gz", hash = "sha256:5060a99537a571ec8e5b94a3972161a318ae60dc7df4154ebcc8cb5f29cfbdbb", size = 21695, upload-time = "2025-06-20T08:08:05.727Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/c2/d562e5e8721a1e4319f0ca78c7dc2fbe2fe796a58fda9aae44b4462a7a14/mitol_django_common-2025.6.20-py3-none-any.whl", hash = "sha256:a3a1d2ed1570cf905132651ab1338cf30924904c6f4d98af62e80cf9a25d4f54", size = 31511, upload-time = "2025-06-20T08:08:04.965Z" },
+]
+
+[[package]]
+name = "mitol-django-observability"
+version = "2026.3.11"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "mitol-django-common" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/84/3b/8c07a0a0feda332656213a8af4f055fa83fb9e0d6d483d77f12d8e63b47e/mitol_django_observability-2026.3.11.tar.gz", hash = "sha256:4539eff6b7da18e500fb0f23c0abf6bdba67eb65e35e890b08c338318494a1e6", size = 10093, upload-time = "2026-03-13T20:21:41.271Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/76/3f730dec3ff4ff6c5ab044d7b1e027b6f3214cedb66a2532301b6eb4b285/mitol_django_observability-2026.3.11-py3-none-any.whl", hash = "sha256:7523782802c09cad3003cacecdb62cc055efdbd8a80a9ea27a12cb5aaf3f59bc", size = 16052, upload-time = "2026-03-13T20:21:40.216Z" },
 ]
 
 [[package]]
@@ -3176,19 +3248,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/08/d8/0f354c375628e048bd0570645b310797299754730079853095bf000fba69/opentelemetry_api-1.38.0.tar.gz", hash = "sha256:f4c193b5e8acb0912b06ac5b16321908dd0843d75049c091487322284a3eea12", size = 65242, upload-time = "2025-10-16T08:35:50.25Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ae/a2/d86e01c28300bd41bab8f18afd613676e2bd63515417b77636fc1add426f/opentelemetry_api-1.38.0-py3-none-any.whl", hash = "sha256:2891b0197f47124454ab9f0cf58f3be33faca394457ac3e09daba13ff50aa582", size = 65947, upload-time = "2025-10-16T08:35:30.23Z" },
-]
-
-[[package]]
-name = "opentelemetry-exporter-otlp"
-version = "1.38.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "opentelemetry-exporter-otlp-proto-grpc" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c2/2d/16e3487ddde2dee702bd746dd41950a8789b846d22a1c7e64824aac5ebea/opentelemetry_exporter_otlp-1.38.0.tar.gz", hash = "sha256:2f55acdd475e4136117eff20fbf1b9488b1b0b665ab64407516e1ac06f9c3f9d", size = 6147, upload-time = "2025-10-16T08:35:52.53Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fd/8a/81cd252b16b7d95ec1147982b6af81c7932d23918b4c3b15372531242ddd/opentelemetry_exporter_otlp-1.38.0-py3-none-any.whl", hash = "sha256:bc6562cef229fac8887ed7109fc5abc52315f39d9c03fd487bb8b4ef8fbbc231", size = 7018, upload-time = "2025-10-16T08:35:32.995Z" },
 ]
 
 [[package]]
@@ -4752,6 +4811,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/87/b0/9cf15108b73c4f2ffffe11d237c938f57785f55d3693d822d565432cb680/static3-0.7.0.tar.gz", hash = "sha256:674641c64bc75507af2eb20bef7e7e3593dca993dec6674be108fa15b42f47c8", size = 24607, upload-time = "2016-05-10T11:43:45.17Z" }
 
 [[package]]
+name = "structlog"
+version = "25.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/52/9ba0f43b686e7f3ddfeaa78ac3af750292662284b3661e91ad5494f21dbc/structlog-25.5.0.tar.gz", hash = "sha256:098522a3bebed9153d4570c6d0288abf80a031dfdb2048d59a49e9dc2190fc98", size = 1460830, upload-time = "2025-10-27T08:28:23.028Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/45/a132b9074aa18e799b891b91ad72133c98d8042c70f6240e4c5f9dabee2f/structlog-25.5.0-py3-none-any.whl", hash = "sha256:a8453e9b9e636ec59bd9e79bbd4a72f025981b3ba0f5837aebf48f02f37a7f9f", size = 72510, upload-time = "2025-10-27T08:28:21.535Z" },
+]
+
+[[package]]
 name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4938,6 +5006,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a7/a7/e6aecc4b4eb59598829a3b5076a93aff291b4fdaa2ded25efc4e1f4d219c/typer_slim-0.24.0.tar.gz", hash = "sha256:f0ed36127183f52ae6ced2ecb2521789995992c521a46083bfcdbb652d22ad34", size = 4776, upload-time = "2026-02-16T22:08:51.2Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/24/5480c20380dfd18cf33d14784096dca45a24eae6102e91d49a718d3b6855/typer_slim-0.24.0-py3-none-any.whl", hash = "sha256:d5d7ee1ee2834d5020c7c616ed5e0d0f29b9a4b1dd283bdebae198ec09778d0e", size = 3394, upload-time = "2026-02-16T22:08:49.92Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20250915"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/69/3c51b36d04da19b92f9e815be12753125bd8bc247ba0470a982e6979e71c/types_pyyaml-6.0.12.20250915.tar.gz", hash = "sha256:0f8b54a528c303f0e6f7165687dd33fafa81c807fcac23f632b63aa624ced1d3", size = 17522, upload-time = "2025-09-15T03:01:00.728Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/e0/1eed384f02555dde685fff1a1ac805c1c7dcb6dd019c916fe659b1c1f9ec/types_pyyaml-6.0.12.20250915-py3-none-any.whl", hash = "sha256:e7d4d9e064e89a3b3cae120b4990cd370874d2bf12fa5f46c97018dd5d3c9ab6", size = 20338, upload-time = "2025-09-15T03:00:59.218Z" },
 ]
 
 [[package]]
