@@ -337,15 +337,11 @@ EMBEDLY_KEY = get_string("EMBEDLY_KEY", None)
 EMBEDLY_EMBED_URL = get_string("EMBEDLY_EMBED_URL", "https://api.embed.ly/1/oembed")
 EMBEDLY_EXTRACT_URL = get_string("EMBEDLY_EMBED_URL", "https://api.embed.ly/1/extract")
 
-# Logging configuration
-LOG_LEVEL = get_string("MITOL_LOG_LEVEL", "INFO")
-DJANGO_LOG_LEVEL = get_string("DJANGO_LOG_LEVEL", "INFO")
-OS_LOG_LEVEL = get_string("OS_LOG_LEVEL", "INFO")
-
-# For logging to a remote syslog host
 HOSTNAME = platform.node().split(".")[0]
 
-# LOGGING is provided by mitol-django-observability (structlog-based, JSON in prod)
+# LOGGING is provided by mitol-django-observability (structlog-based, JSON in prod).
+# Log levels are controlled via LOG_LEVEL (root) and DJANGO_LOG_LEVEL environment
+# variables, read directly by the plugin.
 from mitol.observability.settings.logging import LOGGING  # noqa: E402, F401
 
 STATUS_TOKEN = get_string("STATUS_TOKEN", "")
