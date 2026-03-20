@@ -54,9 +54,15 @@ def test_session_w_messages():
     return SimpleNamespace(
         session=chat_session,
         messages=[
-            CheckpointFactory.create(thread_id=chat_session.thread_id, is_human=True),
-            CheckpointFactory.create(thread_id=chat_session.thread_id, is_tool=True),
-            CheckpointFactory.create(thread_id=chat_session.thread_id, is_agent=True),
+            CheckpointFactory.create(
+                thread_id=chat_session.thread_id, checkpoint_ns="", is_human=True
+            ),
+            CheckpointFactory.create(
+                thread_id=chat_session.thread_id, checkpoint_ns="", is_tool=True
+            ),
+            CheckpointFactory.create(
+                thread_id=chat_session.thread_id, checkpoint_ns="", is_agent=True
+            ),
         ],
     )
 
@@ -68,9 +74,15 @@ def test_anonymous_session():
     return SimpleNamespace(
         session=chat_session,
         messages=[
-            CheckpointFactory.create(thread_id=chat_session.thread_id, is_human=True),
-            CheckpointFactory.create(thread_id=chat_session.thread_id, is_tool=True),
-            CheckpointFactory.create(thread_id=chat_session.thread_id, is_agent=True),
+            CheckpointFactory.create(
+                thread_id=chat_session.thread_id, checkpoint_ns="", is_human=True
+            ),
+            CheckpointFactory.create(
+                thread_id=chat_session.thread_id, checkpoint_ns="", is_tool=True
+            ),
+            CheckpointFactory.create(
+                thread_id=chat_session.thread_id, checkpoint_ns="", is_agent=True
+            ),
         ],
     )
 
@@ -88,14 +100,20 @@ def user_session():
 @pytest.fixture
 def agent_checkpoint(user_session):
     return CheckpointFactory(
-        session=user_session, thread_id=user_session.thread_id, is_agent=True
+        session=user_session,
+        thread_id=user_session.thread_id,
+        checkpoint_ns="",
+        is_agent=True,
     )
 
 
 @pytest.fixture
 def human_checkpoint(user_session):
     return CheckpointFactory(
-        session=user_session, thread_id=user_session.thread_id, is_human=True
+        session=user_session,
+        thread_id=user_session.thread_id,
+        checkpoint_ns="",
+        is_human=True,
     )
 
 
@@ -177,7 +195,7 @@ def test_thread_messages_view(client, test_session_w_messages):
                 or checkpoint.metadata["writes"].get("__start__")
             )
         ],
-        key=lambda message: message["step"],
+        key=lambda message: message["id"],
     )
     for result in results:
         assert result["role"] in ["human", "agent"]
