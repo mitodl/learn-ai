@@ -28,7 +28,6 @@ from ai_chatbots.chatbots import (
     VideoGPTBot,
     get_canvas_problem_set,
     get_problem_from_edx_block,
-    run_recommendation_node,
     run_syllabus_node,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
@@ -1167,26 +1166,11 @@ async def test_route_to_syllabus_returns_command():
     )
     assert isinstance(result, Command)
     assert result.goto == "run_syllabus"
-    assert result.update["sub_query"] == "prerequisites"
-    assert result.update["sub_course_id"] == "MIT+6.00.1x"
+    assert result.update["sub_queries"] == ["prerequisites"]
+    assert result.update["sub_course_ids"] == ["MIT+6.00.1x"]
     assert len(result.update["messages"]) == 1
     assert isinstance(result.update["messages"][0], LCToolMessage)
     assert result.update["messages"][0].tool_call_id == "call_123"
-
-
-@pytest.mark.asyncio
-async def test_route_to_recommendation_returns_command():
-    """route_to_recommendation should return a Command with correct goto and update."""
-    from langgraph.types import Command
-
-    from ai_chatbots.tools import route_to_recommendation
-
-    result = await route_to_recommendation.ainvoke(
-        {"q": "machine learning courses", "tool_call_id": "call_456"}
-    )
-    assert isinstance(result, Command)
-    assert result.goto == "run_recommendation"
-    assert result.update["sub_query"] == "machine learning courses"
 
 
 @pytest.mark.asyncio
@@ -1212,53 +1196,19 @@ async def test_run_syllabus_node(mocker, mock_checkpointer):
     mock_cls.__name__ = "SyllabusBot"
 
     state = {
-        "sub_query": "what topics?",
-        "sub_course_id": "MIT+18.01",
+        "sub_queries": ["what topics?"],
+        "sub_course_ids": ["MIT+18.01"],
     }
     config = {"configurable": {"thread_id": "test", "user_id": "user123"}}
     result = await run_syllabus_node(state, config)
 
-    assert result["messages"][0].content == "Course covers calculus"
-    assert result["sub_query"] is None
-    assert result["sub_course_id"] is None
+    assert "what topics?" in result["messages"][0].content
+    assert "already streamed" in result["messages"][0].content
+    assert result["sub_queries"] == []
+    assert result["sub_course_ids"] == []
     assert result["sub_agent_tool_content"] == tool_content
     mock_ainvoke.assert_called_once_with(
         {"messages": [HumanMessage("what topics?")], "course_id": ["MIT+18.01"]},
-        config,
-    )
-
-
-@pytest.mark.asyncio
-async def test_run_recommendation_node(mocker, mock_checkpointer):
-    """run_recommendation_node should create a ResourceRecommendationBot and return an AIMessage."""
-    tool_content = json.dumps({"results": [{"title": "ML Course"}]})
-    mock_ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                ToolMessageFactory.create(content=tool_content),
-                AIMessage(content="Try these courses"),
-            ]
-        }
-    )
-    mock_bot = mocker.Mock()
-    mock_bot.agent = mocker.Mock()
-    mock_bot.agent.ainvoke = mock_ainvoke
-
-    mock_cls = mocker.patch(
-        "ai_chatbots.chatbots.ResourceRecommendationBot",
-        return_value=mock_bot,
-    )
-    mock_cls.__name__ = "ResourceRecommendationBot"
-
-    state = {"sub_query": "similar to 6.00.1x"}
-    config = {"configurable": {"thread_id": "test", "user_id": "user456"}}
-    result = await run_recommendation_node(state, config)
-
-    assert result["messages"][0].content == "Try these courses"
-    assert result["sub_query"] is None
-    assert result["sub_agent_tool_content"] == tool_content
-    mock_ainvoke.assert_called_once_with(
-        {"messages": [HumanMessage("similar to 6.00.1x")]},
         config,
     )
 
@@ -1284,17 +1234,6 @@ async def test_recommendation_bot_no_sub_agents_uses_create_react_agent(
         "user", mock_checkpointer, enable_syllabus_sub_agent=False
     )
     mock_create_agent.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_syllabus_bot_with_recommendations_has_run_recommendation_node(
-    mock_checkpointer,
-):
-    """SyllabusBot with enable_course_recommendations should have run_recommendation node."""
-    chatbot = await sync_to_async(SyllabusBot)(
-        "user", mock_checkpointer, enable_course_recommendations=True
-    )
-    assert "run_recommendation" in chatbot.agent.nodes
 
 
 @pytest.mark.asyncio

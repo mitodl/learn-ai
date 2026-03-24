@@ -10,6 +10,7 @@ from typing import Annotated, Any, Optional
 from uuid import uuid4
 
 import posthog
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -19,7 +20,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import END, MessagesState, StateGraph
+from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langgraph.prebuilt.chat_agent_executor import AgentState, _validate_chat_history
@@ -54,6 +55,11 @@ from ai_chatbots.utils import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def add_or_clear(existing: list, new: list) -> list:
+    """List reducer: append items, or clear when an empty list is sent."""
+    return existing + new if new else []
 
 
 class BaseChatbot(ABC):
@@ -275,7 +281,10 @@ class BaseChatbot(ABC):
 
         Uses astream_events (v2) so that LLM streaming tokens from both the
         agent and any sub-agent function nodes are captured in real-time.
+        Inserts a separator between different LLM runs (e.g. between
+        sub-agent responses, or between a sub-agent and the parent agent).
         """
+        last_run_id = None
         async for event in self.agent.astream_events(state, self.config, version="v2"):
             if event["event"] != "on_chat_model_stream":
                 continue
@@ -283,6 +292,11 @@ class BaseChatbot(ABC):
             chunk = event["data"]["chunk"]
             if not chunk.content:
                 continue
+
+            run_id = event.get("run_id")
+            if last_run_id is not None and run_id != last_run_id:
+                yield "\n\n"
+            last_run_id = run_id
 
             yield chunk.content
 
@@ -429,7 +443,7 @@ class TruncatingChatbot(BaseChatbot):
 
         def route_after_tools(state: dict) -> str:
             """Route to sub-agent if routing fields set, else back to agent."""
-            if state.get("sub_query"):
+            if state.get("sub_queries"):
                 return sub_agent_node_name
             return "pre_model_hook"
 
@@ -443,7 +457,7 @@ class TruncatingChatbot(BaseChatbot):
         workflow.add_edge("pre_model_hook", "agent")
         workflow.add_conditional_edges("agent", tools_condition)
         workflow.add_conditional_edges("tools", route_after_tools)
-        workflow.add_edge(sub_agent_node_name, END)
+        workflow.add_edge(sub_agent_node_name, "pre_model_hook")
 
         return workflow.compile(checkpointer=self.checkpointer)
 
@@ -455,9 +469,10 @@ class RecommendationAgentState(SummaryState):
     """
 
     search_url: Annotated[list[str], add]
-    # Sub-agent routing fields (set by Command-returning tools)
-    sub_query: Optional[str]
-    sub_course_id: Optional[str]
+    # Sub-agent routing fields (set by Command-returning tools).
+    # add_or_clear: multiple tool calls in one step accumulate; empty list clears.
+    sub_queries: Annotated[list[str], add_or_clear]
+    sub_course_ids: Annotated[list[str], add_or_clear]
     llm_input_messages: Optional[list]
     # Tool metadata from sub-agent (search results JSON for UI display)
     sub_agent_tool_content: Optional[str]
@@ -469,15 +484,12 @@ async def _run_sub_agent_node(
     bot_class: type,
     bot_kwargs: dict,
     invoke_state: dict,
-    fields_to_clear: list[str],
 ) -> dict:
     """Run a sub-agent node: create a stateless bot, invoke it, propagate results.
 
     Creates a fresh bot instance with no checkpointer and invokes it with the
     parent's config so LLM tokens propagate through astream_events.
     """
-    from asgiref.sync import sync_to_async
-
     user_id = config.get("configurable", {}).get("user_id", "system")
     log.debug("Running %s sub-agent for user=%s", bot_class.__name__, user_id)
     bot = await sync_to_async(bot_class)(
@@ -493,38 +505,53 @@ async def _run_sub_agent_node(
         if isinstance(msg, ToolMessage):
             sub_tool_content = msg.content
             break
-    output = {
-        "messages": [AIMessage(content=result["messages"][-1].content)],
+    # Return a summary marker instead of the full response, since the
+    # sub-agent's tokens were already streamed to the user. This prevents
+    # the parent LLM from restating the sub-agent's answer.
+    query_desc = invoke_state["messages"][0].content
+    return {
+        "messages": [
+            AIMessage(
+                content=(
+                    f'[Sub-agent response for "{query_desc}" was already '
+                    "streamed to the user. Do not repeat it.]"
+                )
+            )
+        ],
         "sub_agent_tool_content": sub_tool_content,
     }
-    for field in fields_to_clear:
-        output[field] = None
-    return output
 
 
 async def run_syllabus_node(state: dict, config: RunnableConfig) -> dict:
-    """Run a SyllabusBot sub-agent for detailed course information."""
-    return await _run_sub_agent_node(
-        config,
-        bot_class=SyllabusBot,
-        bot_kwargs={},
-        invoke_state={
-            "messages": [HumanMessage(state["sub_query"])],
-            "course_id": [state["sub_course_id"]],
-        },
-        fields_to_clear=["sub_query", "sub_course_id"],
-    )
+    """Run SyllabusBot sub-agent(s) for detailed course information.
 
-
-async def run_recommendation_node(state: dict, config: RunnableConfig) -> dict:
-    """Run a ResourceRecommendationBot sub-agent for course recommendations."""
-    return await _run_sub_agent_node(
-        config,
-        bot_class=ResourceRecommendationBot,
-        bot_kwargs={"enable_syllabus_sub_agent": False},
-        invoke_state={"messages": [HumanMessage(state["sub_query"])]},
-        fields_to_clear=["sub_query"],
-    )
+    Processes all queued query/course_id pairs, then clears the lists
+    (empty list triggers add_or_clear to reset).
+    """
+    queries = state.get("sub_queries") or []
+    course_ids = state.get("sub_course_ids") or []
+    all_messages = []
+    last_tool_content = None
+    for i, query in enumerate(queries):
+        course_id = course_ids[i] if i < len(course_ids) else None
+        result = await _run_sub_agent_node(
+            config,
+            bot_class=SyllabusBot,
+            bot_kwargs={},
+            invoke_state={
+                "messages": [HumanMessage(query)],
+                "course_id": [course_id] if course_id else [],
+            },
+        )
+        all_messages.extend(result["messages"])
+        if result.get("sub_agent_tool_content"):
+            last_tool_content = result["sub_agent_tool_content"]
+    return {
+        "messages": all_messages,
+        "sub_agent_tool_content": last_tool_content,
+        "sub_queries": [],  # clear via add_or_clear reducer
+        "sub_course_ids": [],
+    }
 
 
 class ResourceRecommendationBot(TruncatingChatbot):
@@ -595,11 +622,6 @@ class SyllabusAgentState(SummaryState):
     # str representation of a boolean value, because the
     # langgraph JsonPlusSerializer can't handle booleans
     exclude_canvas: Annotated[Optional[list[str]], add]
-    # Sub-agent routing fields (set by Command-returning tools)
-    sub_query: Optional[str]
-    llm_input_messages: Optional[list]
-    # Tool metadata from sub-agent (search results JSON for UI display)
-    sub_agent_tool_content: Optional[str]
 
 
 class SyllabusBot(TruncatingChatbot):
@@ -621,10 +643,8 @@ class SyllabusBot(TruncatingChatbot):
         instructions: Optional[str] = None,
         thread_id: Optional[str] = None,
         enable_related_courses: Optional[bool] = False,
-        enable_course_recommendations: bool = False,
     ):
         self.enable_related_courses = enable_related_courses
-        self.enable_course_recommendations = enable_course_recommendations
         super().__init__(
             user_id,
             name=name,
@@ -641,17 +661,7 @@ class SyllabusBot(TruncatingChatbot):
         bot_tools = [tools.search_content_files]
         if self.enable_related_courses:
             bot_tools.append(tools.search_related_course_content_files)
-        if self.enable_course_recommendations:
-            bot_tools.append(tools.route_to_recommendation)
         return bot_tools
-
-    def create_agent_graph(self) -> CompiledStateGraph:
-        """Build agent graph with sub-agent routing when recommendations enabled."""
-        if not self.enable_course_recommendations:
-            return super().create_agent_graph()
-        return self._build_sub_agent_graph(
-            "run_recommendation", run_recommendation_node
-        )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""

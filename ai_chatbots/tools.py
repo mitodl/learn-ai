@@ -244,15 +244,6 @@ class RouteSyllabusSchema(pydantic.BaseModel):
     )
 
 
-class RouteRecommendationSchema(pydantic.BaseModel):
-    """Find MIT learning resources similar to or related to a topic."""
-
-    q: str = Field(
-        max_length=1024,
-        description="Description of what kind of courses or resources to find",
-    )
-
-
 class VideoGPTToolSchema(pydantic.BaseModel):
     """Schema for searching MIT contentfiles for to a particular video transcript."""
 
@@ -415,31 +406,7 @@ async def route_to_syllabus(
                     tool_call_id=tool_call_id,
                 )
             ],
-            "sub_query": q,
-            "sub_course_id": readable_id,
-        },
-    )
-
-
-@tool(args_schema=RouteRecommendationSchema)
-async def route_to_recommendation(
-    q: str,
-    tool_call_id: Annotated[str, InjectedToolCallId],
-) -> Command:
-    """
-    Search for MIT learning resources matching a description.
-    Use this when the user asks for courses similar to or related to
-    the current one.
-    """
-    return Command(
-        goto="run_recommendation",
-        update={
-            "messages": [
-                ToolMessage(
-                    content=f"Routing to recommendation expert for: {q}",
-                    tool_call_id=tool_call_id,
-                )
-            ],
-            "sub_query": q,
+            "sub_queries": [q],
+            "sub_course_ids": [readable_id],
         },
     )
