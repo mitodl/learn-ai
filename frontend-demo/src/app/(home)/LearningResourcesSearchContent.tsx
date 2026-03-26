@@ -16,6 +16,7 @@ import {
   ToggleButtonGroup,
   TextField,
   Button,
+  Pagination,
 } from "@mui/material"
 import Grid from "@mui/material/Grid"
 import Box from "@mui/material/Box"
@@ -24,7 +25,6 @@ import {
   RiBriefcaseFill,
   RiArrowDownSLine,
   RiListCheck,
-  RiBookmarkLine,
 } from "@remixicon/react"
 import {
   SearchInput,
@@ -48,10 +48,15 @@ const LearningResourcesSearchContent: React.FC = () => {
   const [topicSearch, setTopicSearch] = useState("")
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [selectedCertificates, setSelectedCertificates] = useState<string[]>([])
+  const [departmentSearch, setDepartmentSearch] = useState("")
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
   const [selectedFormats, setSelectedFormats] = useState<string[]>([])
   const [selectedProviders, setSelectedProviders] = useState<string[]>([])
 
   const [hybridSearch, setHybridSearch] = useState(false)
+
+  // Pagination State
+  const [page, setPage] = useState(1)
 
   // Resource Tab Types
   const [resourceTypeGroup, setResourceTypeGroup] = useState<
@@ -78,6 +83,7 @@ const LearningResourcesSearchContent: React.FC = () => {
         resourceTypeGroup !== "all" ? [resourceTypeGroup] : undefined,
       hybrid_search: hybridSearch || undefined,
       limit: 30,
+      offset: (page - 1) * 30,
     }),
     enabled: true,
   })
@@ -85,6 +91,7 @@ const LearningResourcesSearchContent: React.FC = () => {
   const handleSubmit: SearchInputProps["onSubmit"] = (e) => {
     e.preventDefault()
     setSearchQuery(inputValue)
+    setPage(1)
   }
 
   if (me.data?.anonymous) {
@@ -112,15 +119,18 @@ const LearningResourcesSearchContent: React.FC = () => {
     setSelectedTopics([])
     setSelectedFormats([])
     setSelectedProviders([])
+    setSelectedDepartments([])
     setHybridSearch(false)
+    setPage(1)
   }
 
   const handleAudienceChange = (
     event: React.MouseEvent<HTMLElement>,
-    newAudience: "all" | "academic" | "professional",
+    newAudience: "all" | "academic" | "professional" | null,
   ) => {
     if (newAudience !== null) {
       setAudience(newAudience)
+      setPage(1)
     }
   }
 
@@ -188,7 +198,10 @@ const LearningResourcesSearchContent: React.FC = () => {
               control={
                 <Checkbox
                   checked={isFree}
-                  onChange={(e) => setIsFree(e.target.checked)}
+                  onChange={(e) => {
+                    setPage(1)
+                    setIsFree(e.target.checked)
+                  }}
                 />
               }
               label={<Typography>Free</Typography>}
@@ -214,6 +227,7 @@ const LearningResourcesSearchContent: React.FC = () => {
                   <Checkbox
                     checked={selectedCertificates.includes(cert.value)}
                     onChange={(e) => {
+                      setPage(1)
                       if (e.target.checked)
                         setSelectedCertificates([
                           ...selectedCertificates,
@@ -271,6 +285,7 @@ const LearningResourcesSearchContent: React.FC = () => {
                     <Checkbox
                       checked={selectedTopics.includes(topic)}
                       onChange={(e) => {
+                        setPage(1)
                         if (e.target.checked)
                           setSelectedTopics([...selectedTopics, topic])
                         else
@@ -281,6 +296,100 @@ const LearningResourcesSearchContent: React.FC = () => {
                     />
                   }
                   label={<Typography variant="body2">{topic}</Typography>}
+                  sx={{ width: "100%", m: 0 }}
+                />
+              ))}
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion defaultExpanded variant="outlined" sx={{ mb: 2 }}>
+          <AccordionSummary expandIcon={<RiArrowDownSLine />}>
+            <Typography fontWeight="bold">Department</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Search Department"
+              value={departmentSearch}
+              onChange={(e) => setDepartmentSearch(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            {[
+              { label: "Aeronautics and Astronautics", value: "aeroastro" },
+              { label: "Architecture", value: "architecture" },
+              { label: "Biological Engineering", value: "bioeng" },
+              { label: "Biology", value: "biology" },
+              { label: "Brain and Cognitive Sciences", value: "braincog" },
+              { label: "Chemical Engineering", value: "chemeng" },
+              { label: "Chemistry", value: "chemistry" },
+              {
+                label: "Civil and Environmental Engineering",
+                value: "civilenv",
+              },
+              { label: "Comparative Media Studies/Writing", value: "cmsw" },
+              {
+                label: "Earth, Atmospheric, and Planetary Sciences",
+                value: "eaps",
+              },
+              { label: "Economics", value: "economics" },
+              {
+                label: "Electrical Engineering and Computer Science",
+                value: "eecs",
+              },
+              {
+                label: "Foreign Languages and Literatures",
+                value: "foreignlang",
+              },
+              { label: "History", value: "history" },
+              { label: "Humanities", value: "humanities" },
+              { label: "Linguistics and Philosophy", value: "lingphil" },
+              { label: "Literature", value: "literature" },
+              { label: "Management", value: "management" },
+              {
+                label: "Materials Science and Engineering",
+                value: "matscieng",
+              },
+              { label: "Mathematics", value: "math" },
+              { label: "Mechanical Engineering", value: "mech_eng" },
+              { label: "Media Arts and Sciences", value: "media_arts" },
+              { label: "Music and Theater Arts", value: "music_theater" },
+              {
+                label: "Nuclear Science and Engineering",
+                value: "nuclear_sci",
+              },
+              { label: "Ocean Engineering", value: "ocean_eng" },
+              { label: "Physics", value: "physics" },
+              { label: "Political Science", value: "polisci" },
+              { label: "Science, Technology, and Society", value: "sts" },
+              { label: "Urban Studies and Planning", value: "urban_studies" },
+            ]
+              .filter((dept) =>
+                dept.label
+                  .toLowerCase()
+                  .includes(departmentSearch.toLowerCase()),
+              )
+              .map((dept) => (
+                <FormControlLabel
+                  key={dept.value}
+                  control={
+                    <Checkbox
+                      checked={selectedDepartments.includes(dept.value)}
+                      onChange={(e) => {
+                        setPage(1)
+                        if (e.target.checked)
+                          setSelectedDepartments([
+                            ...selectedDepartments,
+                            dept.value,
+                          ])
+                        else
+                          setSelectedDepartments(
+                            selectedDepartments.filter((d) => d !== dept.value),
+                          )
+                      }}
+                    />
+                  }
+                  label={<Typography variant="body2">{dept.label}</Typography>}
                   sx={{ width: "100%", m: 0 }}
                 />
               ))}
@@ -303,6 +412,7 @@ const LearningResourcesSearchContent: React.FC = () => {
                   <Checkbox
                     checked={selectedFormats.includes(format.value)}
                     onChange={(e) => {
+                      setPage(1)
                       if (e.target.checked)
                         setSelectedFormats([...selectedFormats, format.value])
                       else
@@ -337,6 +447,7 @@ const LearningResourcesSearchContent: React.FC = () => {
                   <Checkbox
                     checked={selectedProviders.includes(provider.value)}
                     onChange={(e) => {
+                      setPage(1)
                       if (e.target.checked)
                         setSelectedProviders([
                           ...selectedProviders,
@@ -427,33 +538,6 @@ const LearningResourcesSearchContent: React.FC = () => {
                     ?.map((d: { code: string }) => d.code)
                     .join(", ") || "Online"}
                 </Typography>
-
-                <Box sx={{ display: "flex", gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      borderRadius: "50%",
-                      minWidth: "40px",
-                      width: "40px",
-                      p: 0,
-                    }}
-                  >
-                    <RiListCheck size={18} />
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      borderRadius: "50%",
-                      minWidth: "40px",
-                      width: "40px",
-                      p: 0,
-                    }}
-                  >
-                    <RiBookmarkLine size={18} />
-                  </Button>
-                </Box>
               </Grid>
               <Grid
                 size={3}
@@ -493,6 +577,19 @@ const LearningResourcesSearchContent: React.FC = () => {
             No results found for "{searchQuery}"
           </Typography>
         )}
+        {(data?.count || 0) > 30 && (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+            <Pagination
+              count={Math.ceil((data?.count || 0) / 30)}
+              page={page}
+              onChange={(e, value) => {
+                setPage(value)
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }}
+              color="primary"
+            />
+          </Box>
+        )}
       </Box>
     )
   }
@@ -509,6 +606,7 @@ const LearningResourcesSearchContent: React.FC = () => {
             if (e.key === "Enter") {
               e.preventDefault()
               setSearchQuery(inputValue)
+              setPage(1)
             }
           }}
         >
@@ -529,7 +627,10 @@ const LearningResourcesSearchContent: React.FC = () => {
           control={
             <Checkbox
               checked={hybridSearch}
-              onChange={(e) => setHybridSearch(e.target.checked)}
+              onChange={(e) => {
+                setPage(1)
+                setHybridSearch(e.target.checked)
+              }}
               color="primary"
             />
           }
@@ -554,7 +655,8 @@ const LearningResourcesSearchContent: React.FC = () => {
               value={resourceTypeGroup}
               exclusive
               onChange={(e, val) => {
-                if (val) setResourceTypeGroup(val)
+                setPage(1)
+                setResourceTypeGroup(val || "all")
               }}
               size="small"
               sx={{ bgcolor: "#f5f5f5" }}
