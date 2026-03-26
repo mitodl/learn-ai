@@ -52,6 +52,7 @@ const queries = {
         const search = new URLSearchParams()
         if (opts.q) search.append("q", opts.q)
         if (opts.limit) search.append("limit", opts.limit.toString())
+        if (opts.offset) search.append("offset", opts.offset.toString())
         if (opts.professional !== undefined)
           search.append("professional", opts.professional.toString())
         if (opts.free !== undefined) search.append("free", opts.free.toString())
