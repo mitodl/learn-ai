@@ -10,6 +10,7 @@ import SyllabusCanvasContent from "./SyllabusCanvasContent"
 import AssessmentContent from "./AssessmentContent"
 import CanvasAssessmentContent from "./CanvasAssessmentContent"
 import LearningMaterialsSearchContent from "./LearningMaterialsSearchContent"
+import LearningResourcesSearchContent from "./LearningResourcesSearchContent"
 import VideoContent from "./VideoContent"
 import { useSyncExternalStore } from "react"
 
@@ -21,6 +22,7 @@ export enum ChatTab {
   AssessmentGPT = "AssessmentGPT",
   CanvasAssessmentGPT = "CanvasAssessmentGPT",
   LearningMaterialsSearch = "LearningMaterialsSearch",
+  LearningResourcesSearch = "LearningResourcesSearch",
 }
 
 const ChatTabs = () => {
@@ -68,6 +70,10 @@ const ChatTabs = () => {
             label="LearningMaterialsSearch"
             value={ChatTab.LearningMaterialsSearch}
           />
+          <Tab
+            label="LearningResourcesSearch"
+            value={ChatTab.LearningResourcesSearch}
+          />
         </TabList>
       </Box>
       <TabPanel value={ChatTab.RecommendationGPT}>
@@ -90,6 +96,9 @@ const ChatTabs = () => {
       </TabPanel>
       <TabPanel value={ChatTab.LearningMaterialsSearch}>
         <LearningMaterialsSearchContent />
+      </TabPanel>
+      <TabPanel value={ChatTab.LearningResourcesSearch}>
+        <LearningResourcesSearchContent />
       </TabPanel>
     </TabContext>
   )

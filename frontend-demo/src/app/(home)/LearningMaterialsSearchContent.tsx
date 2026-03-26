@@ -20,6 +20,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Checkbox,
+  FormControlLabel,
   type SelectChangeEvent,
 } from "@mui/material"
 import Grid from "@mui/material/Grid"
@@ -114,6 +116,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [platform, setPlatform] = useState("")
+  const [hybridSearch, setHybridSearch] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     ...VectorContenfilesQueries.listing({
@@ -124,6 +127,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
       url__isnull: false,
       title__isnull: false,
       platform: platform || undefined,
+      hybrid_search: hybridSearch || undefined,
     }),
     enabled: !!searchQuery,
   })
@@ -137,6 +141,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
     setInputValue("")
     setSearchQuery("")
     setPlatform("")
+    setHybridSearch(false)
   }
 
   const handlePlatformChange = (event: SelectChangeEvent) => {
@@ -209,6 +214,17 @@ const LearningMaterialsSearchContent: React.FC = () => {
             </Select>
           </FormControl>
         </Box>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={hybridSearch}
+              onChange={(e) => setHybridSearch(e.target.checked)}
+              color="primary"
+            />
+          }
+          label="Hybrid Search"
+          sx={{ ml: 1, whiteSpace: "nowrap" }}
+        />
       </Box>
 
       {isLoading && (
