@@ -356,6 +356,33 @@ async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     )
 
 
+@pytest.mark.asyncio
+async def test_syllabus_bot_related_courses_instructions(mocker, mock_checkpointer):
+    """SyllabusBot should append related courses instructions when enabled."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        enable_related_courses=True,
+    )
+    assert "search_related_course_content_files" in chatbot.instructions
+    assert "BOTH" in chatbot.instructions
+
+
+@pytest.mark.asyncio
+async def test_syllabus_bot_no_related_courses_instructions(mocker, mock_checkpointer):
+    """SyllabusBot should not append related courses instructions when disabled."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        enable_related_courses=False,
+    )
+    assert "search_related_course_content_files" not in chatbot.instructions
+
+
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
 @pytest.mark.asyncio
 async def test_syllabus_bot_get_completion_state(

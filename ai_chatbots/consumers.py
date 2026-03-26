@@ -479,7 +479,9 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
-        enable_related_courses = bool(serializer.validated_data.get("related_courses"))
+        enable_related_courses = bool(
+            serializer.validated_data.get("related_resources")
+        )
 
         return SyllabusBot(
             self.user_id,
@@ -494,14 +496,14 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
         user = self.scope.get("user", None)
-        related_courses = data.get("related_courses", [])
+        related_resources = data.get("related_resources", [])
         params = {
             "course_id": [data.get("course_id")],
             "collection_name": [data.get("collection_name")],
             "exclude_canvas": [str(not user or user.is_anonymous or not user.is_staff)],
         }
-        if related_courses:
-            params["related_courses"] = related_courses
+        if related_resources:
+            params["related_courses"] = related_resources
         return params
 
     def prepare_response(
@@ -552,7 +554,9 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
-        enable_related_courses = bool(serializer.validated_data.get("related_courses"))
+        enable_related_courses = bool(
+            serializer.validated_data.get("related_resources")
+        )
 
         return CanvasSyllabusBot(
             self.user_id,

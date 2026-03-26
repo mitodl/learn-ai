@@ -6,7 +6,11 @@ import pytest
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
-from ai_chatbots.tools import search_content_files, search_courses
+from ai_chatbots.tools import (
+    search_content_files,
+    search_courses,
+    search_related_course_content_files,
+)
 
 
 @pytest.fixture
@@ -263,3 +267,43 @@ async def test_search_courses_handles_none_kwargs(
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
+
+
+@pytest.mark.parametrize("no_collection_name", [True, False])
+async def test_search_related_course_content_files(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+    no_collection_name,
+):
+    """Test that search_related_course_content_files searches across related courses."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/search"
+    settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    related = ["course-v1:UAI+12", "course-v1:UAI+13"]
+    syllabus_agent_state["related_courses"] = related
+
+    expected_params = {
+        "q": "main topics",
+        "limit": 5,
+        "resource_readable_id": related,
+        "collection_name": syllabus_agent_state["collection_name"][-1],
+    }
+    if no_collection_name:
+        expected_params.pop("collection_name")
+        syllabus_agent_state.pop("collection_name")
+
+    results = json.loads(
+        await search_related_course_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
+    )
+    mock_get_content_files.return_value.get.assert_called_once_with(
+        "https://mit.edu/search",
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
+    assert len(results["results"]) == len(content_chunk_results["results"])
