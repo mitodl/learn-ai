@@ -63,10 +63,14 @@ const queries = {
           opts.topic.forEach((t: string) => search.append("topic", t))
         if (opts.delivery)
           opts.delivery.forEach((d: string) => search.append("delivery", d))
-        if (opts.resource_category)
-          opts.resource_category.forEach((rc: string) =>
-            search.append("resource_category", rc),
+        if (opts.resource_type_group) {
+          const types = Array.isArray(opts.resource_type_group)
+            ? opts.resource_type_group
+            : [opts.resource_type_group]
+          types.forEach((rtg: string) =>
+            search.append("resource_type_group", rtg),
           )
+        }
         if (opts.certification_type)
           opts.certification_type.forEach((c: string) =>
             search.append("certification_type", c),

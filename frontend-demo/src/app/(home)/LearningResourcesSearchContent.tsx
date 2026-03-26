@@ -74,7 +74,7 @@ const LearningResourcesSearchContent: React.FC = () => {
       topic: selectedTopics.length > 0 ? selectedTopics : undefined,
       delivery: selectedFormats.length > 0 ? selectedFormats : undefined,
       offered_by: selectedProviders.length > 0 ? selectedProviders : undefined,
-      resource_category:
+      resource_type_group:
         resourceTypeGroup !== "all" ? [resourceTypeGroup] : undefined,
       hybrid_search: hybridSearch || undefined,
       limit: 30,
