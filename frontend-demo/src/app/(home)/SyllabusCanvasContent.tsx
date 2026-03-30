@@ -69,7 +69,7 @@ const SyllabusCanvasContent = () => {
       extraBody={{
         model: settings.syllabus_model,
         course_id: readableId,
-        related_resources: undefined,
+        related_courses: undefined,
         instructions: settings.syllabus_prompt,
       }}
       settings={settings}
