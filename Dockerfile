@@ -29,7 +29,6 @@ USER mitodl
 WORKDIR /src
 RUN uv sync --frozen --no-install-project
 RUN uv pip install deepeval --no-deps
-RUN uv pip install 'setuptools<78'
 
 # Add project
 USER root
