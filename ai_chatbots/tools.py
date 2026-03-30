@@ -312,8 +312,10 @@ async def search_related_course_content_files(
     q: str, state: Annotated[dict, InjectedState]
 ) -> str:
     """
-    Query the MIT contentfile vector endpoint API, and return results as a
-    JSON string, along with metadata about the query parameters used.
+    Search for information across related courses in the same program.
+    Use this tool when the user's question may be answered by content from
+    other courses in the program, or when the current course search does not
+    return sufficient results.
     """
     url = settings.AI_MIT_SYLLABUS_URL
     collection_name = state.get("collection_name", [None])[-1]

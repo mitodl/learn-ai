@@ -499,6 +499,16 @@ class SyllabusBot(TruncatingChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
+        if self.enable_related_courses and self.instructions:
+            self.instructions += (
+                "\n\nIMPORTANT: You have two search tools available. "
+                "Always call BOTH search_content_files AND "
+                "search_related_course_content_files for every user question. "
+                "search_content_files searches the current course, while "
+                "search_related_course_content_files searches other courses "
+                "in the same program. Combine results from both tools to "
+                "provide the most comprehensive answer."
+            )
         self.agent = self.create_agent_graph()
 
     def create_tools(self):

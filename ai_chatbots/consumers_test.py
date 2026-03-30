@@ -364,6 +364,47 @@ async def test_syllabus_create_chatbot(
     assert chatbot.model == "gpt-3.5-turbo"
 
 
+async def test_syllabus_create_chatbot_with_related_resources(
+    mocker, mock_http_consumer_send, syllabus_consumer, async_user
+):
+    """SyllabusBotHttpConsumer should enable related courses when related_resources provided."""
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={
+            "message": "hello",
+            "course_id": "MITx+6.00.1x",
+            "related_resources": ["course-v1:UAI+12"],
+        }
+    )
+    serializer.is_valid(raise_exception=True)
+    await syllabus_consumer.prepare_response(serializer)
+    chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
+        serializer, mocker.Mock()
+    )
+    assert isinstance(chatbot, SyllabusBot)
+    assert chatbot.enable_related_courses is True
+    assert len(chatbot.create_tools()) == 2
+
+
+async def test_syllabus_create_chatbot_without_related_resources(
+    mocker, mock_http_consumer_send, syllabus_consumer, async_user
+):
+    """SyllabusBotHttpConsumer should not enable related courses when related_resources absent."""
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={
+            "message": "hello",
+            "course_id": "MITx+6.00.1x",
+        }
+    )
+    serializer.is_valid(raise_exception=True)
+    await syllabus_consumer.prepare_response(serializer)
+    chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
+        serializer, mocker.Mock()
+    )
+    assert isinstance(chatbot, SyllabusBot)
+    assert chatbot.enable_related_courses is False
+    assert len(chatbot.create_tools()) == 1
+
+
 @pytest.mark.parametrize(
     "request_params",
     [
@@ -383,6 +424,19 @@ def test_syllabus_process_extra_state(syllabus_consumer, request_params):
         "collection_name": [request_params.get("collection_name", None)],
         "exclude_canvas": ["True"],
     }
+
+
+def test_syllabus_process_extra_state_with_related_resources(syllabus_consumer):
+    """Test that process_extra_state maps related_resources to related_courses in state."""
+    related = ["course-v1:UAI+12", "course-v1:UAI+13"]
+    result = syllabus_consumer.process_extra_state(
+        {
+            "message": "hello",
+            "course_id": "MITx+6.00.1x",
+            "related_resources": related,
+        }
+    )
+    assert result["related_courses"] == related
 
 
 def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
