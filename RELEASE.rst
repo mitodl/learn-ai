@@ -1,6 +1,18 @@
 Release Notes
 =============
 
+Version 0.28.2
+--------------
+
+- Revert some previous changes (#473)
+- Update setuptools version (#470)
+- Fix request parameter name mismatch, update syllabus prompt and tool docstrings (#463)
+- chore(deps): update codecov/codecov-action action to v5.5.4 (#466)
+- chore(deps): update dependency langchain-core to v1.2.22 [security] (#464)
+- chore(deps): update dependency requests to v2.33.0 [security] (#461)
+- fix(deps): update dependency next to v15.5.14 [security] (#460)
+- feat: migrate to mitol-django-observability plugin (#439)
+
 Version 0.27.0 (Released March 16, 2026)
 --------------
 
