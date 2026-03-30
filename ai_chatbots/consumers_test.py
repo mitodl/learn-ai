@@ -364,15 +364,15 @@ async def test_syllabus_create_chatbot(
     assert chatbot.model == "gpt-3.5-turbo"
 
 
-async def test_syllabus_create_chatbot_with_related_resources(
+async def test_syllabus_create_chatbot_with_related_courses(
     mocker, mock_http_consumer_send, syllabus_consumer, async_user
 ):
-    """SyllabusBotHttpConsumer should enable related courses when related_resources provided."""
+    """SyllabusBotHttpConsumer should enable related courses when related_courses provided."""
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "hello",
             "course_id": "MITx+6.00.1x",
-            "related_resources": ["course-v1:UAI+12"],
+            "related_courses": ["course-v1:UAI+12"],
         }
     )
     serializer.is_valid(raise_exception=True)
@@ -385,10 +385,10 @@ async def test_syllabus_create_chatbot_with_related_resources(
     assert len(chatbot.create_tools()) == 2
 
 
-async def test_syllabus_create_chatbot_without_related_resources(
+async def test_syllabus_create_chatbot_without_related_courses(
     mocker, mock_http_consumer_send, syllabus_consumer, async_user
 ):
-    """SyllabusBotHttpConsumer should not enable related courses when related_resources absent."""
+    """SyllabusBotHttpConsumer should not enable related courses when related_courses absent."""
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "hello",
@@ -426,14 +426,14 @@ def test_syllabus_process_extra_state(syllabus_consumer, request_params):
     }
 
 
-def test_syllabus_process_extra_state_with_related_resources(syllabus_consumer):
-    """Test that process_extra_state maps related_resources to related_courses in state."""
+def test_syllabus_process_extra_state_with_related_courses(syllabus_consumer):
+    """Test that process_extra_state maps related_courses to related_courses in state."""
     related = ["course-v1:UAI+12", "course-v1:UAI+13"]
     result = syllabus_consumer.process_extra_state(
         {
             "message": "hello",
             "course_id": "MITx+6.00.1x",
-            "related_resources": related,
+            "related_courses": related,
         }
     )
     assert result["related_courses"] == related
