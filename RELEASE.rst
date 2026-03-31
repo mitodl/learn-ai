@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.28.2
+Version 0.28.2 (Released March 31, 2026)
 --------------
 
 - Revert some previous changes (#473)
