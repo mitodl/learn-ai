@@ -307,3 +307,42 @@ async def test_search_related_course_content_files(
         timeout=30,
     )
     assert len(results["results"]) == len(content_chunk_results["results"])
+
+
+@pytest.mark.parametrize("is_hybrid_enabled", [True, False])
+async def test_content_file_search_hybrid_flag(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    is_hybrid_enabled,
+    mocker,
+):
+    """Test that the hybrid_search parameter is added when the feature flag is enabled."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/search"
+    settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    mocker.patch(
+        "ai_chatbots.tools.feature_is_enabled",
+        return_value=is_hybrid_enabled,
+    )
+
+    expected_params = {
+        "q": "main topics",
+        "limit": 5,
+        "resource_readable_id": syllabus_agent_state["course_id"][-1],
+        "collection_name": syllabus_agent_state["collection_name"][-1],
+    }
+    if is_hybrid_enabled:
+        expected_params["hybrid_search"] = True
+
+    await search_content_files.ainvoke(
+        {"q": "main topics", "state": syllabus_agent_state}
+    )
+
+    mock_get_content_files.return_value.get.assert_called_once_with(
+        "https://mit.edu/search",
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
