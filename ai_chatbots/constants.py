@@ -6,6 +6,7 @@ from typing import Optional
 
 from named_enum import ExtendedEnum
 
+HYBRID_SEARCH_FEATURE_FLAG = "bot_hybrid_search_enabled"
 GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
 AI_ANONYMOUS_USER = "anonymous"
 AI_THREAD_COOKIE_KEY = "ai_thread_auth"

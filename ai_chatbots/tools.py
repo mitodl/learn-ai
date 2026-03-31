@@ -5,14 +5,20 @@ import logging
 from typing import Annotated, Optional
 
 import pydantic
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from httpx import RequestError
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
-from ai_chatbots.constants import LearningResourceType, OfferedBy
+from ai_chatbots.constants import (
+    HYBRID_SEARCH_FEATURE_FLAG,
+    LearningResourceType,
+    OfferedBy,
+)
 from ai_chatbots.utils import async_request_with_token, enum_zip
+from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
 
@@ -247,6 +253,12 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         # Convert the exclude_canvas parameter to a boolean if it is a string
         if exclude_canvas and exclude_canvas == "False":
             exclude_canvas = False
+        hybrid_search_enabled = await sync_to_async(feature_is_enabled)(
+            HYBRID_SEARCH_FEATURE_FLAG, default=False
+        )
+        if hybrid_search_enabled:
+            params["hybrid_search"] = True
+
         response = await async_request_with_token(
             url, params, timeout=settings.REQUESTS_TIMEOUT
         )
