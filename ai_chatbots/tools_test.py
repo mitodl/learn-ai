@@ -130,6 +130,7 @@ async def test_httpx_exception(mocker):
     assert result == '{"error": "An error occurred while searching"}'
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     ("search_url", "limit"),
     [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
@@ -187,6 +188,7 @@ async def test_search_content_files(  # noqa: PLR0913
             }
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("exclude_canvas", [True, False])
 async def test_search_canvas_content_files(
     settings,
@@ -269,6 +271,7 @@ async def test_search_courses_handles_none_kwargs(
     )
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("no_collection_name", [True, False])
 async def test_search_related_course_content_files(
     settings,
