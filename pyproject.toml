@@ -102,6 +102,7 @@ dev = [
     "google-genai>=1.9.0",
     "chromadb>=1.0.13,<2",
     "pandas>=3.0.1,<4",
+    "mitol-drf-lint==2026.4.2",
 ]
 
 [tool.uv]
