@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.28.3
+Version 0.28.3 (Released April 01, 2026)
 --------------
 
 - adding hybrid checkbox (#468)
