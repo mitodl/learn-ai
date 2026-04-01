@@ -13,6 +13,7 @@ type VectorContentListOptions = {
   url__isnull?: boolean
   title__isnull?: boolean
   file_extension?: string[]
+  hybrid_search?: boolean
   limit: number
 }
 
@@ -75,6 +76,9 @@ const queries = {
         }
         if (opts.title__isnull !== undefined) {
           search.append("title__isnull", opts.title__isnull.toString())
+        }
+        if (opts.hybrid_search !== undefined) {
+          search.append("hybrid_search", opts.hybrid_search.toString())
         }
 
         return axios
