@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.29.0
+--------------
+
+- Replace article with document for resource types (#479)
+- chore: add drf-lint pre-commit hook with baseline (#477)
+- feature flagged hybrid search for bots (#475)
+
 Version 0.28.3 (Released April 01, 2026)
 --------------
 
