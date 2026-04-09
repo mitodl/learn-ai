@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.29.0
+Version 0.29.0 (Released April 09, 2026)
 --------------
 
 - Replace article with document for resource types (#479)
