@@ -1,14 +1,18 @@
 """Utility functions for ai chat agents"""
 
 import asyncio
+import json
 import logging
 from enum import Enum
 
 import httpx
+from channels.db import database_sync_to_async
 from django.conf import settings
 from django.core.cache import BaseCache, caches
 from langchain_core.messages import HumanMessage
 from named_enum import ExtendedEnum
+
+from ai_chatbots.models import DjangoCheckpoint
 
 log = logging.getLogger(__name__)
 
@@ -16,11 +20,41 @@ log = logging.getLogger(__name__)
 TOOL_MESSAGE_ID = ["langchain", "schema", "messages", "ToolMessage"]
 AI_MESSAGE_ID = ["langchain", "schema", "messages", "AIMessage"]
 
+# HTTP statuses that indicate transient upstream failures worth retrying.
+# Other 4xx codes are deterministic and should not be retried.
+RETRYABLE_STATUS_CODES = frozenset({408, 429, 502, 503, 504})
+
+# httpx exceptions that represent transient network/transport failures.
+RETRYABLE_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+    httpx.RemoteProtocolError,
+)
+
+# Max retry attempts for transient HTTP failures (1 original + 2 retries).
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 0.5
+_RETRY_MAX_DELAY = 2.0
+
+
+def _compute_retry_delay(attempt: int) -> float:
+    """Compute a capped exponential backoff delay in seconds."""
+    return min(_RETRY_BASE_DELAY * (2**attempt), _RETRY_MAX_DELAY)
+
+
+async def _sleep_before_retry(attempt: int) -> None:
+    """Sleep before retrying a transient upstream failure."""
+    await asyncio.sleep(_compute_retry_delay(attempt))
+
 
 class HTTPClientManager:
     """Manager for shared HTTP client instances with connection pooling."""
 
     def __init__(self):
+        """Initialize empty shared sync and async HTTP clients."""
         self._sync_client: httpx.Client | None = None
         self._async_client: httpx.AsyncClient | None = None
 
@@ -150,6 +184,22 @@ async def async_request_with_token(url, params, timeout: int = 30):
     blocking the event loop with synchronous HTTP requests. Uses a shared client
     with connection pooling for optimal performance with concurrent requests.
 
+    Transient upstream failures are retried up to ``_RETRY_MAX_ATTEMPTS`` times
+    with a capped exponential backoff. The following are considered transient
+    and trigger a retry:
+
+    - Network/transport exceptions in ``RETRYABLE_EXCEPTIONS`` (connect errors,
+      read/write/pool timeouts, remote protocol errors).
+    - HTTP responses with a status code in ``RETRYABLE_STATUS_CODES``
+      (408, 429, 502, 503, 504).
+
+    Non-retryable responses (including 2xx success and 4xx client errors other
+    than 408/429) are returned to the caller as-is, preserving the existing
+    contract that callers decide what to do via their own ``raise_for_status``.
+    If retries are exhausted for a retryable HTTP status, the final response is
+    returned to the caller. If retries are exhausted for a transport error, the
+    original ``httpx.RequestError`` is reraised.
+
     Args:
         url: The URL to request
         params: Query parameters
@@ -159,12 +209,55 @@ async def async_request_with_token(url, params, timeout: int = 30):
         httpx.Response object with compatible interface to requests.Response
     """
     client = get_async_http_client()
-    return await client.get(
-        url,
-        params=params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=timeout,
-    )
+    headers = {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
+
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            response = await client.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=timeout,
+            )
+        except RETRYABLE_EXCEPTIONS:
+            if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                raise
+            delay = _compute_retry_delay(attempt)
+            log.warning(
+                (
+                    "Retrying HTTP request to %s after transient transport "
+                    "error; attempt %d/%d in %.1fs"
+                ),
+                url,
+                attempt + 2,
+                _RETRY_MAX_ATTEMPTS,
+                delay,
+                exc_info=True,
+            )
+            await _sleep_before_retry(attempt)
+            continue
+
+        if response.status_code not in RETRYABLE_STATUS_CODES:
+            return response
+
+        if attempt == _RETRY_MAX_ATTEMPTS - 1:
+            return response
+
+        delay = _compute_retry_delay(attempt)
+        log.warning(
+            (
+                "Retrying HTTP request to %s after transient upstream status "
+                "%d; attempt %d/%d in %.1fs"
+            ),
+            url,
+            response.status_code,
+            attempt + 2,
+            _RETRY_MAX_ATTEMPTS,
+            delay,
+        )
+        await _sleep_before_retry(attempt)
+
+    return response
 
 
 def truncate_to_latest_human_message(messages: list) -> list:
@@ -198,11 +291,6 @@ async def save_truncated_checkpoint(thread_id: str, keep_ids: set[str]) -> None:
         thread_id: The thread ID to clean up
         keep_ids: Set of message IDs to keep
     """
-    import json
-
-    from channels.db import database_sync_to_async
-
-    from ai_chatbots.api import DjangoCheckpoint
 
     @database_sync_to_async
     def update_checkpoint():

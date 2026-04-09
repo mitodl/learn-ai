@@ -2,10 +2,12 @@
 
 import json
 
+import httpx
 import pytest
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
+from ai_chatbots import utils
 from ai_chatbots.tools import (
     search_content_files,
     search_courses,
@@ -128,6 +130,33 @@ async def test_httpx_exception(mocker):
         {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
     )
     assert result == '{"error": "An error occurred while searching"}'
+
+
+async def test_search_courses_handles_http_status_error(mocker):
+    """
+    A persistent upstream 502 (after retries are exhausted in
+    async_request_with_token) must be caught by search_courses and converted
+    to the JSON error payload, not bubble out as an uncaught HTTPStatusError.
+    Regression test for the production incident where a 502 escaped this
+    tool's narrow ``except RequestError`` clause and corrupted the checkpoint.
+    """
+    mocker.patch.object(utils, "_sleep_before_retry", mocker.AsyncMock())
+
+    error_response = httpx.Response(
+        status_code=502,
+        request=httpx.Request("GET", "https://test.edu/search"),
+    )
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(return_value=error_response)
+    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
+
+    result = await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
+    )
+
+    assert result == '{"error": "An error occurred while searching"}'
+    # Confirm the retry budget was actually exercised before giving up.
+    assert mock_client.get.call_count == 3
 
 
 @pytest.mark.django_db

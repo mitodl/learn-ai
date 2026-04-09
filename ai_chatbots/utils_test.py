@@ -92,6 +92,102 @@ async def test_async_request_with_token(mocker, settings):
     assert response.json() == {"result": "async_success"}
 
 
+@pytest.fixture
+def _no_retry_sleep(mocker):
+    """Patch retry sleep so retry tests run instantly."""
+    mocker.patch.object(utils, "_sleep_before_retry", mocker.AsyncMock())
+
+
+def _httpx_response(status_code: int, url: str = "https://api.example.com/test"):
+    """Build a real httpx.Response so raise_for_status() raises HTTPStatusError."""
+    return httpx.Response(
+        status_code=status_code,
+        request=httpx.Request("GET", url),
+    )
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_async_request_with_token_retries_on_502(mocker, settings):
+    """Transient 502s are retried up to 3 attempts and then succeed."""
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    responses = [
+        _httpx_response(502),
+        _httpx_response(502),
+        _httpx_response(200),
+    ]
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(side_effect=responses)
+    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
+
+    response = await utils.async_request_with_token(
+        "https://api.example.com/test", {"q": "x"}
+    )
+
+    assert response.status_code == 200
+    assert mock_client.get.call_count == 3
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_async_request_with_token_returns_final_502_after_max_attempts(
+    mocker, settings
+):
+    """Three consecutive 502s exhaust the retry budget and return the final response."""
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(
+        side_effect=[_httpx_response(502) for _ in range(3)]
+    )
+    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
+
+    response = await utils.async_request_with_token(
+        "https://api.example.com/test", {"q": "x"}
+    )
+
+    assert response.status_code == 502
+    assert mock_client.get.call_count == 3
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_async_request_with_token_does_not_retry_on_404(mocker, settings):
+    """Deterministic 4xx responses are returned to the caller without retrying."""
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(return_value=_httpx_response(404))
+    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
+
+    response = await utils.async_request_with_token(
+        "https://api.example.com/test", {"q": "x"}
+    )
+
+    assert response.status_code == 404
+    assert mock_client.get.call_count == 1
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_async_request_with_token_retries_on_connect_error(mocker, settings):
+    """Transient transport exceptions are retried."""
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(
+        side_effect=[
+            httpx.ConnectError("boom"),
+            _httpx_response(200),
+        ]
+    )
+    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
+
+    response = await utils.async_request_with_token(
+        "https://api.example.com/test", {"q": "x"}
+    )
+
+    assert response.status_code == 200
+    assert mock_client.get.call_count == 2
+
+
 def test_get_sync_http_client_singleton():
     """Test that get_sync_http_client returns the same instance."""
     client1 = utils.get_sync_http_client()

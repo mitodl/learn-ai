@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 import pydantic
 from asgiref.sync import sync_to_async
 from django.conf import settings
-from httpx import RequestError
+from httpx import HTTPStatusError, RequestError
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
@@ -189,7 +189,12 @@ async def search_courses(
             "metadata": {"search_url": search_url, "parameters": params},
         }
         return json.dumps(full_output)
-    except RequestError:
+    except (RequestError, HTTPStatusError):
+        # HTTPStatusError covers terminal upstream failures (e.g. persistent
+        # 502s after the retry budget in async_request_with_token is exhausted).
+        # It is *not* a subclass of RequestError, so it must be caught
+        # explicitly to keep the failure inside this tool's JSON contract
+        # rather than bubbling to the chatbot's generic exception handler.
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
 
