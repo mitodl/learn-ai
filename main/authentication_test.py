@@ -1,4 +1,5 @@
 """Tests for authentication"""
+
 import zoneinfo
 from datetime import datetime, timedelta
 

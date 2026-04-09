@@ -4,18 +4,25 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ai_chatbots', '0002_chat_sessions'),
+        ("ai_chatbots", "0002_chat_sessions"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='TutorBotOutput',
+            name="TutorBotOutput",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('thread_id', models.TextField()),
-                ('chat_json', models.JSONField()),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("thread_id", models.TextField()),
+                ("chat_json", models.JSONField()),
             ],
         ),
     ]
