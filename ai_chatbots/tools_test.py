@@ -33,7 +33,7 @@ def mock_get_content_files(mock_httpx_async_client, content_chunk_results):
     "params",
     [
         {"q": "physics"},
-        {"q": "biology", "resource_type": ["course", "video", "article"]},
+        {"q": "biology", "resource_type": ["course", "video", "document"]},
         {"q": "chemistry", "resource_type": ["course"], "free": True},
         {
             "q": "astronomy",
