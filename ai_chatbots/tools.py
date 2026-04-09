@@ -190,11 +190,6 @@ async def search_courses(
         }
         return json.dumps(full_output)
     except (RequestError, HTTPStatusError):
-        # HTTPStatusError covers terminal upstream failures (e.g. persistent
-        # 502s after the retry budget in async_request_with_token is exhausted).
-        # It is *not* a subclass of RequestError, so it must be caught
-        # explicitly to keep the failure inside this tool's JSON contract
-        # rather than bubbling to the chatbot's generic exception handler.
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
 

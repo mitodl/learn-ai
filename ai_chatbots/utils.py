@@ -41,12 +41,12 @@ _RETRY_MAX_DELAY = 2.0
 
 
 def _compute_retry_delay(attempt: int) -> float:
-    """Compute a capped exponential backoff delay in seconds."""
+    """Return the capped exponential backoff delay."""
     return min(_RETRY_BASE_DELAY * (2**attempt), _RETRY_MAX_DELAY)
 
 
 async def _sleep_before_retry(attempt: int) -> None:
-    """Sleep before retrying a transient upstream failure."""
+    """Sleep for the next retry delay."""
     await asyncio.sleep(_compute_retry_delay(attempt))
 
 
@@ -54,7 +54,7 @@ class HTTPClientManager:
     """Manager for shared HTTP client instances with connection pooling."""
 
     def __init__(self):
-        """Initialize empty shared sync and async HTTP clients."""
+        """Initialize shared client slots."""
         self._sync_client: httpx.Client | None = None
         self._async_client: httpx.AsyncClient | None = None
 
@@ -178,27 +178,11 @@ def request_with_token(url, params, follow_redirects, timeout: int = 30):
 
 async def async_request_with_token(url, params, timeout: int = 30):
     """
-    Make an asynchronous HTTP GET request with bearer token authentication.
+        Make an async bearer-authenticated GET request.
 
-    This function should be used in async contexts (like LangGraph tools) to avoid
-    blocking the event loop with synchronous HTTP requests. Uses a shared client
-    with connection pooling for optimal performance with concurrent requests.
-
-    Transient upstream failures are retried up to ``_RETRY_MAX_ATTEMPTS`` times
-    with a capped exponential backoff. The following are considered transient
-    and trigger a retry:
-
-    - Network/transport exceptions in ``RETRYABLE_EXCEPTIONS`` (connect errors,
-      read/write/pool timeouts, remote protocol errors).
-    - HTTP responses with a status code in ``RETRYABLE_STATUS_CODES``
-      (408, 429, 502, 503, 504).
-
-    Non-retryable responses (including 2xx success and 4xx client errors other
-    than 408/429) are returned to the caller as-is, preserving the existing
-    contract that callers decide what to do via their own ``raise_for_status``.
-    If retries are exhausted for a retryable HTTP status, the final response is
-    returned to the caller. If retries are exhausted for a transport error, the
-    original ``httpx.RequestError`` is reraised.
+        Retries transient transport errors and retryable upstream statuses up to
+        ``_RETRY_MAX_ATTEMPTS`` times. Returns the final response, or reraises the
+        last transport error if no response was received.
 
     Args:
         url: The URL to request
