@@ -543,4 +543,3 @@ Version 0.1.0 (Released February 21, 2025)
 -------------
 
 - Zero the version
-

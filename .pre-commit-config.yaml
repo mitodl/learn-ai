@@ -6,7 +6,6 @@ ci:
     - prettier
     # Because these are local hooks it seems like they won't easily run in pre-commit CI
     - eslint
-    - style-lint
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -63,7 +62,7 @@ repos:
           - --exclude-files
           - "config/keycloak/tls/*"
           - --exclude-files
-          - "config/keycloak/realms/default-realm.json"
+          - "config/keycloak/realms/ol-local-realm.json"
         additional_dependencies: ["gibberish-detector"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.7.2"
