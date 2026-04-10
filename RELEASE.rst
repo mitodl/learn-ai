@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.29.1
+--------------
+
+- Retry tool calls on failed requests to search endpoints (#482)
+- Fix github precommit ci error (#481)
+- fix: Remove pgbouncer related configuration (#410)
+
 Version 0.29.0 (Released April 09, 2026)
 --------------
 
