@@ -1,9 +1,12 @@
+"""Shared pytest fixtures for ai_chatbots tests."""
+
 import json
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
+import httpx
 import pytest
 from asgiref.sync import sync_to_async
 
@@ -56,8 +59,6 @@ def sync_user():
 @pytest.fixture
 def django_session():
     """Create a mock Django session for testing."""
-    from uuid import uuid4
-
     session = Mock()
     session.session_key = f"test_session_{uuid4().hex}"
     session.save = Mock()
@@ -76,9 +77,6 @@ def mock_check_throttles(mocker):
 @pytest.fixture(autouse=True)
 def ai_settings(settings, mocker):
     """Assign default AI settings"""
-    # Reset HTTP client singletons before each test
-    from ai_chatbots import utils
-
     utils.sync_http_client = None
     utils.async_http_client = None
 
@@ -115,12 +113,15 @@ class MockAsyncIterator:
     """An async iterator for testing purposes."""
 
     def __init__(self, seq):
+        """Store the sequence iterator."""
         self.iter = iter(seq)
 
     def __aiter__(self):
+        """Return the iterator itself."""
         return self
 
     async def __anext__(self):
+        """Return the next item or stop iteration."""
         try:
             return next(self.iter)
         except StopIteration:
@@ -238,3 +239,52 @@ def mock_httpx_async_client(mocker):
         return mock_client
 
     return _mock_async_client
+
+
+@pytest.fixture
+def _no_retry_sleep(mocker):
+    """Skip retry sleeps in tests."""
+    mocker.patch.object(utils, "_sleep_before_retry", mocker.AsyncMock())
+
+
+@pytest.fixture
+def httpx_response():
+    """Build a real httpx.Response for tests."""
+
+    def _httpx_response(
+        status_code: int,
+        url: str = "https://api.example.com/test",
+        json_body: dict | None = None,
+    ):
+        kwargs = {
+            "status_code": status_code,
+            "request": httpx.Request("GET", url),
+        }
+        if json_body is not None:
+            kwargs["json"] = json_body
+        return httpx.Response(**kwargs)
+
+    return _httpx_response
+
+
+@pytest.fixture
+def mock_async_get_client(mocker):
+    """Mock an async client with a configurable GET response."""
+
+    def _mock_async_get_client(
+        *,
+        side_effect=None,
+        return_value=None,
+        patch_path: str = "ai_chatbots.utils.get_async_http_client",
+    ):
+        mock_client = mocker.Mock()
+        if side_effect is not None:
+            mock_client.get = mocker.AsyncMock(side_effect=side_effect)
+        else:
+            mock_client.get = mocker.AsyncMock(return_value=return_value)
+        mock_client.post = mocker.AsyncMock()
+        mock_client.aclose = mocker.AsyncMock()
+        mocker.patch(patch_path, return_value=mock_client)
+        return mock_client
+
+    return _mock_async_get_client

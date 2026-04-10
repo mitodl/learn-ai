@@ -92,6 +92,60 @@ async def test_async_request_with_token(mocker, settings):
     assert response.json() == {"result": "async_success"}
 
 
+@pytest.mark.usefixtures("_no_retry_sleep")
+@pytest.mark.parametrize(
+    ("statuses", "expected_status", "expected_calls"),
+    [
+        ([502, 502, 200], 200, 3),
+        ([502, 502, 502], 502, 3),
+        ([404], 404, 1),
+    ],
+    ids=[
+        "retries-on-502-until-success",
+        "returns-final-502-after-exhaustion",
+        "does-not-retry-on-404",
+    ],
+)
+async def test_async_request_with_token_status_handling(
+    mock_async_get_client,
+    httpx_response,
+    statuses,
+    expected_status,
+    expected_calls,
+):
+    """Handle retryable and non-retryable HTTP statuses correctly."""
+    mock_client = mock_async_get_client(
+        side_effect=[httpx_response(status) for status in statuses]
+    )
+
+    response = await utils.async_request_with_token(
+        "https://api.example.com/test", {"q": "x"}
+    )
+
+    assert response.status_code == expected_status
+    assert mock_client.get.call_count == expected_calls
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_async_request_with_token_retries_on_connect_error(
+    mock_async_get_client, httpx_response
+):
+    """Retry transient transport errors."""
+    mock_client = mock_async_get_client(
+        side_effect=[
+            httpx.ConnectError("boom"),
+            httpx_response(200),
+        ]
+    )
+
+    response = await utils.async_request_with_token(
+        "https://api.example.com/test", {"q": "x"}
+    )
+
+    assert response.status_code == 200
+    assert mock_client.get.call_count == 2
+
+
 def test_get_sync_http_client_singleton():
     """Test that get_sync_http_client returns the same instance."""
     client1 = utils.get_sync_http_client()
@@ -251,8 +305,6 @@ async def test_truncate_to_latest_human_message_empty(mock_checkpointer):
 @pytest.mark.django_db
 async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
     """Should filter checkpoint messages to only keep specified IDs."""
-    from ai_chatbots.utils import save_truncated_checkpoint
-
     thread_id = mock_checkpointer.session.thread_id
     keep_msg = HumanMessageFactory.create(content="keep")
     checkpoint_data = {
@@ -268,7 +320,7 @@ async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
         checkpoint=json.dumps(checkpoint_data),
     )
 
-    await save_truncated_checkpoint(thread_id, {keep_msg.id})
+    await utils.save_truncated_checkpoint(thread_id, {keep_msg.id})
 
     await database_sync_to_async(checkpoint.refresh_from_db)()
     saved_data = json.loads(checkpoint.checkpoint)

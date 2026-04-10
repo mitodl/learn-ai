@@ -130,6 +130,24 @@ async def test_httpx_exception(mocker):
     assert result == '{"error": "An error occurred while searching"}'
 
 
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_search_courses_handles_http_status_error(
+    mock_async_get_client, httpx_response
+):
+    """Persistent 502s should become the tool's JSON error payload."""
+    mock_client = mock_async_get_client(
+        return_value=httpx_response(502, url="https://test.edu/search")
+    )
+
+    result = await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
+    )
+
+    assert result == '{"error": "An error occurred while searching"}'
+    # Confirm the retry budget was actually exercised before giving up.
+    assert mock_client.get.call_count == 3
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("search_url", "limit"),
