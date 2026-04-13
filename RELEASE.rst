@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.29.1
+Version 0.29.1 (Released April 13, 2026)
 --------------
 
 - Retry tool calls on failed requests to search endpoints (#482)
