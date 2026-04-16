@@ -1,4 +1,4 @@
-FROM python:3.13.7
+FROM python:3.13.7@sha256:fe841081ec55481496a4ab25e538833741295d57d2abdec8d38d74d65fb4715b
 LABEL maintainer "ODL DevOps <mitx-devops@mit.edu>"
 
 # Add package files, install updated node and pip
@@ -11,7 +11,7 @@ RUN apt-get install -y $(grep -vE "^\s*#" apt.txt  | tr "\n" " ")
 RUN apt-get update && apt-get install libpq-dev postgresql-client -y
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a /uv /uvx /usr/local/bin/
 
 # Add, and run as, non-root user.
 RUN mkdir /src
