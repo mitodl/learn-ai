@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Annotated, Optional
+from typing import Annotated
 
 import pydantic
 from asgiref.sync import sync_to_async
@@ -68,7 +68,7 @@ class SearchToolSchema(pydantic.BaseModel):
         description="The agent state, including the search url to use"
     )
 
-    resource_type: Optional[list[enum_zip("resource_type", LearningResourceType)]] = (
+    resource_type: list[enum_zip("resource_type", LearningResourceType)] | None = (
         Field(
             default=None,
             description=(
@@ -85,7 +85,7 @@ class SearchToolSchema(pydantic.BaseModel):
             ),
         )
     )
-    free: Optional[bool] = Field(
+    free: bool | None = Field(
         default=None,
         description=(
             """
@@ -96,7 +96,7 @@ class SearchToolSchema(pydantic.BaseModel):
             """
         ),
     )
-    certification: Optional[bool] = Field(
+    certification: bool | None = Field(
         default=None,
         description=(
             """
@@ -107,7 +107,7 @@ class SearchToolSchema(pydantic.BaseModel):
             """
         ),
     )
-    offered_by: Optional[list[enum_zip("resource_type", OfferedBy)]] = Field(
+    offered_by: list[enum_zip("resource_type", OfferedBy)] | None = Field(
         default=None,
         description="""
             If a user asks for resources "offered by" or "from" an institution,
@@ -129,7 +129,7 @@ class SearchToolSchema(pydantic.BaseModel):
 
 @tool(args_schema=SearchToolSchema)
 async def search_courses(
-    q: str, state: Optional[Annotated[dict, InjectedState]], **kwargs
+    q: str, state: Annotated[dict, InjectedState] | None, **kwargs
 ) -> str:
     """
     Query the MIT API for learning resources, and
@@ -203,7 +203,7 @@ class SearchContentFilesToolSchema(pydantic.BaseModel):
         description=("Query to find requested information about a learning resource.")
     )
 
-    readable_id: Optional[str] = Field(
+    readable_id: str | None = Field(
         description=("The readable_id of the learning resource."),
         default=None,
     )

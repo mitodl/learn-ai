@@ -1,6 +1,6 @@
 """Bot-specific evaluators for RAG evaluation."""
 
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import AIMessage
 
@@ -37,7 +37,7 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
         return "search_url" in extra_state
 
     def create_bot_instance(
-        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
         """Create recommendation bot instance."""
         metadata = test_case.metadata or {}
@@ -95,7 +95,7 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         return "course_id" in extra_state
 
     def create_bot_instance(
-        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
         """Create syllabus bot instance."""
         metadata = test_case.metadata or {}
@@ -153,7 +153,7 @@ class VideoGPTBotEvaluator(BaseBotEvaluator):
         return "transcript_asset_id" in extra_state
 
     def create_bot_instance(
-        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
         """Create video GPT bot instance."""
         metadata = test_case.metadata or {}
@@ -214,7 +214,7 @@ class TutorBotEvaluator(BaseBotEvaluator):
         self,
         model: str,
         test_case: TestCaseSpec,
-        instructions: Optional[str] = None,  # noqa: ARG002
+        instructions: str | None = None,  # noqa: ARG002
     ):
         """Create tutor bot instance."""
         metadata = test_case.metadata or {}

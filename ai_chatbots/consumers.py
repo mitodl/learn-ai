@@ -2,7 +2,6 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from http.cookies import SimpleCookie
-from typing import Optional
 from uuid import uuid4
 
 import litellm
@@ -104,9 +103,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         self,
         user: User,
         *,
-        clear_history: Optional[bool] = False,
-        thread_id: Optional[str] = None,
-        object_id: Optional[str] = None,
+        clear_history: bool | None = False,
+        thread_id: str | None = None,
+        object_id: str | None = None,
     ) -> tuple[str, list[str]]:
         """
         Extract and update separate cookie values for logged in vs anonymous users.
@@ -220,7 +219,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         return current_thread_id, cookies
 
     async def prepare_response(
-        self, serializer: ChatRequestSerializer, object_id_field: Optional[str] = None
+        self, serializer: ChatRequestSerializer, object_id_field: str | None = None
     ) -> tuple[str, list[str]]:
         """Prepare consumer for the API response"""
         if object_id_field:
@@ -249,9 +248,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     async def start_response(
         self,
-        thread_id: Optional[str] = None,
-        status: Optional[int] = HTTP_200_OK,
-        cookies: Optional[list[str]] = None,
+        thread_id: str | None = None,
+        status: int | None = HTTP_200_OK,
+        cookies: list[str] | None = None,
     ):
         headers = (
             [
@@ -507,7 +506,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     def prepare_response(
         self,
         serializer: SyllabusChatRequestSerializer,
-        object_id_field: Optional[str] = None,
+        object_id_field: str | None = None,
     ) -> tuple[str, list[str]]:
         """Set the course id as the default object id field"""
         object_id_field = object_id_field or "course_id"
@@ -620,7 +619,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
     def prepare_response(
         self,
         serializer: TutorChatRequestSerializer,
-        object_id_field: Optional[str] = None,
+        object_id_field: str | None = None,
     ) -> tuple[str, list[str]]:
         """Set the edx_module_id as the default object id field"""
         object_id_field = object_id_field or "edx_module_id"
@@ -673,7 +672,7 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
     def prepare_response(
         self,
         serializer: TutorChatRequestSerializer,
-        object_id_field: Optional[str] = None,
+        object_id_field: str | None = None,
     ) -> tuple[str, list[str]]:
         """Set the edx_module_id as the default object id field"""
         object_id_field = "object_id"
@@ -752,7 +751,7 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
     def prepare_response(
         self,
         serializer: VideoGPTRequestSerializer,
-        object_id_field: Optional[str] = None,
+        object_id_field: str | None = None,
     ) -> tuple[str, list[str]]:
         """Set the problem code as the default object id field"""
         object_id_field = object_id_field or "transcript_asset_id"

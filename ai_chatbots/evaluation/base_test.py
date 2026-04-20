@@ -1,6 +1,5 @@
 """Tests for evaluation.base module."""
 
-from typing import Optional
 from unittest.mock import Mock
 
 import pytest
@@ -94,7 +93,7 @@ class ConcreteBotEvaluator(BaseBotEvaluator):
     """Concrete implementation for testing abstract methods."""
 
     def __init__(
-        self, bot_class, bot_name: str, *, data_file: Optional[str] = None, mocker=None
+        self, bot_class, bot_name: str, *, data_file: str | None = None, mocker=None
     ):
         """Initialize with optional mocker for testing."""
         super().__init__(bot_class, bot_name, data_file=data_file)
@@ -114,7 +113,7 @@ class ConcreteBotEvaluator(BaseBotEvaluator):
         return test_case.question is not None
 
     def create_bot_instance(
-        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
         """Create mock bot instance."""
         _ = model, test_case, instructions  # Unused parameters for testing

@@ -4,7 +4,6 @@ import json
 from collections.abc import AsyncGenerator
 from typing import (
     Any,
-    Optional,
 )
 
 from django.conf import settings
@@ -106,8 +105,8 @@ def _load_writes(
 def _parse_checkpoint_data(
     serde: JsonPlusSerializer,
     data: DjangoCheckpoint,
-    pending_writes: Optional[list[PendingWrite]] = None,
-) -> Optional[CheckpointTuple]:
+    pending_writes: list[PendingWrite] | None = None,
+) -> CheckpointTuple | None:
     """
     Parse checkpoint data retrieved from the database.
     """
@@ -163,9 +162,9 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         thread_id: str,
         message: str,
         agent: str,
-        user: Optional[USER_MODEL] = None,
-        dj_session_key: Optional[str] = "",
-        object_id: Optional[str] = "",
+        user: USER_MODEL | None = None,
+        dj_session_key: str | None = "",
+        object_id: str | None = "",
     ):
         """
         Initialize the DjangoSaver and create a UserChatSession if applicable.
@@ -317,7 +316,7 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
                     },
                 )
 
-    async def aget_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
+    async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         """Get a checkpoint tuple from the database asynchronously.
 
         This method retrieves a checkpoint tuple from the database based on the
@@ -362,11 +361,11 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
 
     async def alist(
         self,
-        config: Optional[RunnableConfig],
+        config: RunnableConfig | None,
         *,
-        filter: Optional[dict[str, Any]] = None,  # noqa: ARG002, A002
-        before: Optional[RunnableConfig] = None,
-        limit: Optional[int] = None,
+        filter: dict[str, Any] | None = None,  # noqa: ARG002, A002
+        before: RunnableConfig | None = None,
+        limit: int | None = None,
     ) -> AsyncGenerator[CheckpointTuple, None]:
         """List checkpoints from the database asynchronously.
 

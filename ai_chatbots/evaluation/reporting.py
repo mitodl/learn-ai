@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, TextIO
+from typing import TextIO
 
 import pandas as pd
 from deepeval.evaluate.types import EvaluationResult
@@ -16,10 +16,10 @@ DEFAULT_PASS_THRESHOLD = 0.5  # Default threshold for metrics without explicit t
 class DualOutputWrapper:
     """Wrapper that writes to both stdout and a file simultaneously."""
 
-    def __init__(self, stdout: OutputWrapper, file_path: Optional[str] = None):
+    def __init__(self, stdout: OutputWrapper, file_path: str | None = None):
         self.stdout = stdout
         self.file_path = file_path
-        self.file: Optional[TextIO] = None
+        self.file: TextIO | None = None
 
         if file_path:
             file_path_obj = Path(file_path)
@@ -454,8 +454,7 @@ class EvaluationReporter:
         self.stdout.write("\nRanking by Model + Bot:")
         for rank, (_, row) in enumerate(composite.iterrows(), 1):
             self.stdout.write(
-                f"  {rank}. {row['model']} / {row['bot']}: "
-                f"{row['composite_score']:.3f}"
+                f"  {rank}. {row['model']} / {row['bot']}: {row['composite_score']:.3f}"
             )
 
         # Per-model aggregate

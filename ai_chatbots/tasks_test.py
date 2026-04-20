@@ -21,8 +21,9 @@ from main.utils import now_in_utc
 def test_delete_stale_sessions():
     """Test delete_stale_sessions"""
     with freeze_time(
-        lambda: now_in_utc()
-        - timedelta(days=settings.AI_CHATBOTS_SESSION_EXPIRY_DAYS + 1)
+        lambda: (
+            now_in_utc() - timedelta(days=settings.AI_CHATBOTS_SESSION_EXPIRY_DAYS + 1)
+        )
     ):
         expired_chats = UserChatSessionFactory.create_batch(
             4, user=None, dj_session_key=uuid4().hex

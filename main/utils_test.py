@@ -35,7 +35,7 @@ def test_is_near_now():
 
 def test_chunks():
     """
-    test for chunks
+    Test for chunks
     """
     input_list = list(range(113))
     output_list = []
@@ -56,7 +56,7 @@ def test_chunks():
 
 def test_chunks_iterable():
     """
-    test that chunks works on non-list iterables too
+    Test that chunks works on non-list iterables too
     """
     count = 113
     input_range = range(count)
