@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from langgraph.checkpoint.memory import InMemorySaver
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
@@ -341,7 +342,7 @@ async def test_disconnect(mocker, recommendation_consumer, has_layer):
 
 
 async def test_syllabus_create_chatbot(
-    mocker, mock_http_consumer_send, syllabus_consumer, async_user
+    mock_http_consumer_send, syllabus_consumer, async_user
 ):
     """SyllabusBotHttpConsumer create_chatbot function should return syllabus bot."""
     serializer = consumers.SyllabusChatRequestSerializer(
@@ -356,7 +357,7 @@ async def test_syllabus_create_chatbot(
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
     chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
-        serializer, mocker.Mock()
+        serializer, InMemorySaver()
     )
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.user_id == async_user.global_id
@@ -365,7 +366,7 @@ async def test_syllabus_create_chatbot(
 
 
 async def test_syllabus_create_chatbot_with_related_courses(
-    mocker, mock_http_consumer_send, syllabus_consumer, async_user
+    mock_http_consumer_send, syllabus_consumer, async_user
 ):
     """SyllabusBotHttpConsumer should enable related courses when related_courses provided."""
     serializer = consumers.SyllabusChatRequestSerializer(
@@ -378,7 +379,7 @@ async def test_syllabus_create_chatbot_with_related_courses(
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
     chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
-        serializer, mocker.Mock()
+        serializer, InMemorySaver()
     )
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.enable_related_courses is True
@@ -386,7 +387,7 @@ async def test_syllabus_create_chatbot_with_related_courses(
 
 
 async def test_syllabus_create_chatbot_without_related_courses(
-    mocker, mock_http_consumer_send, syllabus_consumer, async_user
+    mock_http_consumer_send, syllabus_consumer, async_user
 ):
     """SyllabusBotHttpConsumer should not enable related courses when related_courses absent."""
     serializer = consumers.SyllabusChatRequestSerializer(
@@ -398,7 +399,7 @@ async def test_syllabus_create_chatbot_without_related_courses(
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
     chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
-        serializer, mocker.Mock()
+        serializer, InMemorySaver()
     )
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.enable_related_courses is False
@@ -450,7 +451,7 @@ def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     }
 
 
-async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
+async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
     """The correct chatbot class should be assigned to self.chatbot"""
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
@@ -462,7 +463,7 @@ async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
     serializer.is_valid()
     await canvas_syllabus_consumer.prepare_response(serializer)
     bot = await sync_to_async(canvas_syllabus_consumer.create_chatbot)(
-        serializer, mocker.Mock()
+        serializer, InMemorySaver()
     )
     assert bot.__class__ == consumers.CanvasSyllabusBot
 
@@ -883,7 +884,7 @@ async def canvas_test_tutor_agent_handle(
 
 
 async def test_video_gpt_create_chatbot(
-    mocker, mock_http_consumer_send, video_gpt_consumer, async_user
+    mock_http_consumer_send, video_gpt_consumer, async_user
 ):
     """VideoGPTBotHttpConsumer create_chatbot function should return VideoGPTBot."""
     serializer = consumers.VideoGPTRequestSerializer(
@@ -897,7 +898,7 @@ async def test_video_gpt_create_chatbot(
     serializer.is_valid(raise_exception=True)
     await video_gpt_consumer.prepare_response(serializer)
     chatbot = await sync_to_async(video_gpt_consumer.create_chatbot)(
-        serializer, mocker.Mock()
+        serializer, InMemorySaver()
     )
     assert isinstance(chatbot, VideoGPTBot)
     assert chatbot.user_id == async_user.global_id
