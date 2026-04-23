@@ -611,10 +611,9 @@ class TutorBot(BaseChatbot):
         message_id = str(uuid4())
         if history:
             json_history = json.loads(history.chat_json)
-            chat_history = [
-                *json_to_messages(json_history.get("chat_history", [])),
-                HumanMessage(content=message, id=message_id),
-            ]
+            chat_history = json_to_messages(  # noqa: RUF005
+                json_history.get("chat_history", [])
+            ) + [HumanMessage(content=message, id=message_id)]
 
             intent_history = json_to_intent_list(json_history["intent_history"])
             assessment_history = json_to_messages(json_history["assessment_history"])
