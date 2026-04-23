@@ -369,10 +369,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
         except AsyncThrottled as err:
-            log_msg = "User %s throttled on %s for %d seconds" % (
-                self.get_ident(),
-                self.__class__.__name__,
-                err.wait,
+            log_msg = (
+                f"User {self.get_ident()} throttled on "
+                f"{self.__class__.__name__} for {err.wait} seconds"
             )
             log.info(log_msg)
             await self.start_response(thread_id=None, status=200, cookies=cookies)

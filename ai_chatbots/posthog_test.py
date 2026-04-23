@@ -41,8 +41,8 @@ def test_initialization(
         properties=properties,
     )
 
-    for prop in properties:
-        assert handler._properties[prop] == properties[prop]  # noqa: SLF001
+    for prop, value in properties.items():
+        assert handler._properties[prop] == value  # noqa: SLF001
     assert handler.input_tokens == 0
     assert handler.bot == mock_bot
     mock_posthog_client.capture.assert_called_once_with(

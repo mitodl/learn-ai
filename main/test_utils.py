@@ -25,7 +25,7 @@ def any_instance_of(*classes):
         AnyInstanceOf: dynamic class type with the desired equality
     """  # noqa: D401
 
-    class AnyInstanceOf(abc.ABC):  # noqa: B024
+    class AnyInstanceOf(abc.ABC):  # noqa: B024, PLW1641
         """Dynamic class type for __eq__ in terms of isinstance"""
 
         def __init__(self, classes):

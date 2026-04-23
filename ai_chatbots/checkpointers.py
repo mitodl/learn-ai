@@ -162,7 +162,7 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         thread_id: str,
         message: str,
         agent: str,
-        user: USER_MODEL | None = None,
+        user: "USER_MODEL | None" = None,
         dj_session_key: str | None = "",
         object_id: str | None = "",
     ):
@@ -173,7 +173,7 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         if not (thread_id and message and agent):
             msg = "thread_id, message, and agent are required"
             raise ValueError(msg)
-        chat_session, created = await UserChatSession.objects.select_related(
+        chat_session, _created = await UserChatSession.objects.select_related(
             "user"
         ).aget_or_create(
             thread_id=thread_id,

@@ -68,11 +68,10 @@ class SearchToolSchema(pydantic.BaseModel):
         description="The agent state, including the search url to use"
     )
 
-    resource_type: list[enum_zip("resource_type", LearningResourceType)] | None = (
-        Field(
-            default=None,
-            description=(
-                """
+    resource_type: list[enum_zip("resource_type", LearningResourceType)] | None = Field(
+        default=None,
+        description=(
+            """
                 Type of resource to search for: course, program, video, etc.
                 If the user mentions courses, programs, videos, documents, or podcasts
                 in particular, filter the search by this parameter.  DO NOT USE THE
@@ -82,8 +81,7 @@ class SearchToolSchema(pydantic.BaseModel):
                 If the user asks for podcasts, filter by both "podcast"
                 and "podcast_episode".
                 """
-            ),
-        )
+        ),
     )
     free: bool | None = Field(
         default=None,

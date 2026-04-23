@@ -532,8 +532,9 @@ def test_truncation_with_multiple_ai_responses():
 def test_find_nth_human_message_from_end(sample_messages):
     """Test the helper method for finding human message indices."""
     node = MessageTruncationNode(max_human_messages=3)
-    messages = [AIMessage(content="Hello", id=str(uuid4()))] + sample_messages[
-        1:7
+    messages = [
+        AIMessage(content="Hello", id=str(uuid4())),
+        *sample_messages[1:7],
     ]  # Question 1-3, Answer 1-3
 
     # Should find the 3rd-from-last human message (Question 1 at index 0)
