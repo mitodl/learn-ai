@@ -114,7 +114,7 @@ class Command(BaseCommand):
         cache.set(
             prompt_key,
             prompt_value,
-            os.environ.get("AI_PROMPT_CACHE_DURATION", 60 * 60 * 24 * 28),
+            int(os.environ.get("AI_PROMPT_CACHE_DURATION", str(60 * 60 * 24 * 28))),
         )
         self.stdout.write(
             self.style.SUCCESS(

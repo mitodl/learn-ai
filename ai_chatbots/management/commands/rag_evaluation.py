@@ -94,8 +94,7 @@ class Command(BaseCommand):
             dest="error_log_file",
             required=False,
             help=(
-                "Specify a file to save error logs "
-                "(default: rag_evaluation_errors.log)"
+                "Specify a file to save error logs (default: rag_evaluation_errors.log)"
             ),
             default="rag_evaluation_errors.log",
         )

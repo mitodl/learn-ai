@@ -6,7 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 from uuid import uuid4
 
 import posthog
@@ -73,10 +73,10 @@ class BaseChatbot(ABC):
         checkpointer: BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning Chatbot",
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        instructions: Optional[str] = None,
-        thread_id: Optional[str] = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        instructions: str | None = None,
+        thread_id: str | None = None,
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
@@ -224,7 +224,7 @@ class BaseChatbot(ABC):
         except Exception:
             log.exception("Error while cleaning checkpoint")
 
-    async def _get_latest_checkpoint_id(self) -> Optional[str]:
+    async def _get_latest_checkpoint_id(self) -> str | None:
         """Get the most recent assistant response checkpoint"""
         checkpoint = (
             await DjangoCheckpoint.objects.prefetch_related("session", "session__user")
@@ -237,7 +237,7 @@ class BaseChatbot(ABC):
         return checkpoint.id if checkpoint else None
 
     async def set_callbacks(
-        self, properties: Optional[dict] = None
+        self, properties: dict | None = None
     ) -> list[CallbackHandler]:
         """Set callbacks for the agent LLM"""
         if settings.POSTHOG_PROJECT_API_KEY and settings.POSTHOG_API_HOST:
@@ -282,7 +282,7 @@ class BaseChatbot(ABC):
         self,
         message: str,
         *,
-        extra_state: Optional[dict[str, Any]] = None,
+        extra_state: dict[str, Any] | None = None,
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """
@@ -424,13 +424,13 @@ class ResourceRecommendationBot(TruncatingChatbot):
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
-        checkpointer: Optional[BaseCheckpointSaver] = None,
+        checkpointer: BaseCheckpointSaver | None = None,
         *,
         name: str = "MIT Open Learning Chatbot",
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        instructions: Optional[str] = None,
-        thread_id: Optional[str] = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        instructions: str | None = None,
+        thread_id: str | None = None,
     ):
         """Initialize the AI search agent service"""
         super().__init__(
@@ -466,7 +466,7 @@ class SyllabusAgentState(SummaryState):
     related_courses: Annotated[list[str], add]
     # str representation of a boolean value, because the
     # langgraph JsonPlusSerializer can't handle booleans
-    exclude_canvas: Annotated[Optional[list[str]], add]
+    exclude_canvas: Annotated[list[str] | None, add]
 
 
 class SyllabusBot(TruncatingChatbot):
@@ -483,11 +483,11 @@ class SyllabusBot(TruncatingChatbot):
         checkpointer: BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning Syllabus Chatbot",
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        instructions: Optional[str] = None,
-        thread_id: Optional[str] = None,
-        enable_related_courses: Optional[bool] = False,
+        model: str | None = None,
+        temperature: float | None = None,
+        instructions: str | None = None,
+        thread_id: str | None = None,
+        enable_related_courses: bool | None = False,
     ):
         self.enable_related_courses = enable_related_courses
         super().__init__(
@@ -546,16 +546,16 @@ class TutorBot(BaseChatbot):
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
-        checkpointer: Optional[BaseCheckpointSaver] = BaseCheckpointSaver,
+        checkpointer: BaseCheckpointSaver | None = BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning Tutor Chatbot",
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        thread_id: Optional[str] = None,
-        block_siblings: Optional[list[str]] = None,
-        edx_module_id: Optional[str] = None,
-        run_readable_id: Optional[str] = None,
-        problem_set_title: Optional[str] = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        thread_id: str | None = None,
+        block_siblings: list[str] | None = None,
+        edx_module_id: str | None = None,
+        run_readable_id: str | None = None,
+        problem_set_title: str | None = None,
     ):
         super().__init__(
             user_id,
@@ -600,7 +600,7 @@ class TutorBot(BaseChatbot):
         self,
         message: str,
         *,
-        extra_state: Optional[dict[str, Any]] = None,  # noqa: ARG002
+        extra_state: dict[str, Any] | None = None,  # noqa: ARG002
         debug: bool = settings.AI_DEBUG,
     ) -> AsyncGenerator[str, None]:
         """Call message_tutor with the user query and return the response"""
@@ -810,10 +810,10 @@ class VideoGPTBot(TruncatingChatbot):
         checkpointer: BaseCheckpointSaver,
         *,
         name: str = "MIT Open Learning VideoGPT Chatbot",
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        instructions: Optional[str] = None,
-        thread_id: Optional[str] = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        instructions: str | None = None,
+        thread_id: str | None = None,
     ):
         super().__init__(
             user_id,

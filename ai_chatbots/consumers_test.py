@@ -1018,7 +1018,7 @@ async def test_anonymous_user_login_session_association(  # noqa: PLR0913
     for i in range(3):
         anon_consumer = anonymous_consumer_setup(test_session_key)
         payload = {
-            "message": f"Anonymous question {i+1}",
+            "message": f"Anonymous question {i + 1}",
             "course_id": "MITx+6.00.1x",
         }
         await anon_consumer.handle(json.dumps(payload))

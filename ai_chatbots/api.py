@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, Optional, Union
+from typing import Any, Union
 from uuid import uuid4
 
 from channels.db import database_sync_to_async
@@ -96,14 +96,14 @@ def serialize_tool_calls(tool_calls: list[dict]) -> list[dict]:
 
 
 @database_sync_to_async
-def query_tutorbot_output(thread_id: str) -> Optional[TutorBotOutput]:
+def query_tutorbot_output(thread_id: str) -> TutorBotOutput | None:
     """Return the latest TutorBotOutput for a given thread_id"""
     return TutorBotOutput.objects.filter(thread_id=thread_id).last()
 
 
 @database_sync_to_async
 def create_tutorbot_output_and_checkpoints(
-    thread_id: str, chat_json: Union[str, dict], edx_module_id: Optional[str]
+    thread_id: str, chat_json: Union[str, dict], edx_module_id: str | None
 ) -> tuple[TutorBotOutput, list[DjangoCheckpoint]]:
     """Atomically create both TutorBotOutput and DjangoCheckpoint objects"""
     with transaction.atomic():
@@ -133,7 +133,7 @@ def _should_create_checkpoint(msg: dict) -> bool:
 
 
 def _identify_new_messages(
-    filtered_messages: list[dict], previous_chat_json: Optional[Union[str, dict]]
+    filtered_messages: list[dict], previous_chat_json: Union[str, dict] | None
 ) -> list[dict]:
     """Identify which messages are new by comparing with previous chat data."""
     if not previous_chat_json:
@@ -222,7 +222,7 @@ def _create_checkpoint_metadata(
 def create_tutor_checkpoints(
     thread_id: str,
     chat_json: Union[str, dict],
-    previous_chat_json: Optional[Union[str, dict]] = None,
+    previous_chat_json: Union[str, dict] | None = None,
 ) -> list[DjangoCheckpoint]:
     """Create DjangoCheckpoint records from tutor chat data (synchronous)"""
     # Get the associated session

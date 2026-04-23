@@ -2,7 +2,6 @@
 
 import dataclasses
 import datetime
-from typing import Optional
 
 from named_enum import ExtendedEnum
 
@@ -57,7 +56,7 @@ class ChatbotCookie:
     name: str
     value: str
     path: str = "/"
-    max_age: Optional[datetime.datetime] = None
+    max_age: datetime.datetime | None = None
 
     def __str__(self) -> str:
         """

@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from asgiref.sync import sync_to_async
 from deepeval.test_case import LLMTestCase, ToolCall
@@ -21,9 +21,9 @@ class TestCaseSpec:
     """Specification for a test case."""
 
     question: str
-    expected_output: Optional[str] = None
-    expected_tools: Optional[list[str]] = None
-    metadata: Optional[dict[str, Any]] = None
+    expected_output: str | None = None
+    expected_tools: list[str] | None = None
+    metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
@@ -43,7 +43,7 @@ class EvaluationConfig:
     evaluation_model: str
     metrics: list[Any]
     metric_thresholds: dict[str, float]
-    confident_api_key: Optional[str] = None
+    confident_api_key: str | None = None
 
 
 class BaseBotEvaluator(ABC):
@@ -54,9 +54,9 @@ class BaseBotEvaluator(ABC):
         bot_class,
         bot_name: str,
         *,
-        data_file: Optional[str] = None,
+        data_file: str | None = None,
         stdout=None,
-        error_log_file: Optional[str] = None,
+        error_log_file: str | None = None,
     ):
         self.bot_class = bot_class
         self.bot_name = bot_name
@@ -67,13 +67,13 @@ class BaseBotEvaluator(ABC):
     def _log_error(
         self,
         error_msg: str,
-        test_case: Optional[TestCaseSpec] = None,
-        exception: Optional[Exception] = None,
+        test_case: TestCaseSpec | None = None,
+        exception: Exception | None = None,
     ):
         """Log error to file with timestamp and details."""
         try:
             timestamp = datetime.now(tz=UTC).isoformat()
-            log_entry = f"\n{'='*80}\n"
+            log_entry = f"\n{'=' * 80}\n"
             log_entry += f"[{timestamp}] Error in {self.bot_name}\n"
 
             if test_case:
@@ -86,7 +86,7 @@ class BaseBotEvaluator(ABC):
             if exception:
                 log_entry += f"\nFull traceback:\n{traceback.format_exc()}\n"
 
-            log_entry += f"{'='*80}\n"
+            log_entry += f"{'=' * 80}\n"
 
             # Append to log file
             log_path = Path(self.error_log_file)
@@ -107,7 +107,7 @@ class BaseBotEvaluator(ABC):
 
     @abstractmethod
     def create_bot_instance(
-        self, model: str, test_case: TestCaseSpec, instructions: Optional[str] = None
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
         """Create a bot instance configured for the given test case."""
 
@@ -232,7 +232,7 @@ class BaseBotEvaluator(ABC):
         self,
         model: str,
         test_cases: list[TestCaseSpec],
-        instructions: Optional[str] = None,
+        instructions: str | None = None,
         prompt_label: str = "default",
         max_concurrent: int = 10,
     ) -> list[LLMTestCase]:
@@ -254,7 +254,7 @@ class BaseBotEvaluator(ABC):
         # Create a semaphore to limit concurrency
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def process_test_case(test_case: TestCaseSpec) -> Optional[LLMTestCase]:
+        async def process_test_case(test_case: TestCaseSpec) -> LLMTestCase | None:
             """Process a single test case with semaphore limiting."""
             async with semaphore:
                 try:

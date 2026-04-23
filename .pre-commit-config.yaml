@@ -8,7 +8,7 @@ ci:
     - eslint
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -28,11 +28,11 @@ repos:
         types_or:
           [javascript, jsx, ts, tsx, json, scss, sass, css, yaml, markdown]
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.10.0-1
+    rev: v3.13.1-1
     hooks:
       - id: shfmt
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.35.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         args: [--format, parsable, -d, relaxed]
@@ -65,7 +65,7 @@ repos:
           - "config/keycloak/realms/ol-local-realm.json"
         additional_dependencies: ["gibberish-detector"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.7.2"
+    rev: "v0.15.11"
     hooks:
       - id: ruff-format
       - id: ruff
@@ -84,7 +84,7 @@ repos:
         additional_dependencies:
           - eslint@8
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]

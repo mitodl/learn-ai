@@ -1,7 +1,7 @@
 """PostHog serialization and callback handler for AI chatbots."""
 
 import logging
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import litellm
@@ -95,7 +95,7 @@ class TokenTrackingCallbackHandler(CallbackHandler):
         messages: list[list[BaseMessage]],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ):
         """Format messages and estimate input tokens"""
@@ -142,7 +142,7 @@ class TokenTrackingCallbackHandler(CallbackHandler):
         response: LLMResult,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ):
         # Calculate output tokens using LiteLLM's token_counter
@@ -193,7 +193,7 @@ class TokenTrackingCallbackHandler(CallbackHandler):
         )
 
     def _pop_run_and_capture_trace_or_span(
-        self, run_id: UUID, parent_run_id: Optional[UUID], outputs: Any
+        self, run_id: UUID, parent_run_id: UUID | None, outputs: Any
     ):
         """Override to serialize outputs before passing to parent."""
         serialized_outputs = serialize_for_posthog(outputs)

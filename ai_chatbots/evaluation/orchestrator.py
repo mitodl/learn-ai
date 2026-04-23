@@ -4,7 +4,6 @@ import os
 from datetime import UTC, datetime
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Optional
 
 import deepeval
 from deepeval.evaluate import AsyncConfig, ErrorConfig
@@ -46,7 +45,7 @@ class EvaluationOrchestrator:
         self,
         models: list[str],
         evaluation_model: str,
-        metric_thresholds: Optional[dict[str, float]] = None,
+        metric_thresholds: dict[str, float] | None = None,
         timeout_seconds: int = 360,
         max_retries: int = 3,
         retry_delay: float = 5.0,
@@ -183,9 +182,9 @@ class EvaluationOrchestrator:
         bot_name: str,
         config: EvaluationConfig,
         *,
-        data_file: Optional[str],
-        use_prompts: Optional[bool],
-        prompts_data: Optional[dict],
+        data_file: str | None,
+        use_prompts: bool | None,
+        prompts_data: dict | None,
         max_concurrent: int,
         batch_size: int,
         error_log_file: str,
@@ -396,10 +395,10 @@ class EvaluationOrchestrator:
             log_path = Path(error_log_file)
 
             header = f"""
-{'#'*80}
+{"#" * 80}
 RAG EVALUATION ERROR LOG
 Started: {timestamp}
-{'#'*80}
+{"#" * 80}
 
 """
             with log_path.open("w", encoding="utf-8") as f:
@@ -413,13 +412,13 @@ Started: {timestamp}
         self,
         config: EvaluationConfig,
         *,
-        bot_names: Optional[list[str]] = None,
-        data_file: Optional[str] = None,
-        use_prompts: Optional[bool] = True,
-        prompts_file: Optional[str] = None,
-        max_concurrent: Optional[int] = 10,
-        batch_size: Optional[int] = 0,
-        error_log_file: Optional[str] = None,
+        bot_names: list[str] | None = None,
+        data_file: str | None = None,
+        use_prompts: bool | None = True,
+        prompts_file: str | None = None,
+        max_concurrent: int | None = 10,
+        batch_size: int | None = 0,
+        error_log_file: str | None = None,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models.
 
@@ -454,9 +453,9 @@ Started: {timestamp}
         # Process each bot one at a time, accumulating results
         all_bot_results = []
         for bot_name in bot_names:
-            self.stdout.write(f"\n{'='*60}")
+            self.stdout.write(f"\n{'=' * 60}")
             self.stdout.write(f"Processing bot: {bot_name}")
-            self.stdout.write(f"{'='*60}")
+            self.stdout.write(f"{'=' * 60}")
 
             bot_result = await self._collect_and_evaluate_bot(
                 bot_name,
@@ -474,9 +473,9 @@ Started: {timestamp}
         results = self._merge_evaluation_results(all_bot_results)
 
         # Log final summary
-        self.stdout.write(f"\n{'='*60}")
+        self.stdout.write(f"\n{'=' * 60}")
         self.stdout.write("EVALUATION COMPLETE - FINAL SUMMARY")
-        self.stdout.write(f"{'='*60}")
+        self.stdout.write(f"{'=' * 60}")
         self.stdout.write(
             f"\nTotal test results across all bots: {len(results.test_results)}"
         )

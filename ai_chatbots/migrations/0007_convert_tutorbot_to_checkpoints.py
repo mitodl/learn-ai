@@ -22,7 +22,7 @@ def add_message_ids(thread_id: str, output_id: int, messages: list[dict]) -> lis
         # Handle both dict and LangChain message objects
         message_id = str(
             uuid5(
-                UUID(thread_id), f'{output_id}_{message["type"]}_{message["content"]}'
+                UUID(thread_id), f"{output_id}_{message['type']}_{message['content']}"
             )
         )
         if isinstance(message, dict):

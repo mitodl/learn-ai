@@ -975,9 +975,11 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
     assert "Let's start by thinking about the problem. " in results
 
     checkpoint = await database_sync_to_async(
-        lambda: DjangoCheckpoint.objects.select_related("session")
-        .filter(thread_id=thread_id)
-        .last()
+        lambda: (
+            DjangoCheckpoint.objects.select_related("session")
+            .filter(thread_id=thread_id)
+            .last()
+        )
     )()
     history = await database_sync_to_async(
         lambda: TutorBotOutput.objects.filter(thread_id=thread_id).last()
