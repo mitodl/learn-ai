@@ -1,6 +1,24 @@
 Release Notes
 =============
 
+Version 0.30.0
+--------------
+
+- pre-commit-ci update (#494)
+- Update Node.js to v24 (#450)
+- Update all non-major dev-dependencies (#467)
+- Update dependency langgraph to v1.0.10 [SECURITY] (#452)
+- Update dependency setuptools to v78 [SECURITY] (#472)
+- Update dependency langsmith to v0.7.31 [SECURITY] (#487)
+- Update dependency next to v15.5.15 [SECURITY] (#488)
+- Update dependency pytest to v9.0.3 [SECURITY] (#489)
+- Update dependency axios to v1.15.0 [SECURITY] (#490)
+- Update dependency litellm to v1.83.0 [SECURITY] (#491)
+- Update dependency langchain-openai to v1.1.14 [SECURITY] (#493)
+- Update dependency langchain-core to v1.2.28 [SECURITY] (#486)
+- Update dependency Django to v5.2.13 [SECURITY] (#485)
+- Update dependency aiohttp to v3.13.4 [SECURITY] (#484)
+
 Version 0.29.1 (Released April 13, 2026)
 --------------
 
