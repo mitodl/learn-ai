@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.30.0
+Version 0.30.0 (Released April 27, 2026)
 --------------
 
 - pre-commit-ci update (#494)
