@@ -377,9 +377,9 @@ class TestConcreteBotEvaluator:
         assert llm_test_case.expected_output == "Expected output"
         assert len(llm_test_case.tools_called) == 1
         assert len(llm_test_case.expected_tools) == 1
-        assert llm_test_case.additional_metadata["bot_name"] == "test_bot"
-        assert llm_test_case.additional_metadata["model"] == "gpt-4o"
-        assert llm_test_case.additional_metadata["prompt_label"] == "default"
+        assert llm_test_case.metadata["bot_name"] == "test_bot"
+        assert llm_test_case.metadata["model"] == "gpt-4o"
+        assert llm_test_case.metadata["prompt_label"] == "default"
 
     def test_create_llm_test_case_warns_on_empty_extraction(self, evaluator, caplog):
         """Test that warnings are logged when tools expected but extraction is empty."""

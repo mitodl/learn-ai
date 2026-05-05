@@ -153,7 +153,7 @@ class BaseBotEvaluator(ABC):
 
         return LLMTestCase(
             name=f"{self.bot_name}-{model}-{prompt_label}",
-            additional_metadata={
+            metadata={
                 "bot_name": self.bot_name,
                 "model": model,
                 "prompt_label": prompt_label,
