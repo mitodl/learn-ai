@@ -658,7 +658,7 @@ class TutorBot(BaseChatbot):
 
                 elif chunk[0] == "values":
                     new_history = filter_out_system_messages(chunk[1]["messages"])
-            additional_metadata = {
+            metadata = {
                 "edx_module_id": self.edx_module_id,
                 "tutor_model": self.model,
                 "problem_set_title": self.problem_set_title,
@@ -668,7 +668,7 @@ class TutorBot(BaseChatbot):
                 new_history,
                 new_intent_history,
                 new_assessment_history,
-                additional_metadata,
+                metadata,
             )
             # Save both TutorBotOutput and DjangoCheckpoint objects atomically
             if self.checkpointer:

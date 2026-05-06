@@ -116,7 +116,7 @@ class TestEvaluationReporter:
         """Create mock evaluation results."""
         # Create mock test results
         test_result1 = mocker.Mock()
-        test_result1.additional_metadata = {
+        test_result1.metadata = {
             "bot_name": "recommendation",
             "model": "gpt-4",
             "prompt_label": "default",
@@ -141,7 +141,7 @@ class TestEvaluationReporter:
 
         # Create second test result
         test_result2 = mocker.Mock()
-        test_result2.additional_metadata = {
+        test_result2.metadata = {
             "bot_name": "syllabus",
             "model": "gpt-3.5",
             "prompt_label": "#1",
@@ -660,7 +660,7 @@ class TestSummaryReporter:
     def mock_simple_results(self, mocker):
         """Create simple mock results for summary testing."""
         test_result = mocker.Mock()
-        test_result.additional_metadata = {
+        test_result.metadata = {
             "bot_name": "recommendation",
             "model": "gpt-4",
             "prompt_label": "default",
@@ -735,7 +735,7 @@ class TestSummaryReporter:
         # Create 3 test results with 2 metrics each (6 total metrics)
         for i in range(3):
             test_result = mocker.Mock()
-            test_result.additional_metadata = {
+            test_result.metadata = {
                 "bot_name": f"bot{i}",
                 "model": "gpt-4",
                 "prompt_label": "default",
@@ -778,7 +778,7 @@ class TestReportingIntegration:
 
         # Create comprehensive test data
         test_result = mocker.Mock()
-        test_result.additional_metadata = {
+        test_result.metadata = {
             "bot_name": "recommendation",
             "model": "gpt-4",
             "prompt_label": "default",

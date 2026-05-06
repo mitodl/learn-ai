@@ -493,8 +493,8 @@ Started: {timestamp}
         model_counts = {}
         bot_counts = {}
         for tr in results.test_results:
-            model = tr.additional_metadata.get("model", "unknown")
-            bot = tr.additional_metadata.get("bot_name", "unknown")
+            model = tr.metadata.get("model", "unknown")
+            bot = tr.metadata.get("bot_name", "unknown")
             metrics_count = len(tr.metrics_data) if tr.metrics_data else 0
 
             model_counts[model] = model_counts.get(model, 0) + 1

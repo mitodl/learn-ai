@@ -149,13 +149,11 @@ class EvaluationReporter:
         """Create DataFrame from evaluation results."""
         data = [
             {
-                "bot": test_result.additional_metadata["bot_name"],
-                "model": test_result.additional_metadata["model"],
-                "prompt_label": test_result.additional_metadata.get(
-                    "prompt_label", "default"
-                ),
+                "bot": test_result.metadata["bot_name"],
+                "model": test_result.metadata["model"],
+                "prompt_label": test_result.metadata.get("prompt_label", "default"),
                 "test_case": test_result.name,
-                "question": test_result.additional_metadata.get("question", "N/A"),
+                "question": test_result.metadata.get("question", "N/A"),
                 "metric": metric_data.name,
                 "score": metric_data.score,
                 "success": metric_data.success,
@@ -569,8 +567,8 @@ class SummaryReporter:
         """Create DataFrame from evaluation results."""
         data = [
             {
-                "bot": test_result.additional_metadata["bot_name"],
-                "model": test_result.additional_metadata["model"],
+                "bot": test_result.metadata["bot_name"],
+                "model": test_result.metadata["model"],
                 "metric": metric_data.name,
                 "success": metric_data.success,
             }

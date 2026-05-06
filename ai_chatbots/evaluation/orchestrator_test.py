@@ -153,7 +153,7 @@ class TestEvaluationOrchestrator:
         mock_results = mocker.Mock(spec=EvaluationResult)
         mock_results.test_results = [
             mocker.Mock(
-                additional_metadata={"model": "gpt-4", "bot_name": "test_bot"},
+                metadata={"model": "gpt-4", "bot_name": "test_bot"},
                 metrics_data=[mocker.Mock()],
             )
         ]
@@ -561,7 +561,7 @@ class TestEvaluationConfigIntegration:
         mock_results = mocker.Mock(spec=EvaluationResult)
         mock_results.test_results = [
             mocker.Mock(
-                additional_metadata={"model": "gpt-4", "bot_name": "test_bot"},
+                metadata={"model": "gpt-4", "bot_name": "test_bot"},
                 metrics_data=[mocker.Mock()],
             )
         ]
@@ -603,7 +603,7 @@ class TestEvaluationConfigIntegration:
         mock_results = mocker.Mock(spec=EvaluationResult)
         mock_results.test_results = [
             mocker.Mock(
-                additional_metadata={"model": "gpt-4", "bot_name": "test_bot"},
+                metadata={"model": "gpt-4", "bot_name": "test_bot"},
                 metrics_data=[mocker.Mock()],
             )
         ]
