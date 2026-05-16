@@ -23,6 +23,13 @@ from main.features import is_enabled as feature_is_enabled
 log = logging.getLogger(__name__)
 
 
+async def _is_hybrid_search_enabled() -> bool:
+    """Check if the hybrid search feature flag is enabled."""
+    return await sync_to_async(feature_is_enabled)(
+        HYBRID_SEARCH_FEATURE_FLAG, default=False
+    )
+
+
 class SearchToolSchema(pydantic.BaseModel):
     """Schema to search for MIT learning resources.
 
@@ -142,6 +149,9 @@ async def search_courses(
         "offered_by": [o.name for o in (kwargs.get("offered_by") or [])] or None,
         "certification": kwargs.get("certification"),
     }
+    if await _is_hybrid_search_enabled():
+        valid_params["hybrid_search"] = True
+
     params.update({k: v for k, v in valid_params.items() if v is not None})
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
@@ -255,10 +265,7 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         # Convert the exclude_canvas parameter to a boolean if it is a string
         if exclude_canvas and exclude_canvas == "False":
             exclude_canvas = False
-        hybrid_search_enabled = await sync_to_async(feature_is_enabled)(
-            HYBRID_SEARCH_FEATURE_FLAG, default=False
-        )
-        if hybrid_search_enabled:
+        if await _is_hybrid_search_enabled():
             params["hybrid_search"] = True
 
         response = await async_request_with_token(

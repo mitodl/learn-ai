@@ -373,3 +373,37 @@ async def test_content_file_search_hybrid_flag(
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
+
+
+@pytest.mark.parametrize("is_hybrid_enabled", [True, False])
+async def test_search_courses_hybrid_flag(
+    settings,
+    mock_get_resources,
+    is_hybrid_enabled,
+    mocker,
+):
+    """Test that search_courses adds hybrid_search when the feature flag is enabled."""
+    search_url = "https://mit.edu/search"
+    settings.AI_MIT_SEARCH_URL = search_url
+    settings.AI_MIT_SEARCH_LIMIT = 10
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    mocker.patch(
+        "ai_chatbots.tools.feature_is_enabled",
+        return_value=is_hybrid_enabled,
+    )
+
+    expected_params = {"q": "physics", "limit": 10}
+    if is_hybrid_enabled:
+        expected_params["hybrid_search"] = True
+
+    await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": [search_url]}}
+    )
+
+    mock_get_resources.return_value.get.assert_called_once_with(
+        search_url,
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
