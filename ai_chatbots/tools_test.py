@@ -51,7 +51,11 @@ def mock_get_content_files(mock_httpx_async_client, content_chunk_results):
 )
 @pytest.mark.parametrize(
     ("search_url", "limit"),
-    [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
+    [
+        ("https://mit.edu/search", 5),
+        ("https://mit.edu/vector", 10),
+        ("https://mit.edu/vector", 20),
+    ],
 )
 async def test_search_courses(  # noqa: PLR0913
     settings, params, mock_get_resources, search_results, search_url, limit
@@ -71,7 +75,9 @@ async def test_search_courses(  # noqa: PLR0913
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
-    assert len(results["results"]) == len(search_results["results"])
+    # The vector endpoint can ignore `limit` and return more rows than asked;
+    # the tool must cap results at AI_MIT_SEARCH_LIMIT regardless.
+    assert len(results["results"]) == min(limit, len(search_results["results"]))
 
 
 @pytest.mark.parametrize(
