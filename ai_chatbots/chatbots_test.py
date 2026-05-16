@@ -196,7 +196,7 @@ async def test_recommendation_bot_tool(
         "resource_type",
         "resource_type",
     ]
-    raw_results = search_results.get("results")
+    raw_results = search_results.get("results")[: settings.AI_MIT_SEARCH_LIMIT]
     expected_results = {"results": [], "metadata": {}}
     for resource in raw_results:
         simple_result = {key: resource.get(key) for key in retained_attributes}
