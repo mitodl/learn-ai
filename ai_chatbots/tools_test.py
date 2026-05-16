@@ -13,6 +13,12 @@ from ai_chatbots.tools import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _mock_feature_flag(mocker):
+    """Default feature flags to disabled so tests don't touch the durable cache."""
+    return mocker.patch("ai_chatbots.tools.feature_is_enabled", return_value=False)
+
+
 @pytest.fixture
 def mock_get_resources(mock_httpx_async_client, search_results):
     """Mock httpx async client for resource search tests."""
