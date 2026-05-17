@@ -161,9 +161,7 @@ async def search_courses(
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
-        # The vector_learning_resources_search endpoint currently
-        # ignores `limit` when a score cutoff is active
-        # and can return up to ~200 results.
+        # Ignore any results over the maximum limit
         raw_results = raw_results[: settings.AI_MIT_SEARCH_LIMIT]
         # Simplify the response to only include the main properties
         main_properties = [
