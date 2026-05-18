@@ -13,6 +13,12 @@ from ai_chatbots.tools import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _mock_feature_flag(mocker):
+    """Default feature flags to disabled so tests don't touch the durable cache."""
+    return mocker.patch("ai_chatbots.tools.feature_is_enabled", return_value=False)
+
+
 @pytest.fixture
 def mock_get_resources(mock_httpx_async_client, search_results):
     """Mock httpx async client for resource search tests."""
@@ -51,7 +57,11 @@ def mock_get_content_files(mock_httpx_async_client, content_chunk_results):
 )
 @pytest.mark.parametrize(
     ("search_url", "limit"),
-    [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
+    [
+        ("https://mit.edu/search", 5),
+        ("https://mit.edu/vector", 10),
+        ("https://mit.edu/vector", 20),
+    ],
 )
 async def test_search_courses(  # noqa: PLR0913
     settings, params, mock_get_resources, search_results, search_url, limit
@@ -71,7 +81,9 @@ async def test_search_courses(  # noqa: PLR0913
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
-    assert len(results["results"]) == len(search_results["results"])
+    # The vector endpoint can ignore `limit` and return more rows than asked;
+    # the tool must cap results at AI_MIT_SEARCH_LIMIT regardless.
+    assert len(results["results"]) == min(limit, len(search_results["results"]))
 
 
 @pytest.mark.parametrize(
@@ -363,6 +375,40 @@ async def test_content_file_search_hybrid_flag(
 
     mock_get_content_files.return_value.get.assert_called_once_with(
         "https://mit.edu/search",
+        params=expected_params,
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize("is_hybrid_enabled", [True, False])
+async def test_search_courses_hybrid_flag(
+    settings,
+    mock_get_resources,
+    is_hybrid_enabled,
+    mocker,
+):
+    """Test that search_courses adds hybrid_search when the feature flag is enabled."""
+    search_url = "https://mit.edu/search"
+    settings.AI_MIT_SEARCH_URL = search_url
+    settings.AI_MIT_SEARCH_LIMIT = 10
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+
+    mocker.patch(
+        "ai_chatbots.tools.feature_is_enabled",
+        return_value=is_hybrid_enabled,
+    )
+
+    expected_params = {"q": "physics", "limit": 10}
+    if is_hybrid_enabled:
+        expected_params["hybrid_search"] = True
+
+    await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": [search_url]}}
+    )
+
+    mock_get_resources.return_value.get.assert_called_once_with(
+        search_url,
         params=expected_params,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
