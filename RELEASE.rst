@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.31.0
+Version 0.31.0 (Released May 18, 2026)
 --------------
 
 - Update dependency langchain-core to v1.3.3 [SECURITY] (#503)
