@@ -1,6 +1,17 @@
 Release Notes
 =============
 
+Version 0.31.0 (Released May 18, 2026)
+--------------
+
+- Update dependency langchain-core to v1.3.3 [SECURITY] (#503)
+- Update dependency Django to v5.2.14 [SECURITY] (#502)
+- Update dependency granian to v2.7.4 [SECURITY] (#501)
+- Update Node.js to v24.15.0 (#498)
+- rename additional_metadata to metadata (#500)
+- Update dependency axios to v1.15.2 [SECURITY] (#499)
+- Pin dependencies (#426)
+
 Version 0.30.0 (Released April 27, 2026)
 --------------
 
