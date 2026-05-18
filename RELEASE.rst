@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.32.0
+Version 0.32.0 (Released May 18, 2026)
 --------------
 
 - Ignore extra results from vector search (#511)
