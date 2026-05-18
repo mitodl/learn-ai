@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+Version 0.32.0
+--------------
+
+- Ignore extra results from vector search (#511)
+- Update dependency langsmith to >=0.8,<0.9 [SECURITY] (#509)
+- Update dependency next to v15.5.18 [SECURITY] (#507)
+- Update dependency litellm to v1.83.10 [SECURITY] (#506)
+
 Version 0.31.0 (Released May 18, 2026)
 --------------
 
