@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.1.0",
-    "@swc/core": "^1.15.30",
+    "@swc/core": "^1.15.33",
     "@swc/jest": "^0.2.37",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -48,7 +48,7 @@
     "@types/jest-when": "^3",
     "@types/lodash": "^4.17.20",
     "@types/node": "^24.12.2",
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.59.0",
     "@typescript-eslint/typescript-estree": "^8.59.0",
