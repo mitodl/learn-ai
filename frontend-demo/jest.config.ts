@@ -1,5 +1,4 @@
 import type { Config } from "@jest/types"
-import path from "path"
 
 const config: Config.InitialOptions = {
   collectCoverage: true,
@@ -27,7 +26,7 @@ const config: Config.InitialOptions = {
   moduleNameMapper: {
     "\\.(svg|jpg|jpeg|png)$": "ol-test-utilities/filemocks/imagemock.js",
     "\\.(css|scss)$": "ol-test-utilities/filemocks/filemock.js",
-    "^@/(.*)$": path.resolve(__dirname, "src/$1"),
+    "^@/(.*)$": "<rootDir>/$1",
   },
   rootDir: "./src",
 }
