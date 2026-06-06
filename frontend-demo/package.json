@@ -52,7 +52,7 @@
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.60.0",
     "@typescript-eslint/typescript-estree": "^8.60.0",
-    "eslint": "^8",
+    "eslint": "^10.0.0",
     "eslint-config-mitodl": "^2.1.0",
     "eslint-config-next": "15.5.18",
     "eslint-config-prettier": "^10.0.0",
