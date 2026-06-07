@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:18.3
+    image: postgres:18.3@sha256:7e32e9833a6fb1c92c32552794cb6ed569d51b445a54907d35fc112ef39684db
     healthcheck:
       test: ["CMD", "pg_isready"]
       interval: 3s
@@ -28,7 +28,7 @@ services:
       - ./config/postgres:/docker-entrypoint-initdb.d
 
   redis:
-    image: redis:7.4.6
+    image: redis:7.4.6@sha256:a9cc41d6d01da2aa26c219e4f99ecbeead955a7b656c1c499cce8922311b2514
     healthcheck:
       test: ["CMD", "redis-cli", "ping", "|", "grep", "PONG"]
       interval: 3s
@@ -61,7 +61,7 @@ services:
       - ./config:/etc/nginx/templates
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:main-stable@sha256:979dd4e19ab559c1f4daeb06a16def89ee6cba088eb41a88647b2a45285885cc
     ports:
       - "4000:4000"
     env_file:
@@ -89,7 +89,7 @@ services:
       - ./config/litellm_config.yml:/app/litellm_config.yml
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.5
+    image: quay.io/keycloak/keycloak:26.5@sha256:45ae20191531eb608ddb0b775d012b40d3e4f942697f3214694887dd7c108d13
     depends_on:
       - db
     ports:
