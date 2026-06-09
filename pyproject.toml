@@ -64,7 +64,7 @@ dependencies = [
     "starlette==1.0.1",
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
-    "open-learning-ai-tutor>=0.2.14,<0.3",
+    "open-learning-ai-tutor>=0.2.15,<0.3",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
     "django-health-check>=3.0.0,<4",
@@ -109,9 +109,6 @@ package = false
 default-groups = "all"
 constraint-dependencies = ["langgraph-checkpoint<3"]
 environments = ["sys_platform != 'win32'"]
-
-[tool.uv.sources]
-open-learning-ai-tutor = { git = "https://github.com/mitodl/open-learning-ai-tutor", branch = "mb/pydantic_update" }
 
 [tool.uv.build-backend]
 module-root = ""
