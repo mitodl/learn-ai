@@ -29,12 +29,13 @@ class ApisixUserMiddleware(PersistentRemoteUserMiddleware):
         try:
             apisix_user = get_user_from_apisix_headers(request)
         except KeyError:
-            if self.force_logout_if_no_header and request.user.is_authenticated:
-                log.debug("Forcing user logout due to missing APISIX headers.")
-                logout(request)
-            return
+            apisix_user = None
 
         if apisix_user:
+            already_logged_in = (
+                request.user.is_authenticated and request.user == apisix_user
+            )
+
             if request.user.is_authenticated and request.user != apisix_user:
                 # The user is authenticated, but doesn't match the user we got
                 # from APISIX. So, log them out so the APISIX user takes
@@ -46,10 +47,17 @@ class ApisixUserMiddleware(PersistentRemoteUserMiddleware):
                 logout(request)
 
             request.user = apisix_user
-            login(
-                request,
-                apisix_user,
-                backend="django.contrib.auth.backends.ModelBackend",
-            )
+            if not already_logged_in:
+                login(
+                    request,
+                    apisix_user,
+                    backend="django.contrib.auth.backends.ModelBackend",
+                )
+        elif request.user.is_authenticated:
+            # APISIX is the source of truth for authentication. With no user
+            # header, drop any lingering Django session so that gateway/Keycloak
+            # logout propagates to the Django session instead of outliving it.
+            log.debug("Logging out Django session due to missing APISIX user.")
+            logout(request)
 
         request.api_gateway_userdata = decode_apisix_headers(request)

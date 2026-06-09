@@ -10,6 +10,7 @@ from itertools import islice
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.cache import cache_page
@@ -178,8 +179,41 @@ def decode_apisix_headers(request, model="users_user"):
     }
 
 
+# User fields synced from the APISIX user headers.
+USER_SYNC_FIELDS = ("global_id", "username", "email", "name")
+
+
+def user_fields_from_headers(decoded_headers):
+    """Map decoded APISIX headers to the synced User fields."""
+    return {
+        "global_id": decoded_headers.get("global_id"),
+        "username": decoded_headers.get("username", ""),
+        "email": decoded_headers.get("email", ""),
+        "name": decoded_headers.get("name", ""),
+    }
+
+
+def user_needs_update(user, user_fields):
+    """Return True if any synced User field differs from the headers."""
+    return any(getattr(user, field) != user_fields[field] for field in USER_SYNC_FIELDS)
+
+
+def profile_needs_update(user, profile_data):
+    """Return True if the profile is missing or any synced field differs."""
+    if not profile_data:
+        return False
+    try:
+        profile = user.profile
+    except ObjectDoesNotExist:
+        return True
+    return any(getattr(profile, key) != value for key, value in profile_data.items())
+
+
 def get_user_from_apisix_headers(request):
-    """Get a user based on the APISIX headers."""
+    """
+    Get a user based on the APISIX headers, syncing User/Profile data only when
+    the APISIX-provided identity has actually changed.
+    """
 
     decoded_headers = decode_apisix_headers(request)
     User = get_user_model()
@@ -188,17 +222,31 @@ def get_user_from_apisix_headers(request):
         return None
 
     global_id = decoded_headers.get("global_id", None)
+    if not global_id:
+        return None
 
     log.debug("get_user_from_apisix_headers: Authenticating %s", global_id)
 
-    user, created = User.objects.filter(global_id=global_id).get_or_create(
-        defaults={
-            "global_id": global_id,
-            "username": decoded_headers.get("username", ""),
-            "email": decoded_headers.get("email", ""),
-            "name": decoded_headers.get("name", ""),
-        }
-    )
+    user_fields = user_fields_from_headers(decoded_headers)
+
+    if (
+        request.user
+        and request.user.is_authenticated
+        and request.user.global_id == global_id
+    ):
+        # Already authenticated as this user; reuse to avoid a redundant query.
+        user = request.user
+        created = False
+    else:
+        try:
+            user, created = (
+                User.objects.filter(global_id=global_id)
+                .select_related("profile")
+                .get_or_create(defaults=user_fields)
+            )
+        except User.MultipleObjectsReturned:
+            log.exception("Ambiguous APISIX user identity for global_id=%s", global_id)
+            return None
 
     if created:
         log.debug(
@@ -207,27 +255,20 @@ def get_user_from_apisix_headers(request):
         )
         user.set_unusable_password()
         user.save()
-    else:
-        log.debug(
-            "get_user_from_apisix_headers: Found existing user for %s: %s",
-            global_id,
-            user,
-        )
-
-        user.name = decoded_headers.get("name", "")
-        user.save()
+    elif user_needs_update(user, user_fields):
+        for field, value in user_fields.items():
+            setattr(user, field, value)
+        user.save(update_fields=[*user_fields, "updated_on"])
 
     profile_data = decode_apisix_headers(request, "users_userprofile")
+    if profile_needs_update(user, profile_data):
+        from users.models import UserProfile
 
-    if profile_data:
         log.debug(
-            "get_user_from_apisix_headers: Setting up additional profile for %s",
+            "get_user_from_apisix_headers: Updating profile for %s",
             global_id,
         )
-
-        _, profile = user.profile.filter(user=user).get_or_create(defaults=profile_data)
-        profile.save()
-        user.refresh_from_db()
+        UserProfile.objects.update_or_create(user=user, defaults=profile_data)
 
     return user
 
