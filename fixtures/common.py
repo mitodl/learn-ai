@@ -40,7 +40,7 @@ def warnings_as_errors():
         # Ignore deprecation warnings in third party libraries
         warnings.filterwarnings(
             "ignore",
-            module=".*(api_jwt|api_jws|rest_framework_jwt|astroid|bs4|celery|factory|botocore|posthog|pydantic|litellm).*",
+            module=".*(api_jwt|api_jws|rest_framework_jwt|astroid|bs4|celery|factory|botocore|posthog|pydantic|litellm|sentry_sdk).*",
             category=DeprecationWarning,
         )
         warnings.filterwarnings(

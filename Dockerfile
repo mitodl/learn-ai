@@ -1,4 +1,4 @@
-FROM python:3.13.7
+FROM python:3.14.5@sha256:250e5c97be05e1eb2272fbdbd810dfd638f9012e1e6f65c99390ad3239943a08
 LABEL maintainer "ODL DevOps <mitx-devops@mit.edu>"
 
 # Add package files, install updated node and pip

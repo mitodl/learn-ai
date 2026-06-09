@@ -3,7 +3,7 @@ name = "learn-ai"
 version = "0.71.0"
 description = "AI applications for MIT Open Learning."
 authors = [{ name = "MIT ODL" }]
-requires-python = ">=3.13.7,<3.14"
+requires-python = ">=3.14.5,<3.15"
 readme = "README.md"
 license = "BSD-3"
 dependencies = [
@@ -18,7 +18,6 @@ dependencies = [
     "dj-database-url>=2.0.0,<3",
     "dj-static>=0.0.6,<0.0.7",
     "django-anymail[mailgun]>=13.0,<14",
-    "django-bitfield>=2.2.0,<3",
     "django-cache-memoize>=0.2.0,<0.3",
     "django-filter>=25.1,<26",
     "django-guardian>=3.0.0,<4",
@@ -65,7 +64,7 @@ dependencies = [
     "starlette==1.0.1",
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
-    "open-learning-ai-tutor>=0.2.14,<0.3",
+    "open-learning-ai-tutor>=0.2.15,<0.3",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
     "django-health-check>=3.0.0,<4",
