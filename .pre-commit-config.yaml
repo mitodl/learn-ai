@@ -75,14 +75,15 @@ repos:
       - id: eslint
         name: eslint
         description: "Lint JS/TS files and apply automatic fixes"
-        entry: npm exec --prefix frontend-demo -- eslint --fix --config frontend-demo/.eslintrc.js
+        entry: npm exec --prefix frontend-demo -- eslint --fix --config frontend-demo/eslint.config.mjs
         language: node
         types_or: [javascript, jsx, ts, tsx]
         args: []
+        files: "^frontend-demo/src/"
         exclude: "(node_modules/|.yarn/)"
         require_serial: false
         additional_dependencies:
-          - eslint@8
+          - eslint@10
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
