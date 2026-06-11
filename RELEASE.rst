@@ -1,6 +1,29 @@
 Release Notes
 =============
 
+Version 0.33.0
+--------------
+
+- [pre-commit.ci] pre-commit autoupdate (#527)
+- Migrate frontend-demo to ESLint 10 (#528)
+- Configure bump-my-version for Concourse release pipeline (#492)
+- Update actions/checkout action to v6 (#404)
+- Update python to 3.14 (#520)
+- Update dependency Django to v5.2.15 [SECURITY] (#525)
+- Update dependency ruff to v0.15.14 (#524)
+- Update jest monorepo to v30b (replace failing renovate PR) (#519)
+- Update actions/setup-node action to v6 (#405)
+- Update dependency ai to v5.0.193 (#516)
+- Update all non-major dev-dependencies (#517)
+- Update dependency aiohttp to v3.14.0 [SECURITY] (#518)
+- [pre-commit.ci] pre-commit autoupdate (#478)
+- Update all non-major dev-dependencies (#515)
+- Update dependency starlette to v1 [SECURITY] (#513)
+- Update all non-major dev-dependencies (#496)
+- Update Node.js to 050bf2b (#504)
+- Update dependency ai to v5.0.188 (#505)
+- Update dependency langchain-openai to v1.1.14 [SECURITY] (#510)
+
 Version 0.32.0 (Released May 18, 2026)
 --------------
 
