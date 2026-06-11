@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.33.0
+Version 0.33.0 (Released June 11, 2026)
 --------------
 
 - [pre-commit.ci] pre-commit autoupdate (#527)
