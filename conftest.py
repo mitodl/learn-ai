@@ -11,6 +11,22 @@ from main.exceptions import DoNotUseRequestException
 
 
 @pytest.fixture(autouse=True)
+def mock_apisix_auth(mocker):
+    """
+    Neutralize the APISIX middleware login/logout in tests.
+
+    The middleware treats APISIX as the source of truth and logs out any Django
+    session lacking the gateway's user header, which would otherwise drop the
+    sessions established by ``client.force_login``. Tests that exercise the
+    middleware itself patch these targets again locally.
+    """
+    return SimpleNamespace(
+        login=mocker.patch("main.middleware.apisix_user.login"),
+        logout=mocker.patch("main.middleware.apisix_user.logout"),
+    )
+
+
+@pytest.fixture(autouse=True)
 def prevent_requests(mocker, request):
     """Patch requests to error on request by default"""
     if "mocked_responses" in request.fixturenames:
