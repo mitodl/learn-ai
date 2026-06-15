@@ -65,7 +65,7 @@ repos:
           - "config/keycloak/realms/ol-local-realm.json"
         additional_dependencies: ["gibberish-detector"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.15.16"
+    rev: "v0.15.17"
     hooks:
       - id: ruff-format
       - id: ruff
