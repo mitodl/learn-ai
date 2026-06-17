@@ -1528,7 +1528,7 @@ export const GetTranscriptEdxModuleIdApiAxiosParamCreator = function (
 ) {
   return {
     /**
-     * API view to get the transcript block ID from edx block for a cotentfile.
+     * API view to get the transcript block ID from edx block for a contentfile.
      * @param {string} edx_module_id edx_module_id of the video content file
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1590,7 +1590,7 @@ export const GetTranscriptEdxModuleIdApiFp = function (
     GetTranscriptEdxModuleIdApiAxiosParamCreator(configuration)
   return {
     /**
-     * API view to get the transcript block ID from edx block for a cotentfile.
+     * API view to get the transcript block ID from edx block for a contentfile.
      * @param {string} edx_module_id edx_module_id of the video content file
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1634,7 +1634,7 @@ export const GetTranscriptEdxModuleIdApiFactory = function (
   const localVarFp = GetTranscriptEdxModuleIdApiFp(configuration)
   return {
     /**
-     * API view to get the transcript block ID from edx block for a cotentfile.
+     * API view to get the transcript block ID from edx block for a contentfile.
      * @param {GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -1675,7 +1675,7 @@ export interface GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequ
  */
 export class GetTranscriptEdxModuleIdApi extends BaseAPI {
   /**
-   * API view to get the transcript block ID from edx block for a cotentfile.
+   * API view to get the transcript block ID from edx block for a contentfile.
    * @param {GetTranscriptEdxModuleIdApiGetTranscriptEdxModuleIdRetrieveRequest} requestParameters Request parameters.
    * @param {*} [options] Override http request option.
    * @throws {RequiredError}

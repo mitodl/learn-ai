@@ -226,12 +226,13 @@ class ProblemSetList(ApiView):
     ],
     responses={
         200: OpenApiResponse(description="Transcript block ID"),
+        404: OpenApiResponse(description="Contentfile not found"),
         500: OpenApiResponse(description="Error retrieving transcript block ID"),
     },
 )
 class GetTranscriptBlockId(ApiView):
     """
-    API view to get the transcript block ID from edx block for a cotentfile.
+    API view to get the transcript block ID from edx block for a contentfile.
     """
 
     http_method_names = ["get"]
@@ -260,7 +261,15 @@ class GetTranscriptBlockId(ApiView):
             contentfile = (
                 response.get("results")[0] if response.get("results") else None
             )
-
+            if contentfile is None:
+                return Response(
+                    {
+                        "error": (
+                            f"No contentfile found for edx_module_id {edx_module_id}"
+                        )
+                    },
+                    status=404,
+                )
             transcript_block_id = get_transcript_block_id(contentfile)
 
             return Response(
