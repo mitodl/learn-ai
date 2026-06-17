@@ -44,9 +44,28 @@ You will need at minimum the following environment variable to run locally:
 OPENAI_API_KEY=<your_openai_api_key>
 ```
 
-### Frontend Configuration
+For chatbots that depend on MIT Learn contentfiles, including VideoGPT and AssessmentGPT, you will also need a Learn API token:
 
-Some parts of the frontend sandbox are query OpenEdx APIs. In lieue of a localally running OpenEdx instance in-sync with a Learn instance, you can proxy OpenEdx requests to an RC instance. For this to work, you must add `OPENEDX_SESSION_COOKIE_VALUE` to your `frontend.local.env` file. See `frontend.env` for details.
+```
+# In backend.local.env
+LEARN_ACCESS_TOKEN=<your_learn_access_token>
+```
+
+You can obtain the value for this from the kubernetes RC learn-ai-app pod for learn-ai.
+
+### Frontend Configuration & EdX integration
+
+The local Docker environment points MIT Learn and OpenEdx integrations to RC by default so course, block, contentfile, and transcript data all come from the same environment. If you need to point local development at production instead, override the related MIT Learn and OpenEdx URLs together in your local env files.
+
+Some parts of the frontend sandbox (VideoGPT and AssessmentGPT) query OpenEdx APIs. In lieu of a locally running OpenEdx instance in sync with a Learn instance, you can proxy OpenEdx requests to an RC instance. For this to work, you must add `OPENEDX_SESSION_COOKIE_VALUE` to your `frontend.local.env` file.
+
+In order to get the actual value for this, go to https://courses.rc.learn.mit.edu/auth/login/ol-oauth2/?auth_entry=login and complete login. Then check your cookies for the site via your browser's developer tools. Look for `mitxonline-qa-edx-lms-sessionid` and use that cookie's value for `OPENEDX_SESSION_COOKIE_VALUE`
+
+Some caveats:
+
+- The VideoGPT and AssessmentGPT tabs default to a video/problem from the [Structure of Materials (MITxT+3.012Sx)](https://rc.learn.mit.edu/?resource=5124) course. The OpenEdx blocks API only returns content for courses you are enrolled in, so either [enroll in that course on RC Learn](https://rc.learn.mit.edu/courses/course-v1:MITxT+3.012Sx) or use the "Edit" button to select a unit from a course you are already enrolled in on https://courses.rc.learn.mit.edu.
+- VideoGPT can only answer questions about videos whose course content has been ingested into the RC Learn API (check `https://api.rc.learn.mit.edu/api/v1/contentfiles/?edx_module_id=<video block id>`). Selecting a video from a course that has not been ingested will result in a "No contentfile found" error.
+- OpenEdx rotates the session id whenever you log in, so logging in to the RC OpenEdx site again (even in another tab) invalidates the cookie value you previously copied. If OpenEdx API requests start failing with auth errors such as "Anonymous users cannot access another user's blocks", grab a fresh cookie value and recreate the frontend container with `docker compose up -d --force-recreate watch`.
 
 ## Committing & Formatting
 
