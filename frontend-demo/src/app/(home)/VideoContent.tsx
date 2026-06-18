@@ -32,7 +32,17 @@ const VideoContent = () => {
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_MITOL_API_BASE_URL}/api/v0/get_transcript_edx_module_id/?edx_module_id=${encodeURIComponent(edxModuleId)}`,
     )
-    return response.json()
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(
+        data?.error ??
+          `Transcript request failed with status ${response.status}`,
+      )
+    }
+    if (data === null) {
+      throw new Error("Invalid response from transcript API.")
+    }
+    return data
   }
 
   const transcriptIdQueryResult = useQuery({
@@ -42,11 +52,20 @@ const VideoContent = () => {
   })
   const { id: transcriptBlockId, error: transcriptError } = useMemo(() => {
     if (transcriptIdQueryResult.isLoading) return { id: null, error: null }
-    if (transcriptIdQueryResult.data.error) {
-      return { id: null, error: transcriptIdQueryResult.data.error }
+
+    if (transcriptIdQueryResult.isError) {
+      return {
+        id: null,
+        error:
+          transcriptIdQueryResult.error?.message ||
+          "Failed to load video transcript data.",
+      }
     }
 
-    return { id: transcriptIdQueryResult.data.transcript_block_id, error: null }
+    return {
+      id: transcriptIdQueryResult.data?.transcript_block_id ?? null,
+      error: null,
+    }
   }, [transcriptIdQueryResult])
 
   const isReady = !!transcriptBlockId

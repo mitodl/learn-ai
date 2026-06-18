@@ -1,5 +1,7 @@
 """DRF API views for chat sessions and messages."""
 
+import logging
+
 import httpx
 import requests
 from bs4 import BeautifulSoup
@@ -35,6 +37,8 @@ from ai_chatbots.serializers import (
 )
 from ai_chatbots.utils import get_django_cache, request_with_token
 from main.views import DefaultPagination
+
+log = logging.getLogger(__name__)
 
 
 @extend_schema(
@@ -226,12 +230,13 @@ class ProblemSetList(ApiView):
     ],
     responses={
         200: OpenApiResponse(description="Transcript block ID"),
+        404: OpenApiResponse(description="Contentfile not found"),
         500: OpenApiResponse(description="Error retrieving transcript block ID"),
     },
 )
 class GetTranscriptBlockId(ApiView):
     """
-    API view to get the transcript block ID from edx block for a cotentfile.
+    API view to get the transcript block ID from edx block for a contentfile.
     """
 
     http_method_names = ["get"]
@@ -260,7 +265,16 @@ class GetTranscriptBlockId(ApiView):
             contentfile = (
                 response.get("results")[0] if response.get("results") else None
             )
-
+            if contentfile is None:
+                log.error("No contentfile found for edx_module_id %s", edx_module_id)
+                return Response(
+                    {
+                        "error": (
+                            f"No contentfile found for edx_module_id {edx_module_id}"
+                        )
+                    },
+                    status=404,
+                )
             transcript_block_id = get_transcript_block_id(contentfile)
 
             return Response(
