@@ -1,5 +1,7 @@
 """DRF API views for chat sessions and messages."""
 
+import logging
+
 import httpx
 import requests
 from bs4 import BeautifulSoup
@@ -35,6 +37,8 @@ from ai_chatbots.serializers import (
 )
 from ai_chatbots.utils import get_django_cache, request_with_token
 from main.views import DefaultPagination
+
+log = logging.getLogger(__name__)
 
 
 @extend_schema(
@@ -262,6 +266,7 @@ class GetTranscriptBlockId(ApiView):
                 response.get("results")[0] if response.get("results") else None
             )
             if contentfile is None:
+                log.error("No contentfile found for edx_module_id %s", edx_module_id)
                 return Response(
                     {
                         "error": (

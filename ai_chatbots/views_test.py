@@ -380,6 +380,7 @@ def test_get_transcript_block_id():
 def test_get_transcript_block_id_view_no_contentfile(mocker, client):
     """The view should return a clean 404 error when no matching contentfile is found"""
     mock_response = mocker.Mock()
+    mock_log = mocker.patch("ai_chatbots.views.log.error")
     mock_response.json.return_value = {"results": []}
     mocker.patch("ai_chatbots.views.requests.get", return_value=mock_response)
 
@@ -391,6 +392,9 @@ def test_get_transcript_block_id_view_no_contentfile(mocker, client):
     assert response.json() == {
         "error": f"No contentfile found for edx_module_id {edx_module_id}"
     }
+    mock_log.assert_called_once_with(
+        "No contentfile found for edx_module_id %s", edx_module_id
+    )
 
 
 def test_list_all_prompts(client):
