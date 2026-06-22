@@ -9,9 +9,9 @@ import pytest
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.conf import settings
-from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
+from langchain_litellm import ChatLiteLLM
 from open_learning_ai_tutor.constants import Intent
 from open_learning_ai_tutor.utils import (
     filter_out_system_messages,
@@ -172,7 +172,10 @@ async def test_recommendation_bot_initialization_defaults(
         instructions if instructions else chatbot.instructions
     )
     worker_llm = chatbot.llm
-    assert worker_llm.__class__ == RunnableBinding if has_tools else ChatLiteLLM
+    # tools bound -> wrapped runnable (RunnableBinding or subclass); else a bare model.
+    # Use isinstance rather than exact class identity, which is brittle across
+    # langchain-core/langchain-litellm versions.
+    assert isinstance(worker_llm, RunnableBinding if has_tools else ChatLiteLLM)
     assert worker_llm.model == (
         model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
