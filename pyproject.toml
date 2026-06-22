@@ -107,7 +107,7 @@ dev = [
 [tool.uv]
 package = false
 default-groups = "all"
-constraint-dependencies = ["langgraph-checkpoint<3"]
+constraint-dependencies = ["langgraph-checkpoint<3", "langgraph-prebuilt==1.0.8"]
 environments = ["sys_platform != 'win32'"]
 
 [tool.uv.build-backend]
