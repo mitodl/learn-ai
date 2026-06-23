@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 # hadolint global ignore=DL3008,DL3042
 
-FROM mitodl/ol-python-base:3.13 AS deps
+FROM mitodl/ol-python-base:3.14 AS deps
 LABEL maintainer="ODL DevOps <mitx-devops@mit.edu>"
 
 # learn-ai has no app-specific apt extras; all required packages are in
-# mitodl/ol-python-base:3.13.
+# mitodl/ol-python-base:3.14.
 
 # Install Python dependencies before copying source so this layer is only
 # invalidated when lock files change.
