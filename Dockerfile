@@ -9,14 +9,13 @@ LABEL maintainer="ODL DevOps <mitx-devops@mit.edu>"
 
 # Install Python dependencies before copying source so this layer is only
 # invalidated when lock files change.
-COPY pyproject.toml uv.lock /src/
-RUN chown mitodl:mitodl /src/pyproject.toml /src/uv.lock
+COPY --chown=mitodl:mitodl pyproject.toml uv.lock /src/
 
 USER mitodl
 WORKDIR /src
 # BuildKit cache mount keeps the uv download cache across builds.
 RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
-    uv sync --frozen --no-install-project
+    uv sync --frozen --no-install-project --no-dev
 
 # deepeval is installed without its deps to avoid heavy transitive requirements.
 RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
@@ -56,3 +55,9 @@ EXPOSE 8888
 EXPOSE 8001
 ENV PORT=8001
 CMD ["sh", "-c", "exec granian --interface asgi --host 0.0.0.0 --port ${PORT:-8001} main.asgi:application"]
+
+# ─── Development target ───────────────────────────────────────────────────────
+FROM final AS development
+
+RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
+    uv sync --frozen --no-install-project
