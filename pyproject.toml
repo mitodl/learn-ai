@@ -38,7 +38,7 @@ dependencies = [
     "langchain-core>=1.1.0,<2",
     "langchain-litellm>=0.6.1,<0.7",
     "langchain-openai>=1.1.0,<2",
-    "langgraph==1.0.10",
+    "langgraph>=1.2.4,<2",
     "langmem>=0.0.30,<0.0.31",
     "langsmith>=0.8,<0.9",
     "litellm>=1.53.5,<2",
@@ -107,7 +107,6 @@ dev = [
 [tool.uv]
 package = false
 default-groups = "all"
-constraint-dependencies = ["langgraph-checkpoint<3", "langgraph-prebuilt==1.0.8"]
 environments = ["sys_platform != 'win32'"]
 
 [tool.uv.build-backend]
