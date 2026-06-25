@@ -55,4 +55,4 @@ USER mitodl
 EXPOSE 8888
 EXPOSE 8001
 ENV PORT=8001
-CMD ["granian", "--interface", "asgi", "--host", "0.0.0.0", "--port", "8001", "main.asgi:application"]
+CMD ["sh", "-c", "exec granian --interface asgi --host 0.0.0.0 --port ${PORT:-8001} main.asgi:application"]
