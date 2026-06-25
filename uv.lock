@@ -2518,23 +2518,27 @@ wheels = [
 
 [[package]]
 name = "langsmith"
-version = "0.8.18"
+version = "0.9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "anyio", marker = "sys_platform != 'win32'" },
+    { name = "distro", marker = "sys_platform != 'win32'" },
     { name = "httpx", marker = "sys_platform != 'win32'" },
     { name = "orjson", marker = "platform_python_implementation != 'PyPy' and sys_platform != 'win32'" },
     { name = "packaging", marker = "sys_platform != 'win32'" },
     { name = "pydantic", marker = "sys_platform != 'win32'" },
     { name = "requests", marker = "sys_platform != 'win32'" },
     { name = "requests-toolbelt", marker = "sys_platform != 'win32'" },
+    { name = "sniffio", marker = "sys_platform != 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform != 'win32'" },
     { name = "uuid-utils", marker = "sys_platform != 'win32'" },
     { name = "websockets", marker = "sys_platform != 'win32'" },
     { name = "xxhash", marker = "sys_platform != 'win32'" },
     { name = "zstandard", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9a/d9/a6681aa9847bbbc5ec21abe20a5e233b94e5edcfe39624db607ac7e8ccb4/langsmith-0.8.18.tar.gz", hash = "sha256:32dde9c0e67e053e0fb738921fc8ced768af7b8fa83d7a0e3fd63597cf8776dd", size = 4526988, upload-time = "2026-06-19T13:12:17.123Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/57/8a/445562007432dca8a79dac13a50d3e98da547f2042812254385526dcd207/langsmith-0.9.2.tar.gz", hash = "sha256:b2a43f285a3cc17e46f9eea0ed975709af0c8f40e9f3f250364a8ed728e00e3d", size = 4567843, upload-time = "2026-06-25T13:46:45.823Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/03/70/0e0cc80a3b064c8d6c8d697c3125ed86e39d5a7393ec6dc8b07cb1cf13c4/langsmith-0.8.18-py3-none-any.whl", hash = "sha256:3940183349993faef48e6c7d08e4822ee9cefd906b362d0e3c2d650314d2f282", size = 508108, upload-time = "2026-06-19T13:12:15.348Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/c3/68e5e91300467e3e4f649633561cb797f50293128cbfa29530ce0ea3eb03/langsmith-0.9.2-py3-none-any.whl", hash = "sha256:a861167d181514aa2b73f49874e4f9bb13b4ef75e292e22d3940344e9b345e45", size = 595131, upload-time = "2026-06-25T13:46:43.613Z" },
 ]
 
 [[package]]
@@ -2686,12 +2690,12 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.1.0,<2" },
     { name = "langgraph", specifier = "==1.0.10" },
     { name = "langmem", specifier = ">=0.0.30,<0.0.31" },
-    { name = "langsmith", specifier = ">=0.8,<0.9" },
+    { name = "langsmith", specifier = ">=0.8,<0.10" },
     { name = "litellm", specifier = ">=1.53.5,<2" },
     { name = "markdown2", specifier = ">=2.5.2,<3" },
     { name = "mitol-django-observability", specifier = ">=2026.1.0" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
-    { name = "open-learning-ai-tutor", specifier = ">=0.2.15,<0.3" },
+    { name = "open-learning-ai-tutor", specifier = "==0.2.16" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-django", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-httpx", specifier = ">=0.59b0,<0.60" },
@@ -3248,7 +3252,7 @@ wheels = [
 
 [[package]]
 name = "open-learning-ai-tutor"
-version = "0.2.15"
+version = "0.2.16"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "e2b-code-interpreter", marker = "sys_platform != 'win32'" },
@@ -3258,9 +3262,9 @@ dependencies = [
     { name = "langgraph", marker = "sys_platform != 'win32'" },
     { name = "langsmith", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/83/84/26d0089676131bc6cf62f30d9e6719ecd97f013ece0edb531312da6fdc62/open_learning_ai_tutor-0.2.15.tar.gz", hash = "sha256:de38e4a55a1186173c103b3067d7cf243c592b8f8d3bae91d13607ce5f660270", size = 90440, upload-time = "2026-06-08T19:18:38.362Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/bb/f848c7e072a8a68813bdcba220c20ef1b82b67bf5b630ca723554eff6eb3/open_learning_ai_tutor-0.2.16.tar.gz", hash = "sha256:0d00023ec8caaf3381fbd2af681d71efce1bc0972e26815b8e18f9eb36584550", size = 92430, upload-time = "2026-06-25T16:03:07.39Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/32/d50f10fedc9fbc9c080d16fe4824becfe1f4f8fb210690c77f567613f8d0/open_learning_ai_tutor-0.2.15-py3-none-any.whl", hash = "sha256:bdb0be242635757533b7a6fe938dcc05b38b8182d8d88516232e28cda28d1c6c", size = 20172, upload-time = "2026-06-08T19:18:36.888Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/27/c4d57b7747ecaf45e3004d195bf9bc4f74cde93a2950e072948e6ac19777/open_learning_ai_tutor-0.2.16-py3-none-any.whl", hash = "sha256:e32f40af01a3871c51fd6f1be4e793cc2287ac2ac36a46e871b3a18af0bfdf1d", size = 20197, upload-time = "2026-06-25T16:03:06.211Z" },
 ]
 
 [[package]]
