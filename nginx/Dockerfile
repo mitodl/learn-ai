@@ -2,7 +2,7 @@
 #       it's primary purpose is to emulate heroku-buildpack-nginx's
 #       functionality that compiles config/nginx.conf.erb
 # See https://github.com/heroku/heroku-buildpack-nginx/blob/fefac6c569f28182b3459cb8e34b8ccafc403fde/bin/start-nginx
-FROM nginx:1.29.5
+FROM nginx:1.29.5@sha256:0236ee02dcbce00b9bd83e0f5fbc51069e7e1161bd59d99885b3ae1734f3392e
 
 # Logs are configured to a relatic path under /etc/nginx
 # but the container expects /var/log
