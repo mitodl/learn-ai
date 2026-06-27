@@ -11,7 +11,7 @@ RUN apt-get install -y $(grep -vE "^\s*#" apt.txt  | tr "\n" " ")
 RUN apt-get update && apt-get install libpq-dev postgresql-client -y
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:1e3808aa9023d0980e7c15b1fa7c1ac16ff35925780cf5c459858b2d693f01a9 /uv /uvx /usr/local/bin/
 
 # Add, and run as, non-root user.
 RUN mkdir /src
