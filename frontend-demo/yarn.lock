@@ -12,16 +12,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ai-sdk/gateway@npm:2.0.97":
-  version: 2.0.97
-  resolution: "@ai-sdk/gateway@npm:2.0.97"
+"@ai-sdk/gateway@npm:2.0.105":
+  version: 2.0.105
+  resolution: "@ai-sdk/gateway@npm:2.0.105"
   dependencies:
     "@ai-sdk/provider": "npm:2.0.3"
-    "@ai-sdk/provider-utils": "npm:3.0.25"
+    "@ai-sdk/provider-utils": "npm:3.0.27"
     "@vercel/oidc": "npm:3.1.0"
   peerDependencies:
     zod: ^3.25.76 || ^4.1.8
-  checksum: 10c0/baa53aebde4cc8aab1d922474fd8bcf39679a0aad6c9120284a333bae1744ad6999f764f4161b3300977b4ddc01b11d1a71beda63fcaf631d2f46c7a71e4cf46
+  checksum: 10c0/8ccd4cd8a952902551122183d9cf639ddd3ee0422fa1268420dfa14e25788986e267146b60b68d38a2a54e19bcdc60235a995cea80d0bcea89bce7f5ccfd18aa
   languageName: node
   linkType: hard
 
@@ -38,16 +38,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ai-sdk/provider-utils@npm:3.0.25":
-  version: 3.0.25
-  resolution: "@ai-sdk/provider-utils@npm:3.0.25"
+"@ai-sdk/provider-utils@npm:3.0.27":
+  version: 3.0.27
+  resolution: "@ai-sdk/provider-utils@npm:3.0.27"
   dependencies:
     "@ai-sdk/provider": "npm:2.0.3"
     "@standard-schema/spec": "npm:^1.0.0"
     eventsource-parser: "npm:^3.0.6"
   peerDependencies:
     zod: ^3.25.76 || ^4.1.8
-  checksum: 10c0/6de8874c2b1459517a2d2a71a6a899b75a31d46312626b7ee1480363a085c07d95400bcc86a4bc768cc719ad91166435b2183566ce9985276be03b3a49ed20f9
+  checksum: 10c0/018dd2aa4440b71ddc383777f2ec2113f2340cf00bf5de5e7c10b3ab7e82706a7236ea33df6ddcc26aa0643d0316c9ec215a913896bdf4f3d172da019a4be0cf
   languageName: node
   linkType: hard
 
@@ -3747,16 +3747,16 @@ __metadata:
   linkType: hard
 
 "ai@npm:^5.0.0":
-  version: 5.0.196
-  resolution: "ai@npm:5.0.196"
+  version: 5.0.206
+  resolution: "ai@npm:5.0.206"
   dependencies:
-    "@ai-sdk/gateway": "npm:2.0.97"
+    "@ai-sdk/gateway": "npm:2.0.105"
     "@ai-sdk/provider": "npm:2.0.3"
-    "@ai-sdk/provider-utils": "npm:3.0.25"
+    "@ai-sdk/provider-utils": "npm:3.0.27"
     "@opentelemetry/api": "npm:1.9.0"
   peerDependencies:
     zod: ^3.25.76 || ^4.1.8
-  checksum: 10c0/b6904d3e3a4e7aa5f9fc04e3019c57e57c3c5f9517dfd22a50a01de0e1e1807a49dfddf219716afd9e4f35f58b43e6081985598b1866cd269c246e13568060c0
+  checksum: 10c0/da25624453d115a326d7108d81a7e189ef4f3c4d862191f8e3411c25877d77631a6b5aeec06e5d9b94d5fd9ee850ace521363f28a7ec1c117cb91b3e4bbbf591
   languageName: node
   linkType: hard
 
