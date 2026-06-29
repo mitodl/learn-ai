@@ -849,6 +849,45 @@ wheels = [
 ]
 
 [[package]]
+name = "deepeval"
+version = "4.0.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp", marker = "sys_platform != 'win32'" },
+    { name = "click", marker = "sys_platform != 'win32'" },
+    { name = "grpcio", marker = "sys_platform != 'win32'" },
+    { name = "jinja2", marker = "sys_platform != 'win32'" },
+    { name = "nest-asyncio", marker = "sys_platform != 'win32'" },
+    { name = "openai", marker = "sys_platform != 'win32'" },
+    { name = "opentelemetry-api", marker = "sys_platform != 'win32'" },
+    { name = "opentelemetry-sdk", marker = "sys_platform != 'win32'" },
+    { name = "portalocker", marker = "sys_platform != 'win32'" },
+    { name = "posthog", marker = "sys_platform != 'win32'" },
+    { name = "pydantic", marker = "sys_platform != 'win32'" },
+    { name = "pydantic-settings", marker = "sys_platform != 'win32'" },
+    { name = "pyfiglet", marker = "sys_platform != 'win32'" },
+    { name = "pytest", marker = "sys_platform != 'win32'" },
+    { name = "pytest-asyncio", marker = "sys_platform != 'win32'" },
+    { name = "pytest-repeat", marker = "sys_platform != 'win32'" },
+    { name = "pytest-rerunfailures", marker = "sys_platform != 'win32'" },
+    { name = "pytest-xdist", marker = "sys_platform != 'win32'" },
+    { name = "python-dotenv", marker = "sys_platform != 'win32'" },
+    { name = "requests", marker = "sys_platform != 'win32'" },
+    { name = "rich", marker = "sys_platform != 'win32'" },
+    { name = "sentry-sdk", marker = "sys_platform != 'win32'" },
+    { name = "setuptools", marker = "sys_platform != 'win32'" },
+    { name = "tabulate", marker = "sys_platform != 'win32'" },
+    { name = "tenacity", marker = "sys_platform != 'win32'" },
+    { name = "tqdm", marker = "sys_platform != 'win32'" },
+    { name = "typer", marker = "sys_platform != 'win32'" },
+    { name = "wheel", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8b/5f/fc7c27888d35fea49718c6ce3a5278b0bd94bf439c46ac407302dcafd5fe/deepeval-4.0.7.tar.gz", hash = "sha256:b776b78138675a445eba8c07af781150206f83f534c25e7aec4df58525e82e39", size = 742198, upload-time = "2026-06-22T17:46:17.648Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a3/ea/8d178f1db5d76897a234f132e09654d488c3719f2c55d3a947c131257e80/deepeval-4.0.7-py3-none-any.whl", hash = "sha256:f45aee57e7743b8b9e7746753881220ac7d938e4f1afc66a4a9dabbdf09177d0", size = 1066008, upload-time = "2026-06-22T17:46:21.52Z" },
+]
+
+[[package]]
 name = "defusedxml"
 version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2620,6 +2659,7 @@ dev = [
     { name = "bpython", marker = "sys_platform != 'win32'" },
     { name = "chromadb", marker = "sys_platform != 'win32'" },
     { name = "ddt", marker = "sys_platform != 'win32'" },
+    { name = "deepeval", marker = "sys_platform != 'win32'" },
     { name = "django-debug-toolbar", marker = "sys_platform != 'win32'" },
     { name = "factory-boy", marker = "sys_platform != 'win32'" },
     { name = "faker", marker = "sys_platform != 'win32'" },
@@ -2719,6 +2759,7 @@ dev = [
     { name = "bpython", specifier = ">=0.26,<0.27" },
     { name = "chromadb", specifier = ">=1.0.13,<2" },
     { name = "ddt", specifier = ">=1.6.0,<2" },
+    { name = "deepeval", specifier = ">=4.0.7" },
     { name = "django-debug-toolbar", specifier = ">=6.0.0,<7" },
     { name = "factory-boy", specifier = ">=3.3.0,<4" },
     { name = "faker", specifier = ">=40.0.0,<41" },
@@ -3115,6 +3156,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6d/fd/91545e604bc3dad7dca9ed03284086039b294c6b3d75c0d2fa45f9e9caf3/nbformat-5.10.4.tar.gz", hash = "sha256:322168b14f937a5d11362988ecac2a4952d3d8e3a2cbeb2319584631226d5b3a", size = 142749, upload-time = "2024-04-04T11:20:37.371Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a9/82/0340caa499416c78e5d8f5f05947ae4bc3cba53c9f038ab6e9ed964e22f1/nbformat-5.10.4-py3-none-any.whl", hash = "sha256:3b48d6c8fbca4b299bf3982ea7db1af21580e4fec269ad087b9e81588891200b", size = 78454, upload-time = "2024-04-04T11:20:34.895Z" },
+]
+
+[[package]]
+name = "nest-asyncio"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
 ]
 
 [[package]]
@@ -3960,6 +4010,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyfiglet"
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c8/e3/0a86276ad2c383ce08d76110a8eec2fe22e7051c4b8ba3fa163a0b08c428/pyfiglet-1.0.4.tar.gz", hash = "sha256:db9c9940ed1bf3048deff534ed52ff2dafbbc2cd7610b17bb5eca1df6d4278ef", size = 1560615, upload-time = "2025-08-15T18:32:47.302Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/5c/fe9f95abd5eaedfa69f31e450f7e2768bef121dbdf25bcddee2cd3087a16/pyfiglet-1.0.4-py3-none-any.whl", hash = "sha256:65b57b7a8e1dff8a67dc8e940a117238661d5e14c3e49121032bd404d9b2b39f", size = 1806118, upload-time = "2025-08-15T18:32:45.556Z" },
+]
+
+[[package]]
 name = "pygithub"
 version = "2.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4134,6 +4193,31 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/68/14/eb014d26be205d38ad5ad20d9a80f7d201472e08167f0bb4361e251084a9/pytest_mock-3.15.1.tar.gz", hash = "sha256:1849a238f6f396da19762269de72cb1814ab44416fa73a8686deac10b0d87a0f", size = 34036, upload-time = "2025-09-16T16:37:27.081Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/cc/06253936f4a7fa2e0f48dfe6d851d9c56df896a9ab09ac019d70b760619c/pytest_mock-3.15.1-py3-none-any.whl", hash = "sha256:0a25e2eb88fe5168d535041d09a4529a188176ae608a6d249ee65abc0949630d", size = 10095, upload-time = "2025-09-16T16:37:25.734Z" },
+]
+
+[[package]]
+name = "pytest-repeat"
+version = "0.9.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/80/d4/69e9dbb9b8266df0b157c72be32083403c412990af15c7c15f7a3fd1b142/pytest_repeat-0.9.4.tar.gz", hash = "sha256:d92ac14dfaa6ffcfe6917e5d16f0c9bc82380c135b03c2a5f412d2637f224485", size = 6488, upload-time = "2025-04-07T14:59:53.077Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/d4/8b706b81b07b43081bd68a2c0359fe895b74bf664b20aca8005d2bb3be71/pytest_repeat-0.9.4-py3-none-any.whl", hash = "sha256:c1738b4e412a6f3b3b9e0b8b29fcd7a423e50f87381ad9307ef6f5a8601139f3", size = 4180, upload-time = "2025-04-07T14:59:51.492Z" },
+]
+
+[[package]]
+name = "pytest-rerunfailures"
+version = "16.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging", marker = "sys_platform != 'win32'" },
+    { name = "pytest", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4d/f0/74f8e685be7ecd1572c1256132f18fce3a665d7e07649a3f23b7eb2d3bec/pytest_rerunfailures-16.3.tar.gz", hash = "sha256:37c9b1231c8083e9f4e724f50f7a21241822f9516c15c700ebbf218d6452355c", size = 34148, upload-time = "2026-05-22T06:51:22.292Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/98/58a71d68d3126d7f6a6ed1944c37ec207a4ff3dc66cad3bed7b59d38df61/pytest_rerunfailures-16.3-py3-none-any.whl", hash = "sha256:6bdfb8ffb46c46072e6c16bdedee38b6c13eac620d9415ed5b63152cbf283170", size = 15396, upload-time = "2026-05-22T06:51:20.547Z" },
 ]
 
 [[package]]
@@ -4809,6 +4893,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tabulate"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090, upload-time = "2022-10-06T17:21:48.54Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252, upload-time = "2022-10-06T17:21:44.262Z" },
+]
+
+[[package]]
 name = "tenacity"
 version = "9.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -5238,6 +5331,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/b2/381be8cfdee792dd117872481b6e378f85c957dd7c5bca38897b08f765fd/werkzeug-3.1.8.tar.gz", hash = "sha256:9bad61a4268dac112f1c5cd4630a56ede601b6ed420300677a869083d70a4c44", size = 875852, upload-time = "2026-04-02T18:49:14.268Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/93/8c/2e650f2afeb7ee576912636c23ddb621c91ac6a98e66dc8d29c3c69446e1/werkzeug-3.1.8-py3-none-any.whl", hash = "sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50", size = 226459, upload-time = "2026-04-02T18:49:12.72Z" },
+]
+
+[[package]]
+name = "wheel"
+version = "0.47.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/62/75f18a0f03b4219c456652c7780e4d749b929eb605c098ce3a5b6b6bc081/wheel-0.47.0.tar.gz", hash = "sha256:cc72bd1009ba0cf63922e28f94d9d83b920aa2bb28f798a31d0691b02fa3c9b3", size = 63854, upload-time = "2026-04-22T15:51:27.727Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/1b/9e33c09813d65e248f7f773119148a612516a4bea93e9c6f545f78455b7c/wheel-0.47.0-py3-none-any.whl", hash = "sha256:212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", size = 32218, upload-time = "2026-04-22T15:51:26.296Z" },
 ]
 
 [[package]]
