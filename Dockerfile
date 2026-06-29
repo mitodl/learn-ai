@@ -17,9 +17,6 @@ WORKDIR /src
 RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
     uv sync --frozen --no-install-project --no-dev
 
-RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
-    uv pip install 'deepeval==4.0.7'
-
 FROM deps AS final
 
 # Add project source.
