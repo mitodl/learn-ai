@@ -48,9 +48,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Install deepeval (without resolving posthog constraint)
-        run: uv pip install --no-deps 'deepeval>=3.8.0,<4' 'nest-asyncio>=1.6.0'
-
       - name: Tests
         run: |
           uv run ./manage.py collectstatic --noinput --clear
