@@ -1,6 +1,22 @@
 Release Notes
 =============
 
+Version 0.34.0 (Released June 30, 2026)
+--------------
+
+- upgrade langchain (#546)
+- feat: adopt mitodl/ol-python-base:3.13 and add BuildKit cache mounts (#529)
+- update open-learning-ai-tutor (#544)
+- uv lock upgrade (#540)
+- Better instructions and env defaults (RC consistency) (#531)
+- Update dependency aiohttp to v3.14.1 [SECURITY] (#535)
+- Update dependency starlette to v1.3.1 [SECURITY] (#537)
+- Update dependency langchain to v1.3.9 [SECURITY] (#536)
+- Update dependency ai to v5.0.196 (#526)
+- [pre-commit.ci] pre-commit autoupdate (#533)
+- Handle missing transcript block contentfiles (#534)
+- Fix local logout and avoid needless apisix re-login calls (#530)
+
 Version 0.33.0 (Released June 11, 2026)
 --------------
 
