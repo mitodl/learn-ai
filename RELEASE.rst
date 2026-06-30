@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.34.0
+Version 0.34.0 (Released June 30, 2026)
 --------------
 
 - upgrade langchain (#546)
