@@ -70,6 +70,10 @@ DEBUG = get_bool("DEBUG", False)  # noqa: FBT003
 ALLOWED_HOSTS = ["*"]
 
 SECURE_SSL_REDIRECT = get_bool("MITOL_SECURE_SSL_REDIRECT", True)  # noqa: FBT003
+# Trust the X-Forwarded-Proto header set by the TLS-terminating proxy so Django
+# recognizes requests as already secure. Without this, SECURE_SSL_REDIRECT's True
+# default sends every proxied request into an infinite redirect loop.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_REDIRECT_EXEMPT = [
     "^health/startup/$",
     "^health/liveness/$",
