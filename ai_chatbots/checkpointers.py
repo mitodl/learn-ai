@@ -7,6 +7,7 @@ from typing import (
 )
 
 from django.conf import settings
+from langchain_core.load.dump import default as _lc_serializable_default
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
     WRITES_IDX_MAP,
@@ -18,11 +19,47 @@ from langgraph.checkpoint.base import (
     get_checkpoint_id,
 )
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+from langgraph.checkpoint.serde.types import SendProtocol
 
 from ai_chatbots.api import WRITES_MAPPING
 from ai_chatbots.models import DjangoCheckpoint, DjangoCheckpointWrite, UserChatSession
 
 USER_MODEL = settings.AUTH_USER_MODEL
+
+
+def _checkpoint_json_default(obj: Any) -> Any:
+    """
+    json.dumps default for checkpoint storage.
+
+    langgraph-checkpoint 4.x dropped the json serializer and only handles
+    langgraph types (e.g. Send) via msgpack. langchain's default serializes a
+    Send as an unrevivable "not_implemented" blob, so emit the revivable lc:2
+    constructor envelope the JsonPlusSerializer reviver understands.
+    """
+    if isinstance(obj, SendProtocol):
+        args = [obj.node, obj.arg]
+        timeout = getattr(obj, "timeout", None)
+        if timeout is not None:
+            args.append(timeout)
+        return {
+            "lc": 2,
+            "type": "constructor",
+            "id": [*type(obj).__module__.split("."), type(obj).__name__],
+            "args": args,
+            "kwargs": {},
+        }
+    return _lc_serializable_default(obj)
+
+
+def _to_json_dict(obj: Any) -> Any:
+    """
+    Serialize an object to a JSON-safe value for storage in a JSONField.
+
+    Replaces the JsonPlusSerializer.dumps() helper that langgraph-checkpoint 4.x
+    removed.
+
+    """
+    return json.loads(json.dumps(obj, default=_checkpoint_json_default))
 
 
 def calculate_writes(checkpoint: dict) -> dict[str, Any]:
@@ -123,7 +160,7 @@ def _parse_checkpoint_data(
             "checkpoint_id": checkpoint_id,
         }
     }
-    checkpoint = serde.loads(json.dumps(data.checkpoint))
+    checkpoint = serde.loads_typed(("json", json.dumps(data.checkpoint).encode()))
     metadata = data.metadata
     parent_checkpoint_id = data.parent_checkpoint_id
     parent_config = (
@@ -227,8 +264,8 @@ class AsyncDjangoSaver(BaseCheckpointSaver):
         parent_checkpoint_id = config["configurable"].get("checkpoint_id")
 
         type_, _ = self.serde.dumps_typed(checkpoint)
-        serialized_checkpoint = json.loads(self.serde.dumps(checkpoint))
-        serialized_metadata = json.loads(self.serde.dumps(metadata))
+        serialized_checkpoint = _to_json_dict(checkpoint)
+        serialized_metadata = _to_json_dict(metadata)
         if not serialized_metadata.get("writes"):
             serialized_metadata["writes"] = calculate_writes(serialized_checkpoint)
 
