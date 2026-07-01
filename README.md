@@ -67,6 +67,37 @@ Some caveats:
 - VideoGPT can only answer questions about videos whose course content has been ingested into the RC Learn API (check `https://api.rc.learn.mit.edu/api/v1/contentfiles/?edx_module_id=<video block id>`). Selecting a video from a course that has not been ingested will result in a "No contentfile found" error.
 - OpenEdx rotates the session id whenever you log in, so logging in to the RC OpenEdx site again (even in another tab) invalidates the cookie value you previously copied. If OpenEdx API requests start failing with auth errors such as "Anonymous users cannot access another user's blocks", grab a fresh cookie value and recreate the frontend container with `docker compose up -d --force-recreate watch`.
 
+### django-aqueduct settings (opt-in)
+
+This app also ships two **opt-in, parallel** Django settings modules built on
+[django-aqueduct](https://github.com/mitodl/django-aqueduct), a typed
+(Pydantic-based) settings layer. They are selected via
+`DJANGO_SETTINGS_MODULE` and are not used by default anywhere:
+
+- `main.settings_aqueduct` -- validates/loads settings through the typed
+  `AqueductSettings` model in `main/aqueduct_settings.py`. It reads the same
+  environment variables as `main.settings` (the default settings module), so
+  no separate configuration is needed to try it out:
+
+  ```
+  DJANGO_SETTINGS_MODULE=main.settings_aqueduct python manage.py check
+  ```
+
+- `main.settings_aqueduct_dev` -- the same model, but via `DevAqueductSettings`,
+  which fills in any settings missing from the environment by fetching them
+  from Vault (via OIDC) instead of requiring a local `.env` file. Env vars you
+  do set still take priority over Vault, so you can override individual
+  values locally. This requires `VAULT_ADDR` to be set, and likely
+  `VAULT_AQUEDUCT_PATH`/`VAULT_AQUEDUCT_ROLE` -- see the comments in
+  `main/aqueduct_settings.py` for details, since the real Vault path layout
+  under the `secret-learn-ai` mount isn't encoded anywhere in this repo yet.
+
+`main.settings` (the existing, hand-written settings module) is **untouched**
+by this work and remains the default settings module in every deployed
+environment (web, ASGI, Celery). Nothing about existing deployments changes
+unless `DJANGO_SETTINGS_MODULE` is explicitly pointed at one of the modules
+above.
+
 ## Committing & Formatting
 
 To ensure commits to GitHub are safe, first install [pre-commit](https://pre-commit.com/):

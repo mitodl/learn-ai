@@ -68,6 +68,7 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
     "django-health-check>=3.0.0,<4",
+    "django-aqueduct[vault]",
 ]
 
 [dependency-groups]
@@ -109,6 +110,10 @@ dev = [
 package = false
 default-groups = "all"
 environments = ["sys_platform != 'win32'"]
+
+[tool.uv.sources]
+# TODO: switch to a published PyPI version once the KV v1 fix lands upstream.
+django-aqueduct = { path = "/home/tmacey/code/mit/apps/maintained/django-aqueduct/.claude/worktrees/aqueduct-integration", editable = true }
 
 [tool.uv.build-backend]
 module-root = ""
