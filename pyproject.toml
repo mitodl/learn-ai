@@ -111,10 +111,6 @@ package = false
 default-groups = "all"
 environments = ["sys_platform != 'win32'"]
 
-[tool.uv.sources]
-# TODO: switch to a published PyPI version once the KV v1 fix lands upstream.
-django-aqueduct = { path = "/home/tmacey/code/mit/apps/maintained/django-aqueduct/.claude/worktrees/aqueduct-integration", editable = true }
-
 [tool.uv.build-backend]
 module-root = ""
 
