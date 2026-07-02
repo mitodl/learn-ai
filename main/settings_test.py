@@ -93,6 +93,9 @@ class TestSettings(TestCase):
                 "sslmode": "require"
             }
 
+    @pytest.mark.skip(
+        reason="skipped until the new Concourse release pipeline with CalVer is in effect"
+    )
     def test_bump_my_version_format(self):
         """Verify VERSION is in sync with pyproject.toml and matches a version format."""
         with open("pyproject.toml", "rb") as f:  # noqa: PTH123
