@@ -652,7 +652,9 @@ AI_MIT_SEARCH_URL = get_string(
 )
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=10)
-AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=5)
+AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(
+    name="AI_MIT_TRANSCRIPT_SEARCH_LIMIT", default=5
+)
 
 # Provider keys
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
