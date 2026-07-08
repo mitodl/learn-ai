@@ -181,7 +181,7 @@ class AqueductSettings(BaseSettings):
         validation_alias=AliasChoices("AI_MIT_SYLLABUS_URL"),
     )
     AI_MIT_TRANSCRIPT_SEARCH_LIMIT: int = Field(
-        default=5, validation_alias=AliasChoices("AI_MIT_CONTENT_SEARCH_LIMIT")
+        default=5, validation_alias=AliasChoices("AI_MIT_TRANSCRIPT_SEARCH_LIMIT")
     )
     AI_MIT_VIDEO_TRANSCRIPT_URL: str = Field(
         default="https://api.learn.mit.edu/api/v0/vector_content_files_search/",
@@ -878,15 +878,14 @@ class AqueductSettings(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: float | int = Field(default=0)
     SENTRY_PROFILES_SAMPLE_RATE: float | int = Field(default=0)
 
-    # main.settings has two fields that intentionally read the *same* env var
-    # with different defaults (AI_MIT_TRANSCRIPT_SEARCH_LIMIT reads
-    # AI_MIT_CONTENT_SEARCH_LIMIT; EMBEDLY_EXTRACT_URL reads EMBEDLY_EMBED_URL).
-    # pydantic 2.13 already resolves both fields from a shared validation_alias
-    # correctly, but two fields sharing an alias reads as a collision. Drop the
-    # shared alias on the derived field (so it has no env of its own) and
-    # reproduce the "reads the other's env var" quirk explicitly in
+    # main.settings' EMBEDLY_EXTRACT_URL intentionally reads the EMBEDLY_EMBED_URL
+    # env var with a different default. pydantic 2.13 resolves both fields from a
+    # shared validation_alias correctly, but two fields sharing an alias reads as
+    # a collision. Drop the shared alias on the derived field (so it has no env of
+    # its own) and reproduce the "reads the other's env var" quirk explicitly in
     # _configure_shared_env_aliases below — no ambiguity, same behaviour.
-    AI_MIT_TRANSCRIPT_SEARCH_LIMIT: int = Field(default=5)
+    # (AI_MIT_TRANSCRIPT_SEARCH_LIMIT no longer needs this: upstream #555 fixed it
+    # to read its own AI_MIT_TRANSCRIPT_SEARCH_LIMIT env var.)
     EMBEDLY_EXTRACT_URL: str = Field(default="https://api.embed.ly/1/extract")
 
     # Primitives main/settings.py only reads inline (never assigns at module
@@ -945,13 +944,10 @@ class AqueductSettings(BaseSettings):
     def _configure_shared_env_aliases(self) -> AqueductSettings:
         """Reproduce main.settings' "read a sibling's env var" quirk.
 
-        AI_MIT_TRANSCRIPT_SEARCH_LIMIT and EMBEDLY_EXTRACT_URL have no env alias
-        of their own; legacy reads them from AI_MIT_CONTENT_SEARCH_LIMIT and
-        EMBEDLY_EMBED_URL respectively. When that source var is supplied, mirror
-        it here; otherwise each keeps its own distinct default.
+        EMBEDLY_EXTRACT_URL has no env alias of its own; legacy reads it from
+        EMBEDLY_EMBED_URL. When that source var is supplied, mirror it here;
+        otherwise it keeps its own distinct default.
         """
-        if "AI_MIT_CONTENT_SEARCH_LIMIT" in self.model_fields_set:
-            self.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = self.AI_MIT_CONTENT_SEARCH_LIMIT
         if "EMBEDLY_EMBED_URL" in self.model_fields_set:
             self.EMBEDLY_EXTRACT_URL = self.EMBEDLY_EMBED_URL
         return self
