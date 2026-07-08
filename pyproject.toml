@@ -68,6 +68,7 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
     "django-health-check>=3.0.0,<4",
+    "django-aqueduct[vault,derivations]>=0.9.0,<1",
 ]
 
 [dependency-groups]
@@ -105,6 +106,48 @@ dev = [
     "deepeval>=4.0.7",
 ]
 
+[tool.aqueduct]
+modules = ["main.settings"]
+output = "main/aqueduct_settings.py"
+class_name = "AqueductSettings"
+parity_model = "main.aqueduct_settings:AqueductSettings"
+parity_legacy = "main.settings"
+# enrich_url_types (0.9.0 str->AnyUrl promotion) is deliberately left OFF.
+# It was tested: even with 0.9.0's default-gating + paired str serializer, it
+# breaks this app. CELERY_BROKER_URL/REDIS_URL/REDIS_DOMAIN feed
+# django_aqueduct.derivations helpers (first_url/redis_cache) and the channels
+# address dict, which operate on str -- an AnyUrl attribute raises
+# "'AnyUrl' object has no attribute 'strip'" at validation time -- and
+# KEYCLOAK_BASE_URL/POSTHOG_API_HOST normalise to a trailing slash, changing the
+# value. Per the upstream guidance, leaving the flag off keeps every URL field
+# str (matching main.settings) with no hand-written AnyUrl workaround.
+# Deliberate divergences, all documented in main/aqueduct_settings.py:
+# - primitives the model carries that main.settings only reads inline
+#   (DATABASE_URL, MITOL_DB_*, REDISCLOUD_URL, HOST_IP, RUN_DATA_MIGRATIONS)
+# - AWS_* falsy-default mismatch (legacy get_string(..., False) -> False,
+#   model uses a proper str | None)
+# - STORAGES: a conditionally-defined legacy name the model always carries
+#   (IPWARE_PRIVATE_IP_PREFIX no longer needs listing -- the model now omits it
+#   from model_dump when DEBUG is off, matching legacy leaving it undefined)
+# - LOGGING is imported from mitol-django-observability by the settings shims,
+#   not modeled
+# (Django/third-party runtime-injected dict keys -- e.g. DATABASES,
+# DEFAULT_DATABASE_CONFIG, HEALTH_CHECK -- no longer need listing here: 0.9.0's
+# check_aqueduct_settings subset-compares dict settings.)
+parity_ignore = [
+    "LOGGING",
+    "DATABASE_URL",
+    "MITOL_DB_CONN_MAX_AGE",
+    "MITOL_DB_DISABLE_SSL",
+    "REDISCLOUD_URL",
+    "HOST_IP",
+    "RUN_DATA_MIGRATIONS",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_STORAGE_BUCKET_NAME",
+    "STORAGES",
+]
+
 [tool.uv]
 package = false
 default-groups = "all"
@@ -120,6 +163,14 @@ build-backend = "uv_build"
 [tool.ruff]
 target-version = "py311"
 line-length = 88
+# 0.8.1 made the generated output ruff-format-stable and dropped the blanket
+# noqa, but that was validated against ~9 rule groups. This project selects far
+# more, and several fire on the generated file in ways only an exclude can fix:
+# PIE794 (the preserved region deliberately re-declares generated fields to
+# refine their type), TD002/TD003 + FIX002 (the generator's `# TODO: refine
+# type` markers), and PIE807. Keep the file excluded from lint + format.
+extend-exclude = ["main/aqueduct_settings.py"]
+force-exclude = true
 lint.select = [
     "A",  # flake8-builtins
     # "AIR",  # Airflow
@@ -230,6 +281,15 @@ first_value = "1"
 filename = "main/settings.py"
 search = 'VERSION = "{current_version}"'
 replace = 'VERSION = "{new_version}"'
+
+# The generated model's VERSION mirrors main/settings.py's VERSION (static
+# discovery copies the literal). They must stay identical or
+# `generate_aqueduct_settings --check` reports drift, so bump both together.
+# The generated renderer emits double quotes: VERSION: str = Field(default="...").
+[[tool.bumpversion.files]]
+filename = "main/aqueduct_settings.py"
+search = 'VERSION: str = Field(default="{current_version}")'
+replace = 'VERSION: str = Field(default="{new_version}")'
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"

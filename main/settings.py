@@ -111,6 +111,7 @@ INSTALLED_APPS = (
     "hijack.contrib.admin",
     "guardian",
     "channels",
+    "django_aqueduct",
     "mitol.observability.apps.ObservabilityConfig",
     # Put our apps after this point
     "main",

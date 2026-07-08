@@ -67,6 +67,43 @@ Some caveats:
 - VideoGPT can only answer questions about videos whose course content has been ingested into the RC Learn API (check `https://api.rc.learn.mit.edu/api/v1/contentfiles/?edx_module_id=<video block id>`). Selecting a video from a course that has not been ingested will result in a "No contentfile found" error.
 - OpenEdx rotates the session id whenever you log in, so logging in to the RC OpenEdx site again (even in another tab) invalidates the cookie value you previously copied. If OpenEdx API requests start failing with auth errors such as "Anonymous users cannot access another user's blocks", grab a fresh cookie value and recreate the frontend container with `docker compose up -d --force-recreate watch`.
 
+### django-aqueduct settings (opt-in)
+
+This app also ships two **opt-in, parallel** Django settings modules built on
+[django-aqueduct](https://github.com/mitodl/django-aqueduct), a typed
+(Pydantic-based) settings layer. They are selected via
+`DJANGO_SETTINGS_MODULE` and are not used by default anywhere:
+
+- `main.settings_aqueduct` -- validates/loads settings through the typed
+  `AqueductSettings` model in `main/aqueduct_settings.py`. It reads the same
+  environment variables as `main.settings` (the default settings module), so
+  no separate configuration is needed to try it out:
+
+  ```
+  DJANGO_SETTINGS_MODULE=main.settings_aqueduct python manage.py check
+  ```
+
+- `main.settings_aqueduct_dev` -- the same model, but via `DevAqueductSettings`,
+  which fills in any settings missing from the environment by fetching them
+  from Vault instead of requiring a local `.env` file. Env vars you do set
+  still take priority over Vault, so you can override individual values
+  locally. The Vault source is built entirely from `VAULT_*` environment
+  variables by `django_aqueduct.sources.dev.vault_source_from_env`:
+  `VAULT_ADDR` enables it (unset -> Vault is skipped), `VAULT_PATH` is the KV
+  secret path (required once `VAULT_ADDR` is set), `VAULT_MOUNT` is the mount
+  point (e.g. `secret-learn-ai`), `VAULT_KV_VERSION` is `1` or `2`, and
+  `VAULT_AUTH_METHOD` (`token`/`oidc`/`kubernetes`) selects auth with
+  `VAULT_TOKEN` or `VAULT_ROLE` as appropriate. See the `DevAqueductSettings`
+  docstring in `main/aqueduct_settings.py` for the full list; the real Vault
+  path/mount/role layout under the `secret-learn-ai` mount still needs to be
+  confirmed against the live instance.
+
+`main.settings` (the existing, hand-written settings module) is **untouched**
+by this work and remains the default settings module in every deployed
+environment (web, ASGI, Celery). Nothing about existing deployments changes
+unless `DJANGO_SETTINGS_MODULE` is explicitly pointed at one of the modules
+above.
+
 ## Committing & Formatting
 
 To ensure commits to GitHub are safe, first install [pre-commit](https://pre-commit.com/):

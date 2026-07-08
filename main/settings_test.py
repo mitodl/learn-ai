@@ -93,6 +93,9 @@ class TestSettings(TestCase):
                 "sslmode": "require"
             }
 
+    @pytest.mark.skip(
+        reason="skipped until the new Concourse release pipeline with CalVer is in effect"
+    )
     def test_bump_my_version_format(self):
         """Verify VERSION is in sync with pyproject.toml and matches a version format."""
         with open("pyproject.toml", "rb") as f:  # noqa: PTH123
@@ -129,3 +132,33 @@ class TestSettings(TestCase):
                 settings_vars["DEFAULT_DATABASE_CONFIG"]["DISABLE_SERVER_SIDE_CURSORS"]
                 is False
             )
+
+
+def test_aqueduct_shim_configures_settings():
+    """The opt-in main.settings_aqueduct shim builds a working settings scope.
+
+    Smoke-tests the model/shim wiring end to end: the typed model is
+    instantiated, exposed as AQUEDUCT_MODEL, and its values (including the
+    derivation validators) are injected into the module namespace. Kept as a
+    module-level function (not a DB-backed TestCase) so it exercises the
+    settings shim without needing a database.
+    """
+    with mock.patch.dict("os.environ", REQUIRED_SETTINGS, clear=True):
+        module = importlib.import_module("main.settings_aqueduct")
+        try:
+            importlib.reload(module)
+            scope = vars(module)
+
+            # The validated model is exposed for runtime/parity access.
+            assert type(scope["AQUEDUCT_MODEL"]).__name__ == "AqueductSettings"
+            # Required env vars flowed through their aliases.
+            assert scope["APP_BASE_URL"] == REQUIRED_SETTINGS["MITOL_APP_BASE_URL"]
+            # Derivation validators ran: DATABASES built from DATABASE_URL and
+            # JWT_AUTH built from the cookie name.
+            assert "default" in scope["DATABASES"]
+            assert (
+                scope["JWT_AUTH"]["JWT_AUTH_COOKIE"]
+                == REQUIRED_SETTINGS["MITOL_COOKIE_NAME"]
+            )
+        finally:
+            importlib.reload(module)
