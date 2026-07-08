@@ -85,12 +85,18 @@ This app also ships two **opt-in, parallel** Django settings modules built on
 
 - `main.settings_aqueduct_dev` -- the same model, but via `DevAqueductSettings`,
   which fills in any settings missing from the environment by fetching them
-  from Vault (via OIDC) instead of requiring a local `.env` file. Env vars you
-  do set still take priority over Vault, so you can override individual
-  values locally. This requires `VAULT_ADDR` to be set, and likely
-  `VAULT_AQUEDUCT_PATH`/`VAULT_AQUEDUCT_ROLE` -- see the comments in
-  `main/aqueduct_settings.py` for details, since the real Vault path layout
-  under the `secret-learn-ai` mount isn't encoded anywhere in this repo yet.
+  from Vault instead of requiring a local `.env` file. Env vars you do set
+  still take priority over Vault, so you can override individual values
+  locally. The Vault source is built entirely from `VAULT_*` environment
+  variables by `django_aqueduct.sources.dev.vault_source_from_env`:
+  `VAULT_ADDR` enables it (unset -> Vault is skipped), `VAULT_PATH` is the KV
+  secret path (required once `VAULT_ADDR` is set), `VAULT_MOUNT` is the mount
+  point (e.g. `secret-learn-ai`), `VAULT_KV_VERSION` is `1` or `2`, and
+  `VAULT_AUTH_METHOD` (`token`/`oidc`/`kubernetes`) selects auth with
+  `VAULT_TOKEN` or `VAULT_ROLE` as appropriate. See the `DevAqueductSettings`
+  docstring in `main/aqueduct_settings.py` for the full list; the real Vault
+  path/mount/role layout under the `secret-learn-ai` mount still needs to be
+  confirmed against the live instance.
 
 `main.settings` (the existing, hand-written settings module) is **untouched**
 by this work and remains the default settings module in every deployed

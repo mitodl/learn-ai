@@ -2737,7 +2737,7 @@ requires-dist = [
     { name = "dj-static", specifier = ">=0.0.6,<0.0.7" },
     { name = "django", specifier = ">=5.2.11,<6" },
     { name = "django-anymail", extras = ["mailgun"], specifier = ">=13.0,<14" },
-    { name = "django-aqueduct", extras = ["vault", "derivations"], specifier = ">=0.9.0" },
+    { name = "django-aqueduct", extras = ["vault", "derivations"], specifier = ">=0.9.0,<1" },
     { name = "django-cache-memoize", specifier = ">=0.2.0,<0.3" },
     { name = "django-filter", specifier = ">=25.1,<26" },
     { name = "django-guardian", specifier = ">=3.0.0,<4" },
