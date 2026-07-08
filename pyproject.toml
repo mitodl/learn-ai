@@ -68,7 +68,7 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
     "django-health-check>=3.0.0,<4",
-    "django-aqueduct[vault]>=0.6.0",
+    "django-aqueduct[vault,derivations]>=0.7.0",
 ]
 
 [dependency-groups]
@@ -106,6 +106,47 @@ dev = [
     "deepeval>=4.0.7",
 ]
 
+[tool.aqueduct]
+modules = ["main.settings"]
+output = "main/aqueduct_settings.py"
+class_name = "AqueductSettings"
+parity_model = "main.aqueduct_settings:AqueductSettings"
+parity_legacy = "main.settings"
+# Deliberate divergences, all documented in main/aqueduct_settings.py:
+# - primitives the model carries that main.settings only reads inline
+#   (DATABASE_URL, MITOL_DB_*, REDISCLOUD_URL, HOST_IP, RUN_DATA_MIGRATIONS)
+# - AWS_* falsy-default mismatch (legacy get_string(..., False) -> False,
+#   model uses a proper str | None)
+# - conditionally-defined legacy names the model always carries
+#   (STORAGES, IPWARE_PRIVATE_IP_PREFIX)
+# - LOGGING is imported from mitol-django-observability by the settings shims,
+#   not modeled
+# - runtime-augmented keys: the parity harness compares the model's raw value
+#   against `settings.X` after full Django init, so third-party apps and Django
+#   itself have already mutated the legacy value. DATABASES/DEFAULT_DATABASE_CONFIG
+#   gain ATOMIC_REQUESTS/AUTOCOMMIT/TEST/TIME_ZONE from Django's ConnectionHandler
+#   (and the model deliberately omits sslmode under the sqlite fallback via
+#   django_aqueduct.derivations.database_config); HEALTH_CHECK gains DISK_USAGE_MAX/
+#   MEMORY_MIN/WARNINGS_AS_ERRORS/DISABLE_THREADING from django-health-check's
+#   AppConfig.ready(). The model receives the identical augmentation at runtime.
+parity_ignore = [
+    "LOGGING",
+    "DATABASE_URL",
+    "MITOL_DB_CONN_MAX_AGE",
+    "MITOL_DB_DISABLE_SSL",
+    "REDISCLOUD_URL",
+    "HOST_IP",
+    "RUN_DATA_MIGRATIONS",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_STORAGE_BUCKET_NAME",
+    "STORAGES",
+    "IPWARE_PRIVATE_IP_PREFIX",
+    "DATABASES",
+    "DEFAULT_DATABASE_CONFIG",
+    "HEALTH_CHECK",
+]
+
 [tool.uv]
 package = false
 default-groups = "all"
@@ -121,6 +162,10 @@ build-backend = "uv_build"
 [tool.ruff]
 target-version = "py311"
 line-length = 88
+# main/aqueduct_settings.py carries machine-owned `aqueduct:generated` regions;
+# reformatting them would make `generate_aqueduct_settings --check` report drift.
+extend-exclude = ["main/aqueduct_settings.py"]
+force-exclude = true
 lint.select = [
     "A",  # flake8-builtins
     # "AIR",  # Airflow
@@ -231,6 +276,11 @@ first_value = "1"
 filename = "main/settings.py"
 search = 'VERSION = "{current_version}"'
 replace = 'VERSION = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "main/aqueduct_settings.py"
+search = "VERSION: str = Field(default='{current_version}')"
+replace = "VERSION: str = Field(default='{new_version}')"
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
