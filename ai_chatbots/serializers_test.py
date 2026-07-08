@@ -9,6 +9,7 @@ from ai_chatbots.serializers import (
     ChatMessageSerializer,
     ChatRatingSerializer,
     ChatRequestSerializer,
+    ContentFeedbackSerializer,
 )
 from main.factories import UserFactory
 
@@ -145,3 +146,53 @@ def test_human_message_no_rating_field():
 
     assert data["role"] == "human"
     assert "rating" not in data
+
+
+def test_content_feedback_serializer_valid():
+    """A valid content feedback payload passes validation."""
+    serializer = ContentFeedbackSerializer(
+        data={
+            "course_id": "course-v1:MITx+6.00+2T2026",
+            "block_usage_key": "block-v1:MITx+6.00+2T2026+type@video+block@abc",
+            "sentiment": "idea",
+            "comment": "Add a worked example",
+        }
+    )
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["sentiment"] == "idea"
+
+
+@pytest.mark.parametrize("bad_sentiment", ["love", "like", "", "POSITIVE"])
+def test_content_feedback_serializer_invalid_sentiment(bad_sentiment):
+    """An out-of-enum sentiment is rejected."""
+    serializer = ContentFeedbackSerializer(
+        data={
+            "course_id": "c",
+            "block_usage_key": "b",
+            "sentiment": bad_sentiment,
+        }
+    )
+    assert not serializer.is_valid()
+    assert "sentiment" in serializer.errors
+
+
+def test_content_feedback_serializer_truncates_comment():
+    """A comment longer than 1000 chars is truncated rather than rejected."""
+    serializer = ContentFeedbackSerializer(
+        data={
+            "course_id": "c",
+            "block_usage_key": "b",
+            "sentiment": "positive",
+            "comment": "x" * 1500,
+        }
+    )
+    assert serializer.is_valid(), serializer.errors
+    assert len(serializer.validated_data["comment"]) == 1000
+
+
+def test_content_feedback_serializer_requires_core_fields():
+    """course_id, block_usage_key and sentiment are required."""
+    serializer = ContentFeedbackSerializer(data={})
+    assert not serializer.is_valid()
+    for field in ("course_id", "block_usage_key", "sentiment"):
+        assert field in serializer.errors

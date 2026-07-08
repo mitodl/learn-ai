@@ -32,6 +32,11 @@ v0_urls = [
         views.ProblemSetList.as_view(),
         name="problem_set_list",
     ),
+    path(
+        r"content_feedback/",
+        views.ContentFeedbackView.as_view(),
+        name="content_feedback",
+    ),
 ]
 
 urlpatterns = [

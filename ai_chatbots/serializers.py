@@ -7,6 +7,7 @@ from rest_framework import serializers
 from ai_chatbots.models import (
     ChatResponseRating,
     ChatResponseScore,
+    ContentFeedback,
     DjangoCheckpoint,
     LLMModel,
     UserChatSession,
@@ -140,6 +141,35 @@ class ChatRatingSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatResponseRating
         fields = ["rating", "rating_reason"]
+
+
+class ContentFeedbackSerializer(serializers.ModelSerializer):
+    """Serializer for per-block content feedback submissions (append-only)."""
+
+    comment = TruncatedCharField(max_length=1000, required=False, allow_blank=True)
+
+    class Meta:
+        model = ContentFeedback
+        fields = [
+            "course_id",
+            "course_name",
+            "block_usage_key",
+            "block_type",
+            "block_display_name",
+            "unit_title",
+            "url",
+            "sentiment",
+            "comment",
+        ]
+        extra_kwargs = {
+            "course_id": {"required": True, "allow_blank": False},
+            "block_usage_key": {"required": True, "allow_blank": False},
+            "course_name": {"required": False, "allow_blank": True},
+            "block_type": {"required": False, "allow_blank": True},
+            "block_display_name": {"required": False, "allow_blank": True},
+            "unit_title": {"required": False, "allow_blank": True},
+            "url": {"required": False, "allow_blank": True},
+        }
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):

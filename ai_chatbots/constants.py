@@ -51,6 +51,14 @@ class ChatResponseScore(ExtendedEnum):
     no_rating = ""
 
 
+class ContentFeedbackSentiment(ExtendedEnum):
+    """Enum for per-block content feedback sentiment"""
+
+    positive = "positive"
+    negative = "negative"
+    idea = "idea"
+
+
 @dataclasses.dataclass
 class ChatbotCookie:
     name: str

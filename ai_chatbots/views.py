@@ -31,6 +31,7 @@ from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
     ChatRatingSerializer,
+    ContentFeedbackSerializer,
     LLMModelSerializer,
     SystemPromptSerializer,
     UserChatSessionSerializer,
@@ -424,3 +425,24 @@ class ApiProxyView(ApiView):
                 {"error": "Failed to proxy request"},
                 status=500,
             )
+
+
+@extend_schema(
+    request=ContentFeedbackSerializer,
+    responses={
+        200: ContentFeedbackSerializer,
+        400: OpenApiResponse(description="Invalid feedback submission"),
+    },
+)
+class ContentFeedbackView(ApiView):
+    """Accept per-block / per-unit content feedback submissions (append-only)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        """Persist a content feedback record for the authenticated user."""
+        serializer = ContentFeedbackSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

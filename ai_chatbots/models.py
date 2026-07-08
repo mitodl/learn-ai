@@ -2,7 +2,7 @@
 
 from django.db import models
 
-from ai_chatbots.constants import ChatResponseScore
+from ai_chatbots.constants import ChatResponseScore, ContentFeedbackSentiment
 from main import settings
 from main.models import TimestampedModel
 
@@ -140,3 +140,36 @@ class ChatResponseRating(models.Model):
 
     def __str__(self):
         return f"{self.checkpoint.checkpoint_id}-{self.rating}"
+
+
+class ContentFeedback(TimestampedModel):
+    """Append-only learner feedback on a piece of course content (block or unit)."""
+
+    SENTIMENT_CHOICES = [
+        (ContentFeedbackSentiment.positive.value, "Positive"),
+        (ContentFeedbackSentiment.negative.value, "Negative"),
+        (ContentFeedbackSentiment.idea.value, "Idea"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True
+    )
+    course_id = models.CharField(max_length=255)
+    course_name = models.CharField(max_length=255, blank=True)
+    block_usage_key = models.CharField(max_length=255, db_index=True)
+    block_type = models.CharField(max_length=64, blank=True)
+    block_display_name = models.CharField(max_length=255, blank=True)
+    unit_title = models.CharField(max_length=255, blank=True)
+    url = models.TextField(blank=True)
+    sentiment = models.CharField(max_length=10, choices=SENTIMENT_CHOICES)
+    comment = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["course_id", "created_on"], name="content_fb_course_time_idx"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.block_usage_key}-{self.sentiment}"

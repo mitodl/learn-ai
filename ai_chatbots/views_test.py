@@ -21,7 +21,7 @@ from ai_chatbots.factories import (
     LLMModelFactory,
     UserChatSessionFactory,
 )
-from ai_chatbots.models import ChatResponseRating, LLMModel
+from ai_chatbots.models import ChatResponseRating, ContentFeedback, LLMModel
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING, parse_prompt
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
@@ -437,3 +437,109 @@ def test_api_proxy_view_403(client):
     url = reverse("ai:learn_api_proxy", kwargs={"path": "any/path"})
     response = client.get(url)
     assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+CONTENT_FEEDBACK_URL = "/api/v0/content_feedback/"
+
+
+def test_content_feedback_success(client):
+    """An authenticated POST stores a content feedback record."""
+    user = UserFactory.create()
+    client.force_login(user)
+    payload = {
+        "course_id": "course-v1:MITx+6.00+2T2026",
+        "course_name": "Introduction to Computer Science",
+        "block_usage_key": "block-v1:MITx+6.00+2T2026+type@video+block@abc",
+        "block_type": "video",
+        "block_display_name": "Lecture 3: Recursion",
+        "unit_title": "Recursion and Dictionaries",
+        "url": "https://courses.example.edu/learn/course/x/y/z",
+        "sentiment": "positive",
+        "comment": "Very clear explanation",
+    }
+    response = client.post(
+        CONTENT_FEEDBACK_URL, data=payload, content_type="application/json"
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["sentiment"] == "positive"
+
+    feedback = ContentFeedback.objects.get()
+    assert feedback.user == user
+    assert feedback.block_usage_key == payload["block_usage_key"]
+    assert feedback.unit_title == "Recursion and Dictionaries"
+    assert feedback.comment == "Very clear explanation"
+
+
+def test_content_feedback_requires_authentication(client):
+    """An unauthenticated POST is rejected and stores nothing."""
+    response = client.post(
+        CONTENT_FEEDBACK_URL,
+        data={
+            "course_id": "course-v1:MITx+6.00+2T2026",
+            "block_usage_key": "block-v1:MITx+6.00+2T2026+type@video+block@abc",
+            "sentiment": "positive",
+        },
+        content_type="application/json",
+    )
+    assert response.status_code in (
+        status.HTTP_401_UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN,
+    )
+    assert ContentFeedback.objects.count() == 0
+
+
+def test_content_feedback_invalid_sentiment(client):
+    """An invalid sentiment returns 400 and stores nothing."""
+    client.force_login(UserFactory.create())
+    response = client.post(
+        CONTENT_FEEDBACK_URL,
+        data={
+            "course_id": "course-v1:MITx+6.00+2T2026",
+            "block_usage_key": "block-v1:MITx+6.00+2T2026+type@video+block@abc",
+            "sentiment": "love",
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "sentiment" in response.data
+    assert ContentFeedback.objects.count() == 0
+
+
+def test_content_feedback_missing_required_fields(client):
+    """Missing required fields return 400."""
+    client.force_login(UserFactory.create())
+    response = client.post(
+        CONTENT_FEEDBACK_URL,
+        data={"sentiment": "positive"},
+        content_type="application/json",
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "course_id" in response.data
+    assert "block_usage_key" in response.data
+
+
+def test_content_feedback_is_append_only(client):
+    """Two submissions for the same user + block create two distinct rows."""
+    user = UserFactory.create()
+    client.force_login(user)
+    payload = {
+        "course_id": "course-v1:MITx+6.00+2T2026",
+        "block_usage_key": "block-v1:MITx+6.00+2T2026+type@video+block@abc",
+        "sentiment": "positive",
+    }
+    first = client.post(
+        CONTENT_FEEDBACK_URL, data=payload, content_type="application/json"
+    )
+    second = client.post(
+        CONTENT_FEEDBACK_URL,
+        data={**payload, "sentiment": "negative"},
+        content_type="application/json",
+    )
+    assert first.status_code == status.HTTP_200_OK
+    assert second.status_code == status.HTTP_200_OK
+
+    rows = ContentFeedback.objects.filter(
+        user=user, block_usage_key=payload["block_usage_key"]
+    )
+    assert rows.count() == 2
+    assert set(rows.values_list("sentiment", flat=True)) == {"positive", "negative"}
