@@ -126,8 +126,9 @@ parity_legacy = "main.settings"
 #   (DATABASE_URL, MITOL_DB_*, REDISCLOUD_URL, HOST_IP, RUN_DATA_MIGRATIONS)
 # - AWS_* falsy-default mismatch (legacy get_string(..., False) -> False,
 #   model uses a proper str | None)
-# - conditionally-defined legacy names the model always carries
-#   (STORAGES, IPWARE_PRIVATE_IP_PREFIX)
+# - STORAGES: a conditionally-defined legacy name the model always carries
+#   (IPWARE_PRIVATE_IP_PREFIX no longer needs listing -- the model now omits it
+#   from model_dump when DEBUG is off, matching legacy leaving it undefined)
 # - LOGGING is imported from mitol-django-observability by the settings shims,
 #   not modeled
 # (Django/third-party runtime-injected dict keys -- e.g. DATABASES,
@@ -145,7 +146,6 @@ parity_ignore = [
     "AWS_SECRET_ACCESS_KEY",
     "AWS_STORAGE_BUCKET_NAME",
     "STORAGES",
-    "IPWARE_PRIVATE_IP_PREFIX",
 ]
 
 [tool.uv]

@@ -878,6 +878,17 @@ class AqueductSettings(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: float | int = Field(default=0)
     SENTRY_PROFILES_SAMPLE_RATE: float | int = Field(default=0)
 
+    # main.settings has two fields that intentionally read the *same* env var
+    # with different defaults (AI_MIT_TRANSCRIPT_SEARCH_LIMIT reads
+    # AI_MIT_CONTENT_SEARCH_LIMIT; EMBEDLY_EXTRACT_URL reads EMBEDLY_EMBED_URL).
+    # pydantic 2.13 already resolves both fields from a shared validation_alias
+    # correctly, but two fields sharing an alias reads as a collision. Drop the
+    # shared alias on the derived field (so it has no env of its own) and
+    # reproduce the "reads the other's env var" quirk explicitly in
+    # _configure_shared_env_aliases below — no ambiguity, same behaviour.
+    AI_MIT_TRANSCRIPT_SEARCH_LIMIT: int = Field(default=5)
+    EMBEDLY_EXTRACT_URL: str = Field(default="https://api.embed.ly/1/extract")
+
     # Primitives main/settings.py only reads inline (never assigns at module
     # level), so static discovery cannot see them; added by hand.
     DATABASE_URL: str = Field(
@@ -929,6 +940,21 @@ class AqueductSettings(BaseSettings):
     STORAGES: dict[str, Any] = Field(default_factory=dict)
 
     # ---- validators: derive complex settings from primitives ----
+
+    @model_validator(mode="after")
+    def _configure_shared_env_aliases(self) -> AqueductSettings:
+        """Reproduce main.settings' "read a sibling's env var" quirk.
+
+        AI_MIT_TRANSCRIPT_SEARCH_LIMIT and EMBEDLY_EXTRACT_URL have no env alias
+        of their own; legacy reads them from AI_MIT_CONTENT_SEARCH_LIMIT and
+        EMBEDLY_EMBED_URL respectively. When that source var is supplied, mirror
+        it here; otherwise each keeps its own distinct default.
+        """
+        if "AI_MIT_CONTENT_SEARCH_LIMIT" in self.model_fields_set:
+            self.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = self.AI_MIT_CONTENT_SEARCH_LIMIT
+        if "EMBEDLY_EMBED_URL" in self.model_fields_set:
+            self.EMBEDLY_EXTRACT_URL = self.EMBEDLY_EMBED_URL
+        return self
 
     @model_validator(mode="after")
     def _configure_database(self) -> AqueductSettings:
@@ -1093,7 +1119,10 @@ class AqueductSettings(BaseSettings):
                 *middleware,
             )
             # main.settings only defines this under DEBUG so that all IPs,
-            # including localhost, are routable in local testing.
+            # including localhost, are routable in local testing. When DEBUG is
+            # off it stays None and is dropped from the injected settings by
+            # model_dump below, so ipware falls back to its own default (matching
+            # legacy, which leaves the name undefined) rather than seeing None.
             self.IPWARE_PRIVATE_IP_PREFIX = ()
         self.MIDDLEWARE = middleware
         self.INSTALLED_APPS = installed_apps
@@ -1109,6 +1138,20 @@ class AqueductSettings(BaseSettings):
             {} if self.RUN_DATA_MIGRATIONS else {"data_fixtures": None}
         )
         return self
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Drop IPWARE_PRIVATE_IP_PREFIX from the output when it is None.
+
+        main.settings only defines IPWARE_PRIVATE_IP_PREFIX under DEBUG; when
+        DEBUG is off the name is left undefined, so ``getattr`` in django-ipware
+        returns ipware's own default. Injecting an explicit ``None`` instead
+        would override that default. Omitting the key here keeps the injected
+        settings (and the parity comparison) faithful to the legacy module.
+        """
+        data = super().model_dump(*args, **kwargs)
+        if data.get("IPWARE_PRIVATE_IP_PREFIX") is None:
+            data.pop("IPWARE_PRIVATE_IP_PREFIX", None)
+        return data
 
     @model_validator(mode="after")
     def _configure_storages(self) -> AqueductSettings:
