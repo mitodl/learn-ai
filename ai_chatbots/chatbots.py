@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
@@ -53,6 +54,15 @@ from ai_chatbots.utils import (
 )
 
 log = logging.getLogger(__name__)
+
+# Ids the mit-learn ETL can index as ContentFiles; anything else is a
+# guaranteed miss. Keep in sync with LOGGED_MISSING_CONTENT_REGEX in
+# mit-learn learning_resources/utils.py.
+INDEXED_CONTENT_FILE_REGEX = re.compile(
+    r"(?:block-v1:\S+\+type@(?:problem|video|html)\+block@\S+)"
+    r"|(?:asset-v1:\S+\+type@asset\+block@\S+\.(?:srt|vtt))",
+    re.IGNORECASE,
+)
 
 
 class BaseChatbot(ABC):
@@ -726,7 +736,14 @@ async def get_problem_from_edx_block(
     """
 
     api_url = settings.AI_MIT_CONTENTFILE_URL
-    params = {"edx_module_id": block_siblings}
+    queried_ids = [
+        sibling
+        for sibling in block_siblings
+        if sibling == edx_module_id or INDEXED_CONTENT_FILE_REGEX.fullmatch(sibling)
+    ]
+    if edx_module_id not in queried_ids:
+        queried_ids.append(edx_module_id)
+    params = {"edx_module_id": queried_ids}
 
     response = await async_request_with_token(api_url, params, timeout=10)
 

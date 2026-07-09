@@ -1043,6 +1043,50 @@ async def test_get_problem_from_edx_block(mock_httpx_async_client):
 
 
 @pytest.mark.asyncio
+async def test_get_problem_from_edx_block_filters_unindexed_siblings(
+    mock_httpx_async_client,
+):
+    """Only indexable sibling block types are sent to the contentfiles API."""
+    problem_id = "block-v1:MITxT+3.012Sx+3T2024+type@problem+block@2d2b2296f4e6"
+    html_id = "block-v1:MITxT+3.012Sx+3T2024+type@html+block@0e08c744f5ae"
+    discussion_id = "block-v1:MITxT+3.012Sx+3T2024+type@discussion+block@706eea98937a"
+
+    contentfile_api_results = {
+        "results": [
+            {"edx_module_id": problem_id, "content": "<problem>problem 1</problem>"},
+            {"edx_module_id": html_id, "content": "<p>hints</p>"},
+        ]
+    }
+    mock_get_client = mock_httpx_async_client(
+        contentfile_api_results, patch_path="ai_chatbots.utils.get_async_http_client"
+    )
+
+    problem, problem_set = await get_problem_from_edx_block(
+        problem_id, [problem_id, html_id, discussion_id]
+    )
+
+    sent_params = mock_get_client.return_value.get.call_args.kwargs["params"]
+    assert sent_params == {"edx_module_id": [problem_id, html_id]}
+    assert problem == "<problem>problem 1</problem>"
+    assert problem_set == "<problem>problem 1</problem><p>hints</p>"
+
+
+@pytest.mark.asyncio
+async def test_get_problem_from_edx_block_always_queries_problem_id(
+    mock_httpx_async_client,
+):
+    """The problem's own id is queried even if it does not match the regex."""
+    mock_get_client = mock_httpx_async_client(
+        {"results": []}, patch_path="ai_chatbots.utils.get_async_http_client"
+    )
+
+    await get_problem_from_edx_block("weird-id", ["weird-id", "other-weird-id"])
+
+    sent_params = mock_get_client.return_value.get.call_args.kwargs["params"]
+    assert sent_params == {"edx_module_id": ["weird-id"]}
+
+
+@pytest.mark.asyncio
 async def test_get_canvas_problem_set(mock_httpx_async_client):
     """Test that the get_canvas_problem_set function returns the expected problem set and solution"""
     run_readable_id = "a_run_readable_id"
