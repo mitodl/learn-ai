@@ -548,6 +548,19 @@ POSTHOG_PROJECT_ID = get_int(
     default=None,
 )
 
+# Opik settings (LLM tracing via Keycloak-fronted Opik, see main/opik_keycloak_auth.py)
+OPIK_URL_OVERRIDE = get_string(name="OPIK_URL_OVERRIDE", default=None)
+OPIK_WORKSPACE = get_string(name="OPIK_WORKSPACE", default="default")
+OPIK_PROJECT_NAME = get_string(name="OPIK_PROJECT_NAME", default="learn-ai")
+OPIK_KEYCLOAK_TOKEN_URL = get_string(name="OPIK_KEYCLOAK_TOKEN_URL", default=None)
+OPIK_KEYCLOAK_CLIENT_ID = get_string(
+    name="OPIK_KEYCLOAK_CLIENT_ID", default="ol-opik-client"
+)
+OPIK_KEYCLOAK_CLIENT_SECRET = get_string(
+    name="OPIK_KEYCLOAK_CLIENT_SECRET", default=None
+)
+OPIK_KEYCLOAK_SCOPE = get_string(name="OPIK_KEYCLOAK_SCOPE", default=None)
+
 
 # Keycloak API settings
 KEYCLOAK_ADMIN_CLIENT_ID = get_string("KEYCLOAK_ADMIN_CLIENT_ID", False)  # noqa: FBT003
