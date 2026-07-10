@@ -85,6 +85,7 @@ class KeycloakClientCredentialsAuth(httpx.Auth):
                 f"Bearer {self._get_token(force_refresh=True)}"
             )
             yield retry_request
+
     def _get_token(self, *, force_refresh: bool = False) -> str:
         with self._lock:
             now = time.monotonic()
