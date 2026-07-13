@@ -104,6 +104,22 @@ def test_auth_retries_once_on_401():
     assert api_calls == ["Bearer stale", "Bearer fresh"]
 
 
+def test_auth_retries_at_most_once_on_repeated_401():
+    """If the refreshed token is also rejected, give up after one retry."""
+    auth = make_auth([token_response("stale"), token_response("also-bad")])
+    api_calls = []
+
+    def api(request):
+        api_calls.append(request.headers["Authorization"])
+        return httpx.Response(401)
+
+    client = httpx.Client(auth=auth, transport=httpx.MockTransport(api))
+    response = client.get("https://opik.example.edu/api/foo")
+
+    assert response.status_code == 401
+    assert api_calls == ["Bearer stale", "Bearer also-bad"]
+
+
 def test_auth_scope_included_when_set():
     """The optional scope is sent to the token endpoint."""
 
