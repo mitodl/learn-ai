@@ -80,11 +80,10 @@ class KeycloakClientCredentialsAuth(httpx.Auth):
         if response.status_code == httpx.codes.UNAUTHORIZED:
             # Token may have been revoked or expired between fetch and use.
             response.close()
-            retry_request = request.copy()
-            retry_request.headers["Authorization"] = (
+            request.headers["Authorization"] = (
                 f"Bearer {self._get_token(force_refresh=True)}"
             )
-            yield retry_request
+            yield request
 
     def _get_token(self, *, force_refresh: bool = False) -> str:
         with self._lock:
