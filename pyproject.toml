@@ -1,6 +1,6 @@
 [project]
 name = "learn-ai"
-version = "0.33.0"
+version = "0.34.0"
 description = "AI applications for MIT Open Learning."
 authors = [{ name = "MIT ODL" }]
 requires-python = ">=3.14,<3.15"
@@ -68,6 +68,7 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
     "django-health-check>=3.0.0,<4",
+    "opik>=2.1.22",
 ]
 
 [dependency-groups]

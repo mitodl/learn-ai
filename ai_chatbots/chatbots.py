@@ -12,6 +12,7 @@ from uuid import uuid4
 import posthog
 from django.conf import settings
 from django.utils.module_loading import import_string
+from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.messages.ai import AIMessageChunk
@@ -32,7 +33,6 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
-from posthog.ai.langchain import CallbackHandler
 
 from ai_chatbots import tools
 from ai_chatbots.admin import LLMModel
@@ -51,6 +51,7 @@ from ai_chatbots.utils import (
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
 )
+from main.opik_keycloak_auth import is_opik_configured
 
 log = logging.getLogger(__name__)
 
@@ -238,14 +239,15 @@ class BaseChatbot(ABC):
 
     async def set_callbacks(
         self, properties: dict | None = None
-    ) -> list[CallbackHandler]:
+    ) -> list[BaseCallbackHandler]:
         """Set callbacks for the agent LLM"""
+        callbacks = []
+        extra_props = properties or {}
         if settings.POSTHOG_PROJECT_API_KEY and settings.POSTHOG_API_HOST:
             hog_client = posthog.Posthog(
                 settings.POSTHOG_PROJECT_API_KEY, host=settings.POSTHOG_API_HOST
             )
             model_parts = self.model.rsplit("/", 1)
-            extra_props = properties or {}
             callback_handler = TokenTrackingCallbackHandler(
                 model_name=self.model,
                 client=hog_client,
@@ -261,8 +263,24 @@ class BaseChatbot(ABC):
                     **extra_props,
                 },
             )
-            return [callback_handler]
-        return []
+            callbacks.append(callback_handler)
+        if is_opik_configured():
+            from opik.integrations.langchain import OpikTracer
+
+            callbacks.append(
+                OpikTracer(
+                    project_name=settings.OPIK_PROJECT_NAME,
+                    thread_id=self.thread_id,
+                    tags=[self.JOB_ID],
+                    metadata={
+                        "botName": self.JOB_ID,
+                        "model": self.model,
+                        "user": self.user_id,
+                        **extra_props,
+                    },
+                )
+            )
+        return callbacks
 
     async def send_chunks(self, state) -> AsyncGenerator[str, None]:
         """Yield the response in chunks"""

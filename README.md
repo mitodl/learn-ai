@@ -12,8 +12,9 @@ This application provides backend API endpoints to access various AI chatbots.
 4. [Sample Requests](#sample-requests)
 5. [Langsmith Integration](#langsmith-integration)
 6. [Posthog Integration](#posthog-integration)
-7. [Architecture Overview](#architecture-overview)
-8. [RAG Evaluation](#rag-evaluation)
+7. [Opik Integration](#opik-integration)
+8. [Architecture Overview](#architecture-overview)
+9. [RAG Evaluation](#rag-evaluation)
 
 ## Initial Setup
 
@@ -151,6 +152,32 @@ To enable this functionality, you need to perform the following steps:
     POSTHOG_API_HOST=https://app.posthog.com
    ```
 4. You now should be able to see AI traces and generations by clicking "Analytics->LLM analytics" in the left sidebar.
+
+## Opik Integration
+
+[Opik](https://github.com/comet-ml/opik) can be used for tracing agent runs against MIT OL's self-hosted
+Opik installations, which sit behind a Keycloak-fronted APISIX gateway. SDK requests authenticate with a
+Keycloak JWT obtained via the client-credentials grant; the token is fetched, cached, and refreshed
+automatically by `main/opik_keycloak_auth.py` (see the
+[OPIK_SDK_KEYCLOAK_AUTH doc](https://github.com/mitodl/ol-infrastructure/blob/main/src/ol_infrastructure/applications/opik/OPIK_SDK_KEYCLOAK_AUTH.md)
+for the gateway architecture).
+
+To enable it, add the following to your backend environment variables:
+
+```
+OPIK_URL_OVERRIDE=https://opik-ci.ol.mit.edu/api/
+OPIK_WORKSPACE=default
+OPIK_PROJECT_NAME=learn-ai
+OPIK_KEYCLOAK_TOKEN_URL=https://sso-ci.ol.mit.edu/realms/ol-platform-engineering/protocol/openid-connect/token
+OPIK_KEYCLOAK_CLIENT_ID=ol-opik-client
+OPIK_KEYCLOAK_CLIENT_SECRET=<from Vault>
+```
+
+The client secret comes from Vault (published by the keycloak substructure); in Kubernetes it is synced
+via the Vault Secrets Operator, and for local development you can obtain it from the RC learn-ai-app pod.
+Do **not** set `OPIK_API_KEY` — the auth hook owns the `Authorization` header, and a static key would
+conflict with it. When all of the variables above are present, chatbot runs emit LangGraph traces to Opik
+(grouped by conversation thread) alongside any Langsmith/PostHog integrations.
 
 ## Architecture Overview
 
