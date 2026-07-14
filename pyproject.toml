@@ -66,9 +66,10 @@ dependencies = [
     "granian>=2.5.4,<3",
     "open-learning-ai-tutor==0.2.16",
     "httpx>=0.28.1,<0.29",
-    "opentelemetry-instrumentation-httpx>=0.59b0,<0.60",
+    "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
     "opik>=2.1.22",
+    "openlit>=1.44.0",
 ]
 
 [dependency-groups]
