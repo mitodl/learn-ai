@@ -90,7 +90,8 @@ def test_auth_scope_included_when_set(mocked_responses):
 
     auth(otlp_request())
 
-    assert "scope=openlit" in mocked_responses.calls[0].request.body
+    body = mocked_responses.calls[0].request.body
+    assert "scope=openlit" in (body.decode() if isinstance(body, bytes) else body)
 
 
 def test_token_endpoint_error_propagates(mocked_responses):
