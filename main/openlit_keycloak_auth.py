@@ -282,8 +282,8 @@ def _install_authed_providers(auth: KeycloakClientCredentialsAuth) -> None:
     if isinstance(existing_tracer_provider, TracerProvider):
         # mitol-django-observability already owns the global provider; add
         # OpenLIT as an additional (openlit-scope-only) export destination.
+        resource = existing_tracer_provider.resource
         existing_tracer_provider.add_span_processor(span_processor)
-    else:
         tracer_provider = TracerProvider(resource=resource)
         tracer_provider.add_span_processor(span_processor)
         trace.set_tracer_provider(tracer_provider)
