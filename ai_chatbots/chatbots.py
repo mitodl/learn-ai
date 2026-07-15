@@ -122,6 +122,10 @@ class BaseChatbot(ABC):
         llm = ChatLiteLLM(
             model=f"{self.proxy_prefix}{self.model}",
             streaming=True,
+            # Explicitly request token usage on the final streaming chunk.
+            # (langchain_litellm already defaults this on; we set it so the
+            # behavior survives a library default change.)
+            stream_options={"include_usage": True},
             # Set reasoning effort if specified for the model
             model_kwargs={"reasoning_effort": model_spec.reasoning_effort}
             if model_spec and model_spec.reasoning_effort
@@ -265,10 +269,10 @@ class BaseChatbot(ABC):
             )
             callbacks.append(callback_handler)
         if is_opik_configured():
-            from opik.integrations.langchain import OpikTracer
+            from ai_chatbots.opik_tracing import CostTrackingOpikTracer
 
             callbacks.append(
-                OpikTracer(
+                CostTrackingOpikTracer(
                     project_name=settings.OPIK_PROJECT_NAME,
                     thread_id=self.thread_id,
                     tags=[self.JOB_ID],
