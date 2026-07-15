@@ -342,7 +342,21 @@ HOSTNAME = platform.node().split(".")[0]
 # LOGGING is provided by mitol-django-observability (structlog-based, JSON in prod).
 # Log levels are controlled via LOG_LEVEL (root) and DJANGO_LOG_LEVEL environment
 # variables, read directly by the plugin.
-from mitol.observability.settings.logging import LOGGING  # noqa: E402, F401
+from mitol.observability.settings.logging import LOGGING  # noqa: E402
+
+# openlit's LangChain callback handler attaches/detaches OTel context tokens
+# across asyncio task boundaries, so OpenTelemetry logs a harmless "Failed to
+# detach context" traceback on every async/streamed LLM call (spans are ended
+# explicitly by run_id and are unaffected). Drop just that record.
+LOGGING.setdefault("filters", {})["drop_failed_to_detach_context"] = {
+    "()": "main.logging_filters.DropFailedToDetachContext",
+}
+LOGGING["loggers"]["opentelemetry.context"] = {
+    "handlers": ["console"],
+    "level": "ERROR",
+    "filters": ["drop_failed_to_detach_context"],
+    "propagate": False,
+}
 
 STATUS_TOKEN = get_string("STATUS_TOKEN", "")
 
@@ -561,6 +575,24 @@ OPIK_KEYCLOAK_CLIENT_SECRET = get_string(
 )
 OPIK_KEYCLOAK_SCOPE = get_string(name="OPIK_KEYCLOAK_SCOPE", default=None)
 
+# OpenLIT settings (LLM observability via Keycloak-fronted OpenLIT,
+# see main/openlit_keycloak_auth.py)
+OPENLIT_OTLP_ENDPOINT = get_string(name="OPENLIT_OTLP_ENDPOINT", default=None)
+OPENLIT_KEYCLOAK_TOKEN_URL = get_string(name="OPENLIT_KEYCLOAK_TOKEN_URL", default=None)
+OPENLIT_KEYCLOAK_CLIENT_ID = get_string(
+    name="OPENLIT_KEYCLOAK_CLIENT_ID", default="ol-openlit-client"
+)
+OPENLIT_KEYCLOAK_CLIENT_SECRET = get_string(
+    name="OPENLIT_KEYCLOAK_CLIENT_SECRET", default=None
+)
+OPENLIT_KEYCLOAK_SCOPE = get_string(name="OPENLIT_KEYCLOAK_SCOPE", default=None)
+OPENLIT_CAPTURE_MESSAGE_CONTENT = get_bool(
+    name="OPENLIT_CAPTURE_MESSAGE_CONTENT", default=False
+)
+OPENLIT_DISABLED_INSTRUMENTORS = get_list_of_str(
+    name="OPENLIT_DISABLED_INSTRUMENTORS", default=[]
+)
+
 
 # Keycloak API settings
 KEYCLOAK_ADMIN_CLIENT_ID = get_string("KEYCLOAK_ADMIN_CLIENT_ID", False)  # noqa: FBT003
@@ -702,6 +734,14 @@ APISIX_USERDATA_MAP = {
 # env var) is set, or when DEBUG=True. The old OPENTELEMETRY_ENABLED flag is no
 # longer supported; set OPENTELEMETRY_ENDPOINT to enable tracing.
 OPENTELEMETRY_SERVICE_NAME = get_string("OPENTELEMETRY_SERVICE_NAME", "learn-ai")
+# openlit hard-depends on OTel instrumentation packages for every web framework
+# it supports; each registers an opentelemetry_instrumentor entry point that
+# mitol-django-observability's auto-instrument loop would otherwise try to load
+# and fail on (the frameworks themselves are not installed).
+MITOL_OBSERVABILITY_SKIP_INSTRUMENTORS = get_list_of_str(
+    "MITOL_OBSERVABILITY_SKIP_INSTRUMENTORS",
+    ["falcon", "fastapi", "flask", "pyramid", "tornado"],
+)
 OPENTELEMETRY_INSECURE = get_bool("OPENTELEMETRY_INSECURE", default=True)
 OPENTELEMETRY_ENDPOINT = get_string("OPENTELEMETRY_ENDPOINT", None)
 OPENTELEMETRY_BATCH_SIZE = get_int("OPENTELEMETRY_BATCH_SIZE", 512)
