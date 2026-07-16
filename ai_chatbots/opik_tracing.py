@@ -123,11 +123,18 @@ class CostTrackingOpikTracer(OpikTracer):
         if info["usage"] is None and info["model"] is None:
             return
         try:
-            span_data.update(
-                usage=info["usage"],
-                model=info["model"],
-                provider=info["provider"],
-            )
+            update_kwargs = {
+                k: v
+                for k, v in {
+                    "usage": info.get("usage"),
+                    "model": info.get("model"),
+                    "provider": info.get("provider"),
+                }.items()
+                if v is not None
+            }
+            if not update_kwargs:
+                return
+            span_data.update(**update_kwargs)
             if tracing_runtime_config.is_tracing_active():
                 self._opik_client.__internal_api__span__(**span_data.as_parameters)
         except Exception:
