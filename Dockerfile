@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 # hadolint global ignore=DL3008,DL3042
 
-FROM mitodl/ol-python-base:3.14 AS deps
+FROM mitodl/ol-python-base:3.14@sha256:06a81d0b3adaebcbbd8619948153869e6a34b9d378afd899fe072de9f8cf97be AS deps
 LABEL maintainer="ODL DevOps <mitx-devops@mit.edu>"
 
 # learn-ai has no app-specific apt extras; all required packages are in
