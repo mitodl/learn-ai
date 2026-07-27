@@ -22,7 +22,7 @@ from ai_chatbots.constants import (
     OfferedBy,
     SupportPortal,
 )
-from ai_chatbots.utils import async_request, async_request_with_token, enum_zip
+from ai_chatbots.utils import async_request, enum_zip
 from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
@@ -161,8 +161,11 @@ async def search_courses(
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
-        response = await async_request_with_token(
-            search_url, params, timeout=settings.REQUESTS_TIMEOUT
+        response = await async_request(
+            search_url,
+            params,
+            timeout=settings.REQUESTS_TIMEOUT,
+            include_learn_token=True,
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
@@ -271,8 +274,8 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         if await _is_hybrid_search_enabled():
             params["hybrid_search"] = True
 
-        response = await async_request_with_token(
-            url, params, timeout=settings.REQUESTS_TIMEOUT
+        response = await async_request(
+            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
@@ -373,8 +376,8 @@ async def get_video_transcript_chunk(
 
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = await async_request_with_token(
-            url, params, timeout=settings.REQUESTS_TIMEOUT
+        response = await async_request(
+            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
