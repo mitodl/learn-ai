@@ -383,7 +383,9 @@ async def test_syllabus_create_chatbot_with_related_courses(
     )
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.enable_related_courses is True
-    assert len(chatbot.create_tools()) == 2
+    assert "search_related_course_content_files" in [
+        tool.name for tool in chatbot.create_tools()
+    ]
 
 
 async def test_syllabus_create_chatbot_without_related_courses(
@@ -403,7 +405,9 @@ async def test_syllabus_create_chatbot_without_related_courses(
     )
     assert isinstance(chatbot, SyllabusBot)
     assert chatbot.enable_related_courses is False
-    assert len(chatbot.create_tools()) == 1
+    assert "search_related_course_content_files" not in [
+        tool.name for tool in chatbot.create_tools()
+    ]
 
 
 @pytest.mark.parametrize(
