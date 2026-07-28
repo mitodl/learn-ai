@@ -143,6 +143,13 @@ def content_chunk_results():
 
 
 @pytest.fixture
+def zendesk_article_results():
+    """Return Zendesk help center article search results for testing."""
+    with Path.open("./test_json/zendesk_articles.json") as f:
+        yield json.loads(f.read())
+
+
+@pytest.fixture
 def video_transcript_content_chunk_results():
     """Return content file vector chunks for testing video GPT."""
     with Path.open("./test_json/video_transcript_chunks.json") as f:
