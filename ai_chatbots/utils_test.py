@@ -64,8 +64,8 @@ def test_request_with_token(mocker, settings):
     assert response.json() == {"result": "success"}
 
 
-async def test_async_request_with_token(mocker, settings):
-    """Test asynchronous async_request_with_token function."""
+async def test_async_request_with_learn_token(mocker, settings):
+    """async_request should send the Learn token when asked to."""
     settings.LEARN_ACCESS_TOKEN = "test_token_456"  # noqa: S105
 
     mock_response = mocker.Mock()
@@ -78,8 +78,11 @@ async def test_async_request_with_token(mocker, settings):
 
     mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
 
-    response = await utils.async_request_with_token(
-        "https://api.example.com/async", {"param2": "value2"}, timeout=20
+    response = await utils.async_request(
+        "https://api.example.com/async",
+        {"param2": "value2"},
+        timeout=20,
+        include_learn_token=True,
     )
 
     mock_client.get.assert_called_once_with(
@@ -90,6 +93,24 @@ async def test_async_request_with_token(mocker, settings):
     )
     assert response.status_code == 200
     assert response.json() == {"result": "async_success"}
+
+
+async def test_async_request_omits_learn_token_by_default(
+    mock_async_get_client, httpx_response, settings
+):
+    """async_request should not leak the Learn token to third party APIs."""
+    settings.LEARN_ACCESS_TOKEN = "test_token_789"  # noqa: S105
+
+    mock_client = mock_async_get_client(return_value=httpx_response(200))
+
+    await utils.async_request("https://third.party.example.com/api", {"q": "x"})
+
+    mock_client.get.assert_called_once_with(
+        "https://third.party.example.com/api",
+        params={"q": "x"},
+        headers={},
+        timeout=30,
+    )
 
 
 @pytest.mark.usefixtures("_no_retry_sleep")
@@ -106,7 +127,7 @@ async def test_async_request_with_token(mocker, settings):
         "does-not-retry-on-404",
     ],
 )
-async def test_async_request_with_token_status_handling(
+async def test_async_request_status_handling(
     mock_async_get_client,
     httpx_response,
     statuses,
@@ -118,16 +139,14 @@ async def test_async_request_with_token_status_handling(
         side_effect=[httpx_response(status) for status in statuses]
     )
 
-    response = await utils.async_request_with_token(
-        "https://api.example.com/test", {"q": "x"}
-    )
+    response = await utils.async_request("https://api.example.com/test", {"q": "x"})
 
     assert response.status_code == expected_status
     assert mock_client.get.call_count == expected_calls
 
 
 @pytest.mark.usefixtures("_no_retry_sleep")
-async def test_async_request_with_token_retries_on_connect_error(
+async def test_async_request_retries_on_connect_error(
     mock_async_get_client, httpx_response
 ):
     """Retry transient transport errors."""
@@ -138,9 +157,7 @@ async def test_async_request_with_token_retries_on_connect_error(
         ]
     )
 
-    response = await utils.async_request_with_token(
-        "https://api.example.com/test", {"q": "x"}
-    )
+    response = await utils.async_request("https://api.example.com/test", {"q": "x"})
 
     assert response.status_code == 200
     assert mock_client.get.call_count == 2
