@@ -2772,7 +2772,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opik", specifier = ">=2.1.22" },
+    { name = "opik", specifier = "~=2.1.22" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },

@@ -57,7 +57,7 @@ def parse_provider_and_model(
 
 
 def _find_first(obj: Any, key: str) -> Any:
-    """Return the first non-empty value stored under ``key`` in a nested run."""
+    """Return the first non-empty value stored under ``key`` in a nested dict."""
     if isinstance(obj, dict):
         for k, v in obj.items():
             if k == key and v:
@@ -112,10 +112,13 @@ class CostTrackingOpikTracer(OpikTracer):
     """
 
     def _process_end_span(self, run: Run) -> None:
-        info = _extract_llm_span_info(run)
-        span_data = self._span_data_map.get(run.id)
+        # super() pops the span from _opik_context_storage but leaves it in
+        # _span_data_map, so grabbing it afterwards is safe -- and naturally
+        # respects super's skip/early-return paths (e.g. skipped LangGraph
+        # root runs), which never reach the map lookup with a live span.
         super()._process_end_span(run)
-        self._attach_cost_fields(span_data, info)
+        info = _extract_llm_span_info(run)
+        self._attach_cost_fields(self._span_data_map.get(run.id), info)
 
     def _attach_cost_fields(self, span_data: Any, info: dict[str, Any] | None) -> None:
         if not info or span_data is None:

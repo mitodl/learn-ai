@@ -78,7 +78,7 @@ def test_extract_llm_span_info_maps_usage_provider_model():
 
 
 def test_extract_llm_span_info_finds_deeply_nested_usage():
-    """usage_metadata is located wherever it sits in the run tree."""
+    """usage_metadata is located anywhere within the run's outputs."""
     run = _make_run()
     # Bury usage one level deeper to exercise the recursive search.
     run.outputs = {"deeper": {"generations": [run.outputs]}}
