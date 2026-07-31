@@ -44,7 +44,7 @@ dependencies = [
     "litellm>=1.53.5,<2",
     "markdown2>=2.5.2,<3",
     "mitol-django-observability>=2026.1.0",
-    "setuptools<82",
+    "setuptools<84",
     "named-enum>=1.4.0,<2",
     "opentelemetry-instrumentation-celery>=0.52b0",
     "opentelemetry-instrumentation-django>=0.52b0",
