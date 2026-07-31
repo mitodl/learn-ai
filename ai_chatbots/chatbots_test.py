@@ -610,6 +610,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         mock_llm.assert_any_call(
             model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
             streaming=True,
+            stream_options={"include_usage": True},
             model_kwargs={},
             **chatbot.proxy.get_api_kwargs(),
             **chatbot.proxy.get_additional_kwargs(chatbot),
@@ -621,6 +622,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         mock_llm.assert_any_call(
             model=model_name,
             streaming=True,
+            stream_options={"include_usage": True},
             model_kwargs={},
         )
 
