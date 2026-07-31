@@ -273,6 +273,10 @@ class BaseChatbot(ABC):
 
             callbacks.append(
                 CostTrackingOpikTracer(
+                    # Log the agent graph so Opik can render it in the trace
+                    # sidebar ("Show Agent Graph"). xray=True expands nested
+                    # subgraphs (e.g. ToolNode internals) for full visibility.
+                    graph=self.agent.get_graph(xray=True) if self.agent else None,
                     project_name=settings.OPIK_PROJECT_NAME,
                     thread_id=self.thread_id,
                     tags=[self.JOB_ID],
