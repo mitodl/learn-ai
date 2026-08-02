@@ -46,7 +46,7 @@ from ai_chatbots.api import (
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
-    async_request_with_token,
+    async_request,
     get_django_cache,
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
@@ -538,6 +538,7 @@ class SyllabusBot(TruncatingChatbot):
         bot_tools = [tools.search_content_files]
         if self.enable_related_courses:
             bot_tools.append(tools.search_related_course_content_files)
+        bot_tools.append(tools.search_support_articles)
         return bot_tools
 
     async def get_tool_metadata(self) -> str:
@@ -750,7 +751,9 @@ async def get_problem_from_edx_block(
     api_url = settings.AI_MIT_CONTENTFILE_URL
     params = {"edx_module_id": block_siblings}
 
-    response = await async_request_with_token(api_url, params, timeout=10)
+    response = await async_request(
+        api_url, params, timeout=10, include_learn_token=True
+    )
 
     response = response.json()
 
@@ -780,7 +783,7 @@ async def get_canvas_problem_set(
 
     api_url = f"{settings.PROBLEM_SET_URL}{run_readable_id}/{problem_set_title}/"
 
-    response = await async_request_with_token(api_url, {}, timeout=10)
+    response = await async_request(api_url, {}, timeout=10, include_learn_token=True)
     response = response.json()
 
     return {

@@ -1,11 +1,14 @@
 """Tools and schemas for AI agents"""
 
+import asyncio
+import itertools
 import json
 import logging
 from typing import Annotated
 
 import pydantic
 from asgiref.sync import sync_to_async
+from bs4 import BeautifulSoup
 from django.conf import settings
 from httpx import HTTPStatusError, RequestError
 from langchain_core.tools import tool
@@ -14,10 +17,12 @@ from pydantic import Field
 
 from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
+    ZENDESK_ARTICLE_SEARCH_PATH,
     LearningResourceType,
     OfferedBy,
+    SupportPortal,
 )
-from ai_chatbots.utils import async_request_with_token, enum_zip
+from ai_chatbots.utils import async_request, enum_zip
 from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
@@ -156,8 +161,11 @@ async def search_courses(
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
-        response = await async_request_with_token(
-            search_url, params, timeout=settings.REQUESTS_TIMEOUT
+        response = await async_request(
+            search_url,
+            params,
+            timeout=settings.REQUESTS_TIMEOUT,
+            include_learn_token=True,
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
@@ -266,8 +274,8 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         if await _is_hybrid_search_enabled():
             params["hybrid_search"] = True
 
-        response = await async_request_with_token(
-            url, params, timeout=settings.REQUESTS_TIMEOUT
+        response = await async_request(
+            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
@@ -368,8 +376,8 @@ async def get_video_transcript_chunk(
 
     log.debug("Searching MIT API with params: %s", params)
     try:
-        response = await async_request_with_token(
-            url, params, timeout=settings.REQUESTS_TIMEOUT
+        response = await async_request(
+            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
         )
         response.raise_for_status()
         raw_results = response.json().get("results", [])
@@ -389,3 +397,148 @@ async def get_video_transcript_chunk(
     except Exception:
         log.exception("Error querying MIT API for transcripts")
         return json.dumps({"error": "An error occurred while getting the transcript"})
+
+
+class SearchSupportArticlesToolSchema(pydantic.BaseModel):
+    """
+    Schema to search MIT support portals (help centers) for articles about
+    how MIT platforms work: enrollment, certificates, refunds, payments,
+    account and login issues, deadlines, technical problems, etc.
+
+    Here are some recommended tool parameters to apply for sample user prompts:
+
+    User: "How do I get a certificate for my MITx Online course?"
+    Search parameters: q="certificate", platform=["mitxonline"]
+
+    User: "Can I get credit for OpenCourseWare courses?"
+    Search parameters: q="credit", platform=["ocw"]
+
+    User: "I can't log in to MIT Learn"
+    Search parameters: q="login", platform=["mitlearn"]
+
+    User: "How do refunds work?"
+    Search parameters: q="refund"
+    """
+
+    q: str = Field(
+        description=(
+            """
+            Keywords describing the support question, i.e. "certificate", "refund",
+            "unenroll", "password reset".  Use a few keywords rather than a full
+            sentence, since this is a keyword search rather than a semantic one.
+            """
+        )
+    )
+
+    platform: list[enum_zip("platform", SupportPortal)] | None = Field(
+        default=None,
+        description="""
+            The support portal(s) to search, based on the MIT platform the user is
+            asking about:
+
+                mitxonline = MITx Online (also use for MITx courses/programs)
+                ocw = MIT OpenCourseWare
+                mitlearn = MIT Learn (learn.mit.edu), and other MIT Open Learning
+                    offerings such as xPRO, Professional Education,
+                    Sloan Executive Education and Bootcamps
+
+            Always set this parameter if the platform is clear from the user's
+            question or from the resources under discussion.  If the platform is
+            ambiguous, omit it and all portals will be searched.
+            """,
+    )
+
+
+def _simplify_zendesk_article(article: dict, platform: str) -> dict:
+    """
+    Convert a Zendesk help center article into a simplified dict,
+    with the html body converted to truncated plain text.
+    """
+    body_text = BeautifulSoup(article.get("body") or "", "html.parser").get_text(
+        " ", strip=True
+    )
+    return {
+        "id": f"{platform}-{article.get('id')}",
+        "title": article.get("title"),
+        "url": article.get("html_url"),
+        "platform": platform,
+        "updated_at": article.get("updated_at"),
+        "content": body_text[: settings.AI_ZENDESK_ARTICLE_MAX_CHARS],
+    }
+
+
+async def _search_zendesk_portal(platform: str, portal_url: str, params: dict) -> list:
+    """
+    Search one Zendesk help center and return simplified articles,
+    in Zendesk relevance order.  Returns an empty list on error, so that
+    one unavailable portal does not fail the entire search.
+    """
+    search_url = f"{portal_url.rstrip('/')}{ZENDESK_ARTICLE_SEARCH_PATH}"
+    try:
+        # These are public help centers, so no authentication is sent
+        response = await async_request(
+            search_url, params, timeout=settings.REQUESTS_TIMEOUT
+        )
+        response.raise_for_status()
+        return [
+            _simplify_zendesk_article(article, platform)
+            for article in response.json().get("results", [])
+        ]
+    except Exception:
+        log.exception(
+            "Error querying the %s support portal at %s", platform, search_url
+        )
+        return []
+
+
+@tool(args_schema=SearchSupportArticlesToolSchema)
+async def search_support_articles(q: str, **kwargs) -> str:
+    """
+    Search the MIT support portals (help centers) for up to date articles
+    answering questions about how MIT platforms work, such as enrollment,
+    certificates, refunds, payments, accounts, logins, deadlines and
+    technical issues.  Returns the articles as a JSON string.
+    """
+    platforms = [p.name for p in (kwargs.get("platform") or [])]
+    portals = {
+        platform: url
+        for platform, url in settings.AI_ZENDESK_PORTAL_URLS.items()
+        if url and (not platforms or platform in platforms)
+    }
+    if not portals:
+        log.warning("No support portals configured for platforms: %s", platforms)
+        return json.dumps({"results": []})
+
+    limit = settings.AI_ZENDESK_SEARCH_LIMIT
+    params = {"query": q, "per_page": limit}
+    portal_results = await asyncio.gather(
+        *[
+            _search_zendesk_portal(platform, url, params)
+            for platform, url in portals.items()
+        ]
+    )
+    # Interleave the portal results so that the most relevant articles from
+    # each portal are kept when the overall limit is applied.
+    articles = [
+        article
+        for article in itertools.chain.from_iterable(
+            itertools.zip_longest(*portal_results)
+        )
+        if article
+    ][:limit]
+    full_output = {
+        "results": articles,
+        "citation_sources": {
+            article["id"]: {
+                "citation_url": article["url"],
+                "citation_title": article["title"],
+            }
+            for article in articles
+            if article["url"]
+        },
+        "metadata": {
+            "search_urls": list(portals.values()),
+            "parameters": {**params, "platform": list(portals.keys())},
+        },
+    }
+    return json.dumps(full_output)

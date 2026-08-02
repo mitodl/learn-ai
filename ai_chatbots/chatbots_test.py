@@ -386,6 +386,23 @@ async def test_syllabus_bot_no_related_courses_instructions(mocker, mock_checkpo
     assert "search_related_course_content_files" not in chatbot.instructions
 
 
+@pytest.mark.parametrize("enable_related_courses", [True, False])
+@pytest.mark.asyncio
+async def test_syllabus_bot_tools(mocker, mock_checkpointer, enable_related_courses):
+    """SyllabusBot should have the support article search tool."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        enable_related_courses=enable_related_courses,
+    )
+    expected_tools = ["search_content_files", "search_support_articles"]
+    if enable_related_courses:
+        expected_tools.insert(1, "search_related_course_content_files")
+    assert [tool.name for tool in chatbot.create_tools()] == expected_tools
+
+
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
 @pytest.mark.asyncio
 async def test_syllabus_bot_get_completion_state(

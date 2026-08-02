@@ -683,6 +683,23 @@ AI_BUDGET_DURATION = get_string(name="AI_BUDGET_DURATION", default="60m")
 AI_MAX_BUDGET = get_float(name="AI_MAX_BUDGET", default=0.05)
 AI_ANON_LIMIT_MULTIPLIER = get_float(name="AI_ANON_LIMIT_MULTIPLIER", default=10.0)
 
+AI_ZENDESK_PORTAL_URLS = {
+    "mitxonline": get_string(
+        name="AI_ZENDESK_MITXONLINE_URL", default="https://mitxonline.zendesk.com"
+    ),
+    "ocw": get_string(name="AI_ZENDESK_OCW_URL", default="https://mitocw.zendesk.com"),
+    "mitlearn": get_string(
+        name="AI_ZENDESK_MITLEARN_URL", default="https://support.learn.mit.edu"
+    ),
+}
+# Max number of support articles returned by the support search tool per request
+AI_ZENDESK_SEARCH_LIMIT = get_int(name="AI_ZENDESK_SEARCH_LIMIT", default=5)
+# Max number of characters of article text passed back to the LLM per article
+AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
+    name="AI_ZENDESK_ARTICLE_MAX_CHARS", default=1500
+)
+
+
 # APISIX middleware settings
 APISIX_USERDATA_MAP = {
     "users_user": {

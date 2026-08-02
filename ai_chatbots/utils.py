@@ -176,9 +176,11 @@ def request_with_token(url, params, follow_redirects, timeout: int = 30):
     )
 
 
-async def async_request_with_token(url, params, timeout: int = 30):
+async def async_request(
+    url, params, timeout: int = 30, *, include_learn_token: bool = False
+):
     """
-        Make an async bearer-authenticated GET request.
+        Make an async GET request.
 
         Retries transient transport errors and retryable upstream statuses up to
         ``_RETRY_MAX_ATTEMPTS`` times. Returns the final response, or reraises the
@@ -188,12 +190,18 @@ async def async_request_with_token(url, params, timeout: int = 30):
         url: The URL to request
         params: Query parameters
         timeout: Request timeout in seconds
+        include_learn_token: Authenticate with the MIT Learn bearer token.
+            Only enable this for MIT Learn APIs, never for third party ones.
 
     Returns:
         httpx.Response object with compatible interface to requests.Response
     """
     client = get_async_http_client()
-    headers = {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
+    headers = (
+        {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
+        if include_learn_token
+        else {}
+    )
 
     for attempt in range(_RETRY_MAX_ATTEMPTS):
         try:

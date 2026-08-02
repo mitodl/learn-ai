@@ -1,0 +1,46 @@
+{
+  "count": 70,
+  "page": 1,
+  "per_page": 3,
+  "results": [
+    {
+      "id": 28158506908699,
+      "html_url": "https://mitxonline.zendesk.com/hc/en-us/articles/28158506908699-What-is-the-Certificate-Track-What-are-Course-and-Program-Certificates",
+      "title": "What is the Certificate Track? What are Course and Program Certificates?",
+      "name": "What is the Certificate Track? What are Course and Program Certificates?",
+      "locale": "en-us",
+      "created_at": "2024-08-09T23:14:48Z",
+      "updated_at": "2026-07-24T18:59:44Z",
+      "section_id": 13765526851867,
+      "body": "<h1 id=\"h_01J547BJG65B95WST3F4GX3VN9\">What Are The Two Course Enrollment Tracks?</h1>\n<p>The MITx Online Platform features two Enrollment Tracks, which offer learners slightly different experiences. All MITx Online courses, with very few exceptions\u2020, offer an Audit (free) Enrollment Track. Many, but not all, MITx Online courses also offer a Verified/Certificate (Paid) Enrollment Track.</p>\n<ul>\n<l",
+      "snippet": "on the <em>Certificate</em> Track are eligible to earn a Course <em>Certificate</em>. MITx Online does not offer any free <em>Certificates</em> For",
+      "result_type": "article"
+    },
+    {
+      "id": 13866503633819,
+      "html_url": "https://mitxonline.zendesk.com/hc/en-us/articles/13866503633819-What-happens-if-I-pay-for-a-certificate-and-then-fail-the-course-Will-a-certificate-be-issued-to-me",
+      "title": "What happens if I pay for a certificate and then fail the course? Will a certificate be issued to me?",
+      "name": "What happens if I pay for a certificate and then fail the course? Will a certificate be issued to me?",
+      "locale": "en-us",
+      "created_at": "2023-03-21T20:31:32Z",
+      "updated_at": "2024-05-02T02:59:32Z",
+      "section_id": 13765526851867,
+      "body": "<p>When you upgrade to the certificate track, it indicates your commitment to completing the course requirements and gives you the opportunity to earn a certificate upon successful completion. However, it's important to note that upgrading to the certificate track does not guarantee a passing grade in the course or the issuance of a certificate.</p>\n<p>\u00a0</p>\n<p>MITx Online courses require learners",
+      "snippet": "earn a <em>certificate</em> upon successful completion. However, it's important to note that upgrading to the <em>certificate</em> track does",
+      "result_type": "article"
+    },
+    {
+      "id": 16928447060635,
+      "html_url": "https://mitxonline.zendesk.com/hc/en-us/articles/16928447060635-Can-I-get-a-paper-copy-of-my-certificate",
+      "title": "Can I get a paper copy of my certificate?",
+      "name": "Can I get a paper copy of my certificate?",
+      "locale": "en-us",
+      "created_at": "2023-07-06T18:26:55Z",
+      "updated_at": "2026-07-22T22:59:49Z",
+      "section_id": 13765526851867,
+      "body": "<p>MITx Online Course and Program Certificates are delivered exclusively in electronic format as soft copies. MITx Online does not provide physical certificates in hard copy form.</p>\n<p>However, learners can download and then print their Course and Program Certificates, via the Print-to-PDF function of most modern web browsers and operating systems, to generate their own hard copy.</p>\n<ul>\n<li><",
+      "snippet": "MITx Online Course and Program <em>Certificates</em> are delivered exclusively in electronic format as soft copies. MITx Online does",
+      "result_type": "article"
+    }
+  ]
+}
