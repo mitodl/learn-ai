@@ -1,6 +1,41 @@
 Release Notes
 =============
 
+Version 0.35.0
+--------------
+
+- Remove S3 static webapp deploy workflows
+- Update dependency next to v15.5.21 [SECURITY] (#7)
+- Update dependency axios to v1.18.0 [SECURITY] (#8)
+- Update dependency Django to v5.2.16 [SECURITY] (#6)
+- Update dependency setuptools to v83 [SECURITY] (#9)
+- Use psycopg's C implementation for the Postgres driver
+- fix: remove OpenLIT instrumentation in favor of Opik
+- fix: address code review feedback on CostTrackingOpikTracer
+- Potential fix for pull request finding
+- feat: track LLM cost in Opik traces via CostTrackingOpikTracer
+- adding zendesk fixtures
+- add zendesk article fixture
+- revise tests for utils.async_request
+- add tests for support tool
+- revise test
+- adding test for existence of support search tool
+- adding zendesk settings
+- add prompt
+- add support article tool
+- use new util flag
+- add constants
+- modify async request with 'include token' param
+- adding initial tools
+- fix: install OpenLIT tracer provider in the else branch
+- fix: Disable failing test until new release workflow takes over (#559)
+- feat: OpenLIT LLM observability with Keycloak-authed OTLP export (#560)
+- Update dependency formik to v2.4.9 (#523)
+- [pre-commit.ci] pre-commit autoupdate (#541)
+- Instrument Opik tracing with Keycloak client-credentials auth (#558)
+- chore(auth): remove dead ApiGatewayAuthentication, fix search-limit env var typo (#555)
+- fix: TLS termination behavior. (#551)
+
 Version 0.34.0 (Released June 30, 2026)
 --------------
 
