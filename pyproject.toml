@@ -110,6 +110,7 @@ dev = [
 package = false
 default-groups = "all"
 environments = ["sys_platform != 'win32'"]
+exclude-newer = "7d"
 
 [tool.uv.build-backend]
 module-root = ""
