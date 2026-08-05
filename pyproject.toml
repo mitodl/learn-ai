@@ -110,6 +110,13 @@ dev = [
 package = false
 default-groups = "all"
 environments = ["sys_platform != 'win32'"]
+exclude-newer = "7d"
+required-version = ">=0.9.17"
+
+[tool.uv.exclude-newer-package]
+mitol-django-common = "0d"
+mitol-django-observability = "0d"
+mitol-drf-lint = "0d"
 
 [tool.uv.build-backend]
 module-root = ""
