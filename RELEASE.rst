@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.35.2
+Version 0.35.2 (Released August 05, 2026)
 --------------
 
 - Remove S3 static webapp deploy workflows
