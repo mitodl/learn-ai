@@ -343,6 +343,27 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
+async def test_set_callbacks_logs_agent_graph_to_opik(mocker, mock_checkpointer):
+    """set_callbacks should pass the agent graph to the Opik tracer for logging."""
+    # Disable PostHog so the Opik tracer is the only callback added
+    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
+    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
+    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
+    graph = mocker.Mock()
+    mocker.patch.object(chatbot.agent, "get_graph", return_value=graph)
+
+    callbacks = await chatbot.set_callbacks()
+
+    chatbot.agent.get_graph.assert_called_once_with(xray=True)
+    mock_tracer.assert_called_once()
+    assert mock_tracer.call_args.kwargs["graph"] is graph
+    assert mock_tracer.return_value in callbacks
+
+
+@pytest.mark.asyncio
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
