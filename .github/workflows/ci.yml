@@ -28,7 +28,7 @@ jobs:
           - 5433:5433
 
       redis:
-        image: redis:7.4.6
+        image: redis:7.4.9@sha256:a8f08480e1f88f2647fed492d1178c06abb0d0c1fbf02c682a61e2f483fb3954
         ports:
           - 6379:6379
 
