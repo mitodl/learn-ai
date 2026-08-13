@@ -1931,12 +1931,12 @@ __metadata:
   linkType: hard
 
 "@mitodl/mit-learn-api-axios@npm:^2025.6.3":
-  version: 2025.10.28
-  resolution: "@mitodl/mit-learn-api-axios@npm:2025.10.28"
+  version: 2025.12.16
+  resolution: "@mitodl/mit-learn-api-axios@npm:2025.12.16"
   dependencies:
     "@types/node": "npm:^22.0.0"
     axios: "npm:^1.6.5"
-  checksum: 10c0/54f24238f64ae763bbe0bcf47e3f7c29a9e7b5984297862f2b3560c04fa278c5a8301cb82c919510e40864b279278f7b85023a8dc7f99813d9abe8e84a02b364
+  checksum: 10c0/b68c945867ea0a5b17b1cac46ef9f5743d288582261ad840fae2196326aac24bf3ef2fccc0f225effad0a329469de6be62e00cee76558fd7e4dd9ed6dcee35e1
   languageName: node
   linkType: hard
 
