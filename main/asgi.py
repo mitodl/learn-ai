@@ -9,6 +9,7 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.urls import Resolver404, re_path, resolve
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+from opentelemetry.util.http import sanitize_method
 from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 
 from main.middleware.configs import HTTP_MIDDLEWARE
@@ -29,8 +30,17 @@ def _otel_span_details(scope: dict) -> tuple[str, dict]:
     Channels' URLRouter never populates scope["route"], which the OTel default
     relies on, and raw paths carry UUID thread ids plus the /learn-api/<path>
     proxy tail -- naming spans by path would blow up span-metric cardinality.
+
+    The method is sanitized for the same reason the path is. ASGI accepts
+    extension methods, so an unsanitized scope["method"] lets a caller mint a
+    new span name per request just by varying the verb -- reintroducing through
+    the method exactly the cardinality blowup this function exists to prevent.
+    sanitize_method collapses anything off the RFC list to "_OTHER", which the
+    ASGI and Django instrumentations then report as "HTTP".
     """
-    method = (scope.get("method") or "HTTP").strip()
+    method = sanitize_method((scope.get("method") or "").strip())
+    if method == "_OTHER":
+        method = "HTTP"
     path = (scope.get("path") or "/").lstrip("/")
     try:
         return f"{method} {resolve(f'/{path}').route}", {}

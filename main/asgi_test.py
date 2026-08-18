@@ -36,3 +36,20 @@ def test_span_names_are_low_cardinality(path, expected):
     name, attributes = _otel_span_details({"method": "GET", "path": path})
     assert name == expected
     assert attributes == {}
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [
+        ("GET", "GET health/"),
+        ("get", "GET health/"),
+        # ASGI accepts extension methods; an attacker-chosen verb must not
+        # become its own span name.
+        ("FOOBARBAZ", "HTTP health/"),
+        ("", "HTTP health/"),
+    ],
+)
+def test_method_is_sanitized(method, expected):
+    """Cardinality can leak in through the method as easily as the path."""
+    name, _ = _otel_span_details({"method": method, "path": "/health/"})
+    assert name == expected
