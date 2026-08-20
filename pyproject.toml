@@ -46,6 +46,7 @@ dependencies = [
     "mitol-django-observability>=2026.8.19",
     "setuptools<84",
     "named-enum>=1.4.0,<2",
+    "opentelemetry-instrumentation-asgi>=0.52b0",
     "opentelemetry-instrumentation-celery>=0.52b0",
     "opentelemetry-instrumentation-django>=0.52b0",
     "opentelemetry-instrumentation-psycopg>=0.52b0",
