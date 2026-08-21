@@ -43,19 +43,7 @@ class OfferedBy(ExtendedEnum):
     see = "MIT Sloan Executive Education"
 
 
-class SupportPortal(ExtendedEnum):
-    """
-    Enum for the MIT support portals (Zendesk help centers) that
-    the chatbots can search. Names must match the keys of the
-    settings.AI_ZENDESK_PORTAL_URLS dict.
-    """
-
-    mitxonline = "MITx Online"
-    ocw = "MIT OpenCourseWare"
-    mitlearn = "MIT Learn"
-
-
-# Zendesk help center article search endpoint, appended to a portal base url
+# Zendesk help center article search endpoint, appended to the help center base url
 ZENDESK_ARTICLE_SEARCH_PATH = "/api/v2/help_center/articles/search.json"
 
 
