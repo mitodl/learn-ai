@@ -1,7 +1,5 @@
 """Tools and schemas for AI agents"""
 
-import asyncio
-import itertools
 import json
 import logging
 from typing import Annotated
@@ -18,14 +16,17 @@ from pydantic import Field
 from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
     ZENDESK_ARTICLE_SEARCH_PATH,
+    ZENDESK_PLATFORM_CATEGORY_IDS,
     LearningResourceType,
     OfferedBy,
-    SupportPortal,
 )
-from ai_chatbots.utils import async_request, enum_zip
+from ai_chatbots.utils import async_request, enum_zip, get_django_cache
 from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
+
+# Cache key prefix for the platform a course is offered on
+COURSE_PLATFORM_CACHE_PREFIX = "course_platform_"
 
 
 async def _is_hybrid_search_enabled() -> bool:
@@ -401,20 +402,20 @@ async def get_video_transcript_chunk(
 
 class SearchSupportArticlesToolSchema(pydantic.BaseModel):
     """
-    Schema to search MIT support portals (help centers) for articles about
-    how MIT platforms work: enrollment, certificates, refunds, payments,
-    account and login issues, deadlines, technical problems, etc.
+    Schema to search the MIT Learn support center (Zendesk help center) for
+    articles about how MIT platforms work: enrollment, certificates, refunds,
+    payments, account and login issues, deadlines, technical problems, etc.
 
     Here are some recommended tool parameters to apply for sample user prompts:
 
-    User: "How do I get a certificate for my MITx Online course?"
-    Search parameters: q="certificate", platform=["mitxonline"]
+    User: "How do I get a certificate for my course?"
+    Search parameters: q="certificate"
 
     User: "Can I get credit for OpenCourseWare courses?"
-    Search parameters: q="credit", platform=["ocw"]
+    Search parameters: q="credit"
 
     User: "I can't log in to MIT Learn"
-    Search parameters: q="login", platform=["mitlearn"]
+    Search parameters: q="login"
 
     User: "How do refunds work?"
     Search parameters: q="refund"
@@ -430,26 +431,16 @@ class SearchSupportArticlesToolSchema(pydantic.BaseModel):
         )
     )
 
-    platform: list[enum_zip("platform", SupportPortal)] | None = Field(
-        default=None,
-        description="""
-            The support portal(s) to search, based on the MIT platform the user is
-            asking about:
-
-                mitxonline = MITx Online (also use for MITx courses/programs)
-                ocw = MIT OpenCourseWare
-                mitlearn = MIT Learn (learn.mit.edu), and other MIT Open Learning
-                    offerings such as xPRO, Professional Education,
-                    Sloan Executive Education and Bootcamps
-
-            Always set this parameter if the platform is clear from the user's
-            question or from the resources under discussion.  If the platform is
-            ambiguous, omit it and all portals will be searched.
-            """,
+    state: Annotated[dict, InjectedState] = Field(
+        description=(
+            "The agent state, which may include the course_id of the resource "
+            "under discussion.  Its platform determines which part of the "
+            "support center is searched."
+        )
     )
 
 
-def _simplify_zendesk_article(article: dict, platform: str) -> dict:
+def _simplify_zendesk_article(article: dict) -> dict:
     """
     Convert a Zendesk help center article into a simplified dict,
     with the html body converted to truncated plain text.
@@ -458,74 +449,95 @@ def _simplify_zendesk_article(article: dict, platform: str) -> dict:
         " ", strip=True
     )
     return {
-        "id": f"{platform}-{article.get('id')}",
+        "id": str(article.get("id")),
         "title": article.get("title"),
         "url": article.get("html_url"),
-        "platform": platform,
         "updated_at": article.get("updated_at"),
         "content": body_text[: settings.AI_ZENDESK_ARTICLE_MAX_CHARS],
     }
 
 
-async def _search_zendesk_portal(platform: str, portal_url: str, params: dict) -> list:
+async def _get_course_platform(readable_id: str) -> str | None:
     """
-    Search one Zendesk help center and return simplified articles,
-    in Zendesk relevance order.  Returns an empty list on error, so that
-    one unavailable portal does not fail the entire search.
+    Return the MIT Learn platform code of a course, or None if it cannot be
+    determined.  Cached, since a course does not change platforms.
     """
-    search_url = f"{portal_url.rstrip('/')}{ZENDESK_ARTICLE_SEARCH_PATH}"
+    cache = get_django_cache()
+    cache_key = f"{COURSE_PLATFORM_CACHE_PREFIX}{readable_id}"
+    cached_platform = await cache.aget(cache_key)
+    if cached_platform is not None:
+        # Failed and empty lookups are cached as an empty string
+        return cached_platform or None
     try:
-        # These are public help centers, so no authentication is sent
         response = await async_request(
-            search_url, params, timeout=settings.REQUESTS_TIMEOUT
+            settings.AI_MIT_LEARNING_RESOURCES_URL,
+            {"readable_id": readable_id, "limit": 1},
+            timeout=settings.REQUESTS_TIMEOUT,
+            # Courses are public, so the lookup still works without a token.
+            # httpx rejects an empty bearer header outright, so only send one
+            # when a token is actually configured.
+            include_learn_token=bool(settings.LEARN_ACCESS_TOKEN),
         )
         response.raise_for_status()
-        return [
-            _simplify_zendesk_article(article, platform)
-            for article in response.json().get("results", [])
-        ]
+        results = response.json().get("results", [])
+        platform = (results[0].get("platform") or {}).get("code") if results else None
     except Exception:
-        log.exception(
-            "Error querying the %s support portal at %s", platform, search_url
-        )
-        return []
+        log.exception("Error looking up the platform of course %s", readable_id)
+        return None
+    await cache.aset(
+        cache_key, platform or "", settings.AI_COURSE_PLATFORM_CACHE_DURATION
+    )
+    return platform
 
 
 @tool(args_schema=SearchSupportArticlesToolSchema)
-async def search_support_articles(q: str, **kwargs) -> str:
+async def search_support_articles(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
-    Search the MIT support portals (help centers) for up to date articles
+    Search the MIT Learn support center (help center) for up to date articles
     answering questions about how MIT platforms work, such as enrollment,
     certificates, refunds, payments, accounts, logins, deadlines and
     technical issues.  Returns the articles as a JSON string.
     """
-    platforms = [p.name for p in (kwargs.get("platform") or [])]
-    portals = {
-        platform: url
-        for platform, url in settings.AI_ZENDESK_PORTAL_URLS.items()
-        if url and (not platforms or platform in platforms)
-    }
-    if not portals:
-        log.warning("No support portals configured for platforms: %s", platforms)
+    portal_url = settings.AI_ZENDESK_URL
+    if not portal_url:
+        log.warning("No support portal url is configured")
         return json.dumps({"results": []})
 
-    limit = settings.AI_ZENDESK_SEARCH_LIMIT
-    params = {"query": q, "per_page": limit}
-    portal_results = await asyncio.gather(
-        *[
-            _search_zendesk_portal(platform, url, params)
-            for platform, url in portals.items()
-        ]
-    )
-    # Interleave the portal results so that the most relevant articles from
-    # each portal are kept when the overall limit is applied.
-    articles = [
-        article
-        for article in itertools.chain.from_iterable(
-            itertools.zip_longest(*portal_results)
+    search_url = f"{portal_url.rstrip('/')}{ZENDESK_ARTICLE_SEARCH_PATH}"
+    params = {"query": q, "per_page": settings.AI_ZENDESK_SEARCH_LIMIT}
+
+    # Limit the search to the part of the support center covering the platform
+    # of the course under discussion.
+    course_ids = (state or {}).get("course_id") or [None]
+    course_id = course_ids[-1]
+    platform = await _get_course_platform(course_id) if course_id else None
+    platform_category = ZENDESK_PLATFORM_CATEGORY_IDS.get(platform)
+    if platform_category:
+        params["category"] = platform_category
+    else:
+        # Without a category the whole support center is searched, which risks
+        # answering with an article about some other MIT platform.
+        log.info(
+            "Searching the whole support center; no category is mapped to the "
+            "platform (%s) of course %s",
+            platform,
+            course_id,
         )
-        if article
-    ][:limit]
+
+    try:
+        # This is a public help center, so no authentication is sent
+        response = await async_request(
+            search_url, params, timeout=settings.REQUESTS_TIMEOUT
+        )
+        response.raise_for_status()
+        articles = [
+            _simplify_zendesk_article(article)
+            for article in response.json().get("results", [])
+        ]
+    except Exception:
+        log.exception("Error querying the support portal at %s", search_url)
+        return json.dumps({"results": []})
+
     full_output = {
         "results": articles,
         "citation_sources": {
@@ -537,8 +549,9 @@ async def search_support_articles(q: str, **kwargs) -> str:
             if article["url"]
         },
         "metadata": {
-            "search_urls": list(portals.values()),
-            "parameters": {**params, "platform": list(portals.keys())},
+            "search_url": search_url,
+            "parameters": params,
+            "platform": platform,
         },
     }
     return json.dumps(full_output)
