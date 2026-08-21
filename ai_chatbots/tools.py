@@ -16,13 +16,17 @@ from pydantic import Field
 from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
     ZENDESK_ARTICLE_SEARCH_PATH,
+    ZENDESK_PLATFORM_CATEGORY_IDS,
     LearningResourceType,
     OfferedBy,
 )
-from ai_chatbots.utils import async_request, enum_zip
+from ai_chatbots.utils import async_request, enum_zip, get_django_cache
 from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
+
+# Cache key prefix for the platform a course is offered on
+COURSE_PLATFORM_CACHE_PREFIX = "course_platform_"
 
 
 async def _is_hybrid_search_enabled() -> bool:
@@ -427,6 +431,14 @@ class SearchSupportArticlesToolSchema(pydantic.BaseModel):
         )
     )
 
+    state: Annotated[dict, InjectedState] = Field(
+        description=(
+            "The agent state, which may include the course_id of the resource "
+            "under discussion.  Its platform determines which part of the "
+            "support center is searched."
+        )
+    )
+
 
 def _simplify_zendesk_article(article: dict) -> dict:
     """
@@ -445,8 +457,41 @@ def _simplify_zendesk_article(article: dict) -> dict:
     }
 
 
+async def _get_course_platform(readable_id: str) -> str | None:
+    """
+    Return the MIT Learn platform code of a course, or None if it cannot be
+    determined.  Cached, since a course does not change platforms.
+    """
+    cache = get_django_cache()
+    cache_key = f"{COURSE_PLATFORM_CACHE_PREFIX}{readable_id}"
+    cached_platform = await cache.aget(cache_key)
+    if cached_platform is not None:
+        # Failed and empty lookups are cached as an empty string
+        return cached_platform or None
+    try:
+        response = await async_request(
+            settings.AI_MIT_LEARNING_RESOURCES_URL,
+            {"readable_id": readable_id, "limit": 1},
+            timeout=settings.REQUESTS_TIMEOUT,
+            # Courses are public, so the lookup still works without a token.
+            # httpx rejects an empty bearer header outright, so only send one
+            # when a token is actually configured.
+            include_learn_token=bool(settings.LEARN_ACCESS_TOKEN),
+        )
+        response.raise_for_status()
+        results = response.json().get("results", [])
+        platform = (results[0].get("platform") or {}).get("code") if results else None
+    except Exception:
+        log.exception("Error looking up the platform of course %s", readable_id)
+        return None
+    await cache.aset(
+        cache_key, platform or "", settings.AI_COURSE_PLATFORM_CACHE_DURATION
+    )
+    return platform
+
+
 @tool(args_schema=SearchSupportArticlesToolSchema)
-async def search_support_articles(q: str) -> str:
+async def search_support_articles(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Search the MIT Learn support center (help center) for up to date articles
     answering questions about how MIT platforms work, such as enrollment,
@@ -460,6 +505,25 @@ async def search_support_articles(q: str) -> str:
 
     search_url = f"{portal_url.rstrip('/')}{ZENDESK_ARTICLE_SEARCH_PATH}"
     params = {"query": q, "per_page": settings.AI_ZENDESK_SEARCH_LIMIT}
+
+    # Limit the search to the part of the support center covering the platform
+    # of the course under discussion.
+    course_ids = (state or {}).get("course_id") or [None]
+    course_id = course_ids[-1]
+    platform = await _get_course_platform(course_id) if course_id else None
+    platform_category = ZENDESK_PLATFORM_CATEGORY_IDS.get(platform)
+    if platform_category:
+        params["category"] = platform_category
+    else:
+        # Without a category the whole support center is searched, which risks
+        # answering with an article about some other MIT platform.
+        log.info(
+            "Searching the whole support center; no category is mapped to the "
+            "platform (%s) of course %s",
+            platform,
+            course_id,
+        )
+
     try:
         # This is a public help center, so no authentication is sent
         response = await async_request(
@@ -487,6 +551,7 @@ async def search_support_articles(q: str) -> str:
         "metadata": {
             "search_url": search_url,
             "parameters": params,
+            "platform": platform,
         },
     }
     return json.dumps(full_output)

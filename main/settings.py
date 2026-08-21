@@ -616,6 +616,10 @@ AI_MIT_CONTENTFILE_URL = get_string(
     name="AI_MIT_CONTENTFILE_URL",
     default="https://api.learn.mit.edu/api/v1/contentfiles/",
 )
+AI_MIT_LEARNING_RESOURCES_URL = get_string(
+    name="AI_MIT_LEARNING_RESOURCES_URL",
+    default="https://api.learn.mit.edu/api/v1/learning_resources/",
+)
 AI_MIT_SYLLABUS_URL = get_string(
     "AI_MIT_SYLLABUS_URL",
     "https://api.learn.mit.edu/api/v0/vector_content_files_search/",
@@ -692,6 +696,12 @@ AI_ZENDESK_SEARCH_LIMIT = get_int(name="AI_ZENDESK_SEARCH_LIMIT", default=5)
 # Max number of characters of article text passed back to the LLM per article
 AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
     name="AI_ZENDESK_ARTICLE_MAX_CHARS", default=1500
+)
+# How long the platform of a course is cached for, in seconds.  A course does
+# not change platforms, so this only needs to expire often enough to pick up
+# resources that were not yet published at the time of the first lookup.
+AI_COURSE_PLATFORM_CACHE_DURATION = get_int(
+    name="AI_COURSE_PLATFORM_CACHE_DURATION", default=60 * 60 * 24
 )
 
 

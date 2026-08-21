@@ -3,9 +3,11 @@
 import json
 
 import pytest
+from django.core.cache import caches
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
+from ai_chatbots.constants import ZENDESK_PLATFORM_CATEGORY_IDS
 from ai_chatbots.tools import (
     search_content_files,
     search_courses,
@@ -15,6 +17,9 @@ from ai_chatbots.tools import (
 
 ZENDESK_URL = "https://support.learn.mit.edu"
 ZENDESK_SEARCH_URL = f"{ZENDESK_URL}/api/v2/help_center/articles/search.json"
+LEARNING_RESOURCES_URL = "https://api.learn.mit.edu/api/v1/learning_resources/"
+OCW_CATEGORY = ZENDESK_PLATFORM_CATEGORY_IDS["ocw"]
+COURSE_ID = "8.20+january-iap_2021"
 
 
 @pytest.fixture(autouse=True)
@@ -420,11 +425,36 @@ async def test_search_courses_hybrid_flag(
 
 
 @pytest.fixture
-def mock_get_zendesk_articles(mock_httpx_async_client, zendesk_article_results):
-    """Mock httpx async requests for Zendesk support article tests."""
-    return mock_httpx_async_client(
-        zendesk_article_results, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
+def mock_support_requests(mocker, zendesk_article_results):
+    """
+    Mock the two requests a support search makes: the MIT Learn lookup of the
+    course platform, and the Zendesk help center article search.
+    """
+
+    def _mock_requests(platform="ocw"):
+        def _response(json_value):
+            response = mocker.Mock()
+            response.json.return_value = json_value
+            response.status_code = 200
+            response.raise_for_status = mocker.Mock()
+            return response
+
+        resources = {"results": [{"platform": {"code": platform}}] if platform else []}
+
+        async def _get(url, **kwargs):
+            """Answer based on which of the two APIs is being called."""
+            if url == LEARNING_RESOURCES_URL:
+                return _response(resources)
+            return _response(zendesk_article_results)
+
+        mock_client = mocker.Mock()
+        mock_client.get = mocker.AsyncMock(side_effect=_get)
+        mocker.patch(
+            "ai_chatbots.utils.get_async_http_client", return_value=mock_client
+        )
+        return mock_client
+
+    return _mock_requests
 
 
 @pytest.fixture(autouse=True)
@@ -433,22 +463,55 @@ def _zendesk_settings(settings):
     settings.AI_ZENDESK_URL = ZENDESK_URL
     settings.AI_ZENDESK_SEARCH_LIMIT = 5
     settings.AI_ZENDESK_ARTICLE_MAX_CHARS = 1500
+    settings.AI_MIT_LEARNING_RESOURCES_URL = LEARNING_RESOURCES_URL
+
+
+@pytest.fixture(autouse=True)
+def _local_platform_cache(mocker):
+    """Cache course platforms in local memory rather than redis."""
+    cache = caches["default"]
+    cache.clear()
+    mocker.patch("ai_chatbots.tools.get_django_cache", return_value=cache)
+    return cache
+
+
+def support_state(course_id=COURSE_ID):
+    """Return a minimal syllabus agent state for the support search tool."""
+    return {"course_id": [course_id]}
 
 
 async def test_search_support_articles(
-    settings, mock_get_zendesk_articles, zendesk_article_results
+    settings, mock_support_requests, zendesk_article_results
 ):
-    """The tool should query the MIT Learn support center."""
+    """The tool should search the category matching the course platform."""
     settings.AI_ZENDESK_SEARCH_LIMIT = 3
-    results = json.loads(await search_support_articles.ainvoke({"q": "certificate"}))
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    mock_client = mock_support_requests(platform="ocw")
 
-    # No authorization is sent to the public help center
-    mock_get_zendesk_articles.return_value.get.assert_called_once_with(
-        ZENDESK_SEARCH_URL,
-        params={"query": "certificate", "per_page": 3},
-        headers={},
-        timeout=30,
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "certificate", "state": support_state()}
+        )
     )
+
+    expected_params = {
+        "query": "certificate",
+        "per_page": 3,
+        "category": OCW_CATEGORY,
+    }
+    # The platform of the course is looked up against the MIT Learn API
+    assert mock_client.get.call_args_list[0].args[0] == LEARNING_RESOURCES_URL
+    assert mock_client.get.call_args_list[0].kwargs["params"] == {
+        "readable_id": COURSE_ID,
+        "limit": 1,
+    }
+    # No authorization is sent to the public help center
+    assert mock_client.get.call_args_list[1].args[0] == ZENDESK_SEARCH_URL
+    assert mock_client.get.call_args_list[1].kwargs == {
+        "params": expected_params,
+        "headers": {},
+        "timeout": 30,
+    }
     expected_articles = zendesk_article_results["results"]
     assert len(results["results"]) == len(expected_articles)
     first_result = results["results"][0]
@@ -467,37 +530,152 @@ async def test_search_support_articles(
     }
     assert results["metadata"] == {
         "search_url": ZENDESK_SEARCH_URL,
-        "parameters": {"query": "certificate", "per_page": 3},
+        "parameters": expected_params,
+        "platform": "ocw",
     }
 
 
-async def test_search_support_articles_truncates_content(
-    settings, mock_get_zendesk_articles
+@pytest.mark.parametrize(
+    ("platform", "expected_category"),
+    [
+        ("ocw", ZENDESK_PLATFORM_CATEGORY_IDS["ocw"]),
+        ("mitxonline", ZENDESK_PLATFORM_CATEGORY_IDS["mitxonline"]),
+        ("edx", ZENDESK_PLATFORM_CATEGORY_IDS["edx"]),
+        ("xpro", ZENDESK_PLATFORM_CATEGORY_IDS["xpro"]),
+        ("emeritus", ZENDESK_PLATFORM_CATEGORY_IDS["xpro"]),
+        # Platforms without a help center category of their own, and courses
+        # whose platform cannot be determined, search the whole support center
+        ("mitpe", None),
+        ("canvas", None),
+        (None, None),
+    ],
+)
+async def test_search_support_articles_platform_category(
+    mock_support_requests, platform, expected_category
 ):
-    """Article text should be truncated to the configured max length."""
-    settings.AI_ZENDESK_ARTICLE_MAX_CHARS = 20
-    results = json.loads(await search_support_articles.ainvoke({"q": "certificate"}))
-    assert [len(result["content"]) for result in results["results"]] == [20, 20, 20]
+    """Each platform should be mapped to its own help center category."""
+    mock_client = mock_support_requests(platform=platform)
+
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "certificate", "state": support_state()}
+        )
+    )
+
+    search_params = mock_client.get.call_args_list[1].kwargs["params"]
+    if expected_category:
+        assert search_params["category"] == expected_category
+    else:
+        assert "category" not in search_params
+    assert results["metadata"]["platform"] == platform
 
 
-async def test_search_support_articles_no_portal(settings, mock_get_zendesk_articles):
-    """An empty result is returned if no support portal url is configured."""
-    settings.AI_ZENDESK_URL = ""
-    result = json.loads(await search_support_articles.ainvoke({"q": "credit"}))
-    assert result == {"results": []}
-    mock_get_zendesk_articles.return_value.get.assert_not_called()
+@pytest.mark.parametrize("state", [{}, {"course_id": [None]}])
+async def test_search_support_articles_without_course(mock_support_requests, state):
+    """With no course under discussion, the whole support center is searched."""
+    mock_client = mock_support_requests()
+
+    results = json.loads(
+        await search_support_articles.ainvoke({"q": "refund", "state": state})
+    )
+
+    # The platform lookup is skipped entirely
+    mock_client.get.assert_called_once_with(
+        ZENDESK_SEARCH_URL,
+        params={"query": "refund", "per_page": 5},
+        headers={},
+        timeout=30,
+    )
+    assert results["metadata"]["platform"] is None
+
+
+async def test_search_support_articles_caches_platform(mock_support_requests):
+    """The platform of a course should only be looked up once."""
+    mock_client = mock_support_requests(platform="ocw")
+
+    for query in ("certificate", "refund"):
+        results = json.loads(
+            await search_support_articles.ainvoke(
+                {"q": query, "state": support_state()}
+            )
+        )
+        assert results["metadata"]["parameters"]["category"] == OCW_CATEGORY
+
+    lookup_urls = [call.args[0] for call in mock_client.get.call_args_list]
+    assert lookup_urls.count(LEARNING_RESOURCES_URL) == 1
+    assert lookup_urls.count(ZENDESK_SEARCH_URL) == 2
 
 
 @pytest.mark.usefixtures("_no_retry_sleep")
-async def test_search_support_articles_portal_error(
-    mocker, mock_httpx_async_client, zendesk_article_results
+async def test_search_support_articles_platform_lookup_error(
+    mocker, zendesk_article_results
 ):
-    """An empty result is returned if the support portal is unavailable."""
-    mock_client = mock_httpx_async_client(zendesk_article_results)
-    mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
+    """A failed platform lookup should not prevent an unfiltered search."""
+
+    def _response(json_value):
+        response = mocker.Mock()
+        response.json.return_value = json_value
+        response.status_code = 200
+        response.raise_for_status = mocker.Mock()
+        return response
+
+    connection_error = RequestError("Connection error")
+
+    async def _get(url, **kwargs):
+        """Fail every platform lookup."""
+        if url == LEARNING_RESOURCES_URL:
+            raise connection_error
+        return _response(zendesk_article_results)
+
+    mock_client = mocker.Mock()
+    mock_client.get = mocker.AsyncMock(side_effect=_get)
     mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
 
-    results = json.loads(await search_support_articles.ainvoke({"q": "refund"}))
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "certificate", "state": support_state()}
+        )
+    )
+
+    assert len(results["results"]) == len(zendesk_article_results["results"])
+    assert "category" not in results["metadata"]["parameters"]
+    assert results["metadata"]["platform"] is None
+
+
+async def test_search_support_articles_truncates_content(
+    settings, mock_support_requests
+):
+    """Article text should be truncated to the configured max length."""
+    settings.AI_ZENDESK_ARTICLE_MAX_CHARS = 20
+    mock_support_requests()
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "certificate", "state": support_state()}
+        )
+    )
+    assert [len(result["content"]) for result in results["results"]] == [20, 20, 20]
+
+
+async def test_search_support_articles_no_portal(settings, mock_support_requests):
+    """An empty result is returned if no support portal url is configured."""
+    settings.AI_ZENDESK_URL = ""
+    mock_client = mock_support_requests()
+    result = json.loads(
+        await search_support_articles.ainvoke({"q": "credit", "state": support_state()})
+    )
+    assert result == {"results": []}
+    mock_client.get.assert_not_called()
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_search_support_articles_portal_error(mocker, mock_support_requests):
+    """An empty result is returned if the support portal is unavailable."""
+    mock_client = mock_support_requests()
+    mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
+
+    results = json.loads(
+        await search_support_articles.ainvoke({"q": "refund", "state": support_state()})
+    )
 
     assert results == {"results": []}
 
@@ -505,4 +683,4 @@ async def test_search_support_articles_portal_error(
 def test_invalid_support_article_params():
     """Test that invalid support search parameters raise a validation error."""
     with pytest.raises(ValidationError):
-        search_support_articles.invoke({})
+        search_support_articles.invoke({"state": support_state()})

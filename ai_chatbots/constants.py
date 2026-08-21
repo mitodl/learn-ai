@@ -46,6 +46,27 @@ class OfferedBy(ExtendedEnum):
 # Zendesk help center article search endpoint, appended to the help center base url
 ZENDESK_ARTICLE_SEARCH_PATH = "/api/v2/help_center/articles/search.json"
 
+# The MIT Learn help center is divided into one category per MIT platform, so a
+# support search has to be limited to the category matching the platform of the
+# course under discussion.  Otherwise keyword relevance alone decides, and i.e.
+# "certificate" asked about an OCW course is answered with an MIT xPRO article.
+# Each platform category repeats the articles it needs (account creation,
+# technical issues, getting support), so searching one category is enough.
+# Keys are MIT Learn platform codes, values are MIT Learn help center category ids.
+ZENDESK_PLATFORM_CATEGORY_IDS = {
+    # MIT OpenCourseWare (OCW)
+    "ocw": "41249707771035",
+    # MITx, which covers the MITx courses now hosted on MIT Learn / MITx Online
+    "mitxonline": "41750628505627",
+    "edx": "41750628505627",
+    # MIT xPRO, including its Emeritus, Global Alumni and WHU partner courses,
+    # which each have their own section under the xPRO category
+    "xpro": "41249375945243",
+    "emeritus": "41249375945243",
+    "globalalumni": "41249375945243",
+    "whu": "41249375945243",
+}
+
 
 class ChatResponseScore(ExtendedEnum):
     """Enum for chat response ratings"""
