@@ -13,11 +13,8 @@ from ai_chatbots.tools import (
     search_support_articles,
 )
 
-ZENDESK_PORTAL_URLS = {
-    "mitxonline": "https://mitxonline.zendesk.com",
-    "ocw": "https://mitocw.zendesk.com",
-    "mitlearn": "https://support.learn.mit.edu",
-}
+ZENDESK_URL = "https://support.learn.mit.edu"
+ZENDESK_SEARCH_URL = f"{ZENDESK_URL}/api/v2/help_center/articles/search.json"
 
 
 @pytest.fixture(autouse=True)
@@ -432,27 +429,22 @@ def mock_get_zendesk_articles(mock_httpx_async_client, zendesk_article_results):
 
 @pytest.fixture(autouse=True)
 def _zendesk_settings(settings):
-    """Assign default Zendesk portal settings."""
-    settings.AI_ZENDESK_PORTAL_URLS = dict(ZENDESK_PORTAL_URLS)
+    """Assign default Zendesk settings."""
+    settings.AI_ZENDESK_URL = ZENDESK_URL
     settings.AI_ZENDESK_SEARCH_LIMIT = 5
     settings.AI_ZENDESK_ARTICLE_MAX_CHARS = 1500
 
 
-@pytest.mark.parametrize("platform", ["mitxonline", "ocw", "mitlearn"])
 async def test_search_support_articles(
-    settings, mock_get_zendesk_articles, zendesk_article_results, platform
+    settings, mock_get_zendesk_articles, zendesk_article_results
 ):
-    """The tool should query only the portal matching the requested platform."""
+    """The tool should query the MIT Learn support center."""
     settings.AI_ZENDESK_SEARCH_LIMIT = 3
-    results = json.loads(
-        await search_support_articles.ainvoke(
-            {"q": "certificate", "platform": [platform]}
-        )
-    )
+    results = json.loads(await search_support_articles.ainvoke({"q": "certificate"}))
 
-    # No authorization is sent to the public help centers
+    # No authorization is sent to the public help center
     mock_get_zendesk_articles.return_value.get.assert_called_once_with(
-        f"{ZENDESK_PORTAL_URLS[platform]}/api/v2/help_center/articles/search.json",
+        ZENDESK_SEARCH_URL,
         params={"query": "certificate", "per_page": 3},
         headers={},
         timeout=30,
@@ -461,10 +453,9 @@ async def test_search_support_articles(
     assert len(results["results"]) == len(expected_articles)
     first_result = results["results"][0]
     first_article = expected_articles[0]
-    assert first_result["id"] == f"{platform}-{first_article['id']}"
+    assert first_result["id"] == str(first_article["id"])
     assert first_result["title"] == first_article["title"]
     assert first_result["url"] == first_article["html_url"]
-    assert first_result["platform"] == platform
     # The html body should be converted to plain text
     assert "<" not in first_result["content"]
     assert first_result["content"].startswith(
@@ -474,28 +465,10 @@ async def test_search_support_articles(
         "citation_url": first_article["html_url"],
         "citation_title": first_article["title"],
     }
-    assert results["metadata"]["parameters"]["platform"] == [platform]
-
-
-async def test_search_support_articles_all_portals(mock_get_zendesk_articles):
-    """All portals should be searched, and interleaved results capped at the limit."""
-    results = json.loads(await search_support_articles.ainvoke({"q": "refund"}))
-
-    mock_client = mock_get_zendesk_articles.return_value
-    assert mock_client.get.call_count == len(ZENDESK_PORTAL_URLS)
-    assert [call.args[0] for call in mock_client.get.call_args_list] == [
-        f"{url}/api/v2/help_center/articles/search.json"
-        for url in ZENDESK_PORTAL_URLS.values()
-    ]
-    # 3 articles per portal, interleaved by relevance rank and capped at 5
-    assert [result["platform"] for result in results["results"]] == [
-        "mitxonline",
-        "ocw",
-        "mitlearn",
-        "mitxonline",
-        "ocw",
-    ]
-    assert results["metadata"]["parameters"]["platform"] == list(ZENDESK_PORTAL_URLS)
+    assert results["metadata"] == {
+        "search_url": ZENDESK_SEARCH_URL,
+        "parameters": {"query": "certificate", "per_page": 3},
+    }
 
 
 async def test_search_support_articles_truncates_content(
@@ -503,34 +476,14 @@ async def test_search_support_articles_truncates_content(
 ):
     """Article text should be truncated to the configured max length."""
     settings.AI_ZENDESK_ARTICLE_MAX_CHARS = 20
-    results = json.loads(
-        await search_support_articles.ainvoke(
-            {"q": "certificate", "platform": ["mitxonline"]}
-        )
-    )
+    results = json.loads(await search_support_articles.ainvoke({"q": "certificate"}))
     assert [len(result["content"]) for result in results["results"]] == [20, 20, 20]
 
 
-async def test_search_support_articles_skips_unconfigured_portals(
-    settings, mock_get_zendesk_articles
-):
-    """Portals without a configured url should not be searched."""
-    settings.AI_ZENDESK_PORTAL_URLS = {**ZENDESK_PORTAL_URLS, "ocw": ""}
-    results = json.loads(await search_support_articles.ainvoke({"q": "refund"}))
-
-    assert {result["platform"] for result in results["results"]} == {
-        "mitxonline",
-        "mitlearn",
-    }
-    assert mock_get_zendesk_articles.return_value.get.call_count == 2
-
-
-async def test_search_support_articles_no_portals(settings, mock_get_zendesk_articles):
-    """An empty result is returned if no portal is configured for the platform."""
-    settings.AI_ZENDESK_PORTAL_URLS = {**ZENDESK_PORTAL_URLS, "ocw": ""}
-    result = json.loads(
-        await search_support_articles.ainvoke({"q": "credit", "platform": ["ocw"]})
-    )
+async def test_search_support_articles_no_portal(settings, mock_get_zendesk_articles):
+    """An empty result is returned if no support portal url is configured."""
+    settings.AI_ZENDESK_URL = ""
+    result = json.loads(await search_support_articles.ainvoke({"q": "credit"}))
     assert result == {"results": []}
     mock_get_zendesk_articles.return_value.get.assert_not_called()
 
@@ -539,39 +492,17 @@ async def test_search_support_articles_no_portals(settings, mock_get_zendesk_art
 async def test_search_support_articles_portal_error(
     mocker, mock_httpx_async_client, zendesk_article_results
 ):
-    """A failing portal should not prevent results from the other portals."""
-    mock_response = mocker.Mock()
-    mock_response.json.return_value = zendesk_article_results
-    mock_response.status_code = 200
-    mock_response.raise_for_status = mocker.Mock()
-
-    connection_error = RequestError("Connection error")
-
-    def _get(url, **kwargs):
-        """Fail every request to the MITx Online portal."""
-        if url.startswith(ZENDESK_PORTAL_URLS["mitxonline"]):
-            raise connection_error
-        return mock_response
-
+    """An empty result is returned if the support portal is unavailable."""
     mock_client = mock_httpx_async_client(zendesk_article_results)
-    mock_client.get = mocker.AsyncMock(side_effect=_get)
+    mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
     mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
 
     results = json.loads(await search_support_articles.ainvoke({"q": "refund"}))
 
-    # The failing portal exhausts its retries and is dropped from the results
-    assert {result["platform"] for result in results["results"]} == {"ocw", "mitlearn"}
+    assert results == {"results": []}
 
 
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"platform": ["mitxonline"]},
-        {"q": "certificate", "platform": ["mitx"]},
-        {"q": "certificate", "platform": "mitxonline"},
-    ],
-)
-def test_invalid_support_article_params(params):
+def test_invalid_support_article_params():
     """Test that invalid support search parameters raise a validation error."""
     with pytest.raises(ValidationError):
-        search_support_articles.invoke(params)
+        search_support_articles.invoke({})
