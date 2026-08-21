@@ -46,13 +46,7 @@ class OfferedBy(ExtendedEnum):
 # Zendesk help center article search endpoint, appended to the help center base url
 ZENDESK_ARTICLE_SEARCH_PATH = "/api/v2/help_center/articles/search.json"
 
-# The MIT Learn help center is divided into one category per MIT platform, so a
-# support search has to be limited to the category matching the platform of the
-# course under discussion.  Otherwise keyword relevance alone decides, and i.e.
-# "certificate" asked about an OCW course is answered with an MIT xPRO article.
-# Each platform category repeats the articles it needs (account creation,
-# technical issues, getting support), so searching one category is enough.
-# Keys are MIT Learn platform codes, values are MIT Learn help center category ids.
+# Mapping from platform to zendesk category id
 ZENDESK_PLATFORM_CATEGORY_IDS = {
     # MIT OpenCourseWare (OCW)
     "ocw": "41249707771035",
