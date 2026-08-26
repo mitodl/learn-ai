@@ -12,6 +12,7 @@ from ai_chatbots.constants import (
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
 )
 from ai_chatbots.tools import (
+    COURSE_PLATFORM_CACHE_PREFIX,
     search_content_files,
     search_courses,
     search_related_course_content_files,
@@ -435,7 +436,7 @@ def mock_support_requests(mocker, zendesk_article_results):
     course platform, and the Zendesk help center article search.
     """
 
-    def _mock_requests(platform="ocw"):
+    def _mock_requests(platform="ocw", articles=None):
         def _response(json_value):
             response = mocker.Mock()
             response.json.return_value = json_value
@@ -449,7 +450,7 @@ def mock_support_requests(mocker, zendesk_article_results):
             """Answer based on which of the two APIs is being called."""
             if url == LEARNING_RESOURCES_URL:
                 return _response(resources)
-            return _response(zendesk_article_results)
+            return _response(zendesk_article_results if articles is None else articles)
 
         mock_client = mocker.Mock()
         mock_client.get = mocker.AsyncMock(side_effect=_get)
@@ -503,12 +504,17 @@ async def test_search_support_articles(
         "per_page": 3,
         "category": OCW_CATEGORY,
     }
-    # The platform of the course is looked up against the MIT Learn API
+    # The platform of the course is looked up against the MIT Learn API, with a
+    # tighter timeout than a search since the support search waits on it
     assert mock_client.get.call_args_list[0].args[0] == LEARNING_RESOURCES_URL
     assert mock_client.get.call_args_list[0].kwargs["params"] == {
         "readable_id": COURSE_ID,
         "limit": 1,
     }
+    assert (
+        mock_client.get.call_args_list[0].kwargs["timeout"]
+        == settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT
+    )
     # No authorization is sent to the public help center
     assert mock_client.get.call_args_list[1].args[0] == ZENDESK_SEARCH_URL
     assert mock_client.get.call_args_list[1].kwargs == {
@@ -691,6 +697,84 @@ async def test_search_support_articles_platform_lookup_error(
     assert len(results["results"]) == len(zendesk_article_results["results"])
     assert "category" not in results["metadata"]["parameters"]
     assert results["metadata"]["platform"] is None
+
+
+@pytest.mark.usefixtures("_no_retry_sleep")
+async def test_search_support_articles_caches_platform_lookup_error(
+    settings, mocker, mock_support_requests
+):
+    """A failed platform lookup should be cached, and not retried every time."""
+    settings.AI_COURSE_PLATFORM_ERROR_CACHE_DURATION = 60
+    cache_write = mocker.spy(caches["default"], "aset")
+    mock_client = mock_support_requests()
+    connection_error = RequestError("Connection error")
+
+    async def _get(url, **kwargs):
+        """Fail every platform lookup, answer every article search."""
+        if url == LEARNING_RESOURCES_URL:
+            raise connection_error
+        response = mocker.Mock()
+        response.status_code = 200
+        response.json.return_value = {"results": []}
+        response.raise_for_status = mocker.Mock()
+        return response
+
+    mock_client.get = mocker.AsyncMock(side_effect=_get)
+
+    for query in ("certificate", "refund"):
+        results = json.loads(
+            await search_support_articles.ainvoke(
+                {"q": query, "state": support_state()}
+            )
+        )
+        assert results["metadata"]["platform"] is None
+
+    lookup_urls = [call.args[0] for call in mock_client.get.call_args_list]
+    # Only the first support question pays for the failing lookup; the second
+    # reads the cached failure
+    assert lookup_urls.count(LEARNING_RESOURCES_URL) == 1
+    assert lookup_urls.count(ZENDESK_SEARCH_URL) == 2
+    # Cached briefly, so a transient outage does not blank out the platform of
+    # the course for the whole of AI_COURSE_PLATFORM_CACHE_DURATION
+    cache_write.assert_called_once_with(
+        f"{COURSE_PLATFORM_CACHE_PREFIX}{COURSE_ID}", "", 60
+    )
+
+
+async def test_search_support_articles_warns_on_empty_category(
+    mocker, mock_support_requests
+):
+    """An empty result from a category-scoped search should be logged."""
+    mock_log = mocker.patch("ai_chatbots.tools.log.warning")
+    mock_support_requests(platform="ocw", articles={"results": []})
+
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "certificate", "state": support_state()}
+        )
+    )
+
+    assert results["results"] == []
+    # A stale category id looks exactly like this, so it should not pass silently
+    assert mock_log.call_count == 1
+    assert mock_log.call_args.args[1:] == (OCW_CATEGORY, "ocw", COURSE_ID)
+
+
+async def test_search_support_articles_no_warning_without_category(
+    mocker, mock_support_requests
+):
+    """An unscoped search coming back empty is not worth a warning."""
+    mock_log = mocker.patch("ai_chatbots.tools.log.warning")
+    mock_support_requests(platform="mitpe", articles={"results": []})
+
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "certificate", "state": support_state()}
+        )
+    )
+
+    assert results["results"] == []
+    mock_log.assert_not_called()
 
 
 async def test_search_support_articles_truncates_content(

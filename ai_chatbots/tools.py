@@ -474,7 +474,9 @@ async def _get_course_platform(readable_id: str) -> str | None:
         response = await async_request(
             settings.AI_MIT_LEARNING_RESOURCES_URL,
             {"readable_id": readable_id, "limit": 1},
-            timeout=settings.REQUESTS_TIMEOUT,
+            # A cheap metadata lookup, not a search, and every support search
+            # waits on it, so it gets a tighter timeout than the default.
+            timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
             # Courses are public, so the lookup still works without a token.
             # httpx rejects an empty bearer header outright, so only send one
             # when a token is actually configured.
@@ -485,6 +487,11 @@ async def _get_course_platform(readable_id: str) -> str | None:
         platform = (results[0].get("platform") or {}).get("code") if results else None
     except Exception:
         log.exception("Error looking up the platform of course %s", readable_id)
+        # Cache the failure briefly, so that an unreachable API is not retried
+        # in front of every support question while it is down.
+        await cache.aset(
+            cache_key, "", settings.AI_COURSE_PLATFORM_ERROR_CACHE_DURATION
+        )
         return None
     await cache.aset(
         cache_key, platform or "", settings.AI_COURSE_PLATFORM_CACHE_DURATION
@@ -556,6 +563,19 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
     except Exception:
         log.exception("Error querying the support portal at %s", search_url)
         return json.dumps({"results": []})
+
+    if categories and not articles:
+        # A stale category id is not an error: zendesk answers 200 with an
+        # empty result set, so every scoped search would quietly return
+        # nothing.  Log it, since only repeated misses distinguish a bad
+        # category from a query with no matching article.
+        log.warning(
+            "No support articles found in categories %s for the platform (%s) "
+            "of course %s",
+            params["category"],
+            platform,
+            course_id,
+        )
 
     full_output = {
         "results": articles,

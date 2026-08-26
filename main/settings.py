@@ -703,6 +703,17 @@ AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
 AI_COURSE_PLATFORM_CACHE_DURATION = get_int(
     name="AI_COURSE_PLATFORM_CACHE_DURATION", default=60 * 60 * 24
 )
+# How long a failed platform lookup is cached for, in seconds.  Short, so that
+# a struggling MIT Learn API is not retried in front of every support question
+# but scoped searches resume soon after it recovers.
+AI_COURSE_PLATFORM_ERROR_CACHE_DURATION = get_int(
+    name="AI_COURSE_PLATFORM_ERROR_CACHE_DURATION", default=60
+)
+# Timeout in seconds for the platform lookup.  Tighter than REQUESTS_TIMEOUT
+# because it is a cheap metadata lookup that every support search waits on.
+AI_COURSE_PLATFORM_LOOKUP_TIMEOUT = get_int(
+    name="AI_COURSE_PLATFORM_LOOKUP_TIMEOUT", default=5
+)
 
 
 # APISIX middleware settings
