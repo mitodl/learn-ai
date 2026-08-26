@@ -2,6 +2,7 @@
 
 import dataclasses
 import datetime
+import re
 
 from named_enum import ExtendedEnum
 
@@ -46,6 +47,14 @@ class OfferedBy(ExtendedEnum):
 # Zendesk help center article search endpoint, appended to the help center base url
 ZENDESK_ARTICLE_SEARCH_PATH = "/api/v2/help_center/articles/search.json"
 
+# Zendesk help center category ids, as listed by the public category endpoint:
+#   curl -sL https://support.learn.mit.edu/api/v2/help_center/categories.json
+#     41249004008859  About MIT Learn
+#     41410514373019  Universal Learning
+#     41750628505627  MITx
+#     41249375945243  MIT xPRO
+#     41249707771035  MIT OpenCourseWare (OCW)
+
 # Mapping from platform to zendesk category id
 ZENDESK_PLATFORM_CATEGORY_IDS = {
     # MIT OpenCourseWare (OCW)
@@ -60,6 +69,14 @@ ZENDESK_PLATFORM_CATEGORY_IDS = {
     "globalalumni": "41249375945243",
     "whu": "41249375945243",
 }
+
+# Universal AI (UAI) courses and programs are hosted on MITx Online, so their
+# platform code is "mitxonline", but their support articles live in the
+# "Universal Learning" category instead of the MITx one.  Only the readable id
+# distinguishes them, and it comes in two shapes: program-v1:UAI+B2C* for the
+# programs and course-v1:UAI_SOURCE+UAI.* for the courses.
+ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID = "41410514373019"
+UAI_READABLE_ID_REGEX = re.compile(r"^(?:course|program)-v1:UAI(?:_\w+)?\+")
 
 
 class ChatResponseScore(ExtendedEnum):

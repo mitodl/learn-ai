@@ -7,7 +7,10 @@ from django.core.cache import caches
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
-from ai_chatbots.constants import ZENDESK_PLATFORM_CATEGORY_IDS
+from ai_chatbots.constants import (
+    ZENDESK_PLATFORM_CATEGORY_IDS,
+    ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
+)
 from ai_chatbots.tools import (
     search_content_files,
     search_courses,
@@ -19,6 +22,7 @@ ZENDESK_URL = "https://support.learn.mit.edu"
 ZENDESK_SEARCH_URL = f"{ZENDESK_URL}/api/v2/help_center/articles/search.json"
 LEARNING_RESOURCES_URL = "https://api.learn.mit.edu/api/v1/learning_resources/"
 OCW_CATEGORY = ZENDESK_PLATFORM_CATEGORY_IDS["ocw"]
+MITX_CATEGORY = ZENDESK_PLATFORM_CATEGORY_IDS["mitxonline"]
 COURSE_ID = "8.20+january-iap_2021"
 
 
@@ -568,6 +572,53 @@ async def test_search_support_articles_platform_category(
     else:
         assert "category" not in search_params
     assert results["metadata"]["platform"] == platform
+
+
+@pytest.mark.parametrize(
+    ("course_id", "expected_category"),
+    [
+        # Universal AI courses and programs are hosted on MITx Online, so both
+        # the MITx and the Universal Learning categories are searched
+        (
+            "program-v1:UAI+B2C.1",
+            f"{MITX_CATEGORY},{ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID}",
+        ),
+        (
+            "course-v1:UAI_SOURCE+UAI.HAIM.1",
+            f"{MITX_CATEGORY},{ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID}",
+        ),
+        # Other MITx Online courses only search the MITx category
+        ("course-v1:MITxT+3.012Sx+3T2024", MITX_CATEGORY),
+        ("8.20+january-iap_2021", MITX_CATEGORY),
+    ],
+)
+async def test_search_support_articles_uai_category(
+    mock_support_requests, course_id, expected_category
+):
+    """UAI courses should also search the Universal Learning category."""
+    mock_client = mock_support_requests(platform="mitxonline")
+
+    results = json.loads(
+        await search_support_articles.ainvoke(
+            {"q": "GI Bill", "state": support_state(course_id)}
+        )
+    )
+
+    search_params = mock_client.get.call_args_list[1].kwargs["params"]
+    assert search_params["category"] == expected_category
+    assert results["metadata"]["parameters"]["category"] == expected_category
+
+
+async def test_search_support_articles_uai_unknown_platform(mock_support_requests):
+    """A UAI course whose platform is unknown still searches its own category."""
+    mock_client = mock_support_requests(platform=None)
+
+    await search_support_articles.ainvoke(
+        {"q": "GI Bill", "state": support_state("course-v1:UAI_SOURCE+UAI.HAIM.1")}
+    )
+
+    search_params = mock_client.get.call_args_list[1].kwargs["params"]
+    assert search_params["category"] == ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID
 
 
 @pytest.mark.parametrize("state", [{}, {"course_id": [None]}])

@@ -15,8 +15,10 @@ from pydantic import Field
 
 from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
+    UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
     ZENDESK_PLATFORM_CATEGORY_IDS,
+    ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
     LearningResourceType,
     OfferedBy,
 )
@@ -490,6 +492,22 @@ async def _get_course_platform(readable_id: str) -> str | None:
     return platform
 
 
+def _zendesk_categories(course_id: str | None, platform: str | None) -> list[str]:
+    """
+    Return the zendesk help center categories that cover a course, so that a
+    search can be limited to the parts of the support center relevant to it.
+    """
+    categories = []
+    platform_category = ZENDESK_PLATFORM_CATEGORY_IDS.get(platform)
+    if platform_category:
+        categories.append(platform_category)
+    if course_id and UAI_READABLE_ID_REGEX.match(course_id):
+        # UAI courses are on MITx Online but documented under their own
+        # category, so both are searched.
+        categories.append(ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID)
+    return categories
+
+
 @tool(args_schema=SearchSupportArticlesToolSchema)
 async def search_support_articles(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
@@ -506,14 +524,15 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
     search_url = f"{portal_url.rstrip('/')}{ZENDESK_ARTICLE_SEARCH_PATH}"
     params = {"query": q, "per_page": settings.AI_ZENDESK_SEARCH_LIMIT}
 
-    # Limit the search to the part of the support center covering the platform
-    # of the course under discussion.
+    # Limit the search to the parts of the support center covering the course
+    # under discussion.
     course_ids = (state or {}).get("course_id") or [None]
     course_id = course_ids[-1]
     platform = await _get_course_platform(course_id) if course_id else None
-    platform_category = ZENDESK_PLATFORM_CATEGORY_IDS.get(platform)
-    if platform_category:
-        params["category"] = platform_category
+    categories = _zendesk_categories(course_id, platform)
+    if categories:
+        # The search endpoint takes a comma separated list of category ids
+        params["category"] = ",".join(categories)
     else:
         # Without a category the whole support center is searched, which risks
         # answering with an article about some other MIT platform.
