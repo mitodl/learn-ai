@@ -436,8 +436,8 @@ class SearchSupportArticlesToolSchema(pydantic.BaseModel):
     state: Annotated[dict, InjectedState] = Field(
         description=(
             "The agent state, which may include the course_id of the resource "
-            "under discussion.  Its platform determines which part of the "
-            "support center is searched."
+            "under discussion. Its platform and readable id determines "
+            "which part of the support center is searched."
         )
     )
 
