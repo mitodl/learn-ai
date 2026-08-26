@@ -1,6 +1,27 @@
 Release Notes
 =============
 
+Version 0.35.3
+--------------
+
+- zendesk tool fix (#33)
+- fix(observability): trace the ASGI requests Django instrumentation cannot see (#31)
+- chore(deps): mitol-django-observability 2026.3.11 -> 2026.8.19 (#32)
+- Update dependency @mitodl/smoot-design to v6.33.1 (#30)
+- Update dependency @mitodl/mit-learn-api-axios to v2025.12.16 (#29)
+- Update react monorepo to v19.2.8 (#24)
+- Update material-ui monorepo to v7.3.11 (#23)
+- Update dependency next to v15.5.23 (#22)
+- Update dependency ai to v5.0.229 (#21)
+- Update all non-major dev-dependencies (#28)
+- Update actions/setup-node action to v6.5.0 (#27)
+- Update actions/checkout action to v6.1.0 (#26)
+- Update redis Docker tag to v7.4.9 (#25)
+- Update codecov/codecov-action action to v5.5.5 (#20)
+- Update dependency aiohttp to v3.14.3 [SECURITY] (#17)
+- Log LangGraph agent graph to Opik traces (#11)
+- Harden GitHub Actions supply chain: zizmor scanning + 7-day dependency cool-down (#12)
+
 Version 0.35.2 (Released August 05, 2026)
 --------------
 
