@@ -519,9 +519,13 @@ def _zendesk_categories(course_id: str | None, platform: str | None) -> list[str
 async def search_support_articles(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Search the MIT Learn support center (help center) for up to date articles
-    answering questions about how MIT platforms work, such as enrollment,
-    certificates, refunds, payments, accounts, logins, deadlines and
-    technical issues.  Returns the articles as a JSON string.
+    about how MIT platforms and courses work: enrollment, certificates,
+    refunds, payments, accounts, logins, deadlines and technical issues, and
+    also how course material is delivered - video transcripts and captions,
+    accessibility, course formats, prerequisites, and how long access to the
+    content lasts.  Use this tool for any question about a course that is not
+    answered by the course content itself.  Returns the articles as a JSON
+    string.
     """
     portal_url = settings.AI_ZENDESK_URL
     if not portal_url:

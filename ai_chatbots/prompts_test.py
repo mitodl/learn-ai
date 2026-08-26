@@ -12,6 +12,21 @@ from ai_chatbots import chatbots, prompts
 from ai_chatbots.utils import get_django_cache
 
 
+@pytest.mark.parametrize(
+    "prompt", [prompts.PROMPT_SYLLABUS, prompts.PROMPT_SYLLABUS_CANVAS]
+)
+def test_syllabus_prompts_route_support_questions(prompt):
+    """
+    Both syllabus prompts should send questions the course content cannot
+    answer to the support center, not just platform questions.  Support
+    articles cover how a course is delivered too, and those questions read as
+    questions about the course itself.
+    """
+    assert "search_support_articles" in prompt
+    for topic in ("transcripts", "accessibility", "how long access"):
+        assert topic in prompt
+
+
 def test_langsmith_prompt_create(mocker):
     """Test that the langsmith_prompt function creates a prompt if it doesn't exist."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"

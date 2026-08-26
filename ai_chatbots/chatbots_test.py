@@ -392,6 +392,11 @@ async def test_syllabus_bot_related_courses_instructions(mocker, mock_checkpoint
     )
     assert "search_related_course_content_files" in chatbot.instructions
     assert "BOTH" in chatbot.instructions
+    # The content search tools must not be presented as the only tools, or as
+    # mandatory for every question, or the support tool never gets called
+    assert "two search tools available" not in chatbot.instructions
+    assert "for every user question" not in chatbot.instructions
+    assert "search_support_articles" in chatbot.instructions
 
 
 @pytest.mark.asyncio
