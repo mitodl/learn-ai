@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.35.3
+Version 0.35.3 (Released August 27, 2026)
 --------------
 
 - zendesk tool fix (#33)
