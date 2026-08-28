@@ -1,6 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["local>mitodl/.github:renovate-config"],
+  "toolSettings": {
+    "nodeMaxMemory": 2048
+  },
   "packageRules": [
     {
       "matchFileNames": ["frontend-demo/learn_ai/package.json"],
