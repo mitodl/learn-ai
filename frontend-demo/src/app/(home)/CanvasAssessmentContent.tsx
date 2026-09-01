@@ -123,22 +123,16 @@ const CanvasAssessmentContent = () => {
       problemSetList: problemSetListResult.data.problem_set_titles,
       error: null,
     }
-  }, [problemSetListResult, settings.run])
+  }, [problemSetListResult])
 
   useEffect(() => {
-    // Set problem_set_title to first item or "" whenever problemSetList changes
-    if (problemSetList && problemSetList.length > 0) {
-      if (settings.problem_set_title !== problemSetList[0]) {
-        setSettings({
-          problem_set_title: problemSetList[0],
-        })
-      }
-    } else if (settings.problem_set_title !== "") {
-      setSettings({
-        problem_set_title: "",
-      })
+    // Keep a valid selection; otherwise fall back to the first item or ""
+    if (problemSetList?.includes(settings.problem_set_title)) return
+    const fallback = problemSetList?.[0] ?? ""
+    if (settings.problem_set_title !== fallback) {
+      setSettings({ problem_set_title: fallback })
     }
-  }, [problemSetList])
+  }, [problemSetList, settings.problem_set_title, setSettings])
 
   // problemSetList is [] while loading (truthy), so gate on the actual value
   // the chat request requires
