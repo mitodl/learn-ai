@@ -641,7 +641,7 @@ async def test_get_metadata_is_comment_safe(mocker, mock_checkpointer):
         run_readable_id="course-v1:MITxT+14.01x",
         problem_set_title="Problem Set 4",
     )
-    content = "<!-- Image content: scanned page -->\nProblem text"
+    content = "<!-- Image content: scanned page -->\nProblem text --!> here"
     chatbot.problem_set = {"problem_set_files": [{"content": content}]}
     chatbot.problem_data_loaded = True
     mocker.patch.object(
@@ -650,7 +650,8 @@ async def test_get_metadata_is_comment_safe(mocker, mock_checkpointer):
 
     metadata = await chatbot.get_metadata(debug=True)
 
-    assert "-->" not in metadata
+    # '-->' and '--!>' both terminate HTML comments; no '>' may survive
+    assert ">" not in metadata
     parsed = json.loads(metadata)
     assert parsed["problem_set"]["problem_set_files"][0]["content"] == content
     assert parsed["checkpoint_pk"] == 123

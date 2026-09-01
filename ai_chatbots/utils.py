@@ -100,10 +100,10 @@ def comment_safe_json(data) -> str:
     """
     Serialize data to JSON that cannot terminate an enclosing HTML comment.
 
-    '-->' can only occur inside JSON string values, so escaping the '>'
-    yields identical JSON after parsing.
+    HTML comments end at '-->' and also '--!>', so escape every '>'.
+    JSON has no structural '>', so this yields identical JSON after parsing.
     """
-    return json.dumps(data).replace("-->", "--\\u003e")
+    return json.dumps(data).replace(">", "\\u003e")
 
 
 def enum_zip(label: str, enum: ExtendedEnum) -> type[Enum]:
