@@ -140,7 +140,9 @@ const CanvasAssessmentContent = () => {
     }
   }, [problemSetList])
 
-  const isReady = !!problemSetList
+  // problemSetList is [] while loading (truthy), so gate on the actual value
+  // the chat request requires
+  const isReady = !!settings.problem_set_title
 
   return (
     <BaseChatContent
