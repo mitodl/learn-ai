@@ -632,6 +632,30 @@ async def test_get_tool_metadata_error(mocker, mock_checkpointer):
     }
 
 
+@pytest.mark.asyncio
+async def test_get_metadata_is_comment_safe(mocker, mock_checkpointer):
+    """Metadata JSON must not contain '-->', which would end the HTML comment early"""
+    chatbot = await sync_to_async(TutorBot)(
+        "anonymous",
+        mock_checkpointer,
+        run_readable_id="course-v1:MITxT+14.01x",
+        problem_set_title="Problem Set 4",
+    )
+    content = "<!-- Image content: scanned page -->\nProblem text"
+    chatbot.problem_set = {"problem_set_files": [{"content": content}]}
+    chatbot.problem_data_loaded = True
+    mocker.patch.object(
+        chatbot, "_get_latest_checkpoint_id", AsyncMock(return_value=123)
+    )
+
+    metadata = await chatbot.get_metadata(debug=True)
+
+    assert "-->" not in metadata
+    parsed = json.loads(metadata)
+    assert parsed["problem_set"]["problem_set_files"][0]["content"] == content
+    assert parsed["checkpoint_pk"] == 123
+
+
 @pytest.mark.parametrize("use_proxy", [True, False])
 @pytest.mark.asyncio
 async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):

@@ -96,6 +96,16 @@ class HTTPClientManager:
 http_client_manager = HTTPClientManager()
 
 
+def comment_safe_json(data) -> str:
+    """
+    Serialize data to JSON that cannot terminate an enclosing HTML comment.
+
+    '-->' can only occur inside JSON string values, so escaping the '>'
+    yields identical JSON after parsing.
+    """
+    return json.dumps(data).replace("-->", "--\\u003e")
+
+
 def enum_zip(label: str, enum: ExtendedEnum) -> type[Enum]:
     """
     Create a new Enum with both name and value equal to

@@ -47,6 +47,7 @@ from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
     async_request,
+    comment_safe_json,
     get_django_cache,
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
@@ -362,7 +363,7 @@ class BaseChatbot(ABC):
                 error["error"]["message"] = (
                     "You have exceeded your AI usage limit. Please try again later."
                 )
-            yield f"<!-- {json.dumps(error)} -->"
+            yield f"<!-- {comment_safe_json(error)} -->"
         except Exception:
             yield '<!-- {"error":{"message":"An error occurred, please try again"}} -->'
             log.exception("Error running AI agent")
@@ -378,7 +379,7 @@ class BaseChatbot(ABC):
         metadata["checkpoint_pk"] = await self._get_latest_checkpoint_id()
         metadata["thread_id"] = self.thread_id
         if metadata:
-            return json.dumps(metadata)
+            return comment_safe_json(metadata)
         return ""
 
     @abstractmethod

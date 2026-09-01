@@ -41,6 +41,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
+from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
 from main.utils import decode_value, format_seconds
@@ -310,8 +311,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.start_response(status=status, cookies=cookies)
             await self.send_chunk(json.dumps(error_msg))
         else:
-            error_msg = json.dumps(error_msg)
-            await self.send_chunk(f"<!-- {error_msg} -->")
+            await self.send_chunk(f"<!-- {comment_safe_json(error_msg)} -->")
 
     async def create_checkpointer(
         self,
