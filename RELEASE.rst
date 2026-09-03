@@ -1,7 +1,7 @@
 Release Notes
 =============
 
-Version 0.36.0
+Version 0.36.0 (Released September 03, 2026)
 --------------
 
 - Fix metadata leaking into visible CanvasAssessment responses (#37)
