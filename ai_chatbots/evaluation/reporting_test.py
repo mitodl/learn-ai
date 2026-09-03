@@ -394,7 +394,7 @@ class TestEvaluationReporter:
             ["recommendation", "syllabus"],
             evaluation_model="gpt-4o-mini",
             metric_names=["Faithfulness", "Hallucination", "AnswerRelevancy"],
-            metric_thresholds={"Faithfulness": 0.7, "Hallucination": 1.0},
+            metric_thresholds={"Faithfulness": 0.7, "Hallucination": 0.8},
             use_prompts=True,
         )
 
