@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+Version 0.36.0
+--------------
+
+- Fix metadata leaking into visible CanvasAssessment responses (#37)
+- Cap Renovate install-step Node heap to fix Mend OOM (#36)
+- Update Node.js to f22d6a1 (#19)
+- Update dependency Django to v5.2.17 [SECURITY] (#35)
+- Pin dependencies (#18)
+
 Version 0.35.3 (Released August 27, 2026)
 --------------
 
