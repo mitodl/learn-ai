@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+Version 0.36.1
+--------------
+
+- Update dependency ruff to v0.16.3 (#43)
+- Update all non-major dev-dependencies (#41)
+- Update dependency djangorestframework to v3.17.2 [SECURITY] (#39)
+- Run yarn zip conversion single-threaded to fix Renovate OOM (#40)
+
 Version 0.36.0 (Released September 03, 2026)
 --------------
 
