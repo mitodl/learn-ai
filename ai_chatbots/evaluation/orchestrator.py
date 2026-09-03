@@ -72,7 +72,7 @@ class EvaluationOrchestrator:
                     "ContextualPrecision": 0.7,
                     "ContextualRelevancy": 0.5,
                     "ContextualRecall": 0.7,
-                    "Hallucination": 0.0,
+                    "Hallucination": 1.0,
                     "AnswerRelevancy": 0.7,
                 }
 
@@ -108,7 +108,7 @@ class EvaluationOrchestrator:
                 metric_thresholds = {
                     "Faithfulness": 0.7,
                     "ContextualRelevancy": 0.5,
-                    "Hallucination": 0.0,
+                    "Hallucination": 1.0,
                     "AnswerRelevancy": 0.7,
                     "Helpfulness": 0.7,
                 }

@@ -48,6 +48,13 @@ def warnings_as_errors():
             module=".*(pydantic).*",
             category=UserWarning,
         )
+        # deepeval 4.2 warns on every construction of the metrics whose score
+        # direction it flipped; we already use the new direction.
+        warnings.filterwarnings(
+            "ignore",
+            message=".*now scores in the same direction as every other deepeval.*",
+            category=DeprecationWarning,
+        )
         yield
     finally:
         warnings.resetwarnings()

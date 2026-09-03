@@ -61,7 +61,7 @@ class TestEvaluationOrchestrator:
         custom_thresholds = {
             "Faithfulness": 0.9,
             "ContextualRelevancy": 0.8,
-            "Hallucination": 0.1,
+            "Hallucination": 0.9,
             "AnswerRelevancy": 0.8,
             "Helpfulness": 0.8,
         }
