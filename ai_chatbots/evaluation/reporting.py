@@ -6,7 +6,6 @@ from typing import TextIO
 
 import pandas as pd
 from deepeval.evaluate.types import EvaluationResult
-from django.conf import settings
 from django.core.management.base import OutputWrapper
 
 # Constants
@@ -69,41 +68,6 @@ class EvaluationReporter:
     def __init__(self, stdout: OutputWrapper):
         self.stdout = stdout
 
-    def is_inverse_metric(self, metric_name: str) -> bool:
-        """
-        Determine if a metric is inverse (lower scores are better).
-
-        Uses a settings-based approach to identify metrics where lower scores
-        indicate better performance (e.g., hallucination metrics).
-
-        Args:
-            metric_name: The metric name
-
-        Returns:
-            True if lower scores are better, False if higher scores are better
-        """
-        return metric_name.lower() in settings.AI_INVERSE_METRICS
-
-    def normalize_score_for_aggregation(self, metric: str, score: float) -> float:
-        """
-        Normalize scores for aggregation so that higher is always better.
-
-        For most metrics, higher scores are better. However, for inverse metrics
-        (like hallucination where lower scores are better), this function inverts
-        the scores so all metrics follow the same "higher is better" convention
-        when calculating averages.
-
-        Args:
-            metric: The metric name
-            score: The original score (0.0 to 1.0)
-
-        Returns:
-            Normalized score where higher is always better
-        """
-        if self.is_inverse_metric(metric):
-            return 1.0 - score
-        return score
-
     def generate_report(  # noqa: PLR0913
         self,
         results: EvaluationResult,
@@ -164,7 +128,7 @@ class EvaluationReporter:
         ]
         return pd.DataFrame(data)
 
-    def summarize_per_bot_model(  # noqa: C901, PLR0912
+    def summarize_per_bot_model(
         self,
         df: pd.DataFrame,
         models: list[str],
@@ -226,11 +190,7 @@ class EvaluationReporter:
                                 # Determine PASS/FAIL based on threshold
                                 if metric_thresholds and metric in metric_thresholds:
                                     threshold = metric_thresholds[metric]
-                                    # For inverse metrics, lower scores are better
-                                    if self.is_inverse_metric(metric):
-                                        overall_pass = score <= threshold
-                                    else:
-                                        overall_pass = score >= threshold
+                                    overall_pass = score >= threshold
                                 else:
                                     # Fallback: use default threshold
                                     overall_pass = score > DEFAULT_PASS_THRESHOLD
@@ -264,9 +224,7 @@ class EvaluationReporter:
 
         for metric in model_avg.columns:
             self.stdout.write(f"\n📈 {metric}:")
-            # For inverse metrics, lower scores are better, so sort ascending
-            ascending_order = self.is_inverse_metric(metric)
-            metric_scores = model_avg[metric].sort_values(ascending=ascending_order)
+            metric_scores = model_avg[metric].sort_values(ascending=False)
             for i, (model, score) in enumerate(metric_scores.items()):
                 self.stdout.write(f"  {i + 1}. {model}: {score:.3f}")
 
@@ -318,22 +276,9 @@ class EvaluationReporter:
             self.stdout.write("No data for overall performance")
             return
 
-        # Create a copy of the dataframe with normalized scores for aggregation
-        df_normalized = df.copy()
-        df_normalized["normalized_score"] = df_normalized.apply(
-            lambda row: self.normalize_score_for_aggregation(
-                row["metric"], row["score"]
-            ),
-            axis=1,
-        )
-
         # Overall performance by model
         self.stdout.write("\n📱 BY MODEL:")
-        overall_avg = (
-            df_normalized.groupby("model")["normalized_score"]
-            .mean()
-            .sort_values(ascending=False)
-        )
+        overall_avg = df.groupby("model")["score"].mean().sort_values(ascending=False)
 
         for i, (model, avg_score) in enumerate(overall_avg.items()):
             self.stdout.write(f"  {i + 1}. {model}: {avg_score:.3f}")
@@ -341,9 +286,7 @@ class EvaluationReporter:
         # Overall performance by prompt
         if "prompt_label" in df.columns:
             self.stdout.write("\n🎯 BY PROMPT:")
-            prompt_avg = df_normalized.groupby("prompt_label")[
-                "normalized_score"
-            ].mean()
+            prompt_avg = df.groupby("prompt_label")["score"].mean()
 
             # Sort prompts: default first, then #1, #2, etc.
             def prompt_sort_key(prompt):
@@ -413,14 +356,7 @@ class EvaluationReporter:
             self.stdout.write("No data for composite leaderboard")
             return
 
-        # Normalize scores (invert hallucination etc.)
         df_norm = df.copy()
-        df_norm["normalized_score"] = df_norm.apply(
-            lambda row: self.normalize_score_for_aggregation(
-                row["metric"], row["score"]
-            ),
-            axis=1,
-        )
 
         # Determine and normalize weights
         all_metrics = df_norm["metric"].unique()
@@ -430,7 +366,7 @@ class EvaluationReporter:
 
         # Apply weights per row
         df_norm["weighted_score"] = df_norm.apply(
-            lambda row: row["normalized_score"] * norm_weights.get(row["metric"], 0.0),
+            lambda row: row["score"] * norm_weights.get(row["metric"], 0.0),
             axis=1,
         )
 

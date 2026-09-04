@@ -1,5 +1,6 @@
 """Orchestrator for running RAG evaluations across multiple bots and models."""
 
+import asyncio
 import os
 from datetime import UTC, datetime
 from json import JSONDecodeError
@@ -72,7 +73,7 @@ class EvaluationOrchestrator:
                     "ContextualPrecision": 0.7,
                     "ContextualRelevancy": 0.5,
                     "ContextualRecall": 0.7,
-                    "Hallucination": 0.0,
+                    "Hallucination": 0.8,
                     "AnswerRelevancy": 0.7,
                 }
 
@@ -108,7 +109,7 @@ class EvaluationOrchestrator:
                 metric_thresholds = {
                     "Faithfulness": 0.7,
                     "ContextualRelevancy": 0.5,
-                    "Hallucination": 0.0,
+                    "Hallucination": 0.8,
                     "AnswerRelevancy": 0.7,
                     "Helpfulness": 0.7,
                 }
@@ -273,8 +274,8 @@ class EvaluationOrchestrator:
                             f"({len(batch)} test cases) ====="
                         )
 
-                        batch_result = self._run_deepeval_evaluation(
-                            batch, config, max_concurrent
+                        batch_result = await asyncio.to_thread(
+                            self._run_deepeval_evaluation, batch, config, max_concurrent
                         )
                         batch_results.append(batch_result)
 
@@ -306,8 +307,11 @@ class EvaluationOrchestrator:
                     f"\nEvaluating all {num_cases} test cases for {bot_name}"
                 )
 
-            final_result = self._run_deepeval_evaluation(
-                all_llm_test_cases, config, max_concurrent
+            final_result = await asyncio.to_thread(
+                self._run_deepeval_evaluation,
+                all_llm_test_cases,
+                config,
+                max_concurrent,
             )
             batch_results.append(final_result)
 
@@ -323,7 +327,13 @@ class EvaluationOrchestrator:
     def _run_deepeval_evaluation(
         self, test_cases: list, config: EvaluationConfig, max_concurrent: int
     ) -> EvaluationResult:
-        """Run the actual DeepEval evaluation."""
+        """Run the actual DeepEval evaluation.
+
+        Callers must run this off the event loop (asyncio.to_thread). Called
+        from a coroutine, deepeval.evaluate() falls back to nest_asyncio and
+        re-enters the running loop, which on python 3.14 fails the first API
+        call and then hangs the retries indefinitely.
+        """
         self.stdout.write(
             f"Running evaluation on {len(test_cases)} test cases "
             f"with max_concurrent={max_concurrent}"
