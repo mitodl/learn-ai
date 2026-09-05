@@ -2779,11 +2779,11 @@ __metadata:
   linkType: hard
 
 "@remixicon/react@npm:^4.2.0":
-  version: 4.7.0
-  resolution: "@remixicon/react@npm:4.7.0"
+  version: 4.9.0
+  resolution: "@remixicon/react@npm:4.9.0"
   peerDependencies:
     react: ">=18.2.0"
-  checksum: 10c0/02db56c1e4349da397b83041f8032e9e9b32b2470a5f14a3b74a2b78c87c8823141553400636ef77171f59c0a1b74ac9d8d3a3cd910b11809cecfcaf6b1666d1
+  checksum: 10c0/91bbadb677f45cf8b6687fdf9d273511fddb4e862f1da6c11bc7932acb578bcb26ae5b9e1eb62143a4e916b71797739a36d689866d5b0949f0f0f22c1684cb96
   languageName: node
   linkType: hard
 
