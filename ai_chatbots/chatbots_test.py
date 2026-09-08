@@ -501,6 +501,7 @@ async def test_syllabus_bot_tool(
         "limit": 5,
     }
     expected_results["metadata"]["parameters"] = search_parameters
+    expected_results["metadata"]["search_url"] = settings.AI_MIT_SYLLABUS_URL
     tool = chatbot.create_tools()[0]
     results = await tool.ainvoke({"q": "main topics", "state": syllabus_agent_state})
     mock_client_instance = mock_client_patch.return_value
@@ -1204,6 +1205,7 @@ async def test_video_gpt_bot_tool(
         "limit": 2,
     }
     expected_results["metadata"]["parameters"] = search_parameters
+    expected_results["metadata"]["search_url"] = settings.AI_MIT_VIDEO_TRANSCRIPT_URL
     tool = chatbot.create_tools()[0]
     results = await tool.ainvoke(
         {"q": "What is this video about?", "state": video_gpt_agent_state}

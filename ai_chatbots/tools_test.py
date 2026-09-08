@@ -13,6 +13,8 @@ from ai_chatbots.constants import (
 )
 from ai_chatbots.tools import (
     COURSE_PLATFORM_CACHE_PREFIX,
+    SearchToolSchema,
+    get_video_transcript_chunk,
     search_content_files,
     search_courses,
     search_related_course_content_files,
@@ -819,3 +821,100 @@ def test_invalid_support_article_params():
     """Test that invalid support search parameters raise a validation error."""
     with pytest.raises(ValidationError):
         search_support_articles.invoke({"state": support_state()})
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("exclude_canvas", [True, False])
+async def test_search_related_course_content_files_exclude_canvas(
+    mock_httpx_async_client,
+    syllabus_agent_state,
+    content_chunk_results,
+    exclude_canvas,
+):
+    """The related-course search honors exclude_canvas from state."""
+    syllabus_agent_state["related_courses"] = ["course-v1:UAI+12"]
+    syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
+    for result in content_chunk_results["results"]:
+        result["platform"]["code"] = "canvas"
+    mock_httpx_async_client(
+        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
+    )
+
+    results = json.loads(
+        await search_related_course_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == (
+        0 if exclude_canvas else len(content_chunk_results["results"])
+    )
+
+
+@pytest.mark.django_db
+async def test_search_content_files_metadata_search_url(
+    settings, mock_get_content_files, syllabus_agent_state
+):
+    """Content file search reports the URL it searched, like search_courses does."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/search"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
+    )
+
+    assert results["metadata"]["search_url"] == "https://mit.edu/search"
+
+
+async def test_get_video_transcript_chunk(
+    settings, mock_httpx_async_client, video_transcript_content_chunk_results
+):
+    """Transcript search returns chunk content and the URL it searched."""
+    settings.AI_MIT_VIDEO_TRANSCRIPT_URL = "https://mit.edu/transcripts"
+    settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 4
+    mock = mock_httpx_async_client(
+        video_transcript_content_chunk_results,
+        patch_path="ai_chatbots.utils.get_async_http_client",
+    )
+
+    results = json.loads(
+        await get_video_transcript_chunk.ainvoke(
+            {"q": "eigenvalues", "state": {"transcript_asset_id": ["asset-1"]}}
+        )
+    )
+
+    mock.return_value.get.assert_called_once()
+    assert mock.return_value.get.call_args.kwargs["params"] == {
+        "q": "eigenvalues",
+        "edx_module_id": "asset-1",
+        "limit": 4,
+    }
+    assert [r["chunk_content"] for r in results["results"]] == [
+        r["chunk_content"] for r in video_transcript_content_chunk_results["results"]
+    ]
+    assert results["metadata"]["search_url"] == "https://mit.edu/transcripts"
+
+
+async def test_search_courses_handles_invalid_json(mock_httpx_async_client):
+    """A non-JSON body is a tool error, not an exception escaping into the graph."""
+    mock = mock_httpx_async_client(
+        {}, patch_path="ai_chatbots.utils.get_async_http_client"
+    )
+    mock.return_value.get.return_value.json.side_effect = json.JSONDecodeError(
+        "Expecting value", "<html>", 0
+    )
+
+    result = await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
+    )
+
+    assert result == '{"error": "An error occurred while searching"}'
+
+
+def test_offered_by_enum_is_named_offered_by():
+    """The enum generated for offered_by must not be labelled resource_type."""
+    defs = SearchToolSchema.model_json_schema()["$defs"]
+
+    assert "offered_by" in defs
+    assert "mitx" in defs["offered_by"]["enum"]
