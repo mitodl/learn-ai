@@ -63,6 +63,19 @@ async def _search(url: str, params: dict) -> SearchResult:
     return SearchResult(body.get("results") or [], url, params)
 
 
+async def search_learning_resources(q: str, filters: dict) -> SearchResult:
+    """
+    Search learning resources. filters are the optional search params
+    (resource_type, free, offered_by, certification) with None values dropped.
+    """
+    result = await _search(
+        settings.AI_MIT_SEARCH_URL,
+        {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT, **filters},
+    )
+    # The vector endpoint can ignore `limit` and return more rows than asked
+    return result._replace(results=result.results[: settings.AI_MIT_SEARCH_LIMIT])
+
+
 async def search_content_files(
     q: str,
     resource_readable_id: str | list[str],
@@ -105,3 +118,29 @@ async def learning_resources(readable_id: str) -> list[dict]:
         timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
     )
     return body.get("results") or []
+
+
+async def contentfiles(
+    edx_module_ids: list[str], *, timeout: int | None = None
+) -> list[dict]:
+    """Return the contentfiles for these edX module ids."""
+    body = await _get(
+        settings.AI_MIT_CONTENTFILE_URL,
+        {"edx_module_id": edx_module_ids},
+        timeout=timeout,
+    )
+    return body.get("results") or []
+
+
+async def problem_set(
+    run_readable_id: str, title: str | None = None, *, timeout: int | None = None
+) -> dict:
+    """
+    Return the tutor problem sets of a run, or one problem set by title.
+
+    Learn redirects any other form of this URL to the trailing-slash one, and
+    the transport does not follow redirects, so the URL is built canonically.
+    """
+    path = "/".join(part for part in (run_readable_id, title) if part)
+    url = f"{settings.PROBLEM_SET_URL.rstrip('/')}/{path}/"
+    return await _get(url, {}, timeout=timeout)
