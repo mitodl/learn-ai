@@ -77,3 +77,40 @@ async def test_non_json_body_raises_learn_error(mock_async_get_client):
     with pytest.raises(learn.LearnError) as excinfo:
         await learn.learning_resources("MITx+6.00.1x")
     assert not isinstance(excinfo.value, ValueError)
+
+
+TRANSCRIPT_URL = "https://api.learn.mit.edu/api/v0/vector_content_files_search/"
+
+
+@pytest.fixture
+def mock_hybrid_flag(mocker):
+    """Control the hybrid search feature flag as seen by the client."""
+    return mocker.patch("ai_chatbots.learn.is_enabled", return_value=False)
+
+
+@pytest.mark.parametrize("hybrid", [True, False])
+async def test_search_transcript(
+    settings, mock_async_get_client, httpx_response, mock_hybrid_flag, hybrid
+):
+    """Transcript search owns its URL, limit and the hybrid flag."""
+    settings.AI_MIT_VIDEO_TRANSCRIPT_URL = TRANSCRIPT_URL
+    settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 4
+    settings.REQUESTS_TIMEOUT = 30
+    mock_hybrid_flag.return_value = hybrid
+    chunks = [{"chunk_content": "a"}, {"chunk_content": "b"}]
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": chunks})
+    )
+
+    result = await learn.search_transcript("eigenvalues", "asset-1")
+
+    expected_params = {"q": "eigenvalues", "edx_module_id": "asset-1", "limit": 4}
+    if hybrid:
+        expected_params["hybrid_search"] = True
+    client.get.assert_called_once_with(
+        TRANSCRIPT_URL,
+        params=expected_params,
+        headers={"Authorization": "Bearer learn-token"},
+        timeout=30,
+    )
+    assert result == learn.SearchResult(chunks, TRANSCRIPT_URL, expected_params)

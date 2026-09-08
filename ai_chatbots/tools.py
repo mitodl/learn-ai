@@ -37,6 +37,22 @@ COURSE_PLATFORM_CACHE_PREFIX = "course_platform_"
 # Learn's platform code for MITx Online, the only platform the tools can read
 MITXONLINE_PLATFORM = "mitxonline"
 
+# What the LLM sees when a Learn-backed tool fails
+LEARN_ERROR_ENVELOPE = json.dumps(
+    {"error": "An error occurred while querying MIT Learn"}
+)
+
+
+def _envelope(result: learn.SearchResult, shaped: list[dict], **extra) -> str:
+    """Serialize shaped search results plus what was searched, for the LLM."""
+    return json.dumps(
+        {
+            "results": shaped,
+            "metadata": {"search_url": result.url, "parameters": result.params},
+            **extra,
+        }
+    )
+
 
 async def _is_hybrid_search_enabled() -> bool:
     """Check if the hybrid search feature flag is enabled."""
@@ -413,39 +429,13 @@ async def get_video_transcript_chunk(
     """
     Query the MIT video transcript API, and return results as a JSON string.
     """
-
-    url = settings.AI_MIT_VIDEO_TRANSCRIPT_URL
-
-    transcript_asset_id = state["transcript_asset_id"][-1]
-    params = {
-        "q": q,
-        "edx_module_id": transcript_asset_id,
-        "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
-    }
-
-    log.debug("Searching MIT API with params: %s", params)
     try:
-        response = await async_request(
-            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
-        )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {
-                "chunk_content": result.get("chunk_content"),
-            }
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"search_url": url, "parameters": params},
-        }
-
-        return json.dumps(full_output)
+        result = await learn.search_transcript(q, state["transcript_asset_id"][-1])
+        shaped = [{"chunk_content": r.get("chunk_content")} for r in result.results]
+        return _envelope(result, shaped)
     except Exception:
         log.exception("Error querying MIT API for transcripts")
-        return json.dumps({"error": "An error occurred while getting the transcript"})
+        return LEARN_ERROR_ENVELOPE
 
 
 class SearchSupportArticlesToolSchema(pydantic.BaseModel):
