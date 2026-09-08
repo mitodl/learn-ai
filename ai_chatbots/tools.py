@@ -43,6 +43,25 @@ LEARN_ERROR_ENVELOPE = json.dumps(
 )
 
 
+def _search_error_envelope(error: Exception, **extra) -> str:
+    """
+    Serialize a failed search.  It keeps the url and parameters when the Learn
+    client raised, so a failed search is distinguishable from one that ran and
+    found nothing.
+    """
+    return json.dumps(
+        {
+            "error": "An error occurred while searching",
+            "results": [],
+            **extra,
+            "metadata": {
+                "search_url": getattr(error, "url", None),
+                "parameters": getattr(error, "params", None),
+            },
+        }
+    )
+
+
 def _envelope(result: learn.SearchResult, shaped: list[dict], **extra) -> str:
     """Serialize shaped search results plus what was searched, for the LLM."""
     return json.dumps(
@@ -307,62 +326,49 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     )
 
 
-async def _content_file_search(url, params, *, exclude_canvas=True):
+async def _content_file_search(
+    q: str,
+    readable_ids: str | list[str],
+    *,
+    collection_name: str | None,
+    exclude_canvas: str = "True",
+    platform: str | None = None,
+) -> str:
+    """Search content files and shape chunks + citations for the LLM."""
     try:
-        # Convert the exclude_canvas parameter to a boolean if it is a string
-        if exclude_canvas and exclude_canvas == "False":
-            exclude_canvas = False
-        if await _is_hybrid_search_enabled():
-            params["hybrid_search"] = True
-
-        response = await async_request(
-            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
+        result = await learn.search_content_files(
+            q, readable_ids, collection_name=collection_name, platform=platform
         )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
+        # State stores the flag as a string; only the exact "False" disables it
+        exclude = exclude_canvas != "False"
+        shaped = []
         citations = {}
-        for result in raw_results:
-            platform = result.get("platform", {}).get("code")
+        for chunk in result.results:
+            platform = chunk.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
             # those from other sources do not.
-            if exclude_canvas and (not platform or platform == "canvas"):
+            if exclude and (not platform or platform == "canvas"):
                 continue
             # the citation url is what identifies a citation; resource_point_id
             # is shared by every chunk of every file in a course, so keying on
             # it collapsed every citation onto whichever result came back first
-            citation_key = result.get("url")
-            simplified_result = {
-                "id": citation_key,
-                "chunk_content": result.get("chunk_content"),
-                "run_title": result.get("run_title"),
-            }
-            simplified_results.append(simplified_result)
+            citation_key = chunk.get("url")
+            shaped.append(
+                {
+                    "id": citation_key,
+                    "chunk_content": chunk.get("chunk_content"),
+                    "run_title": chunk.get("run_title"),
+                }
+            )
             if citation_key and not citations.get(citation_key):
                 citations[citation_key] = {
-                    "citation_url": result.get("url"),
-                    "citation_title": result.get("title")
-                    or result.get("content_title"),
+                    "citation_url": chunk.get("url"),
+                    "citation_title": chunk.get("title") or chunk.get("content_title"),
                 }
-        full_output = {
-            "results": simplified_results,
-            "citation_sources": citations,
-            "metadata": {"search_url": url, "parameters": params},
-        }
-        return json.dumps(full_output)
-    except Exception:
+        return _envelope(result, shaped, citation_sources=citations)
+    except Exception as error:
         log.exception("Error querying MIT API")
-        # keep the url and parameters, so a failed search is distinguishable
-        # from one that ran and found nothing
-        return json.dumps(
-            {
-                "error": "An error occurred while searching",
-                "results": [],
-                "citation_sources": {},
-                "metadata": {"search_url": url, "parameters": params},
-            }
-        )
+        return _search_error_envelope(error, citation_sources={})
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
@@ -377,24 +383,15 @@ async def search_content_files(
     its enrollment and payment deadlines.  Use this first for any question that
     could be specific to this resource.
     """
-
-    url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state.get("course_id", [None])[-1] or readable_id
-    collection_name = state.get("collection_name", [None])[-1]
-    exclude_canvas = state.get("exclude_canvas", ["True"])[-1]
-    platform = (state.get("platform") or [None])[-1]
-    params = {
-        "q": q,
-        "resource_readable_id": course_id,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
-    }
-    if collection_name:
-        params["collection_name"] = collection_name
-    if platform:
+    return await _content_file_search(
+        q,
+        state.get("course_id", [None])[-1] or readable_id,
+        collection_name=state.get("collection_name", [None])[-1],
+        exclude_canvas=state.get("exclude_canvas", ["True"])[-1],
         # A readable id can match resources on two platforms; scope the search
         # to the one the request named so the other one's content can't answer.
-        params["platform"] = [platform]
-    return await _content_file_search(url, params, exclude_canvas=exclude_canvas)
+        platform=(state.get("platform") or [None])[-1],
+    )
 
 
 @tool(args_schema=SearchRelatedCourseContentFilesToolSchema)
@@ -407,18 +404,11 @@ async def search_related_course_content_files(
     other courses in the program, or when the current course search does not
     return sufficient results.
     """
-    url = settings.AI_MIT_SYLLABUS_URL
-    collection_name = state.get("collection_name", [None])[-1]
-    related_courses = state["related_courses"]
-    params = {
-        "q": q,
-        "resource_readable_id": related_courses,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
-    }
-    if collection_name:
-        params["collection_name"] = collection_name
     return await _content_file_search(
-        url, params, exclude_canvas=state.get("exclude_canvas", ["True"])[-1]
+        q,
+        state["related_courses"],
+        collection_name=state.get("collection_name", [None])[-1],
+        exclude_canvas=state.get("exclude_canvas", ["True"])[-1],
     )
 
 

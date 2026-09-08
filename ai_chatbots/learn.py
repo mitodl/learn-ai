@@ -23,6 +23,11 @@ log = logging.getLogger(__name__)
 class LearnError(Exception):
     """A request to the Learn API failed after retries, or returned a non-JSON body."""
 
+    def __init__(self, message: str, url: str, params: dict):
+        super().__init__(message)
+        self.url = url
+        self.params = params
+
 
 class SearchResult(NamedTuple):
     """A search response plus exactly what was sent, for tool metadata."""
@@ -44,7 +49,7 @@ async def _get(url: str, params: dict, *, timeout: int | None = None) -> dict:
         return response.json()
     except (HTTPError, ValueError) as error:
         log.exception("Learn API request failed: %s", url)
-        raise LearnError(str(error)) from error
+        raise LearnError(str(error), url, params) from error
 
 
 async def _hybrid_params() -> dict:
@@ -56,6 +61,26 @@ async def _search(url: str, params: dict) -> SearchResult:
     params = {**params, **await _hybrid_params()}
     body = await _get(url, params)
     return SearchResult(body.get("results") or [], url, params)
+
+
+async def search_content_files(
+    q: str,
+    resource_readable_id: str | list[str],
+    *,
+    collection_name: str | None = None,
+    platform: str | None = None,
+) -> SearchResult:
+    """Search content file chunks of one course, or of several related courses."""
+    params = {
+        "q": q,
+        "resource_readable_id": resource_readable_id,
+        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
+    }
+    if collection_name:
+        params["collection_name"] = collection_name
+    if platform:
+        params["platform"] = [platform]
+    return await _search(settings.AI_MIT_SYLLABUS_URL, params)
 
 
 async def search_transcript(q: str, edx_module_id: str) -> SearchResult:
