@@ -114,3 +114,50 @@ async def test_search_transcript(
         timeout=30,
     )
     assert result == learn.SearchResult(chunks, TRANSCRIPT_URL, expected_params)
+
+
+SYLLABUS_URL = "https://api.learn.mit.edu/api/v0/vector_content_files_search/"
+
+
+@pytest.mark.parametrize(
+    ("readable_id", "collection_name", "hybrid"),
+    [
+        ("MITx+6.00.1x", "vector512", False),
+        ("MITx+6.00.1x", None, True),
+        (["course-v1:UAI+12", "course-v1:UAI+13"], None, False),
+    ],
+)
+async def test_search_content_files(  # noqa: PLR0913
+    settings,
+    mock_async_get_client,
+    httpx_response,
+    mock_hybrid_flag,
+    readable_id,
+    collection_name,
+    hybrid,
+):
+    """Content file search takes one course or a list, optional collection."""
+    settings.AI_MIT_SYLLABUS_URL = SYLLABUS_URL
+    settings.AI_MIT_CONTENT_SEARCH_LIMIT = 6
+    mock_hybrid_flag.return_value = hybrid
+    chunks = [{"resource_point_id": "p1"}]
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": chunks})
+    )
+
+    result = await learn.search_content_files(
+        "main topics", readable_id, collection_name=collection_name
+    )
+
+    expected_params = {
+        "q": "main topics",
+        "resource_readable_id": readable_id,
+        "limit": 6,
+    }
+    if collection_name:
+        expected_params["collection_name"] = collection_name
+    if hybrid:
+        expected_params["hybrid_search"] = True
+    assert client.get.call_args.args == (SYLLABUS_URL,)
+    assert client.get.call_args.kwargs["params"] == expected_params
+    assert result == learn.SearchResult(chunks, SYLLABUS_URL, expected_params)
