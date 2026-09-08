@@ -52,9 +52,12 @@ async def test_http_error_raises_learn_error(mock_async_get_client, httpx_respon
     """A persistent upstream error becomes LearnError after the retry budget."""
     client = mock_async_get_client(return_value=httpx_response(502))
 
-    with pytest.raises(learn.LearnError):
+    with pytest.raises(learn.LearnError) as excinfo:
         await learn.learning_resources("MITx+6.00.1x")
     assert client.get.call_count == 3
+    # tools report what was tried, so a failure isn't mistaken for no results
+    assert excinfo.value.url == RESOURCES_URL
+    assert excinfo.value.params == {"readable_id": "MITx+6.00.1x", "limit": 5}
 
 
 @pytest.mark.usefixtures("_no_retry_sleep")
@@ -161,3 +164,93 @@ async def test_search_content_files(  # noqa: PLR0913
     assert client.get.call_args.args == (SYLLABUS_URL,)
     assert client.get.call_args.kwargs["params"] == expected_params
     assert result == learn.SearchResult(chunks, SYLLABUS_URL, expected_params)
+
+
+SEARCH_URL = "https://api.learn.mit.edu/api/v0/vector_learning_resources_search/"
+
+
+@pytest.mark.parametrize("hybrid", [True, False])
+async def test_search_learning_resources(
+    settings,
+    mock_async_get_client,
+    httpx_response,
+    mock_hybrid_flag,
+    hybrid,
+):
+    """Resource search uses AI_MIT_SEARCH_URL and trims to limit."""
+    settings.AI_MIT_SEARCH_URL = SEARCH_URL
+    settings.AI_MIT_SEARCH_LIMIT = 2
+    mock_hybrid_flag.return_value = hybrid
+    rows = [{"id": 1}, {"id": 2}, {"id": 3}]
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": rows})
+    )
+    filters = {"resource_type": ["course"], "free": True}
+
+    result = await learn.search_learning_resources("physics", filters)
+
+    expected_url = SEARCH_URL
+    expected_params = {"q": "physics", "limit": 2, **filters}
+    if hybrid:
+        expected_params["hybrid_search"] = True
+    assert client.get.call_args.args == (expected_url,)
+    assert client.get.call_args.kwargs["params"] == expected_params
+    # The vector endpoint can ignore `limit`; results are capped regardless.
+    assert result == learn.SearchResult(rows[:2], expected_url, expected_params)
+
+
+CONTENTFILE_URL = "https://api.learn.mit.edu/api/v1/contentfiles/"
+PROBLEM_SET_URL = "https://api.learn.mit.edu/api/v0/tutor/problems/"
+
+
+async def test_contentfiles(settings, mock_async_get_client, httpx_response):
+    """Contentfiles are fetched by edx module id, with an optional timeout."""
+    settings.AI_MIT_CONTENTFILE_URL = CONTENTFILE_URL
+    rows = [{"edx_module_id": "block1", "content": "<problem/>"}]
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": rows})
+    )
+
+    result = await learn.contentfiles(["block1", "block2"], timeout=10)
+
+    assert result == rows
+    client.get.assert_called_once_with(
+        CONTENTFILE_URL,
+        params={"edx_module_id": ["block1", "block2"]},
+        headers={"Authorization": "Bearer learn-token"},
+        timeout=10,
+    )
+
+
+async def test_contentfiles_default_timeout(
+    settings, mock_async_get_client, httpx_response
+):
+    """Without an explicit timeout the shared REQUESTS_TIMEOUT applies."""
+    settings.AI_MIT_CONTENTFILE_URL = CONTENTFILE_URL
+    settings.REQUESTS_TIMEOUT = 17
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": []})
+    )
+
+    assert await learn.contentfiles(["block1"]) == []
+    assert client.get.call_args.kwargs["timeout"] == 17
+
+
+@pytest.mark.parametrize("base_url", [PROBLEM_SET_URL, PROBLEM_SET_URL.rstrip("/")])
+@pytest.mark.parametrize(
+    ("title", "expected_path"),
+    [(None, "run-1/"), ("Problem Set 1", "run-1/Problem Set 1/")],
+)
+async def test_problem_set(  # noqa: PLR0913
+    settings, mock_async_get_client, httpx_response, base_url, title, expected_path
+):
+    """Problem set URLs are canonical: single slashes, trailing slash (Learn 301s otherwise)."""
+    settings.PROBLEM_SET_URL = base_url
+    body = {"problem_set_files": [], "solution_set_files": []}
+    client = mock_async_get_client(return_value=httpx_response(200, json_body=body))
+
+    result = await learn.problem_set("run-1", title, timeout=10)
+
+    assert result == body
+    assert client.get.call_args.args == (f"{PROBLEM_SET_URL}{expected_path}",)
+    assert client.get.call_args.kwargs["params"] == {}
