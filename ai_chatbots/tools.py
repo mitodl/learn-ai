@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
+from ai_chatbots import learn
 from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
@@ -524,19 +525,7 @@ async def _get_course_platform(readable_id: str) -> str | None:
         # Failed and empty lookups are cached as an empty string
         return cached_platform or None
     try:
-        response = await async_request(
-            settings.AI_MIT_LEARNING_RESOURCES_URL,
-            {"readable_id": readable_id, "limit": 5},
-            # A cheap metadata lookup, not a search, and every support search
-            # waits on it, so it gets a tighter timeout than the default.
-            timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
-            # Courses are public, so the lookup still works without a token.
-            # httpx rejects an empty bearer header outright, so only send one
-            # when a token is actually configured.
-            include_learn_token=bool(settings.LEARN_ACCESS_TOKEN),
-        )
-        response.raise_for_status()
-        results = response.json().get("results", [])
+        results = await learn.learning_resources(readable_id)
         codes = {(r.get("platform") or {}).get("code") for r in results} - {None}
         # A readable id can match resources on two platforms.  Picking one of
         # them scopes the support search to the wrong help center section, so
