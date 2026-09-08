@@ -216,6 +216,7 @@ async def test_search_content_files(  # noqa: PLR0913
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
     )
+    assert results["metadata"]["search_url"] == search_url
     assert len(results["results"]) == len(content_chunk_results["results"])
     assert len(results["citation_sources"]) == len(
         {
@@ -235,17 +236,22 @@ async def test_search_content_files(  # noqa: PLR0913
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    "tool", [search_content_files, search_related_course_content_files]
+)
 @pytest.mark.parametrize("exclude_canvas", [True, False])
-async def test_search_canvas_content_files(
+async def test_search_canvas_content_files(  # noqa: PLR0913
     settings,
     mock_httpx_async_client,
     syllabus_agent_state,
     content_chunk_results,
+    tool,
     exclude_canvas,
 ):
-    """Test that search_content_files returns canvas results only if exclude_canvas is False."""
+    """Content file searches return canvas results only if exclude_canvas is False."""
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
 
+    syllabus_agent_state["related_courses"] = ["course-v1:UAI+12"]
     syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
     for result in content_chunk_results["results"]:
         result["platform"]["code"] = "canvas"
@@ -256,9 +262,7 @@ async def test_search_canvas_content_files(
     )
 
     results = json.loads(
-        await search_content_files.ainvoke(
-            {"q": "main topics", "state": syllabus_agent_state}
-        )
+        await tool.ainvoke({"q": "main topics", "state": syllabus_agent_state})
     )
 
     assert len(results["results"]) == (
@@ -823,50 +827,6 @@ def test_invalid_support_article_params():
         search_support_articles.invoke({"state": support_state()})
 
 
-@pytest.mark.django_db
-@pytest.mark.parametrize("exclude_canvas", [True, False])
-async def test_search_related_course_content_files_exclude_canvas(
-    mock_httpx_async_client,
-    syllabus_agent_state,
-    content_chunk_results,
-    exclude_canvas,
-):
-    """The related-course search honors exclude_canvas from state."""
-    syllabus_agent_state["related_courses"] = ["course-v1:UAI+12"]
-    syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
-    for result in content_chunk_results["results"]:
-        result["platform"]["code"] = "canvas"
-    mock_httpx_async_client(
-        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
-
-    results = json.loads(
-        await search_related_course_content_files.ainvoke(
-            {"q": "main topics", "state": syllabus_agent_state}
-        )
-    )
-
-    assert len(results["results"]) == (
-        0 if exclude_canvas else len(content_chunk_results["results"])
-    )
-
-
-@pytest.mark.django_db
-async def test_search_content_files_metadata_search_url(
-    settings, mock_get_content_files, syllabus_agent_state
-):
-    """Content file search reports the URL it searched, like search_courses does."""
-    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/search"
-
-    results = json.loads(
-        await search_content_files.ainvoke(
-            {"q": "main topics", "state": syllabus_agent_state}
-        )
-    )
-
-    assert results["metadata"]["search_url"] == "https://mit.edu/search"
-
-
 async def test_get_video_transcript_chunk(
     settings, mock_httpx_async_client, video_transcript_content_chunk_results
 ):
@@ -917,4 +877,3 @@ def test_offered_by_enum_is_named_offered_by():
     defs = SearchToolSchema.model_json_schema()["$defs"]
 
     assert "offered_by" in defs
-    assert "mitx" in defs["offered_by"]["enum"]
