@@ -8,12 +8,14 @@ from django.core.cache import caches
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
+from ai_chatbots import learn
 from ai_chatbots.constants import (
     ZENDESK_PLATFORM_CATEGORY_IDS,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
 )
 from ai_chatbots.tools import (
     COURSE_PLATFORM_CACHE_PREFIX,
+    LEARN_ERROR_ENVELOPE,
     SearchToolSchema,
     get_video_transcript_chunk,
     search_content_files,
@@ -946,14 +948,14 @@ def test_invalid_support_article_params():
 
 
 async def test_get_video_transcript_chunk(
-    settings, mock_httpx_async_client, video_transcript_content_chunk_results
+    mocker, video_transcript_content_chunk_results
 ):
     """Transcript search returns chunk content and the URL it searched."""
-    settings.AI_MIT_VIDEO_TRANSCRIPT_URL = "https://mit.edu/transcripts"
-    settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 4
-    mock = mock_httpx_async_client(
-        video_transcript_content_chunk_results,
-        patch_path="ai_chatbots.utils.get_async_http_client",
+    chunks = video_transcript_content_chunk_results["results"]
+    params = {"q": "eigenvalues", "edx_module_id": "asset-1", "limit": 4}
+    search = mocker.patch(
+        "ai_chatbots.learn.search_transcript",
+        return_value=learn.SearchResult(chunks, "https://mit.edu/transcripts", params),
     )
 
     results = json.loads(
@@ -962,16 +964,22 @@ async def test_get_video_transcript_chunk(
         )
     )
 
-    mock.return_value.get.assert_called_once()
-    assert mock.return_value.get.call_args.kwargs["params"] == {
-        "q": "eigenvalues",
-        "edx_module_id": "asset-1",
-        "limit": 4,
+    search.assert_called_once_with("eigenvalues", "asset-1")
+    assert results == {
+        "results": [{"chunk_content": r["chunk_content"]} for r in chunks],
+        "metadata": {"search_url": "https://mit.edu/transcripts", "parameters": params},
     }
-    assert [r["chunk_content"] for r in results["results"]] == [
-        r["chunk_content"] for r in video_transcript_content_chunk_results["results"]
-    ]
-    assert results["metadata"]["search_url"] == "https://mit.edu/transcripts"
+
+
+async def test_get_video_transcript_chunk_error(mocker):
+    """A Learn failure is reported to the LLM as the shared error envelope."""
+    mocker.patch("ai_chatbots.learn.search_transcript", side_effect=learn.LearnError())
+
+    result = await get_video_transcript_chunk.ainvoke(
+        {"q": "eigenvalues", "state": {"transcript_asset_id": ["asset-1"]}}
+    )
+
+    assert result == LEARN_ERROR_ENVELOPE
 
 
 async def test_search_courses_handles_invalid_json(mock_httpx_async_client):

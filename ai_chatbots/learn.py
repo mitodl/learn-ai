@@ -9,10 +9,13 @@ LearnError on transport failure, non-2xx after retries, or a non-JSON body.
 import logging
 from typing import NamedTuple
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from httpx import HTTPError
 
+from ai_chatbots.constants import HYBRID_SEARCH_FEATURE_FLAG
 from ai_chatbots.utils import async_request
+from main.features import is_enabled
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +45,29 @@ async def _get(url: str, params: dict, *, timeout: int | None = None) -> dict:
     except (HTTPError, ValueError) as error:
         log.exception("Learn API request failed: %s", url)
         raise LearnError(str(error)) from error
+
+
+async def _hybrid_params() -> dict:
+    enabled = await sync_to_async(is_enabled)(HYBRID_SEARCH_FEATURE_FLAG)
+    return {"hybrid_search": True} if enabled else {}
+
+
+async def _search(url: str, params: dict) -> SearchResult:
+    params = {**params, **await _hybrid_params()}
+    body = await _get(url, params)
+    return SearchResult(body.get("results") or [], url, params)
+
+
+async def search_transcript(q: str, edx_module_id: str) -> SearchResult:
+    """Search the transcript chunks of one video."""
+    return await _search(
+        settings.AI_MIT_VIDEO_TRANSCRIPT_URL,
+        {
+            "q": q,
+            "edx_module_id": edx_module_id,
+            "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
+        },
+    )
 
 
 async def learning_resources(readable_id: str) -> list[dict]:
