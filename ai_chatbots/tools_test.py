@@ -774,16 +774,12 @@ async def test_search_courses(
 
     results = json.loads(
         await search_courses.ainvoke(
-            {
-                "q": "physics",
-                "state": {"search_url": ["https://mit.edu/search"]},
-                **params,
-            }
+            {"q": "physics", "state": {"search_backend": ["elastic"]}, **params}
         )
     )
 
     mock_search_learning_resources.assert_called_once_with(
-        "physics", filters, search_url="https://mit.edu/search"
+        "physics", filters, backend="elastic"
     )
     base = dict.fromkeys(
         (
@@ -821,12 +817,12 @@ async def test_search_courses(
     }
 
 
-async def test_search_courses_without_search_url(mock_search_learning_resources):
-    """Without a search_url in state, the default search URL is used."""
+async def test_search_courses_default_backend(mock_search_learning_resources):
+    """Without a search_backend in state, the vector search is used."""
     await search_courses.ainvoke({"q": "physics", "state": {}})
 
     mock_search_learning_resources.assert_called_once_with(
-        "physics", {}, search_url=None
+        "physics", {}, backend="vector"
     )
 
 
@@ -838,9 +834,7 @@ async def test_search_courses_error(mocker):
         side_effect=learn.LearnError("502", "https://mit.edu/search", params),
     )
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://mit.edu/search"]}}
-    )
+    result = await search_courses.ainvoke({"q": "physics", "state": {}})
 
     assert json.loads(result) == {
         "error": "An error occurred while searching",

@@ -210,7 +210,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
     assert recommendation_consumer.bot.instructions == (
         instructions if instructions else prompts.PROMPT_RECOMMENDATION
     )
-    default_state = {"search_url": [settings.AI_MIT_SEARCH_URL]}
+    default_state = {"search_backend": ["vector"]}
     mock_completion.assert_called_once_with(message, extra_state=default_state)
     assert (
         mock_http_consumer_send.send_body.call_count

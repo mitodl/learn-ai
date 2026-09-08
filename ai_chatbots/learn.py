@@ -63,15 +63,25 @@ async def _search(url: str, params: dict) -> SearchResult:
     return SearchResult(body.get("results") or [], url, params)
 
 
+SEARCH_BACKENDS = {
+    "vector": lambda: settings.AI_MIT_SEARCH_VECTOR_URL,
+    "elastic": lambda: settings.AI_MIT_SEARCH_ELASTIC_URL,
+}
+
+
 async def search_learning_resources(
-    q: str, filters: dict, *, search_url: str | None = None
+    q: str, filters: dict, *, backend: str = "vector"
 ) -> SearchResult:
     """
-    Search learning resources. filters are the optional search params
-    (resource_type, free, offered_by, certification) with None values dropped.
+    Search learning resources on the vector or elastic endpoint. filters are the
+    optional search params (resource_type, free, offered_by, certification)
+    with None values dropped.
     """
+    if backend not in SEARCH_BACKENDS:
+        msg = f"Unknown search backend {backend!r}, expected {sorted(SEARCH_BACKENDS)}"
+        raise ValueError(msg)
     result = await _search(
-        search_url or settings.AI_MIT_SEARCH_URL,
+        SEARCH_BACKENDS[backend](),
         {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT, **filters},
     )
     # The vector endpoint can ignore `limit` and return more rows than asked

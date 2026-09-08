@@ -33,8 +33,8 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
 
-        # Recommendation bot requires search_url in extra_state
-        return "search_url" in extra_state
+        # Recommendation bot requires search_backend in extra_state
+        return "search_backend" in extra_state
 
     def create_bot_instance(
         self, model: str, test_case: TestCaseSpec, instructions: str | None = None

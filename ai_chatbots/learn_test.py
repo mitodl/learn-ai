@@ -166,21 +166,31 @@ async def test_search_content_files(  # noqa: PLR0913
     assert result == learn.SearchResult(chunks, SYLLABUS_URL, expected_params)
 
 
-SEARCH_URL = "https://api.learn.mit.edu/api/v0/vector_learning_resources_search/"
+VECTOR_SEARCH_URL = "https://api.learn.mit.edu/api/v0/vector_learning_resources_search/"
+ELASTIC_SEARCH_URL = "https://api.learn.mit.edu/api/v1/learning_resources_search/"
 
 
-@pytest.mark.parametrize("override_url", [None, "https://mit.edu/other-search"])
+@pytest.mark.parametrize(
+    ("backend", "expected_url"),
+    [
+        (None, VECTOR_SEARCH_URL),
+        ("vector", VECTOR_SEARCH_URL),
+        ("elastic", ELASTIC_SEARCH_URL),
+    ],
+)
 @pytest.mark.parametrize("hybrid", [True, False])
 async def test_search_learning_resources(  # noqa: PLR0913
     settings,
     mock_async_get_client,
     httpx_response,
     mock_hybrid_flag,
-    override_url,
+    backend,
+    expected_url,
     hybrid,
 ):
-    """Resource search uses the default URL or a per-request override, and trims to limit."""
-    settings.AI_MIT_SEARCH_URL = SEARCH_URL
+    """Resource search picks the vector or elastic endpoint and trims to the limit."""
+    settings.AI_MIT_SEARCH_VECTOR_URL = VECTOR_SEARCH_URL
+    settings.AI_MIT_SEARCH_ELASTIC_URL = ELASTIC_SEARCH_URL
     settings.AI_MIT_SEARCH_LIMIT = 2
     mock_hybrid_flag.return_value = hybrid
     rows = [{"id": 1}, {"id": 2}, {"id": 3}]
@@ -188,12 +198,10 @@ async def test_search_learning_resources(  # noqa: PLR0913
         return_value=httpx_response(200, json_body={"results": rows})
     )
     filters = {"resource_type": ["course"], "free": True}
+    kwargs = {} if backend is None else {"backend": backend}
 
-    result = await learn.search_learning_resources(
-        "physics", filters, search_url=override_url
-    )
+    result = await learn.search_learning_resources("physics", filters, **kwargs)
 
-    expected_url = override_url or SEARCH_URL
     expected_params = {"q": "physics", "limit": 2, **filters}
     if hybrid:
         expected_params["hybrid_search"] = True
@@ -201,6 +209,12 @@ async def test_search_learning_resources(  # noqa: PLR0913
     assert client.get.call_args.kwargs["params"] == expected_params
     # The vector endpoint can ignore `limit`; results are capped regardless.
     assert result == learn.SearchResult(rows[:2], expected_url, expected_params)
+
+
+async def test_search_learning_resources_rejects_unknown_backend():
+    """Only the two configured endpoints can be searched."""
+    with pytest.raises(ValueError, match="backend"):
+        await learn.search_learning_resources("physics", {}, backend="https://x/")
 
 
 CONTENTFILE_URL = "https://api.learn.mit.edu/api/v1/contentfiles/"

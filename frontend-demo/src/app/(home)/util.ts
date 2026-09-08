@@ -27,7 +27,9 @@ const getRequestOpts = <Body extends Record<string, unknown>>({
         message: messages[messages.length - 1].content,
         ...extraBody,
         model: extraBody.model ? extraBody.model : undefined,
-        search_url: extraBody.search_url ? extraBody.search_url : undefined,
+        search_backend: extraBody.search_backend
+          ? extraBody.search_backend
+          : undefined,
       }
     },
   }
@@ -73,7 +75,9 @@ const useRequestOpts = <Body extends Record<string, unknown>>({
           ...extraBody,
           clear_history: clearHistory ? true : undefined,
           model: extraBody.model ? extraBody.model : undefined,
-          search_url: extraBody.search_url ? extraBody.search_url : undefined,
+          search_backend: extraBody.search_backend
+            ? extraBody.search_backend
+            : undefined,
         }
       },
     }

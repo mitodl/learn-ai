@@ -480,7 +480,7 @@ class RecommendationAgentState(SummaryState):
     to the associated tool function.
     """
 
-    search_url: Annotated[list[str], add]
+    search_backend: Annotated[list[str], add]
 
 
 class ResourceRecommendationBot(TruncatingChatbot):

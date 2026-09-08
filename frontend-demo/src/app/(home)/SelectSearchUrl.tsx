@@ -21,16 +21,10 @@ const SelectSearchURL: React.FC<
       value={props.value}
     >
       <MenuItem value="">Search Type</MenuItem>
-      <MenuItem
-        key="traditional"
-        value={process.env.NEXT_PUBLIC_MIT_SEARCH_ELASTIC_URL}
-      >
+      <MenuItem key="traditional" value="elastic">
         Elasticsearch
       </MenuItem>
-      <MenuItem
-        key="vector"
-        value={process.env.NEXT_PUBLIC_MIT_SEARCH_VECTOR_URL}
-      >
+      <MenuItem key="vector" value="vector">
         Vector
       </MenuItem>
     </TextField>

@@ -181,11 +181,9 @@ async def search_courses(
         "certification": kwargs.get("certification"),
     }
     filters = {k: v for k, v in filters.items() if v is not None}
-    search_url = ((state or {}).get("search_url") or [None])[-1]
+    backend = ((state or {}).get("search_backend") or ["vector"])[-1]
     try:
-        result = await learn.search_learning_resources(
-            q, filters, search_url=search_url
-        )
+        result = await learn.search_learning_resources(q, filters, backend=backend)
         main_properties = [
             "title",
             "id",

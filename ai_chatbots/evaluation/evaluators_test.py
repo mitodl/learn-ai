@@ -35,7 +35,7 @@ class TestRecommendationBotEvaluator:
                     "question": "What courses are available?",
                     "expected_output": "Here are the courses...",
                     "expected_tools": ["search_courses"],
-                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_state": {"search_backend": ["vector"]},
                     "extra_init": {"param": "value"},
                 }
             ]
@@ -48,9 +48,7 @@ class TestRecommendationBotEvaluator:
         assert test_cases[0].question == "What courses are available?"
         assert test_cases[0].expected_output == "Here are the courses..."
         assert test_cases[0].expected_tools == ["search_courses"]
-        assert test_cases[0].metadata["extra_state"]["search_url"] == [
-            "http://test.com"
-        ]
+        assert test_cases[0].metadata["extra_state"]["search_backend"] == ["vector"]
         assert test_cases[0].metadata["extra_init"]["param"] == "value"
 
     def test_validate_test_case_valid(self, evaluator):
@@ -58,7 +56,7 @@ class TestRecommendationBotEvaluator:
         test_case = TestCaseSpec(
             question="Test question",
             metadata={
-                "extra_state": {"search_url": ["http://test.com"]},
+                "extra_state": {"search_backend": ["vector"]},
                 "extra_init": {},
             },
         )
@@ -106,7 +104,7 @@ class TestRecommendationBotEvaluator:
         test_case = TestCaseSpec(
             question="Test question",
             metadata={
-                "extra_state": {"search_url": ["http://test.com"]},
+                "extra_state": {"search_backend": ["vector"]},
                 "extra_init": {},
             },
         )
@@ -116,7 +114,7 @@ class TestRecommendationBotEvaluator:
         mock_bot.agent.ainvoke.assert_called_once_with(
             {
                 "messages": [{"content": "Test question", "role": "user"}],
-                "search_url": ["http://test.com"],
+                "search_backend": ["vector"],
             },
             config={"test": "config"},
         )
@@ -361,7 +359,7 @@ class TestEvaluatorIntegration:
                     "question": "Test question",
                     "expected_output": "Test output",
                     "expected_tools": ["search_courses"],
-                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_state": {"search_backend": ["vector"]},
                     "extra_init": {},
                 }
             ]
