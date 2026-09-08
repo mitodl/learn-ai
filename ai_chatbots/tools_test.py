@@ -35,15 +35,7 @@ COURSE_ID = "8.20+january-iap_2021"
 @pytest.fixture(autouse=True)
 def _mock_feature_flag(mocker):
     """Default feature flags to disabled so tests don't touch the durable cache."""
-    return mocker.patch("ai_chatbots.tools.feature_is_enabled", return_value=False)
-
-
-@pytest.fixture
-def mock_get_resources(mock_httpx_async_client, search_results):
-    """Mock httpx async client for resource search tests."""
-    return mock_httpx_async_client(
-        search_results, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
+    return mocker.patch("ai_chatbots.learn.is_enabled", return_value=False)
 
 
 @pytest.fixture
@@ -55,82 +47,6 @@ def mock_search_content_files(mocker, content_chunk_results):
         return_value=learn.SearchResult(
             content_chunk_results["results"], "https://mit.edu/search", params
         ),
-    )
-
-
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"q": "physics"},
-        {"q": "biology", "resource_type": ["course", "video", "document"]},
-        {"q": "chemistry", "resource_type": ["course"], "free": True},
-        {
-            "q": "astronomy",
-            "resource_type": ["course"],
-            "free": False,
-            "certification": True,
-        },
-        {
-            "q": "ecology",
-            "resource_type": ["course"],
-            "certification": True,
-            "offered_by": ["xpro"],
-        },
-    ],
-)
-@pytest.mark.parametrize(
-    ("search_url", "limit"),
-    [
-        ("https://mit.edu/search", 5),
-        ("https://mit.edu/vector", 10),
-        ("https://mit.edu/vector", 20),
-    ],
-)
-async def test_search_courses(  # noqa: PLR0913
-    settings, params, mock_get_resources, search_results, search_url, limit
-):
-    """Test that the search_courses tool returns expected results w/expected params."""
-    settings.AI_MIT_SEARCH_URL = search_url
-    settings.AI_MIT_SEARCH_LIMIT = limit
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    params["state"] = {"search_url": [search_url]}
-    results = json.loads(await search_courses.ainvoke(params))
-    params.pop("state")
-    expected_params = {"limit": limit, **params}
-    # The mock client's get method should be called
-    mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-    # The vector endpoint can ignore `limit` and return more rows than asked;
-    # the tool must cap results at AI_MIT_SEARCH_LIMIT regardless.
-    assert len(results["results"]) == min(limit, len(search_results["results"]))
-
-
-@pytest.mark.parametrize(
-    "search_url",
-    ["https://mit.edu/search", "https://mit.edu/vector"],
-)
-async def test_search_courses_override_url(settings, mock_get_resources, search_url):
-    """Test that the search_courses tool returns expected results w/expected params."""
-    settings.AI_MIT_SEARCH_URL = "http://default_url.edu"
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    params = {
-        "q": "physics",
-        "limit": 10,
-        "resource_type": ["course"],
-        "state": {"search_url": [search_url]},
-    }
-    await search_courses.ainvoke(params)
-    params.pop("state")
-    # The mock client's get method should be called
-    mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
-        params=params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
     )
 
 
@@ -150,129 +66,6 @@ def test_invalid_params(params):
     """Test that invalid parameters raise a validation error."""
     with pytest.raises(ValidationError):
         search_courses.invoke(params)
-
-
-async def test_httpx_exception(mocker):
-    """Test that a request exception returns a JSON error msg"""
-    mock_client = mocker.Mock()
-    mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
-
-    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
-
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
-    # a failed search still reports what it tried, so the metadata shows a
-    # failure rather than an empty result set
-    assert json.loads(result) == {
-        "error": "An error occurred while searching",
-        "results": [],
-        "metadata": {
-            "search_url": "https://test.edu/search",
-            "parameters": {"q": "physics", "limit": 10},
-        },
-    }
-
-
-@pytest.mark.usefixtures("_no_retry_sleep")
-async def test_search_courses_handles_http_status_error(
-    mock_async_get_client, httpx_response
-):
-    """Persistent 502s should become the tool's JSON error payload."""
-    mock_client = mock_async_get_client(
-        return_value=httpx_response(502, url="https://test.edu/search")
-    )
-
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
-
-    # a failed search still reports what it tried, so the metadata shows a
-    # failure rather than an empty result set
-    assert json.loads(result) == {
-        "error": "An error occurred while searching",
-        "results": [],
-        "metadata": {
-            "search_url": "https://test.edu/search",
-            "parameters": {"q": "physics", "limit": 10},
-        },
-    }
-    # Confirm the retry budget was actually exercised before giving up.
-    assert mock_client.get.call_count == 3
-
-
-@pytest.mark.parametrize(
-    ("resource_type", "offered_by"),
-    [
-        (None, None),
-        (None, ["xpro"]),
-        (["course"], None),
-    ],
-)
-async def test_search_courses_handles_none_kwargs(
-    settings, mock_get_resources, resource_type, offered_by
-):
-    """Test that search_courses handles None values for resource_type and offered_by."""
-    settings.AI_MIT_SEARCH_URL = "https://mit.edu/search"
-    settings.AI_MIT_SEARCH_LIMIT = 10
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-
-    params = {
-        "q": "physics",
-        "state": {"search_url": ["https://mit.edu/search"]},
-        "resource_type": resource_type,
-        "offered_by": offered_by,
-    }
-
-    await search_courses.ainvoke(params)
-
-    # Build expected params - None values should be excluded
-    expected_params = {"q": "physics", "limit": 10}
-    if resource_type is not None:
-        expected_params["resource_type"] = resource_type
-    if offered_by is not None:
-        expected_params["offered_by"] = offered_by
-
-    mock_get_resources.return_value.get.assert_called_once_with(
-        "https://mit.edu/search",
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-
-
-@pytest.mark.parametrize("is_hybrid_enabled", [True, False])
-async def test_search_courses_hybrid_flag(
-    settings,
-    mock_get_resources,
-    is_hybrid_enabled,
-    mocker,
-):
-    """Test that search_courses adds hybrid_search when the feature flag is enabled."""
-    search_url = "https://mit.edu/search"
-    settings.AI_MIT_SEARCH_URL = search_url
-    settings.AI_MIT_SEARCH_LIMIT = 10
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-
-    mocker.patch(
-        "ai_chatbots.tools.feature_is_enabled",
-        return_value=is_hybrid_enabled,
-    )
-
-    expected_params = {"q": "physics", "limit": 10}
-    if is_hybrid_enabled:
-        expected_params["hybrid_search"] = True
-
-    await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": [search_url]}}
-    )
-
-    mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
 
 
 @pytest.fixture
@@ -725,31 +518,6 @@ async def test_get_video_transcript_chunk_error(mocker):
     assert result == LEARN_ERROR_ENVELOPE
 
 
-async def test_search_courses_handles_invalid_json(mock_httpx_async_client):
-    """A non-JSON body is a tool error, not an exception escaping into the graph."""
-    mock = mock_httpx_async_client(
-        {}, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
-    mock.return_value.get.return_value.json.side_effect = json.JSONDecodeError(
-        "Expecting value", "<html>", 0
-    )
-
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
-
-    # a failed search still reports what it tried, so the metadata shows a
-    # failure rather than an empty result set
-    assert json.loads(result) == {
-        "error": "An error occurred while searching",
-        "results": [],
-        "metadata": {
-            "search_url": "https://test.edu/search",
-            "parameters": {"q": "physics", "limit": 10},
-        },
-    }
-
-
 def test_offered_by_enum_is_named_offered_by():
     """The enum generated for offered_by must not be labelled resource_type."""
     defs = SearchToolSchema.model_json_schema()["$defs"]
@@ -950,5 +718,132 @@ async def test_search_content_files_error(mocker, syllabus_agent_state):
         "error": "An error occurred while searching",
         "results": [],
         "citation_sources": {},
+        "metadata": {"search_url": "https://mit.edu/search", "parameters": params},
+    }
+
+
+DETAIL_URL = "https://learn.mit.edu/?resource="
+RESOURCE_ROWS = [
+    {
+        "id": 1,
+        "title": "A",
+        "readable_id": "a",
+        "next_start_date": "2026-01-01",
+        "runs": [
+            {"start_date": "2025-01-01", "level": ["Old"], "instructors": ["I1"]},
+            {"start_date": "2026-01-01", "level": ["Intro"], "instructors": ["I2"]},
+        ],
+    },
+    {"id": 2, "title": "B", "runs": [{"level": ["Adv"], "instructors": []}]},
+    {"id": 3, "title": "C"},
+]
+
+
+@pytest.fixture
+def mock_search_learning_resources(mocker):
+    """Fake the Learn resource search with three rows exercising run selection."""
+    return mocker.patch(
+        "ai_chatbots.learn.search_learning_resources",
+        return_value=learn.SearchResult(
+            [dict(r) for r in RESOURCE_ROWS],
+            "https://mit.edu/search",
+            {"q": "physics", "limit": 10},
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("params", "filters"),
+    [
+        ({}, {}),
+        (
+            {"resource_type": ["course", "video"], "free": True},
+            {"resource_type": ["course", "video"], "free": True},
+        ),
+        (
+            {"resource_type": None, "offered_by": ["xpro"], "certification": False},
+            {"offered_by": ["xpro"], "certification": False},
+        ),
+    ],
+)
+async def test_search_courses(
+    settings, mock_search_learning_resources, params, filters
+):
+    """search_courses passes stringified non-None filters and shapes rows for the LLM."""
+    settings.AI_MIT_SEARCH_DETAIL_URL = DETAIL_URL
+
+    results = json.loads(
+        await search_courses.ainvoke(
+            {
+                "q": "physics",
+                "state": {"search_url": ["https://mit.edu/search"]},
+                **params,
+            }
+        )
+    )
+
+    mock_search_learning_resources.assert_called_once_with(
+        "physics", filters, search_url="https://mit.edu/search"
+    )
+    base = dict.fromkeys(
+        (
+            "readable_id",
+            "description",
+            "offered_by",
+            "free",
+            "certification",
+            "resource_type",
+        )
+    )
+    assert results["results"] == [
+        {
+            **base,
+            "id": 1,
+            "title": "A",
+            "readable_id": "a",
+            "url": f"{DETAIL_URL}1",
+            "level": ["Intro"],
+            "instructors": ["I2"],
+        },
+        {
+            **base,
+            "id": 2,
+            "title": "B",
+            "url": f"{DETAIL_URL}2",
+            "level": ["Adv"],
+            "instructors": [],
+        },
+        {**base, "id": 3, "title": "C", "url": f"{DETAIL_URL}3"},
+    ]
+    assert results["metadata"] == {
+        "search_url": "https://mit.edu/search",
+        "parameters": {"q": "physics", "limit": 10},
+    }
+
+
+async def test_search_courses_without_search_url(mock_search_learning_resources):
+    """Without a search_url in state, the default search URL is used."""
+    await search_courses.ainvoke({"q": "physics", "state": {}})
+
+    mock_search_learning_resources.assert_called_once_with(
+        "physics", {}, search_url=None
+    )
+
+
+async def test_search_courses_error(mocker):
+    """A failed search still reports what it tried, so it isn't mistaken for no results."""
+    params = {"q": "physics", "limit": 10}
+    mocker.patch(
+        "ai_chatbots.learn.search_learning_resources",
+        side_effect=learn.LearnError("502", "https://mit.edu/search", params),
+    )
+
+    result = await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": ["https://mit.edu/search"]}}
+    )
+
+    assert json.loads(result) == {
+        "error": "An error occurred while searching",
+        "results": [],
         "metadata": {"search_url": "https://mit.edu/search", "parameters": params},
     }

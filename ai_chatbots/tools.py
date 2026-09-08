@@ -5,7 +5,6 @@ import logging
 from typing import Annotated
 
 import pydantic
-from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
 from django.conf import settings
 from langchain_core.tools import tool
@@ -14,7 +13,6 @@ from pydantic import Field
 
 from ai_chatbots import learn
 from ai_chatbots.constants import (
-    HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
     ZENDESK_PLATFORM_CATEGORY_IDS,
@@ -23,7 +21,6 @@ from ai_chatbots.constants import (
     OfferedBy,
 )
 from ai_chatbots.utils import async_request, enum_zip, get_django_cache
-from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
 
@@ -63,13 +60,6 @@ def _envelope(result: learn.SearchResult, shaped: list[dict], **extra) -> str:
             "metadata": {"search_url": result.url, "parameters": result.params},
             **extra,
         }
-    )
-
-
-async def _is_hybrid_search_enabled() -> bool:
-    """Check if the hybrid search feature flag is enabled."""
-    return await sync_to_async(feature_is_enabled)(
-        HYBRID_SEARCH_FEATURE_FLAG, default=False
     )
 
 
@@ -183,33 +173,19 @@ async def search_courses(
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
     """
-    params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
-
-    valid_params = {
+    filters = {
         "resource_type": [rt.name for rt in (kwargs.get("resource_type") or [])]
         or None,
         "free": kwargs.get("free"),
         "offered_by": [o.name for o in (kwargs.get("offered_by") or [])] or None,
         "certification": kwargs.get("certification"),
     }
-    if await _is_hybrid_search_enabled():
-        valid_params["hybrid_search"] = True
-
-    params.update({k: v for k, v in valid_params.items() if v is not None})
-    search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
-    log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
+    filters = {k: v for k, v in filters.items() if v is not None}
+    search_url = ((state or {}).get("search_url") or [None])[-1]
     try:
-        response = await async_request(
-            search_url,
-            params,
-            timeout=settings.REQUESTS_TIMEOUT,
-            include_learn_token=True,
+        result = await learn.search_learning_resources(
+            q, filters, search_url=search_url
         )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Ignore any results over the maximum limit
-        raw_results = raw_results[: settings.AI_MIT_SEARCH_LIMIT]
-        # Simplify the response to only include the main properties
         main_properties = [
             "title",
             "id",
@@ -220,42 +196,28 @@ async def search_courses(
             "certification",
             "resource_type",
         ]
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {k: result.get(k) for k in main_properties}
-            simplified_result["url"] = (
-                f"{settings.AI_MIT_SEARCH_DETAIL_URL}{result.pop('id')}"
-            )
+        shaped = []
+        for row in result.results:
+            simplified = {k: row.get(k) for k in main_properties}
+            simplified["url"] = f"{settings.AI_MIT_SEARCH_DETAIL_URL}{row.get('id')}"
             # Instructors and level will be in the runs data if present
-            next_date = result.get("next_start_date", None)
-            raw_runs = result.get("runs", [])
+            next_date = row.get("next_start_date")
+            raw_runs = row.get("runs", [])
             best_run = None
             if next_date:
-                runs = [run for run in raw_runs if run["start_date"] == next_date]
+                runs = [run for run in raw_runs if run.get("start_date") == next_date]
                 if runs:
                     best_run = runs[0]
             elif raw_runs:
                 best_run = raw_runs[-1]
             if best_run:
                 for attribute in ("level", "instructors"):
-                    simplified_result[attribute] = best_run.get(attribute, [])
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"search_url": search_url, "parameters": params},
-        }
-        return json.dumps(full_output)
-    except Exception:
+                    simplified[attribute] = best_run.get(attribute, [])
+            shaped.append(simplified)
+        return _envelope(result, shaped)
+    except Exception as error:
         log.exception("Error querying MIT API")
-        # keep the url and parameters, so a failed search is distinguishable
-        # from one that ran and found nothing
-        return json.dumps(
-            {
-                "error": "An error occurred while searching",
-                "results": [],
-                "metadata": {"search_url": search_url, "parameters": params},
-            }
-        )
+        return _search_error_envelope(error)
 
 
 class SearchContentFilesToolSchema(pydantic.BaseModel):
