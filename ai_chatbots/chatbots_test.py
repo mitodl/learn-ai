@@ -1293,3 +1293,59 @@ async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid
 
     await chatbot.validate_and_clean_checkpoint()
     assert mock_truncate.call_count == (0 if is_valid else 1)
+
+
+@pytest.mark.asyncio
+async def test_learner_context_appended_after_static_prompt(mocker, mock_checkpointer):
+    """The learner context block goes after the static instructions"""
+    mock_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user",
+        mock_checkpointer,
+        instructions="Be brief.",
+        learner_context="## About this learner\n- Prefers online",
+    )
+    assert chatbot.instructions == "Be brief."
+    prompt = mock_agent.call_args.kwargs["prompt"]
+    assert prompt.startswith("Be brief.")
+    assert prompt.endswith("- Prefers online")
+
+
+@pytest.mark.asyncio
+async def test_no_learner_context_leaves_prompt_unchanged(mocker, mock_checkpointer):
+    """Without a learner context the prompt is exactly the instructions"""
+    mock_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, instructions="Be brief."
+    )
+    assert mock_agent.call_args.kwargs["prompt"] == "Be brief."
+
+
+@pytest.mark.asyncio
+async def test_tutor_injects_learner_context_as_system_message(mocker):
+    """The tutor passes the learner context to message_tutor as a trailing system message"""
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        new_callable=AsyncMock,
+        return_value=("problem_xml", "problem_set_xml"),
+    )
+    mocker.patch("ai_chatbots.chatbots.query_tutorbot_output", return_value=None)
+    mock_stream = mocker.Mock(__aiter__=mocker.Mock(return_value=MockAsyncIterator([])))
+    mock_tutor = mocker.patch(
+        "ai_chatbots.chatbots.message_tutor", return_value=(mock_stream, [], [])
+    )
+    mocker.patch("ai_chatbots.chatbots.create_tutorbot_output_and_checkpoints")
+    chatbot = await sync_to_async(TutorBot)(
+        "user",
+        None,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        edx_module_id="block1",
+        block_siblings=["block1"],
+        learner_context="## About this learner\n- Nurse",
+    )
+    async for _ in chatbot.get_completion("help"):
+        pass
+    chat_history = mock_tutor.call_args.args[4]
+    assert isinstance(chat_history[-1], SystemMessage)
+    assert chat_history[-1].content == "## About this learner\n- Nurse"
+    assert chat_history[-2].content == "help"

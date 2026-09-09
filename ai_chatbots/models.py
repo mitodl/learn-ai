@@ -140,3 +140,17 @@ class ChatResponseRating(models.Model):
 
     def __str__(self):
         return f"{self.checkpoint.checkpoint_id}-{self.rating}"
+
+
+class MemoryStoreItem(TimestampedModel):
+    """One LangGraph BaseStore item; namespace segments are joined with '/'."""
+
+    namespace = models.TextField(db_index=True)
+    key = models.TextField()
+    value = models.JSONField()
+
+    class Meta:
+        unique_together = (("namespace", "key"),)
+
+    def __str__(self):
+        return f"{self.namespace}/{self.key}"

@@ -32,6 +32,7 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
 )
+from ai_chatbots.memory import get_learner_context, memory_enabled
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
@@ -41,6 +42,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
+from ai_chatbots.tasks import extract_learner_memory
 from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
@@ -77,6 +79,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     # Each bot consumer should define a unique ROOM_NAME
     ROOM_NAME = None
+    # Tutor threads are read-only for learner memory: never extract from them
+    EXTRACT_LEARNER_MEMORY = True
+    learner_context = ""
 
     serializer_class = RecommendationChatRequestSerializer
     headers_sent = False
@@ -341,6 +346,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             checkpointer = await self.create_checkpointer(
                 thread_id, message_text, serializer
             )
+            self.learner_context = await sync_to_async(get_learner_context)(
+                self.scope.get("user")
+            )
             self.bot = await sync_to_async(self.create_chatbot)(
                 serializer, checkpointer
             )
@@ -365,6 +373,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     await self.send_chunk(chunk)
                     output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
+            await self.queue_memory_extraction(message_text, "".join(output))
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
@@ -385,6 +394,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         finally:
             await self.send_chunk("", more_body=False)
             await self.disconnect()
+
+    async def queue_memory_extraction(self, message: str, response: str) -> None:
+        """Queue revision of the learner's memory document from this exchange."""
+        user = self.scope.get("user")
+        if self.EXTRACT_LEARNER_MEMORY and await sync_to_async(memory_enabled)(user):
+            extract_learner_memory.delay(user.global_id, message, response)
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
@@ -456,6 +471,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
         )
 
 
@@ -486,6 +502,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
             enable_related_courses=enable_related_courses,
         )
 
@@ -593,6 +610,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = TutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
     throttle_scope = "tutor_bot"
+    EXTRACT_LEARNER_MEMORY = False
 
     def create_chatbot(
         self,
@@ -611,6 +629,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             temperature=temperature,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
             block_siblings=block_siblings,
             edx_module_id=edx_module_id,
         )
@@ -646,6 +665,7 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = CanvasTutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
     throttle_scope = "tutor_bot"
+    EXTRACT_LEARNER_MEMORY = False
 
     def create_chatbot(
         self,
@@ -739,6 +759,7 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
         )
 
     def process_extra_state(self, data: dict) -> dict:

@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from ai_chatbots.models import LLMModel, UserChatSession
+from ai_chatbots.models import LLMModel, MemoryStoreItem, UserChatSession
 
 
 @admin.register(UserChatSession)
@@ -32,3 +32,12 @@ class LLMModelAdmin(admin.ModelAdmin):
     )
     search_fields = ("name", "litellm_id")
     ordering = ("provider", "name", "litellm_id")
+
+
+@admin.register(MemoryStoreItem)
+class MemoryStoreItemAdmin(admin.ModelAdmin):
+    """Learner memory documents, one per namespace."""
+
+    list_display = ("namespace", "key", "updated_on")
+    search_fields = ("namespace",)
+    readonly_fields = ("created_on", "updated_on")

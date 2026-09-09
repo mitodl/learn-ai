@@ -1223,3 +1223,72 @@ async def test_disconnect_without_channel_layer(mocker, recommendation_consumer)
 
     # Verify litellm cleanup was called
     mock_close.assert_called_once()
+
+
+async def test_handle_passes_learner_context_and_queues_extraction(
+    mocker, mock_http_consumer_send, recommendation_consumer
+):
+    """Authenticated chats get the learner context and queue memory extraction"""
+    mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
+    mocker.patch(
+        "ai_chatbots.consumers.get_learner_context",
+        return_value="## About this learner",
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi ", "there"]))
+        ),
+    )
+    extract = mocker.patch("ai_chatbots.consumers.extract_learner_memory")
+    await recommendation_consumer.handle(json.dumps({"message": "hello"}))
+    assert recommendation_consumer.bot.learner_context == "## About this learner"
+    extract.delay.assert_called_once_with(
+        recommendation_consumer.scope["user"].global_id, "hello", "Hi there"
+    )
+
+
+async def test_handle_skips_extraction_when_memory_disabled(
+    mocker, mock_http_consumer_send, recommendation_consumer
+):
+    """Flag off or anonymous: no context, no extraction"""
+    mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=False)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi"]))
+        ),
+    )
+    extract = mocker.patch("ai_chatbots.consumers.extract_learner_memory")
+    await recommendation_consumer.handle(json.dumps({"message": "hello"}))
+    assert recommendation_consumer.bot.learner_context == ""
+    extract.delay.assert_not_called()
+
+
+async def test_tutor_handle_never_extracts(
+    mocker, mock_http_consumer_send, tutor_consumer
+):
+    """Tutor threads read the learner context but are excluded from extraction"""
+    mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
+    mocker.patch(
+        "ai_chatbots.consumers.get_learner_context",
+        return_value="## About this learner",
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.TutorBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi"]))
+        ),
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block", new_callable=AsyncMock
+    )
+    extract = mocker.patch("ai_chatbots.consumers.extract_learner_memory")
+    payload = {
+        "message": "help",
+        "edx_module_id": "block1",
+        "block_siblings": ["block1"],
+    }
+    await tutor_consumer.handle(json.dumps(payload))
+    assert tutor_consumer.bot.learner_context == "## About this learner"
+    extract.delay.assert_not_called()
