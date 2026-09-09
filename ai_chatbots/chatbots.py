@@ -83,9 +83,11 @@ class BaseChatbot(ABC):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
+        self.learner_context = learner_context
         self.model = model or settings.AI_DEFAULT_MODEL
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = (
@@ -112,6 +114,13 @@ class BaseChatbot(ABC):
         self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
+
+    @property
+    def system_prompt(self) -> str | None:
+        """Static instructions first (prompt-cache friendly), learner context after."""
+        if self.instructions and self.learner_context:
+            return f"{self.instructions}\n\n{self.learner_context}"
+        return self.instructions
 
     def create_tools(self):
         """Create any tools required by the agent"""
@@ -178,7 +187,7 @@ class BaseChatbot(ABC):
             """Call the LLM, injecting system prompt"""
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
-                state["messages"].insert(0, SystemMessage(self.instructions))
+                state["messages"].insert(0, SystemMessage(self.system_prompt))
             return self.STATE_CLASS(messages=[self.llm.invoke(state["messages"])])
 
         agent_graph = StateGraph(MessagesState)
@@ -454,7 +463,7 @@ class TruncatingChatbot(BaseChatbot):
             checkpointer=self.checkpointer,
             pre_model_hook=MessageTruncationNode(),
             state_schema=self.STATE_CLASS,
-            prompt=self.instructions,
+            prompt=self.system_prompt,
         )
 
 
@@ -488,6 +497,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
     ):
         """Initialize the AI search agent service"""
         super().__init__(
@@ -498,6 +508,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            learner_context=learner_context,
         )
         self.agent = self.create_agent_graph()
 
@@ -546,6 +557,7 @@ class SyllabusBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
         enable_related_courses: bool | None = False,
         course_id: str | None = None,
         platform: str | None = None,
@@ -559,6 +571,7 @@ class SyllabusBot(TruncatingChatbot):
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            learner_context=learner_context,
         )
         # The graph captures the instructions, so the facts have to be in
         # place before create_agent_graph below.
@@ -626,6 +639,7 @@ class TutorBot(BaseChatbot):
         edx_module_id: str | None = None,
         run_readable_id: str | None = None,
         problem_set_title: str | None = None,
+        learner_context: str = "",
     ):
         super().__init__(
             user_id,
@@ -634,6 +648,7 @@ class TutorBot(BaseChatbot):
             temperature=temperature,
             thread_id=thread_id,
             model=model or settings.AI_DEFAULT_TUTOR_MODEL,
+            learner_context=learner_context,
         )
 
         self.edx_module_id = edx_module_id
@@ -713,6 +728,11 @@ class TutorBot(BaseChatbot):
             chat_history = [HumanMessage(content=message, id=message_id)]
             intent_history = []
             assessment_history = []
+        if self.learner_context:
+            # ponytail: the tutor package builds its own system prompt; a trailing
+            # SystemMessage survives its history slice and is stripped before saving.
+            # Upgrade: a learner_context argument on message_tutor.
+            chat_history.append(SystemMessage(content=self.learner_context))
         self.llm.callbacks = await self.set_callbacks(
             properties=await self.get_tool_metadata()
         )
@@ -924,6 +944,7 @@ class VideoGPTBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
     ):
         super().__init__(
             user_id,
@@ -933,6 +954,7 @@ class VideoGPTBot(TruncatingChatbot):
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            learner_context=learner_context,
         )
         self.agent = self.create_agent_graph()
 
