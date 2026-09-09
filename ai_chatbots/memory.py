@@ -15,6 +15,11 @@ log = logging.getLogger(__name__)
 
 CHAT_MEMORY_FLAG = "CHAT_MEMORY"
 MEMORY_KEY = "default"  # langmem's fixed key for a single-document profile
+CONTEXT_INSTRUCTION = (
+    "# Learner context\n"
+    "Use what follows to tailor your answer. Do not ask the learner for anything "
+    "already stated here; it is fine to ask about anything that is not."
+)
 PROFILE_HEADING = "## About this learner (stated in their MIT Learn profile)"
 MEMORY_HEADING = "## Learned from prior chats"
 
@@ -33,8 +38,11 @@ class LearnerMemory(BaseModel):
 EXTRACTION_INSTRUCTIONS = """You maintain a short profile of a learner using MIT Open
 Learning chatbots. Update it from the conversation: keep it factual, about the learner
 only, and under 1500 characters in total. Record preferences, background, goals and
-current focus. Never record names, emails, quiz or problem answers, grades, or
-problem identifiers. Drop anything the learner contradicts."""
+current focus that the learner stated themselves. The assistant's questions,
+suggestions and search results say nothing about the learner: never record them or
+infer preferences from them. If the learner stated nothing new, change nothing.
+Never record names, emails, quiz or problem answers, grades, or problem identifiers.
+Drop anything the learner contradicts."""
 
 
 def memory_namespace(global_id: str) -> tuple[str, str]:
@@ -99,7 +107,7 @@ def build_learner_context(profile: dict, memory: dict | None) -> str:
         if v
     ]
     if profile_lines:
-        lines += [PROFILE_HEADING, *profile_lines]
+        lines += [CONTEXT_INSTRUCTION, PROFILE_HEADING, *profile_lines]
     if memory:
         memory_lines = [
             f"- {field.replace('_', ' ').capitalize()}: {text}"
@@ -108,6 +116,8 @@ def build_learner_context(profile: dict, memory: dict | None) -> str:
         ]
         if memory_lines:
             body = "\n".join(memory_lines)[: settings.AI_MEMORY_MAX_CHARS]
+            if not lines:
+                lines.append(CONTEXT_INSTRUCTION)
             lines += [MEMORY_HEADING, body]
     return "\n".join(lines)
 

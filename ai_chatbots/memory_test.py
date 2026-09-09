@@ -92,3 +92,10 @@ def test_get_learner_context_reads_own_memory(flag_on):
     flag_on.assert_called_once_with(
         memory.CHAT_MEMORY_FLAG, default=False, opt_unique_id=user.global_id
     )
+
+
+def test_build_learner_context_starts_with_usage_instruction():
+    """The block tells the bot to use it rather than ask for what's in it"""
+    block = memory.build_learner_context(memory.fetch_learner_profile("x"), None)
+    assert block.startswith(memory.CONTEXT_INSTRUCTION)
+    assert "ask" in memory.CONTEXT_INSTRUCTION.lower()
