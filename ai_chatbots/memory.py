@@ -59,21 +59,52 @@ class LearnerMemory(BaseModel):
     )
 
 
-EXTRACTION_INSTRUCTIONS = """You maintain notes about a learner who uses MIT Open
-Learning chatbots. You are given the chatbot that was in use, the current notes, the
-learner's latest message and the chatbot's reply. Return the revised notes.
+BOT_PURPOSE = {
+    "ResourceRecommendationBot": "recommends MIT courses and programs from the catalog",
+    "SyllabusBot": "answers questions about one course's content",
+    "CanvasSyllabusBot": "answers questions about one course's content",
+    "VideoGPTBot": "answers questions about one course video",
+    "TutorBot": "tutors the learner through one problem without giving answers",
+}
 
-Rules:
+EXTRACTION_INSTRUCTIONS = """You maintain notes about a learner who uses MIT Open
+Learning chatbots. You are given the chatbot that was in use and what it does, the
+current notes, the learner's latest message and the chatbot's reply. Return the revised
+notes.
+
+What counts:
 - Record only the learner's own statements. The assistant's reply is context for
   understanding the learner's message and never a source of facts or preferences.
-- Only durable information: who the learner is, what they want in general, how they
-  want to be helped. Skip anything that only matters for this one thread, such as the
-  specific course, lecture or question at hand.
-- 'about' is for facts about the person. 'instructions' is for how every chatbot should
-  behave. 'bot_instructions' is for preferences that only make sense for the chatbot in
-  use, including things they asked not to be shown.
+- A question is never a fact about the learner. Record what a message reveals about
+  them, not what it asks for. "What are good courses for a data science career?"
+  reveals one goal ("wants a career in data science"); "seeking courses" or "looking
+  for resources" is not information and must not be written.
+- Only durable information. Skip anything that only matters for this one thread, such
+  as the specific course, lecture or question at hand.
 - Never record names, emails, problem statements, attempted or correct answers, hints,
   grades, scores, or problem identifiers.
+
+Where it goes. Ask of each item: would it still matter if the learner were talking to
+a different chatbot?
+- Yes, and it is a fact about them (job, location, education, background, goals,
+  constraints such as available time): 'about'. "I'm a working nurse in Boston" ->
+  about.
+- Yes, and it is a request about how to respond (tone, length, jargon, format):
+  'instructions'. "Plain English, no jargon" -> instructions.
+- No, it only makes sense for this chatbot: 'bot_instructions'. For a course
+  recommender: "only advanced courses", "don't show social science courses". For a
+  tutor: "hints only, never the full solution".
+- Anything phrased as a want or a rule ("I want", "I prefer", "don't show me", "only")
+  is an instruction, never an 'about' fact, even if it also implies a fact. Record the
+  fact separately if there is one: "I'm not a social scientist, don't show me those"
+  gives about "not a social scientist" and bot_instructions "don't show social science
+  courses".
+
+How to write:
+- Rewrite each section, do not append. Terse clauses separated by semicolons, no "The
+  learner is..." sentences, no repetition of anything already present. Merge new
+  information into existing clauses. Example about: "Working nurse in Boston; wants a
+  data science career; already knows a fair amount of data science".
 - Keep each section under {max_chars} characters. Drop anything the learner contradicts.
   If the message adds nothing durable, return the notes unchanged."""
 
@@ -220,7 +251,8 @@ def extract_learner_memory(
                 EXTRACTION_INSTRUCTIONS.format(max_chars=settings.AI_MEMORY_MAX_CHARS)
             ),
             HumanMessage(
-                f"Chatbot in use: {bot_name}\n\n"
+                f"Chatbot in use: {bot_name} "
+                f"({BOT_PURPOSE.get(bot_name, 'an MIT Open Learning chatbot')})\n\n"
                 f"Current notes:\n{current.model_dump_json(indent=1)}\n\n"
                 f"Learner's message:\n{message}\n\n"
                 f"Chatbot's reply (context only):\n{response[:2000]}"

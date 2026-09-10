@@ -177,6 +177,7 @@ def test_extract_learner_memory_passes_context_and_saves(mocker, settings):
     llm.with_structured_output.assert_called_once_with(memory.LearnerMemory)
     prompt_text = "".join(m.content for m in structured.invoke.call_args.args[0])
     assert REC in prompt_text
+    assert memory.BOT_PURPOSE[REC] in prompt_text
     assert "nurse" in prompt_text  # current memory shown
     assert "I'm in Boston and not a social scientist" in prompt_text
     assert "Noted." in prompt_text
@@ -188,7 +189,16 @@ def test_extract_learner_memory_passes_context_and_saves(mocker, settings):
 def test_extraction_prompt_has_the_guard_rails():
     """Rules the extraction prompt must state, given the assessment-content history"""
     text = memory.EXTRACTION_INSTRUCTIONS.lower()
-    for phrase in ("answer", "grade", "problem", "assistant", "learner's own"):
+    for phrase in (
+        "answer",
+        "grade",
+        "problem",
+        "assistant",
+        "learner's own",
+        "a question is never a fact",
+        "different chatbot",
+        "do not append",
+    ):
         assert phrase in text
 
 
