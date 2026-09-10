@@ -142,15 +142,50 @@ class ChatResponseRating(models.Model):
         return f"{self.checkpoint.checkpoint_id}-{self.rating}"
 
 
-class MemoryStoreItem(TimestampedModel):
-    """One LangGraph BaseStore item; namespace segments are joined with '/'."""
+class LearnerMemoryNote(TimestampedModel):
+    """One free-text memory section: about, instructions, or instructions:<bot>."""
 
-    namespace = models.TextField(db_index=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memory_notes"
+    )
     key = models.TextField()
-    value = models.JSONField()
+    text = models.TextField()
 
     class Meta:
-        unique_together = (("namespace", "key"),)
+        unique_together = (("user", "key"),)
 
     def __str__(self):
-        return f"{self.namespace}/{self.key}"
+        return f"{self.user_id}/{self.key}"
+
+
+class LearnerMemoryState(TimestampedModel):
+    """Per-user clear counter; the row is locked around every memory write."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memory_state"
+    )
+    generation = models.PositiveIntegerField(default=0)
+    cleared_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user_id} gen {self.generation}"
+
+
+class PendingMemoryTurn(TimestampedModel):
+    """One completed exchange awaiting memory extraction; deleted once processed."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pending_turns"
+    )
+    generation = models.PositiveIntegerField()
+    bot = models.TextField()
+    thread_id = models.TextField()
+    message = models.TextField()
+    response = models.TextField()
+    attempts = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "created_on"], name="pending_turn_idx")]
+
+    def __str__(self):
+        return f"{self.user_id}/{self.bot}/{self.thread_id}"

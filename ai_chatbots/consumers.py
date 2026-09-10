@@ -32,7 +32,12 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
 )
-from ai_chatbots.memory import get_learner_context, memory_enabled
+from ai_chatbots.memory import (
+    get_learner_context,
+    memory_enabled,
+    memory_generation,
+    record_memory_turn,
+)
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
@@ -42,7 +47,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
-from ai_chatbots.tasks import extract_learner_memory
+from ai_chatbots.tasks import schedule_learner_memory
 from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
@@ -80,6 +85,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     # Each bot consumer should define a unique ROOM_NAME
     ROOM_NAME = None
     learner_context = ""
+    memory_generation = 0
 
     serializer_class = RecommendationChatRequestSerializer
     headers_sent = False
@@ -344,9 +350,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             checkpointer = await self.create_checkpointer(
                 thread_id, message_text, serializer
             )
-            self.learner_context = await sync_to_async(get_learner_context)(
-                self.scope.get("user"), self.ROOM_NAME
-            )
+            self.learner_context, self.memory_generation = await sync_to_async(
+                self.load_learner_memory
+            )()
             self.bot = await sync_to_async(self.create_chatbot)(
                 serializer, checkpointer
             )
@@ -393,13 +399,28 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_chunk("", more_body=False)
             await self.disconnect()
 
-    async def queue_memory_extraction(self, message: str, response: str) -> None:
-        """Queue revision of the learner's memory from this exchange."""
+    def load_learner_memory(self) -> tuple[str, int]:
+        """Context block plus the clear counter the exchange will be checked against."""
         user = self.scope.get("user")
-        if await sync_to_async(memory_enabled)(user):
-            extract_learner_memory.delay(
-                user.global_id, self.ROOM_NAME, self.thread_id, message, response
-            )
+        if not memory_enabled(user):
+            return "", 0
+        return get_learner_context(user, self.ROOM_NAME), memory_generation(user)
+
+    async def queue_memory_extraction(self, message: str, response: str) -> None:
+        """Record the exchange for extraction; a first pending turn starts the timer."""
+        user = self.scope.get("user")
+        if not await sync_to_async(memory_enabled)(user):
+            return
+        first = await sync_to_async(record_memory_turn)(
+            user,
+            self.ROOM_NAME,
+            self.thread_id,
+            message,
+            response,
+            self.memory_generation,
+        )
+        if first:
+            schedule_learner_memory(user.id)
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""

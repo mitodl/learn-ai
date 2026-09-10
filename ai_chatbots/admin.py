@@ -2,7 +2,13 @@
 
 from django.contrib import admin
 
-from ai_chatbots.models import LLMModel, MemoryStoreItem, UserChatSession
+from ai_chatbots.models import (
+    LearnerMemoryNote,
+    LearnerMemoryState,
+    LLMModel,
+    PendingMemoryTurn,
+    UserChatSession,
+)
 
 
 @admin.register(UserChatSession)
@@ -34,10 +40,26 @@ class LLMModelAdmin(admin.ModelAdmin):
     ordering = ("provider", "name", "litellm_id")
 
 
-@admin.register(MemoryStoreItem)
-class MemoryStoreItemAdmin(admin.ModelAdmin):
-    """Learner memory documents, one per namespace."""
+@admin.register(LearnerMemoryNote)
+class LearnerMemoryNoteAdmin(admin.ModelAdmin):
+    """Learned notes, one row per learner and section."""
 
-    list_display = ("namespace", "key", "updated_on")
-    search_fields = ("namespace",)
+    list_display = ("user", "key", "updated_on")
+    search_fields = ("user__global_id", "user__email", "key")
     readonly_fields = ("created_on", "updated_on")
+
+
+@admin.register(LearnerMemoryState)
+class LearnerMemoryStateAdmin(admin.ModelAdmin):
+    """Clear counter per learner."""
+
+    list_display = ("user", "generation", "cleared_at")
+    search_fields = ("user__global_id", "user__email")
+
+
+@admin.register(PendingMemoryTurn)
+class PendingMemoryTurnAdmin(admin.ModelAdmin):
+    """Exchanges awaiting extraction."""
+
+    list_display = ("user", "bot", "generation", "attempts", "created_on")
+    search_fields = ("user__global_id", "user__email")

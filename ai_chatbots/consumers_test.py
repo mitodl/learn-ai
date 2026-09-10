@@ -1240,16 +1240,40 @@ async def test_handle_passes_learner_context_and_queues_extraction(
             __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi ", "there"]))
         ),
     )
-    extract = mocker.patch("ai_chatbots.consumers.extract_learner_memory")
+    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=3)
+    record = mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=True)
+    schedule = mocker.patch("ai_chatbots.consumers.schedule_learner_memory")
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
     assert recommendation_consumer.bot.learner_context == "## About this learner"
-    extract.delay.assert_called_once_with(
-        recommendation_consumer.scope["user"].global_id,
+    user = recommendation_consumer.scope["user"]
+    record.assert_called_once_with(
+        user,
         "ResourceRecommendationBot",
         recommendation_consumer.thread_id,
         "hello",
         "Hi there",
+        3,
     )
+    schedule.assert_called_once_with(user.id)
+
+
+async def test_handle_later_turns_join_the_pending_batch(
+    mocker, mock_http_consumer_send, recommendation_consumer
+):
+    """Only the learner's first pending turn schedules the task"""
+    mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
+    mocker.patch("ai_chatbots.consumers.get_learner_context", return_value="")
+    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=0)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi"]))
+        ),
+    )
+    mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=False)
+    schedule = mocker.patch("ai_chatbots.consumers.schedule_learner_memory")
+    await recommendation_consumer.handle(json.dumps({"message": "hello"}))
+    schedule.assert_not_called()
 
 
 async def test_handle_skips_extraction_when_memory_disabled(
@@ -1263,10 +1287,10 @@ async def test_handle_skips_extraction_when_memory_disabled(
             __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi"]))
         ),
     )
-    extract = mocker.patch("ai_chatbots.consumers.extract_learner_memory")
+    record = mocker.patch("ai_chatbots.consumers.record_memory_turn")
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
     assert recommendation_consumer.bot.learner_context == ""
-    extract.delay.assert_not_called()
+    record.assert_not_called()
 
 
 async def test_tutor_handle_extracts_too(
@@ -1287,7 +1311,10 @@ async def test_tutor_handle_extracts_too(
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block", new_callable=AsyncMock
     )
-    extract = mocker.patch("ai_chatbots.consumers.extract_learner_memory")
+    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=0)
+    record = mocker.patch(
+        "ai_chatbots.consumers.record_memory_turn", return_value=False
+    )
     payload = {
         "message": "help",
         "edx_module_id": "block1",
@@ -1295,10 +1322,11 @@ async def test_tutor_handle_extracts_too(
     }
     await tutor_consumer.handle(json.dumps(payload))
     assert tutor_consumer.bot.learner_context == "## About this learner"
-    extract.delay.assert_called_once_with(
-        tutor_consumer.scope["user"].global_id,
+    record.assert_called_once_with(
+        tutor_consumer.scope["user"],
         "TutorBot",
         tutor_consumer.thread_id,
         "help",
         "Hi",
+        0,
     )

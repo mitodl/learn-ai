@@ -511,6 +511,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai_chatbots.tasks.delete_stale_sessions",
         "schedule": crontab(minute=0, hour=4),
     },
+    "requeue_stale_memory_turns": {
+        "task": "ai_chatbots.tasks.requeue_stale_memory_turns",
+        "schedule": crontab(minute="*/15"),
+    },
 }
 
 
@@ -613,6 +617,19 @@ AI_MEMORY_MAX_CHARS = get_int(name="AI_MEMORY_MAX_CHARS", default=1500)
 AI_MEMORY_GATE_MODEL = get_string(
     name="AI_MEMORY_GATE_MODEL", default="openai:gpt-4o-mini"
 )
+# extraction runs per learner in batches: wait this long after the first pending turn
+AI_MEMORY_DELAY_SECONDS = get_int(name="AI_MEMORY_DELAY_SECONDS", default=900)
+AI_MEMORY_BATCH_SIZE = get_int(name="AI_MEMORY_BATCH_SIZE", default=10)
+AI_MEMORY_BATCH_CHARS = get_int(name="AI_MEMORY_BATCH_CHARS", default=8000)
+AI_MEMORY_HISTORY_MESSAGES = get_int(name="AI_MEMORY_HISTORY_MESSAGES", default=8)
+AI_MEMORY_REPLY_CHARS = get_int(name="AI_MEMORY_REPLY_CHARS", default=500)
+AI_MEMORY_MAX_ATTEMPTS = get_int(name="AI_MEMORY_MAX_ATTEMPTS", default=3)
+AI_MEMORY_LLM_TIMEOUT = get_int(name="AI_MEMORY_LLM_TIMEOUT", default=60)
+# two model calls, each with one retry, plus database work; the Redis lock must outlive
+# the hard limit (time limit + 30s) so a live worker never loses it
+AI_MEMORY_TASK_TIME_LIMIT = get_int(name="AI_MEMORY_TASK_TIME_LIMIT", default=300)
+AI_MEMORY_LOCK_SECONDS = get_int(name="AI_MEMORY_LOCK_SECONDS", default=360)
+AI_MEMORY_CLEAR_WAIT_SECONDS = get_int(name="AI_MEMORY_CLEAR_WAIT_SECONDS", default=5)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(

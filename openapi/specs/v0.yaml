@@ -227,6 +227,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/LLMModel'
           description: ''
+  /api/v0/memory/:
+    get:
+      operationId: memory_retrieve
+      description: See or forget what the chatbots have learned about you.
+      tags:
+      - memory
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+    delete:
+      operationId: memory_destroy
+      description: See or forget what the chatbots have learned about you.
+      tags:
+      - memory
+      responses:
+        '204':
+          description: No response body
+        '503':
+          description: No response body
   /api/v0/problem_set_list/:
     get:
       operationId: problem_set_list_retrieve

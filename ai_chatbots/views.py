@@ -21,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
 from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
 
+from ai_chatbots import memory
 from ai_chatbots.models import (
     DjangoCheckpoint,
     LLMModel,
@@ -424,3 +425,37 @@ class ApiProxyView(ApiView):
                 {"error": "Failed to proxy request"},
                 status=500,
             )
+
+
+class LearnerMemoryView(ApiView):
+    """See or forget what the chatbots have learned about you."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request):
+        notes = memory.load_notes(request.user)
+        prefix = memory.bot_instructions_key("")
+        return Response(
+            {
+                "about": notes.get(memory.ABOUT_KEY, ""),
+                "instructions": notes.get(memory.INSTRUCTIONS_KEY, ""),
+                "bots": {
+                    key.removeprefix(prefix): text
+                    for key, text in notes.items()
+                    if key.startswith(prefix)
+                },
+            }
+        )
+
+    @extend_schema(responses={204: None, 503: None})
+    def delete(self, request):
+        try:
+            memory.clear_learner_memory(request.user)
+        except memory.MemoryBusy:
+            return Response(
+                {"detail": "Memory is being updated, retry shortly"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                headers={"Retry-After": str(settings.AI_MEMORY_CLEAR_WAIT_SECONDS)},
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)

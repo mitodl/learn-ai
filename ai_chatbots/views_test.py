@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.exceptions import ErrorDetail
 from rest_framework.test import APIClient
 
+from ai_chatbots import memory
 from ai_chatbots.constants import AI_SESSION_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import (
     ChatResponseRatingFactory,
@@ -437,3 +438,33 @@ def test_api_proxy_view_403(client):
     url = reverse("ai:learn_api_proxy", kwargs={"path": "any/path"})
     response = client.get(url)
     assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_learner_memory_view_get_and_delete(client, mocker):
+    """A learner sees their own notes by section and can forget them"""
+    user = UserFactory.create()
+    memory.save_notes(
+        user,
+        {"about": "nurse", "instructions": "short", "instructions:TutorBot": "hints"},
+    )
+    memory.save_notes(UserFactory.create(), {"about": "poet"})
+    client.force_login(user)
+    response = client.get(reverse("ai:v0:memory"))
+    assert response.status_code == 200
+    assert response.json() == {
+        "about": "nurse",
+        "instructions": "short",
+        "bots": {"TutorBot": "hints"},
+    }
+    clear = mocker.patch("ai_chatbots.views.memory.clear_learner_memory")
+    assert client.delete(reverse("ai:v0:memory")).status_code == 204
+    clear.assert_called_once_with(user)
+    clear.side_effect = memory.MemoryBusy
+    busy = client.delete(reverse("ai:v0:memory"))
+    assert busy.status_code == 503
+    assert busy["Retry-After"]
+
+
+def test_learner_memory_view_requires_login(client):
+    assert client.get(reverse("ai:v0:memory")).status_code == 403
+    assert client.delete(reverse("ai:v0:memory")).status_code == 403
