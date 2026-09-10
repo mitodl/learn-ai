@@ -4,9 +4,8 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
-from langchain_core.messages import HumanMessage
 
-from ai_chatbots.memory import get_memory_manager
+from ai_chatbots import memory
 from ai_chatbots.models import UserChatSession
 from main.celery import app
 from main.utils import now_in_utc
@@ -22,20 +21,15 @@ def delete_stale_sessions():
 
 
 @app.task
-def extract_learner_memory(global_id: str, message: str):
+def extract_learner_memory(global_id: str, bot_name: str, message: str, response: str):
     """
-    Revise the learner's memory document from one learner message. Best-effort.
+    Revise the learner's memory from one exchange. Best-effort.
 
-    Only the learner's words go in: given the bot's reply too, gpt-4o-mini recorded
-    recommended course titles as the learner's interests despite instructions.
-    ponytail: runs on every response and sees one message with no thread context,
-    so "the second one" means nothing. Add the per-user 15 minute throttle and a
-    last-processed marker (then feed the learner's recent messages) when volume matters.
+    ponytail: runs on every response and sees one exchange with no thread context.
+    Add the per-user 15 minute throttle and a last-processed marker (then feed the
+    thread's recent messages) when volume matters.
     """
     try:
-        get_memory_manager().invoke(
-            {"messages": [HumanMessage(content=message)]},
-            config={"configurable": {"langgraph_user_id": global_id}},
-        )
+        memory.extract_learner_memory(global_id, bot_name, message, response)
     except Exception:
         log.exception("Memory extraction failed for %s", global_id)

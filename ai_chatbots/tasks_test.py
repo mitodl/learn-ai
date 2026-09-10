@@ -71,24 +71,21 @@ def test_delete_stale_sessions():
         assert DjangoCheckpoint.objects.filter(id=cp.id).exists()
 
 
-def test_extract_learner_memory_invokes_manager_for_user(mocker):
-    """The task feeds the exchange to the memory manager under the learner's id"""
-    manager = mocker.patch("ai_chatbots.tasks.get_memory_manager").return_value
-    extract_learner_memory("gid-1", "I only want online courses")
-    manager.invoke.assert_called_once()
-    payload, kwargs = manager.invoke.call_args.args[0], manager.invoke.call_args.kwargs
-    # Only the learner's words: the bot's reply is never a source of learner facts
-    assert [(m.type, m.content) for m in payload["messages"]] == [
-        ("human", "I only want online courses")
-    ]
-    assert kwargs["config"]["configurable"]["langgraph_user_id"] == "gid-1"
+def test_extract_learner_memory_task_delegates(mocker):
+    """The task hands everything to the memory module"""
+    extract = mocker.patch("ai_chatbots.tasks.memory.extract_learner_memory")
+    extract_learner_memory("gid-1", "TutorBot", "plain english please", "Sure.")
+    extract.assert_called_once_with(
+        "gid-1", "TutorBot", "plain english please", "Sure."
+    )
 
 
 def test_extract_learner_memory_logs_and_swallows_errors(mocker):
     """Extraction is best-effort: failures are logged, never raised"""
     mocker.patch(
-        "ai_chatbots.tasks.get_memory_manager", side_effect=RuntimeError("boom")
+        "ai_chatbots.tasks.memory.extract_learner_memory",
+        side_effect=RuntimeError("boom"),
     )
     log = mocker.patch("ai_chatbots.tasks.log")
-    extract_learner_memory("gid-1", "hi")
+    extract_learner_memory("gid-1", "TutorBot", "hi", "hello")
     log.exception.assert_called_once()
