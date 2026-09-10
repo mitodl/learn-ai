@@ -364,6 +364,146 @@ async def test_set_callbacks_logs_agent_graph_to_opik(mocker, mock_checkpointer)
 
 
 @pytest.mark.asyncio
+async def test_syllabus_bot_trace_properties(mocker, mock_checkpointer):
+    """The syllabus bot should tag traces with the resource it was asked about."""
+    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
+    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
+    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
+    extra_state = {
+        "course_id": ["MITx+6.00.1x"],
+        "collection_name": ["content_files"],
+        "exclude_canvas": ["True"],
+    }
+
+    properties = chatbot.get_trace_properties(extra_state)
+    assert properties == {
+        "course_id": "MITx+6.00.1x",
+        "collection_name": "content_files",
+    }
+
+    await chatbot.set_callbacks(properties=properties)
+    metadata = mock_tracer.call_args.kwargs["metadata"]
+    assert metadata["course_id"] == "MITx+6.00.1x"
+    assert metadata["collection_name"] == "content_files"
+
+
+@pytest.mark.asyncio
+async def test_base_bot_trace_properties_default(mock_checkpointer):
+    """Bots without TRACE_STATE_KEYS should add no extra trace properties."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
+    assert chatbot.get_trace_properties({"search_url": ["https://example.com"]}) == {}
+
+
+@pytest.mark.asyncio
+async def test_canvas_tutor_bot_trace_properties(mock_checkpointer):
+    """The canvas tutor traces the course run and problem set it was given."""
+    chatbot = await sync_to_async(TutorBot)(
+        "anonymous",
+        mock_checkpointer,
+        run_readable_id="course-v1:MITxT+14.01x+2T2024",
+        problem_set_title="Problem Set 4",
+    )
+
+    assert chatbot.get_trace_properties() == {
+        "run_readable_id": "course-v1:MITxT+14.01x+2T2024",
+        "problem_set_title": "Problem Set 4",
+    }
+
+
+@pytest.mark.asyncio
+async def test_edx_tutor_bot_trace_properties(mock_checkpointer):
+    """The edx tutor traces its module id plus the run derived from it."""
+    chatbot = await sync_to_async(TutorBot)(
+        "anonymous",
+        mock_checkpointer,
+        edx_module_id="block-v1:MITxT+3.012Sx+3T2024+type@problem+block@abc123",
+        block_siblings=["block1", "block2"],
+    )
+
+    properties = chatbot.get_trace_properties()
+
+    assert properties == {
+        "edx_module_id": ("block-v1:MITxT+3.012Sx+3T2024+type@problem+block@abc123"),
+        "run_readable_id": "course-v1:MITxT+3.012Sx+3T2024",
+    }
+    # the edx request has no problem set title, so it is not traced as None
+    assert "problem_set_title" not in properties
+
+
+@pytest.mark.asyncio
+async def test_edx_tutor_bot_callback_metadata_has_derived_run(
+    mocker, mock_checkpointer
+):
+    """
+    The derived run must reach the Opik/PostHog callbacks too, not just the
+    LangSmith wrapper the consumer opens.  TutorBot.get_completion builds its
+    callbacks from get_tool_metadata(), bypassing BaseChatbot.get_completion.
+    """
+    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
+    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
+    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        new_callable=AsyncMock,
+        return_value=("problem_xml", "problem_set_xml"),
+    )
+    chatbot = await sync_to_async(TutorBot)(
+        "anonymous",
+        mock_checkpointer,
+        edx_module_id="block-v1:MITxT+3.012Sx+3T2024+type@problem+block@abc123",
+        block_siblings=["block1", "block2"],
+    )
+
+    await chatbot.set_callbacks(properties=await chatbot.get_tool_metadata())
+
+    metadata = mock_tracer.call_args.kwargs["metadata"]
+    assert metadata["run_readable_id"] == "course-v1:MITxT+3.012Sx+3T2024"
+    assert metadata["edx_module_id"] == chatbot.edx_module_id
+
+
+@pytest.mark.asyncio
+async def test_edx_tutor_bot_trace_properties_undecipherable_id(mock_checkpointer):
+    """A module id with no derivable run should still trace the module id."""
+    chatbot = await sync_to_async(TutorBot)(
+        "anonymous",
+        mock_checkpointer,
+        edx_module_id="block1",
+        block_siblings=["block1"],
+    )
+
+    assert chatbot.get_trace_properties() == {"edx_module_id": "block1"}
+
+
+@pytest.mark.asyncio
+async def test_video_gpt_bot_trace_properties(mock_checkpointer):
+    """The video bot traces the asset id plus the run derived from it."""
+    chatbot = await sync_to_async(VideoGPTBot)("anonymous", mock_checkpointer)
+    asset_id = "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-en"
+
+    properties = chatbot.get_trace_properties({"transcript_asset_id": [asset_id]})
+
+    assert properties == {
+        "transcript_asset_id": asset_id,
+        "run_readable_id": "course-v1:xPRO+LASERxE3+R15",
+    }
+
+
+@pytest.mark.asyncio
+async def test_video_gpt_bot_trace_properties_undecipherable_id(mock_checkpointer):
+    """An asset id with no derivable run should still trace the asset id."""
+    chatbot = await sync_to_async(VideoGPTBot)("anonymous", mock_checkpointer)
+
+    properties = chatbot.get_trace_properties({"transcript_asset_id": ["asset1"]})
+
+    assert properties == {"transcript_asset_id": "asset1"}
+
+
+@pytest.mark.asyncio
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -451,6 +591,12 @@ async def test_syllabus_bot_get_completion_state(
             stream_mode="messages",
         )
     assert chatbot.llm.model == default_model
+    # config metadata is how the resource reaches every tracer, including
+    # LangSmith, whose tracer is installed globally rather than via callbacks
+    assert chatbot.config["metadata"] == {
+        "course_id": "mitx1.23",
+        "collection_name": "vector512",
+    }
 
 
 @pytest.mark.asyncio
