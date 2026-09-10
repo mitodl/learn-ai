@@ -194,9 +194,33 @@ def test_recent_learner_messages_reads_latest_checkpoint():
     assert memory.recent_learner_messages("no-such-thread") == []
 
 
+def test_worth_extracting_asks_the_gate_model(mocker, settings):
+    """A cheap yes/no call decides whether the expensive rewrite runs at all"""
+    settings.AI_MEMORY_GATE_MODEL = "openai:cheap"
+    init = mocker.patch("ai_chatbots.memory.init_chat_model")
+    structured = init.return_value.with_structured_output.return_value
+    structured.invoke.return_value = memory.GateDecision(durable=False)
+    current = memory.LearnerMemory(bot_instructions="only introductory ecology")
+    assert memory.worth_extracting("find some ecology courses for me", current) is False
+    init.assert_called_once_with("openai:cheap", temperature=0)
+    prompt_text = "".join(m.content for m in structured.invoke.call_args.args[0])
+    assert "find some ecology courses for me" in prompt_text
+    assert "only introductory ecology" in prompt_text  # so relaxations are detected
+
+
+def test_extract_learner_memory_skips_when_gate_says_no(mocker):
+    """Nothing durable in the message: no rewrite call, nothing written"""
+    mocker.patch("ai_chatbots.memory.worth_extracting", return_value=False)
+    init = mocker.patch("ai_chatbots.memory.init_chat_model")
+    memory.extract_learner_memory("g4", REC, "t-1", "find ecology courses", "Here.")
+    init.assert_not_called()
+    assert memory.load_learner_memory("g4", REC) == memory.LearnerMemory()
+
+
 def test_extract_learner_memory_passes_context_and_saves(mocker, settings):
     """One structured call gets bot, current memory, thread history and the exchange"""
     settings.AI_MEMORY_MAX_CHARS = 1500
+    mocker.patch("ai_chatbots.memory.worth_extracting", return_value=True)
     memory.save_learner_memory("g3", REC, memory.LearnerMemory(about="nurse"))
     mocker.patch(
         "ai_chatbots.memory.recent_learner_messages",
