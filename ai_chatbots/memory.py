@@ -42,16 +42,19 @@ class LearnerMemory(BaseModel):
         "", description="Format, pace, delivery and level preferences"
     )
     current_focus: str = Field("", description="What they are working on right now")
+    avoid: str = Field(
+        "", description="Topics, fields or resource types they asked not to be shown"
+    )
 
 
 EXTRACTION_INSTRUCTIONS = """You maintain a short profile of a learner using MIT Open
 Learning chatbots. Update it from the conversation: keep it factual, about the learner
-only, and under 1500 characters in total. Record preferences, background, goals and
-current focus that the learner stated themselves. The assistant's questions,
-suggestions and search results say nothing about the learner: never record them or
-infer preferences from them. If the learner stated nothing new, change nothing.
-Never record names, emails, quiz or problem answers, grades, or problem identifiers.
-Drop anything the learner contradicts."""
+only, and under 1500 characters in total. You only ever see the learner's own
+messages. Record preferences, background, goals, current focus, and anything they
+asked not to be recommended (put that under avoid). A bare question with no
+personal detail says nothing about the learner: then change nothing. Never record
+names, emails, quiz or problem answers, grades, or problem identifiers. Drop anything
+the learner contradicts."""
 
 
 def memory_namespace(global_id: str) -> tuple[str, str]:

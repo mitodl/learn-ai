@@ -118,3 +118,10 @@ def test_certificate_preference_implies_price(certificate_desired, expected):
         assert block == ""
     else:
         assert expected in block
+
+
+def test_memory_avoid_section_renders():
+    """Exclusions the learner asked for get their own line the bots can act on"""
+    doc = memory.LearnerMemory(avoid="social-science-focused courses").model_dump()
+    block = memory.build_learner_context({}, doc)
+    assert "- Avoid: social-science-focused courses" in block
