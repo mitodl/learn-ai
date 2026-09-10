@@ -1244,7 +1244,7 @@ async def test_handle_passes_learner_context_and_queues_extraction(
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
     assert recommendation_consumer.bot.learner_context == "## About this learner"
     extract.delay.assert_called_once_with(
-        recommendation_consumer.scope["user"].global_id, "hello", "Hi there"
+        recommendation_consumer.scope["user"].global_id, "hello"
     )
 
 

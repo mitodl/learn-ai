@@ -373,7 +373,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     await self.send_chunk(chunk)
                     output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
-            await self.queue_memory_extraction(message_text, "".join(output))
+            await self.queue_memory_extraction(message_text)
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
@@ -395,11 +395,11 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_chunk("", more_body=False)
             await self.disconnect()
 
-    async def queue_memory_extraction(self, message: str, response: str) -> None:
-        """Queue revision of the learner's memory document from this exchange."""
+    async def queue_memory_extraction(self, message: str) -> None:
+        """Queue revision of the learner's memory document from this message."""
         user = self.scope.get("user")
         if self.EXTRACT_LEARNER_MEMORY and await sync_to_async(memory_enabled)(user):
-            extract_learner_memory.delay(user.global_id, message, response)
+            extract_learner_memory.delay(user.global_id, message)
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
