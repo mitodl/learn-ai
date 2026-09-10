@@ -113,9 +113,16 @@ class BaseChatbot(ABC):
 
     @property
     def system_prompt(self) -> str | None:
-        """Static instructions first (prompt-cache friendly), learner context after."""
+        """
+        Learner context first, static instructions after.
+
+        Appending the block instead (prompt-cache friendly) lost to the static prompt's
+        "ask clarifying questions" examples: with gpt-4o-mini it asked 6/6 times for a
+        memory that answered the question, 0/6 with the block first. Patching that line
+        of the static prompt works equally well if caching ever matters.
+        """
         if self.instructions and self.learner_context:
-            return f"{self.instructions}\n\n{self.learner_context}"
+            return f"{self.learner_context}\n\n{self.instructions}"
         return self.instructions
 
     def create_tools(self):

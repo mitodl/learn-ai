@@ -1296,8 +1296,8 @@ async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid
 
 
 @pytest.mark.asyncio
-async def test_learner_context_appended_after_static_prompt(mocker, mock_checkpointer):
-    """The learner context block goes after the static instructions"""
+async def test_learner_context_precedes_static_prompt(mocker, mock_checkpointer):
+    """The learner context block goes before the static instructions"""
     mock_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
     chatbot = await sync_to_async(ResourceRecommendationBot)(
         "user",
@@ -1307,8 +1307,8 @@ async def test_learner_context_appended_after_static_prompt(mocker, mock_checkpo
     )
     assert chatbot.instructions == "Be brief."
     prompt = mock_agent.call_args.kwargs["prompt"]
-    assert prompt.startswith("Be brief.")
-    assert prompt.endswith("- Prefers online")
+    assert prompt.startswith("## About this learner")
+    assert prompt.endswith("Be brief.")
 
 
 @pytest.mark.asyncio
