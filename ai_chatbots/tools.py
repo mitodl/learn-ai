@@ -8,7 +8,6 @@ import pydantic
 from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
 from django.conf import settings
-from httpx import HTTPStatusError, RequestError
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
@@ -120,7 +119,7 @@ class SearchToolSchema(pydantic.BaseModel):
             """
         ),
     )
-    offered_by: list[enum_zip("resource_type", OfferedBy)] | None = Field(
+    offered_by: list[enum_zip("offered_by", OfferedBy)] | None = Field(
         default=None,
         description="""
             If a user asks for resources "offered by" or "from" an institution,
@@ -210,7 +209,7 @@ async def search_courses(
             "metadata": {"search_url": search_url, "parameters": params},
         }
         return json.dumps(full_output)
-    except (RequestError, HTTPStatusError):
+    except Exception:
         log.exception("Error querying MIT API")
         return json.dumps({"error": "An error occurred while searching"})
 
@@ -306,7 +305,7 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         full_output = {
             "results": simplified_results,
             "citation_sources": citations,
-            "metadata": {"parameters": params},
+            "metadata": {"search_url": url, "parameters": params},
         }
         return json.dumps(full_output)
     except Exception:
@@ -357,7 +356,9 @@ async def search_related_course_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
-    return await _content_file_search(url, params)
+    return await _content_file_search(
+        url, params, exclude_canvas=state.get("exclude_canvas", ["True"])[-1]
+    )
 
 
 @tool(args_schema=VideoGPTToolSchema)
@@ -393,7 +394,7 @@ async def get_video_transcript_chunk(
             simplified_results.append(simplified_result)
         full_output = {
             "results": simplified_results,
-            "metadata": {"parameters": params},
+            "metadata": {"search_url": url, "parameters": params},
         }
 
         return json.dumps(full_output)
