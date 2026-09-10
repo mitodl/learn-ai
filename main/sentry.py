@@ -1,6 +1,7 @@
 """Sentry setup and configuration"""
 
 import logging
+import re
 
 import sentry_sdk
 from celery.exceptions import WorkerLostError
@@ -21,8 +22,11 @@ log = logging.getLogger()
 # value, where no SDK privacy setting reaches it: send_default_pii governs
 # user/cookie/header capture and max_request_body_size governs request bodies,
 # and neither touches exception text.
-PG_DETAIL_MARKER = "\nDETAIL:"
-PG_DETAIL_REPLACEMENT = "\nDETAIL:  [scrubbed]"
+#
+# The newline is matched both raw and as a literal backslash-n: the SDK repr()s
+# frame locals and non-string logging params during serialization, so there the
+# DETAIL line arrives as "...constraint\\nDETAIL: ..." inside a repr string.
+PG_DETAIL_RE = re.compile(r"(\n|\\n)DETAIL:.*", re.DOTALL)
 
 
 def scrub_pg_detail(text):
@@ -31,10 +35,9 @@ def scrub_pg_detail(text):
     Keeps the primary message, which is what identifies the failure, and drops
     the row echo plus any HINT/CONTEXT Postgres appends after it.
     """
-    index = text.find(PG_DETAIL_MARKER)
-    if index == -1:
-        return text
-    return text[:index] + PG_DETAIL_REPLACEMENT
+    return PG_DETAIL_RE.sub(
+        lambda match: match.group(1) + "DETAIL:  [scrubbed]", text, count=1
+    )
 
 
 def scrub_pg_details(event):
@@ -42,15 +45,15 @@ def scrub_pg_details(event):
 
     The row echo reaches Sentry through more fields than the exception value:
     LoggingIntegration puts the log message in a breadcrumb
-    (integrations/logging.py:311), logger.error("...: %s", exc) puts it in
-    logentry.params (:274), and captured stack-frame locals carry it in
-    frame vars because include_local_variables defaults to True
-    (consts.py:1028, utils.py:616).  Walking the whole event covers those
-    without enumerating them, and does not go stale when the SDK adds another.
+    (BreadcrumbHandler._breadcrumb_from_record), logger.error("...: %s", exc)
+    puts it in logentry.params (EventHandler._emit), and captured stack-frame
+    locals carry it in frame vars because include_local_variables defaults to
+    True (serialize_frame).  Walking the whole event covers those without
+    enumerating them, and does not go stale when the SDK adds another.
 
-    Safe to walk naively because client._prepare_event serializes the event
-    before calling before_send (client.py:650 vs :658), so every leaf here is
-    already a JSON primitive -- no live exception objects to coerce.
+    Safe to walk naively because Client._prepare_event serializes the event
+    before calling before_send, so every leaf here is already a JSON
+    primitive -- no live exception objects to coerce.
     """
     return _scrub_node(event)
 
@@ -66,8 +69,6 @@ def _scrub_node(node):
     if isinstance(node, list):
         node[:] = [_scrub_node(item) for item in node]
         return node
-    if isinstance(node, tuple):
-        return tuple(_scrub_node(item) for item in node)
     return node
 
 
@@ -128,11 +129,22 @@ def init_sentry(  # noqa: PLR0913
         release=version,
         before_send=before_send,
         # Request bodies are NOT gated on send_default_pii: the SDK sets
-        # request.data unconditionally (sentry_sdk/integrations/_wsgi_common.py
-        # :123) and this is the only control (:61).  Left unset it defaults to
-        # "medium", i.e. 10,000-byte bodies -- enrollment, checkout, profile and
-        # SCIM payloads.  Set explicitly so the choice is findable here rather
-        # than in a dependency's defaults.
+        # request.data unconditionally (RequestExtractor.extract_into_event)
+        # and this is the only control (request_body_within_bounds).  Left
+        # unset it defaults to "medium", i.e. 10,000-byte bodies.  Set
+        # explicitly so the choice is findable here rather than in a
+        # dependency's defaults.
+        #
+        # This only reaches the regular Django views behind django_asgi_app.
+        # main/asgi.py routes the chatbot endpoints to Channels consumers ahead
+        # of django_asgi_app, so the Django integration never sees them, and
+        # SentryAsgiMiddleware records method, headers, query string and URL
+        # but no body.  Learner messages are not covered by this setting.
+        #
+        # Nor is it a hard 1KB cap: the bound is checked against the declared
+        # Content-Length, and a missing one counts as 0.  Under ASGI, Django
+        # takes CONTENT_LENGTH from the request header, so a chunked request
+        # without one has its parsed body captured in full.
         max_request_body_size="small",
         traces_sample_rate=traces_sample_rate,
         profiles_sample_rate=profiles_sample_rate,
