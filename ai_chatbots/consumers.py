@@ -417,7 +417,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             self.thread_id,
             message,
             response,
-            self.memory_generation,
+            generation=self.memory_generation,
         )
         if first:
             schedule_learner_memory(user.id)

@@ -15,6 +15,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
+from ai_chatbots.memorystores import DjangoMemoryStore
 from ai_chatbots.models import (
     DjangoCheckpoint,
     LearnerMemoryNote,
@@ -197,6 +198,10 @@ class MemoryBusy(Exception):  # noqa: N818
     """Another task holds the learner's memory lock."""
 
 
+def memory_namespace(global_id: str) -> tuple[str, str]:
+    return ("memories", global_id)
+
+
 def bot_instructions_key(bot_name: str) -> str:
     return f"{INSTRUCTIONS_KEY}:{bot_name}"
 
@@ -252,7 +257,9 @@ def fit_length(text: str, cap: int | None = None) -> str:
 
 
 def load_notes(user) -> dict[str, str]:
-    return dict(LearnerMemoryNote.objects.filter(user=user).values_list("key", "text"))
+    """All sections for one learner, by key, via the LangGraph store."""
+    items = DjangoMemoryStore().search(memory_namespace(user.global_id), limit=100)
+    return {item.key: item.value["text"] for item in items}
 
 
 def load_learner_memory(user, bot_name: str) -> LearnerMemory:
@@ -266,17 +273,13 @@ def load_learner_memory(user, bot_name: str) -> LearnerMemory:
 
 def save_notes(user, revised: dict[str, str]) -> None:
     """Write the sections that changed; an empty section deletes the note."""
+    store = DjangoMemoryStore()
+    ns = memory_namespace(user.global_id)
     current = load_notes(user)
     for key, raw in revised.items():
         text = fit_length(raw)
-        if text == current.get(key, ""):
-            continue
-        if text:
-            LearnerMemoryNote.objects.update_or_create(
-                user=user, key=key, defaults={"text": text}
-            )
-        else:
-            LearnerMemoryNote.objects.filter(user=user, key=key).delete()
+        if text != current.get(key, ""):
+            store.put(ns, key, {"text": text} if text else None)
 
 
 # --- rendering -----------------------------------------------------------------
@@ -394,7 +397,7 @@ def clear_learner_memory(user) -> None:
 
 
 def record_memory_turn(  # noqa: PLR0913
-    user, bot_name: str, thread_id: str, message: str, response: str, generation: int
+    user, bot_name: str, thread_id: str, message: str, response: str, *, generation: int
 ) -> bool:
     """
     Save one finished exchange for extraction.

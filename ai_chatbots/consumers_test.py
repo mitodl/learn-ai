@@ -1252,7 +1252,7 @@ async def test_handle_passes_learner_context_and_queues_extraction(
         recommendation_consumer.thread_id,
         "hello",
         "Hi there",
-        3,
+        generation=3,
     )
     schedule.assert_called_once_with(user.id)
 
@@ -1328,5 +1328,5 @@ async def test_tutor_handle_extracts_too(
         tutor_consumer.thread_id,
         "help",
         "Hi",
-        0,
+        generation=0,
     )

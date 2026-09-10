@@ -208,7 +208,7 @@ def test_save_notes_writes_changed_and_deletes_emptied_sections(user):
 
 def test_notes_cascade_with_user(user):
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse"})
-    memory.record_memory_turn(user, REC, "t", "hi", "hello", 0)
+    memory.record_memory_turn(user, REC, "t", "hi", "hello", generation=0)
     user.delete()
     assert not LearnerMemoryNote.objects.exists()
     assert not PendingMemoryTurn.objects.exists()
@@ -220,8 +220,14 @@ def test_notes_cascade_with_user(user):
 
 def test_record_memory_turn_first_row_schedules_later_rows_join(user, settings):
     settings.AI_MEMORY_REPLY_CHARS = 5
-    assert memory.record_memory_turn(user, REC, "t-1", "hi", "hello world", 0) is True
-    assert memory.record_memory_turn(user, TUTOR, "t-2", "help", "sure", 0) is False
+    assert (
+        memory.record_memory_turn(user, REC, "t-1", "hi", "hello world", generation=0)
+        is True
+    )
+    assert (
+        memory.record_memory_turn(user, TUTOR, "t-2", "help", "sure", generation=0)
+        is False
+    )
     rows = list(PendingMemoryTurn.objects.order_by("id"))
     assert [(r.bot, r.response) for r in rows] == [(REC, "hello"), (TUTOR, "sure")]
     assert LearnerMemoryState.objects.get(user=user).generation == 0
@@ -230,14 +236,19 @@ def test_record_memory_turn_first_row_schedules_later_rows_join(user, settings):
 def test_record_memory_turn_discards_pre_clear_exchange(user, redis_lock):
     """A response that started before a clear must not become memory"""
     memory.clear_learner_memory(user)
-    assert memory.record_memory_turn(user, REC, "t-1", "hi", "hello", 0) is False
+    assert (
+        memory.record_memory_turn(user, REC, "t-1", "hi", "hello", generation=0)
+        is False
+    )
     assert not PendingMemoryTurn.objects.exists()
-    assert memory.record_memory_turn(user, REC, "t-1", "hi", "hello", 1) is True
+    assert (
+        memory.record_memory_turn(user, REC, "t-1", "hi", "hello", generation=1) is True
+    )
 
 
 def test_clear_learner_memory_wipes_and_bumps_generation(user, redis_lock):
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse"})
-    memory.record_memory_turn(user, REC, "t", "hi", "hello", 0)
+    memory.record_memory_turn(user, REC, "t", "hi", "hello", generation=0)
     memory.clear_learner_memory(user)
     state = LearnerMemoryState.objects.get(user=user)
     assert state.generation == 1
@@ -258,11 +269,11 @@ def test_clear_learner_memory_busy_when_lock_held(user, redis_lock):
 def test_stale_users_and_stuck_counts(user, settings):
     settings.AI_MEMORY_MAX_ATTEMPTS = 2
     old = timezone.now() - timedelta(seconds=settings.AI_MEMORY_DELAY_SECONDS + 60)
-    memory.record_memory_turn(user, REC, "t", "old", "r", 0)
+    memory.record_memory_turn(user, REC, "t", "old", "r", generation=0)
     PendingMemoryTurn.objects.update(created_on=old)
-    memory.record_memory_turn(user, REC, "t", "new", "r", 0)
+    memory.record_memory_turn(user, REC, "t", "new", "r", generation=0)
     other = UserFactory.create()
-    memory.record_memory_turn(other, REC, "t", "stuck", "r", 0)
+    memory.record_memory_turn(other, REC, "t", "stuck", "r", generation=0)
     PendingMemoryTurn.objects.filter(user=other).update(created_on=old, attempts=2)
     assert memory.stale_users() == [user.id]
     assert memory.stuck_turn_count() == 1
@@ -329,8 +340,10 @@ def test_thread_history_excluded_for_threads_that_predate_a_clear(user):
 
 def test_render_batch_labels_bots_and_threads(user):
     _thread_with_history(user, "t-1", "find ecology courses", "here", "beginner", "ok")
-    memory.record_memory_turn(user, REC, "t-1", "beginner", "Noted.", 0)
-    memory.record_memory_turn(user, TUTOR, "t-2", "hints only please", "Sure.", 0)
+    memory.record_memory_turn(user, REC, "t-1", "beginner", "Noted.", generation=0)
+    memory.record_memory_turn(
+        user, TUTOR, "t-2", "hints only please", "Sure.", generation=0
+    )
     batch = list(PendingMemoryTurn.objects.order_by("id"))
     text = memory.render_batch(user, batch, None)
     assert "context only, already reflected" in text
@@ -363,8 +376,8 @@ def test_process_learner_memory_saves_batch_and_deletes_rows(
     """Gate yes: one rewrite over the batch, notes saved, only those rows removed"""
     _thread_with_history(user, "t-1", "find ecology courses", "here", "beginner", "ok")
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse", "instructions:Other": "keep"})
-    memory.record_memory_turn(user, REC, "t-1", "beginner", "Noted.", 0)
-    memory.record_memory_turn(user, TUTOR, "t-2", "hints only", "Sure.", 0)
+    memory.record_memory_turn(user, REC, "t-1", "beginner", "Noted.", generation=0)
+    memory.record_memory_turn(user, TUTOR, "t-2", "hints only", "Sure.", generation=0)
     revision = memory.MemoryRevision(
         about="nurse in Boston",
         instructions="",
@@ -398,7 +411,9 @@ def test_process_learner_memory_gate_no_drops_rows_keeps_notes(
     mocker, flag_on, user, redis_lock
 ):
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse"})
-    memory.record_memory_turn(user, REC, "t-1", "find ecology courses", "Here.", 0)
+    memory.record_memory_turn(
+        user, REC, "t-1", "find ecology courses", "Here.", generation=0
+    )
     init, _ = _mock_models(mocker, gate=False)
     assert memory.process_learner_memory(user.id) == "skipped"
     assert init.call_count == 1
@@ -410,7 +425,7 @@ def test_process_learner_memory_lock_held_leaves_rows(
     mocker, flag_on, user, redis_lock
 ):
     redis_lock.acquired = False
-    memory.record_memory_turn(user, REC, "t-1", "I'm a nurse", "ok", 0)
+    memory.record_memory_turn(user, REC, "t-1", "I'm a nurse", "ok", generation=0)
     init = mocker.patch("ai_chatbots.memory.init_chat_model")
     assert memory.process_learner_memory(user.id) == "locked"
     init.assert_not_called()
@@ -421,7 +436,7 @@ def test_process_learner_memory_clear_during_extraction_discards(
     mocker, flag_on, user, redis_lock
 ):
     """A clear between the model calls and the commit wins"""
-    memory.record_memory_turn(user, REC, "t-1", "I'm a nurse", "ok", 0)
+    memory.record_memory_turn(user, REC, "t-1", "I'm a nurse", "ok", generation=0)
     revision = memory.MemoryRevision(about="nurse")
     _mock_models(mocker, gate=True, revision=revision)
 
@@ -441,13 +456,13 @@ def test_process_learner_memory_respects_batch_limits(
     """Oldest rows first, up to the count and size limits; the rest stay pending"""
     settings.AI_MEMORY_BATCH_SIZE = 2
     for i in range(3):
-        memory.record_memory_turn(user, REC, "t", f"m{i}", "r", 0)
+        memory.record_memory_turn(user, REC, "t", f"m{i}", "r", generation=0)
     _mock_models(mocker, gate=False)
     assert memory.process_learner_memory(user.id) == "skipped"
     assert list(PendingMemoryTurn.objects.values_list("message", flat=True)) == ["m2"]
     settings.AI_MEMORY_BATCH_SIZE = 10
     settings.AI_MEMORY_BATCH_CHARS = 3
-    memory.record_memory_turn(user, REC, "t", "m3", "r", 0)
+    memory.record_memory_turn(user, REC, "t", "m3", "r", generation=0)
     assert memory.process_learner_memory(user.id) == "skipped"
     assert list(PendingMemoryTurn.objects.values_list("message", flat=True)) == ["m3"]
 
@@ -456,7 +471,7 @@ def test_process_learner_memory_increments_attempts_and_skips_stuck(
     mocker, flag_on, user, redis_lock, settings
 ):
     settings.AI_MEMORY_MAX_ATTEMPTS = 1
-    memory.record_memory_turn(user, REC, "t", "m", "r", 0)
+    memory.record_memory_turn(user, REC, "t", "m", "r", generation=0)
     mocker.patch("ai_chatbots.memory.worth_extracting", side_effect=RuntimeError)
     with pytest.raises(RuntimeError):
         memory.process_learner_memory(user.id)
@@ -466,7 +481,7 @@ def test_process_learner_memory_increments_attempts_and_skips_stuck(
 
 def test_process_learner_memory_flag_off_drops_backlog(mocker, user, redis_lock):
     mocker.patch("ai_chatbots.memory.is_enabled", return_value=False)
-    memory.record_memory_turn(user, REC, "t", "m", "r", 0)
+    memory.record_memory_turn(user, REC, "t", "m", "r", generation=0)
     assert memory.process_learner_memory(user.id) == "disabled"
     assert not PendingMemoryTurn.objects.exists()
     redis_lock.acquire.assert_not_called()
