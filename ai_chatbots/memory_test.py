@@ -48,7 +48,9 @@ def test_build_learner_context_includes_memory_and_truncates(settings):
     block = memory.build_learner_context({}, doc)
     assert "Working nurse" in block
     assert "Prefers short videos" not in block  # truncated away
-    mem_part = block.split(memory.MEMORY_HEADING, 1)[1]
+    mem_part = block.split(memory.MEMORY_HEADING, 1)[1].split(
+        memory.SEARCH_INSTRUCTION
+    )[0]
     assert len(mem_part.strip()) <= 60
 
 
@@ -125,3 +127,25 @@ def test_memory_avoid_section_renders():
     doc = memory.LearnerMemory(avoid="social-science-focused courses").model_dump()
     block = memory.build_learner_context({}, doc)
     assert "- Avoid: social-science-focused courses" in block
+
+
+def test_block_tells_bot_to_search_with_focus_and_skip_avoided():
+    """Memory alone didn't change search queries; the block has to say how to use it"""
+    doc = memory.LearnerMemory(current_focus="machine learning", avoid="social science")
+    block = memory.build_learner_context({}, doc.model_dump())
+    assert block.endswith(memory.SEARCH_INSTRUCTION)
+    assert "Avoid" in memory.SEARCH_INSTRUCTION
+    # Profile-only blocks have nothing to search by, so no search instruction
+    assert memory.SEARCH_INSTRUCTION not in memory.build_learner_context(
+        memory.fetch_learner_profile("x"), None
+    )
+
+
+def test_recommendation_prompt_defers_to_learner_context():
+    """The static prompt must not tell the bot to re-ask what the learner context answers"""
+    from ai_chatbots import prompts
+
+    assert "Learner context" in prompts.PROMPT_RECOMMENDATION
+    assert "If the user's intent is unclear, ask clarifying" not in (
+        prompts.PROMPT_RECOMMENDATION
+    )

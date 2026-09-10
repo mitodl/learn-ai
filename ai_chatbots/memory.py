@@ -23,6 +23,12 @@ CONTEXT_INSTRUCTION = (
     "profile. Treat these as their answers and do not ask them again. Search now using "
     "them; only ask about things not listed here."
 )
+# Without this, memory changed nothing downstream: "machine learning" in current focus
+# still gave search_courses(q="data science") and social-science results despite avoid.
+SEARCH_INSTRUCTION = (
+    "When you search, put the current focus in the query and, after searching, leave "
+    "out any result about a topic listed under Avoid."
+)
 PROFILE_HEADING = "## About this learner (stated in their MIT Learn profile)"
 MEMORY_HEADING = "## Learned from prior chats"
 # Certificate tracks are the paid ones at MIT Learn, so this field also answers price.
@@ -130,7 +136,7 @@ def build_learner_context(profile: dict, memory: dict | None) -> str:
             body = "\n".join(memory_lines)[: settings.AI_MEMORY_MAX_CHARS]
             if not lines:
                 lines.append(CONTEXT_INSTRUCTION)
-            lines += [MEMORY_HEADING, body]
+            lines += [MEMORY_HEADING, body, SEARCH_INSTRUCTION]
     return "\n".join(lines)
 
 
