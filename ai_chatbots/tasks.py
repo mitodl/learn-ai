@@ -20,17 +20,31 @@ def delete_stale_sessions():
     UserChatSession.objects.filter(created_on__lt=cutoff_dt, user=None).delete()
 
 
-@app.task
-def extract_learner_memory(
-    global_id: str, bot_name: str, thread_id: str, message: str, response: str
-):
-    """
-    Revise the learner's memory from one exchange. Best-effort.
-
-    ponytail: runs on every response. Add the per-user 15 minute throttle and a
-    last-processed marker when volume matters.
-    """
+@app.task(
+    soft_time_limit=settings.AI_MEMORY_TASK_TIME_LIMIT,
+    time_limit=settings.AI_MEMORY_TASK_TIME_LIMIT + 30,
+)
+def process_learner_memory(user_id: int):
+    """Revise one learner's notes from their pending turns. Best-effort."""
     try:
-        memory.extract_learner_memory(global_id, bot_name, thread_id, message, response)
+        outcome = memory.process_learner_memory(user_id)
+        log.info("Learner memory for user %s: %s", user_id, outcome)
     except Exception:
-        log.exception("Memory extraction failed for %s", global_id)
+        log.exception("Memory extraction failed for user %s", user_id)
+
+
+def schedule_learner_memory(user_id: int) -> None:
+    """Run extraction after the batching delay."""
+    process_learner_memory.apply_async(
+        (user_id,), countdown=settings.AI_MEMORY_DELAY_SECONDS
+    )
+
+
+@app.task
+def requeue_stale_memory_turns():
+    """Recover pending turns whose task was lost or found the lock held."""
+    for user_id in memory.stale_users():
+        process_learner_memory.delay(user_id)
+    stuck = memory.stuck_turn_count()
+    if stuck:
+        log.error("%d learner memory turns exceeded the retry limit", stuck)

@@ -32,6 +32,7 @@ v0_urls = [
         views.ProblemSetList.as_view(),
         name="problem_set_list",
     ),
+    path(r"memory/", views.LearnerMemoryView.as_view(), name="memory"),
 ]
 
 urlpatterns = [
