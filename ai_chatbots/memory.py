@@ -121,6 +121,31 @@ How to write:
   If the message adds nothing durable, return the notes unchanged."""
 
 
+GATE_INSTRUCTIONS = """Decide whether a message from a learner to an MIT Open Learning
+chatbot contains anything worth remembering about the learner for future chats.
+
+Answer durable=true if the message states, changes or withdraws:
+- a fact about the learner as a person (job, location, education, background, goals,
+  available time), or
+- how they want to be helped (tone, length, jargon, format), or
+- a lasting preference or exclusion about what to show them (level, topics or kinds of
+  results they want or do not want), including relaxing or reversing an earlier one.
+
+Answer durable=false for everything else: questions, requests to find or explain
+something, follow-ups about the current results, complaints about an answer, attempted
+answers to a problem, greetings and thanks.
+
+You are also given the current notes about the learner. If the message contradicts,
+relaxes or removes anything in them, answer durable=true even if it is phrased as a
+request."""
+
+
+class GateDecision(BaseModel):
+    """Whether a message carries anything worth writing to learner memory."""
+
+    durable: bool = Field(description="True if the message should update the notes")
+
+
 def memory_namespace(global_id: str) -> tuple[str, str]:
     return ("memories", global_id)
 
@@ -270,11 +295,28 @@ def recent_learner_messages(thread_id: str, limit: int = 8) -> list[str]:
     return [h for h in humans if isinstance(h, str)][-limit:]
 
 
+def worth_extracting(message: str, current: LearnerMemory) -> bool:
+    """Cheap yes/no gate so the expensive rewrite runs only on messages that matter."""
+    llm = init_chat_model(settings.AI_MEMORY_GATE_MODEL, temperature=0)
+    decision = llm.with_structured_output(GateDecision).invoke(
+        [
+            SystemMessage(GATE_INSTRUCTIONS),
+            HumanMessage(
+                f"Current notes:\n{current.model_dump_json(indent=1)}\n\n"
+                f"Message:\n{message}"
+            ),
+        ]
+    )
+    return decision.durable
+
+
 def extract_learner_memory(
     global_id: str, bot_name: str, thread_id: str, message: str, response: str
 ) -> None:
-    """One structured LLM call revises the three sections from the latest exchange."""
+    """Revise the notes from the latest exchange when it says something durable."""
     current = load_learner_memory(global_id, bot_name)
+    if not worth_extracting(message, current):
+        return
     # Earlier turns give "this topic" its meaning; the latest message may not be
     # checkpointed yet, so it is always appended explicitly.
     history = [m for m in recent_learner_messages(thread_id) if m != message]
@@ -293,7 +335,7 @@ def extract_learner_memory(
                 f"for the latest message; already reflected in the notes):\n"
                 f"{history_text}\n\n"
                 f"Learner's latest message:\n{message}\n\n"
-                f"Chatbot's reply (context only):\n{response[:2000]}"
+                f"Chatbot's reply (context only):\n{response[:500]}"
             ),
         ]
     )

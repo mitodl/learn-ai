@@ -609,6 +609,10 @@ AI_MEMORY_EXTRACTION_MODEL = get_string(
     name="AI_MEMORY_EXTRACTION_MODEL", default="openai:gpt-4.1"
 )
 AI_MEMORY_MAX_CHARS = get_int(name="AI_MEMORY_MAX_CHARS", default=1500)
+# yes/no "anything worth remembering?" call that runs before the extraction model
+AI_MEMORY_GATE_MODEL = get_string(
+    name="AI_MEMORY_GATE_MODEL", default="openai:gpt-4o-mini"
+)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(
