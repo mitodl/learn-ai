@@ -15,10 +15,13 @@ log = logging.getLogger(__name__)
 
 CHAT_MEMORY_FLAG = "CHAT_MEMORY"
 MEMORY_KEY = "default"  # langmem's fixed key for a single-document profile
+# Wording matters: a polite "use this" version still lost to the static prompt's
+# "ask clarifying questions" examples with gpt-4o-mini; this one wins while appended.
 CONTEXT_INSTRUCTION = (
     "# Learner context\n"
-    "Use what follows to tailor your answer. Do not ask the learner for anything "
-    "already stated here; it is fine to ask about anything that is not."
+    "The learner has ALREADY answered the clarifying questions below through their "
+    "profile. Treat these as their answers and do not ask them again. Search now using "
+    "them; only ask about things not listed here."
 )
 PROFILE_HEADING = "## About this learner (stated in their MIT Learn profile)"
 MEMORY_HEADING = "## Learned from prior chats"
