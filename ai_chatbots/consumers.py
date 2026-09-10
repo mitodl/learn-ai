@@ -356,6 +356,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     "thread_id": thread_id,
                     "user_id": self.user_id,
                     "model": self.bot.model,
+                    # The resource the bot was asked about, so the root run
+                    # can be identified/filtered by it in LangSmith
+                    **self.bot.get_trace_properties(extra_state),
                 },
             ) as langsmith_trace:
                 output = []

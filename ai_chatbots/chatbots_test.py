@@ -364,6 +364,42 @@ async def test_set_callbacks_logs_agent_graph_to_opik(mocker, mock_checkpointer)
 
 
 @pytest.mark.asyncio
+async def test_syllabus_bot_trace_properties(mocker, mock_checkpointer):
+    """The syllabus bot should tag traces with the resource it was asked about."""
+    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
+    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
+    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
+    extra_state = {
+        "course_id": ["MITx+6.00.1x"],
+        "collection_name": ["content_files"],
+        "exclude_canvas": ["True"],
+    }
+
+    properties = chatbot.get_trace_properties(extra_state)
+    assert properties == {
+        "course_id": "MITx+6.00.1x",
+        "collection_name": "content_files",
+    }
+
+    await chatbot.set_callbacks(properties=properties)
+    metadata = mock_tracer.call_args.kwargs["metadata"]
+    assert metadata["course_id"] == "MITx+6.00.1x"
+    assert metadata["collection_name"] == "content_files"
+
+
+@pytest.mark.asyncio
+async def test_base_bot_trace_properties_default(mock_checkpointer):
+    """Bots without TRACE_STATE_KEYS should add no extra trace properties."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+    )
+    assert chatbot.get_trace_properties({"search_url": ["https://example.com"]}) == {}
+
+
+@pytest.mark.asyncio
 async def test_syllabus_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function calls create_react_agent with expected arguments"""
     mock_create_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -451,6 +487,12 @@ async def test_syllabus_bot_get_completion_state(
             stream_mode="messages",
         )
     assert chatbot.llm.model == default_model
+    # config metadata is how the resource reaches every tracer, including
+    # LangSmith, whose tracer is installed globally rather than via callbacks
+    assert chatbot.config["metadata"] == {
+        "course_id": "mitx1.23",
+        "collection_name": "vector512",
+    }
 
 
 @pytest.mark.asyncio

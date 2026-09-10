@@ -684,6 +684,33 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
     ).aexists()
 
 
+async def test_consumer_handle_traces_course_id(
+    mocker, mock_http_consumer_send, syllabus_consumer
+):
+    """The root LangSmith trace should be tagged with the course being asked about."""
+    response = SystemMessageFactory.create().content.split(" ")
+    mocker.patch(
+        "ai_chatbots.chatbots.SyllabusBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
+        ),
+    )
+    mock_trace = mocker.patch("ai_chatbots.consumers.trace")
+    payload = {
+        "message": "what are the prerequisites",
+        "course_id": "MITx+6.00.1x",
+        "collection_name": "vector512",
+    }
+
+    await syllabus_consumer.handle(json.dumps(payload))
+
+    metadata = mock_trace.call_args.kwargs["metadata"]
+    assert metadata["course_id"] == payload["course_id"]
+    assert metadata["collection_name"] == payload["collection_name"]
+    # exclude_canvas is state, not a resource identifier, so it stays out
+    assert "exclude_canvas" not in metadata
+
+
 @pytest.mark.parametrize(
     ("error_class", "expected_status", "headers_sent"),
     [

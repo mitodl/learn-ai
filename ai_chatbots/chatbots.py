@@ -69,6 +69,11 @@ class BaseChatbot(ABC):
     JOB_ID = "BASECHAT_JOB"
     STATE_CLASS = AgentState
 
+    # extra_state keys identifying the resource the bot was asked about.
+    # They are attached to trace metadata so a trace can be tied back to the
+    # course/video/etc it is about.
+    TRACE_STATE_KEYS: tuple[str, ...] = ()
+
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
@@ -242,6 +247,24 @@ class BaseChatbot(ABC):
         )
         return checkpoint.id if checkpoint else None
 
+    def get_trace_properties(
+        self, extra_state: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """
+        Return extra properties to tag traces with, pulled from the state
+        keys named in TRACE_STATE_KEYS.  State values arrive as lists (they
+        are reducer-appended fields), so single-item lists are unwrapped.
+        """
+        state = extra_state or {}
+        properties = {}
+        for key in self.TRACE_STATE_KEYS:
+            value = state.get(key)
+            if isinstance(value, list) and len(value) == 1:
+                value = value[0]
+            if value:
+                properties[key] = value
+        return properties
+
     async def set_callbacks(
         self, properties: dict | None = None
     ) -> list[BaseCallbackHandler]:
@@ -323,7 +346,17 @@ class BaseChatbot(ABC):
             error = "Create agent before running"
             raise ValueError(error)
         try:
-            self.config["callbacks"] = await self.set_callbacks()
+            trace_properties = self.get_trace_properties(extra_state)
+            # config["metadata"] is what LangChain propagates to every tracer
+            # as inheritable run metadata -- notably LangSmith, whose tracer is
+            # installed globally from env vars and never appears in callbacks.
+            self.config["metadata"] = {
+                **self.config.get("metadata", {}),
+                **trace_properties,
+            }
+            self.config["callbacks"] = await self.set_callbacks(
+                properties=trace_properties
+            )
             state = {
                 "messages": [HumanMessage(message)],
                 **(extra_state or {}),
@@ -503,6 +536,7 @@ class SyllabusBot(TruncatingChatbot):
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
+    TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses")
 
     def __init__(  # noqa: PLR0913
         self,
@@ -836,6 +870,7 @@ class VideoGPTBot(TruncatingChatbot):
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
     STATE_CLASS = VideoGPTAgentState
+    TRACE_STATE_KEYS = ("transcript_asset_id",)
 
     def __init__(  # noqa: PLR0913
         self,
