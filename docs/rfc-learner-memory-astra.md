@@ -97,13 +97,36 @@ now evaluation cases.
 
 ## Approach
 
-**Profile.** Add `GET /api/v0/profiles/<global_id>/preferences/` to mit-learn, requiring
-service authentication and returning only the six profile fields. learn-ai calls it with
-the ID of the authenticated user, never one from the request, and caches the result for 12
-hours, so a profile edit can take up to that long to reach the bots. The prototype uses a
-stub for this endpoint; it is the one piece of work outside learn-ai. The fetch has a
-timeout, and if it fails the chat continues without the profile. Learned notes are read
-separately so a profile failure doesn't hide them too.
+**Profile.** Add `GET /api/v0/profiles/<global_id>/preferences/` to mit-learn, returning
+only the six profile fields (no name, email, or avatar, which limits what a leaked token
+could expose). learn-ai calls it with the `global_id` of the authenticated learner, never an
+ID from the request body, and caches the result for 12 hours, so a profile edit can take up
+to that long to reach the bots. The fetch has a timeout, and if it fails the chat continues
+without the profile. Learned notes are read separately so a profile failure doesn't hide
+them too. The prototype uses a stub for this endpoint; it is the one piece of work outside
+learn-ai.
+
+Authentication reuses what learn-ai already does for content-file and learning-resource
+search: every server-side call to mit-learn carries `Authorization: Bearer
+<LEARN_ACCESS_TOKEN>` ([utils.py](../ai_chatbots/utils.py)). Reading the code, mit-learn's
+Django never looks at that header. The token is validated at the mit-learn APISIX gateway,
+whose openid-connect plugin checks bearer tokens against Keycloak and passes the resulting
+identity to Django in the `x-userinfo` header, where the existing `ApisixUserMiddleware`
+resolves it to a User. So from mit-learn's point of view, learn-ai is one particular
+Keycloak-backed user account, and `LEARN_ACCESS_TOKEN` is that account's token. I'm not
+sure how that token is issued or rotated today (the learn-ai Keycloak client has service
+accounts disabled, and the README says to copy the value from the RC pod); that's worth
+pinning down with DevOps as part of this work.
+
+The new endpoint has to be restricted to that service identity, not to any logged-in
+user, or a browser session could read other learners' preferences by guessing a
+`global_id`. The simplest option is a DRF permission class in mit-learn that allows only
+users in a designated group or an allowlist setting of service `global_id`s, and learn-ai's
+account goes in it. The alternative is an APISIX key-auth consumer for learn-ai, the way
+learn-ai itself authenticates the Canvas plugin with `canvas_token`, which would keep the
+endpoint off the user-facing OIDC route entirely. I lean toward the permission class since
+it needs no gateway change, but either works. Limiting this endpoint to six fields doesn't
+reduce any other access the existing token already has.
 
 **Notes.** Three new Django models in `ai_chatbots/models.py`:
 
@@ -280,6 +303,8 @@ should tell us whether they are good enough for v1.
 ## Open questions
 
 - Who owns the evaluation conversations, review, and rollout criteria?
+- How is `LEARN_ACCESS_TOKEN` issued and rotated, and should the profile endpoint be gated
+  by a mit-learn permission class or an APISIX consumer?
 - Delay before processing, batch size, and fetch/task timeouts: all tunable, none tuned yet.
 - Should declining a certificate suppress price questions? Should "regardless of
   difficulty" remove a saved preference?
