@@ -8,7 +8,12 @@ from django.utils import timezone
 
 from ai_chatbots import memory, prompts
 from ai_chatbots.factories import CheckpointFactory, UserChatSessionFactory
-from ai_chatbots.models import LearnerMemoryNote, LearnerMemoryState, PendingMemoryTurn
+from ai_chatbots.models import (
+    LearnerMemoryNote,
+    LearnerMemoryState,
+    PendingMemoryTurn,
+    UserChatSession,
+)
 from main.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
@@ -133,12 +138,13 @@ def test_context_instruction_marks_notes_as_learner_data():
     assert "override" in text
 
 
-def test_fit_length_cuts_at_a_clause_boundary():
+def test_fit_length_drops_whole_clauses_or_refuses():
+    """Never a mid-clause cut: 'only advanced data science' must not become 'only advanced'"""
     assert memory.fit_length("short", 40) == "short"
     assert memory.fit_length("Nurse in Boston; wants data science; likes cats", 38) == (
         "Nurse in Boston; wants data science"
     )
-    assert memory.fit_length("x" * 50, 10) == "x" * 10
+    assert memory.fit_length("Only advanced data science courses", 20) is None
 
 
 def test_get_learner_context_anonymous(flag_on):
@@ -206,49 +212,102 @@ def test_save_notes_writes_changed_and_deletes_emptied_sections(user):
     ).exists()
 
 
+def test_save_notes_keeps_previous_when_revision_cannot_fit(user, settings, mocker):
+    """An over-long section with no clause boundary is rejected, not truncated"""
+    settings.AI_MEMORY_MAX_CHARS = 20
+    log = mocker.patch("ai_chatbots.memory.log")
+    memory.save_notes(user, {"instructions:X": "only advanced"})
+    memory.save_notes(user, {"instructions:X": "Only advanced data science courses"})
+    assert memory.load_notes(user) == {"instructions:X": "only advanced"}
+    log.warning.assert_called_once()
+
+
 def test_notes_cascade_with_user(user):
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse"})
-    memory.record_memory_turn(user, REC, "t", "hi", "hello", generation=0)
+    _exchange(user, "t", "hi", "hello")
+    memory.record_memory_turn(user, REC, "t", generation=0)
     user.delete()
     assert not LearnerMemoryNote.objects.exists()
     assert not PendingMemoryTurn.objects.exists()
     assert not LearnerMemoryState.objects.exists()
 
 
+# --- checkpoints -----------------------------------------------------------------
+
+
+def _lc(kind, content):
+    return {
+        "lc": 1,
+        "type": "constructor",
+        "id": ["langchain", "schema", "messages", kind],
+        "kwargs": {"type": kind.replace("Message", "").lower(), "content": content},
+    }
+
+
+def _exchange(user, thread_id, *contents):
+    """Append a checkpoint holding these messages (human, ai, human, ai, ...)"""
+    session = UserChatSession.objects.filter(thread_id=thread_id).first()
+    if not session:
+        session = UserChatSessionFactory.create(user=user, thread_id=thread_id)
+    cp = CheckpointFactory.create(thread_id=thread_id, session=session)
+    cp.checkpoint = {
+        "channel_values": {
+            "messages": [
+                _lc("HumanMessage" if i % 2 == 0 else "AIMessage", c)
+                for i, c in enumerate(contents)
+            ]
+        }
+    }
+    cp.save()
+    return cp
+
+
+def _record(user, bot, thread_id, *contents, generation=0):
+    _exchange(user, thread_id, *contents)
+    return memory.record_memory_turn(user, bot, thread_id, generation=generation)
+
+
 # --- pending turns and clearing --------------------------------------------------
 
 
-def test_record_memory_turn_first_row_schedules_later_rows_join(user, settings):
-    settings.AI_MEMORY_REPLY_CHARS = 5
-    assert (
-        memory.record_memory_turn(user, REC, "t-1", "hi", "hello world", generation=0)
-        is True
-    )
-    assert (
-        memory.record_memory_turn(user, TUTOR, "t-2", "help", "sure", generation=0)
-        is False
-    )
+def test_record_memory_turn_references_the_latest_checkpoint(user):
+    """First row schedules, later rows join; each points at its checkpoint with a hash"""
+    assert _record(user, REC, "t-1", "hi", "hello") is True
+    assert _record(user, TUTOR, "t-2", "help", "sure") is False
     rows = list(PendingMemoryTurn.objects.order_by("id"))
-    assert [(r.bot, r.response) for r in rows] == [(REC, "hello"), (TUTOR, "sure")]
+    assert [r.bot for r in rows] == [REC, TUTOR]
+    assert rows[0].checkpoint.thread_id == "t-1"
+    assert rows[0].checkpoint_hash == memory.checkpoint_hash(rows[0].checkpoint)
     assert LearnerMemoryState.objects.get(user=user).generation == 0
+
+
+def test_record_memory_turn_without_checkpoint_or_twice(user, mocker):
+    """No checkpoint means nothing to reference; the same exchange is never queued twice"""
+    log = mocker.patch("ai_chatbots.memory.log")
+    assert memory.record_memory_turn(user, REC, "no-thread", generation=0) is False
+    log.warning.assert_called_once()
+    assert _record(user, REC, "t-1", "hi", "hello") is True
+    assert memory.record_memory_turn(user, REC, "t-1", generation=0) is False
+    assert PendingMemoryTurn.objects.count() == 1
 
 
 def test_record_memory_turn_discards_pre_clear_exchange(user, redis_lock):
     """A response that started before a clear must not become memory"""
     memory.clear_learner_memory(user)
-    assert (
-        memory.record_memory_turn(user, REC, "t-1", "hi", "hello", generation=0)
-        is False
-    )
+    assert _record(user, REC, "t-1", "hi", "hello") is False
     assert not PendingMemoryTurn.objects.exists()
-    assert (
-        memory.record_memory_turn(user, REC, "t-1", "hi", "hello", generation=1) is True
-    )
+    assert memory.record_memory_turn(user, REC, "t-1", generation=1) is True
+
+
+def test_deleting_the_thread_removes_its_pending_turn(user):
+    _record(user, REC, "t-1", "hi", "hello")
+    UserChatSession.objects.get(thread_id="t-1").delete()
+    assert not PendingMemoryTurn.objects.exists()
 
 
 def test_clear_learner_memory_wipes_and_bumps_generation(user, redis_lock):
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse"})
-    memory.record_memory_turn(user, REC, "t", "hi", "hello", generation=0)
+    _record(user, REC, "t", "hi", "hello")
     memory.clear_learner_memory(user)
     state = LearnerMemoryState.objects.get(user=user)
     assert state.generation == 1
@@ -269,83 +328,72 @@ def test_clear_learner_memory_busy_when_lock_held(user, redis_lock):
 def test_stale_users_and_stuck_counts(user, settings):
     settings.AI_MEMORY_MAX_ATTEMPTS = 2
     old = timezone.now() - timedelta(seconds=settings.AI_MEMORY_DELAY_SECONDS + 60)
-    memory.record_memory_turn(user, REC, "t", "old", "r", generation=0)
+    _record(user, REC, "t", "old", "r")
     PendingMemoryTurn.objects.update(created_on=old)
-    memory.record_memory_turn(user, REC, "t", "new", "r", generation=0)
+    _record(user, REC, "t", "old", "r", "new", "r")
     other = UserFactory.create()
-    memory.record_memory_turn(other, REC, "t", "stuck", "r", generation=0)
+    _record(other, REC, "t-o", "stuck", "r")
     PendingMemoryTurn.objects.filter(user=other).update(created_on=old, attempts=2)
     assert memory.stale_users() == [user.id]
     assert memory.stuck_turn_count() == 1
 
 
-# --- history ---------------------------------------------------------------------
+# --- reading exchanges back ------------------------------------------------------
 
 
-def _lc(kind, content):
-    return {
-        "lc": 1,
-        "type": "constructor",
-        "id": ["langchain", "schema", "messages", kind],
-        "kwargs": {"type": kind.replace("Message", "").lower(), "content": content},
-    }
-
-
-def _thread_with_history(user, thread_id, *contents):
-    session = UserChatSessionFactory.create(user=user, thread_id=thread_id)
-    cp = CheckpointFactory.create(thread_id=thread_id, session=session)
-    cp.checkpoint = {
-        "channel_values": {
-            "messages": [
-                _lc("HumanMessage" if i % 2 == 0 else "AIMessage", c)
-                for i, c in enumerate(contents)
-            ]
-        }
-    }
-    cp.save()
-    return session
-
-
-def test_thread_history_returns_earlier_learner_messages_from_own_thread(user):
-    """Learner turns before the one being processed, from the newest checkpoint"""
-    _thread_with_history(
+def test_load_exchange_reads_message_reply_and_history(user, settings):
+    """Last learner message is the exchange; earlier ones are bounded context"""
+    settings.AI_MEMORY_REPLY_CHARS = 6
+    settings.AI_MEMORY_HISTORY_MESSAGES = 1
+    _record(
         user,
+        REC,
         "t-1",
+        "very first",
+        "ok",
         "find ecology courses",
         "here",
-        "I'm a beginner on this topic",
-        "ok",
+        "beginner here",
+        "Noted, beginner.",
     )
-    assert memory.thread_history(user, "t-1", "I'm a beginner on this topic", None) == [
-        "find ecology courses"
-    ]
-    assert memory.thread_history(user, "t-1", "unrelated", None) == [
-        "find ecology courses",
-        "I'm a beginner on this topic",
-    ]
-    assert memory.thread_history(UserFactory.create(), "t-1", "x", None) == []
-    assert memory.thread_history(user, "no-such-thread", "x", None) == []
+    x = memory.load_exchange(PendingMemoryTurn.objects.get(), None)
+    assert x.message == "beginner here"
+    assert x.reply == "Noted,"
+    assert x.history == ["find e"]
+    assert x.thread_id == "t-1"
+    assert len(x) == len("beginner here") + 6 + 6
 
 
-def test_thread_history_excluded_for_threads_that_predate_a_clear(user):
+def test_load_exchange_skips_rewritten_or_foreign_checkpoints(user):
+    """A changed hash (error-recovery rewrite) or another learner's thread is unusable"""
+    _record(user, REC, "t-1", "I'm a nurse", "ok")
+    row = PendingMemoryTurn.objects.get()
+    row.checkpoint.checkpoint["channel_values"]["messages"] = []
+    row.checkpoint.save()
+    assert memory.load_exchange(row, None) is None
+    row.refresh_from_db()
+    UserChatSession.objects.filter(thread_id="t-1").update(user=UserFactory.create())
+    assert memory.load_exchange(row, None) is None
+
+
+def test_load_exchange_excludes_history_for_threads_that_predate_a_clear(user):
     """Old threads could reintroduce forgotten facts, so they contribute no context"""
-    session = _thread_with_history(user, "t-1", "I'm a nurse", "ok", "beginner here")
+    _record(user, REC, "t-1", "I'm a nurse", "ok", "beginner here", "ok")
+    row = PendingMemoryTurn.objects.get()
+    session = UserChatSession.objects.get(thread_id="t-1")
     after = session.created_on + timedelta(minutes=1)
     before = session.created_on - timedelta(minutes=1)
-    assert memory.thread_history(user, "t-1", "beginner here", after) == []
-    assert memory.thread_history(user, "t-1", "beginner here", before) == [
-        "I'm a nurse"
-    ]
+    assert memory.load_exchange(row, after).history == []
+    assert memory.load_exchange(row, before).history == ["I'm a nurse"]
 
 
-def test_render_batch_labels_bots_and_threads(user):
-    _thread_with_history(user, "t-1", "find ecology courses", "here", "beginner", "ok")
-    memory.record_memory_turn(user, REC, "t-1", "beginner", "Noted.", generation=0)
-    memory.record_memory_turn(
-        user, TUTOR, "t-2", "hints only please", "Sure.", generation=0
+def test_render_batch_labels_bots_and_threads():
+    text = memory.render_batch(
+        [
+            memory.Exchange(REC, "t-1", "beginner", "Noted.", ["find ecology courses"]),
+            memory.Exchange(TUTOR, "t-2", "hints only please", "Sure.", []),
+        ]
     )
-    batch = list(PendingMemoryTurn.objects.order_by("id"))
-    text = memory.render_batch(user, batch, None)
     assert "context only, already reflected" in text
     assert "- find ecology courses" in text
     assert f"[{REC}, thread 1] Learner: beginner" in text
@@ -374,10 +422,9 @@ def test_process_learner_memory_saves_batch_and_deletes_rows(
     mocker, flag_on, user, redis_lock
 ):
     """Gate yes: one rewrite over the batch, notes saved, only those rows removed"""
-    _thread_with_history(user, "t-1", "find ecology courses", "here", "beginner", "ok")
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse", "instructions:Other": "keep"})
-    memory.record_memory_turn(user, REC, "t-1", "beginner", "Noted.", generation=0)
-    memory.record_memory_turn(user, TUTOR, "t-2", "hints only", "Sure.", generation=0)
+    _record(user, REC, "t-1", "find ecology courses", "here", "beginner", "Noted.")
+    _record(user, TUTOR, "t-2", "hints only", "Sure.")
     revision = memory.MemoryRevision(
         about="nurse in Boston",
         instructions="",
@@ -396,9 +443,9 @@ def test_process_learner_memory_saves_batch_and_deletes_rows(
     assert memory.BOT_PURPOSE[TUTOR] in prompt_text
     assert '"about": "nurse"' in prompt_text
     assert "- find ecology courses" in prompt_text
+    assert "Learner: beginner" in prompt_text
     assert "Learner: hints only" in prompt_text
-    notes = memory.load_notes(user)
-    assert notes == {
+    assert memory.load_notes(user) == {
         memory.ABOUT_KEY: "nurse in Boston",
         f"instructions:{REC}": "beginner in ecology",
         f"instructions:{TUTOR}": "hints only",
@@ -411,9 +458,7 @@ def test_process_learner_memory_gate_no_drops_rows_keeps_notes(
     mocker, flag_on, user, redis_lock
 ):
     memory.save_notes(user, {memory.ABOUT_KEY: "nurse"})
-    memory.record_memory_turn(
-        user, REC, "t-1", "find ecology courses", "Here.", generation=0
-    )
+    _record(user, REC, "t-1", "find ecology courses", "Here.")
     init, _ = _mock_models(mocker, gate=False)
     assert memory.process_learner_memory(user.id) == "skipped"
     assert init.call_count == 1
@@ -421,11 +466,25 @@ def test_process_learner_memory_gate_no_drops_rows_keeps_notes(
     assert not PendingMemoryTurn.objects.exists()
 
 
+def test_process_learner_memory_skips_unusable_checkpoints(
+    mocker, flag_on, user, redis_lock
+):
+    """Rewritten checkpoints are dropped and counted; no model call, no substitute history"""
+    _record(user, REC, "t-1", "I'm a nurse", "ok")
+    PendingMemoryTurn.objects.update(checkpoint_hash="stale")
+    init = mocker.patch("ai_chatbots.memory.init_chat_model")
+    log = mocker.patch("ai_chatbots.memory.log")
+    assert memory.process_learner_memory(user.id) == "unusable"
+    init.assert_not_called()
+    log.warning.assert_called_once()
+    assert not PendingMemoryTurn.objects.exists()
+
+
 def test_process_learner_memory_lock_held_leaves_rows(
     mocker, flag_on, user, redis_lock
 ):
     redis_lock.acquired = False
-    memory.record_memory_turn(user, REC, "t-1", "I'm a nurse", "ok", generation=0)
+    _record(user, REC, "t-1", "I'm a nurse", "ok")
     init = mocker.patch("ai_chatbots.memory.init_chat_model")
     assert memory.process_learner_memory(user.id) == "locked"
     init.assert_not_called()
@@ -436,9 +495,8 @@ def test_process_learner_memory_clear_during_extraction_discards(
     mocker, flag_on, user, redis_lock
 ):
     """A clear between the model calls and the commit wins"""
-    memory.record_memory_turn(user, REC, "t-1", "I'm a nurse", "ok", generation=0)
-    revision = memory.MemoryRevision(about="nurse")
-    _mock_models(mocker, gate=True, revision=revision)
+    _record(user, REC, "t-1", "I'm a nurse", "ok")
+    _mock_models(mocker, gate=True, revision=memory.MemoryRevision(about="nurse"))
 
     def clear_then_gate(*_a, **_k):
         LearnerMemoryState.objects.filter(user=user).update(generation=1)
@@ -453,25 +511,25 @@ def test_process_learner_memory_clear_during_extraction_discards(
 def test_process_learner_memory_respects_batch_limits(
     mocker, flag_on, user, redis_lock, settings
 ):
-    """Oldest rows first, up to the count and size limits; the rest stay pending"""
+    """Oldest rows first, up to the count and input-size limits (history included)"""
     settings.AI_MEMORY_BATCH_SIZE = 2
     for i in range(3):
-        memory.record_memory_turn(user, REC, "t", f"m{i}", "r", generation=0)
+        _record(user, REC, f"t-{i}", f"m{i}", "r")
     _mock_models(mocker, gate=False)
     assert memory.process_learner_memory(user.id) == "skipped"
-    assert list(PendingMemoryTurn.objects.values_list("message", flat=True)) == ["m2"]
+    assert list(PendingMemoryTurn.objects.values_list("bot", flat=True)) == [REC]
     settings.AI_MEMORY_BATCH_SIZE = 10
-    settings.AI_MEMORY_BATCH_CHARS = 3
-    memory.record_memory_turn(user, REC, "t", "m3", "r", generation=0)
+    settings.AI_MEMORY_BATCH_CHARS = 30
+    _record(user, TUTOR, "t-h", "x" * 25, "r", "m3", "r")  # 25 chars of history
     assert memory.process_learner_memory(user.id) == "skipped"
-    assert list(PendingMemoryTurn.objects.values_list("message", flat=True)) == ["m3"]
+    assert list(PendingMemoryTurn.objects.values_list("bot", flat=True)) == [TUTOR]
 
 
 def test_process_learner_memory_increments_attempts_and_skips_stuck(
     mocker, flag_on, user, redis_lock, settings
 ):
     settings.AI_MEMORY_MAX_ATTEMPTS = 1
-    memory.record_memory_turn(user, REC, "t", "m", "r", generation=0)
+    _record(user, REC, "t", "m", "r")
     mocker.patch("ai_chatbots.memory.worth_extracting", side_effect=RuntimeError)
     with pytest.raises(RuntimeError):
         memory.process_learner_memory(user.id)
@@ -481,7 +539,7 @@ def test_process_learner_memory_increments_attempts_and_skips_stuck(
 
 def test_process_learner_memory_flag_off_drops_backlog(mocker, user, redis_lock):
     mocker.patch("ai_chatbots.memory.is_enabled", return_value=False)
-    memory.record_memory_turn(user, REC, "t", "m", "r", generation=0)
+    _record(user, REC, "t", "m", "r")
     assert memory.process_learner_memory(user.id) == "disabled"
     assert not PendingMemoryTurn.objects.exists()
     redis_lock.acquire.assert_not_called()

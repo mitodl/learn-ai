@@ -172,20 +172,25 @@ class LearnerMemoryState(TimestampedModel):
 
 
 class PendingMemoryTurn(TimestampedModel):
-    """One completed exchange awaiting memory extraction; deleted once processed."""
+    """
+    One completed exchange awaiting memory extraction; deleted once processed.
+
+    Points at the checkpoint the exchange produced rather than copying its text.
+    The hash detects a rewritten checkpoint (see save_truncated_checkpoint).
+    """
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pending_turns"
     )
     generation = models.PositiveIntegerField()
     bot = models.TextField()
-    thread_id = models.TextField()
-    message = models.TextField()
-    response = models.TextField()
+    checkpoint = models.ForeignKey(DjangoCheckpoint, on_delete=models.CASCADE)
+    checkpoint_hash = models.CharField(max_length=64)
     attempts = models.PositiveIntegerField(default=0)
 
     class Meta:
+        unique_together = (("checkpoint", "generation"),)
         indexes = [models.Index(fields=["user", "created_on"], name="pending_turn_idx")]
 
     def __str__(self):
-        return f"{self.user_id}/{self.bot}/{self.thread_id}"
+        return f"{self.user_id}/{self.bot}/{self.checkpoint_id}"
