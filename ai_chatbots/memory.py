@@ -25,6 +25,12 @@ CONTEXT_INSTRUCTION = (
 )
 PROFILE_HEADING = "## About this learner (stated in their MIT Learn profile)"
 MEMORY_HEADING = "## Learned from prior chats"
+# Certificate tracks are the paid ones at MIT Learn, so this field also answers price.
+CERTIFICATE_TEXT = {
+    "yes": "wants one (paid certificate courses are fine)",
+    "no": "does not want one (free, non-certificate resources are fine; "
+    "no need to ask about price)",
+}
 
 
 class LearnerMemory(BaseModel):
@@ -100,7 +106,7 @@ def build_learner_context(profile: dict, memory: dict | None) -> str:
         ("Topics of interest", [t["name"] for t in profile.get("topic_interests", [])]),
         ("Goals", profile.get("goals")),
         ("Current education", profile.get("current_education")),
-        ("Wants a certificate", profile.get("certificate_desired")),
+        ("Certificate", CERTIFICATE_TEXT.get(profile.get("certificate_desired"))),
         ("Time commitment", profile.get("time_commitment")),
         ("Preferred delivery", profile.get("delivery")),
     ]

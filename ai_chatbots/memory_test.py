@@ -99,3 +99,22 @@ def test_build_learner_context_starts_with_usage_instruction():
     block = memory.build_learner_context(memory.fetch_learner_profile("x"), None)
     assert block.startswith(memory.CONTEXT_INSTRUCTION)
     assert "ask" in memory.CONTEXT_INSTRUCTION.lower()
+
+
+@pytest.mark.parametrize(
+    ("certificate_desired", "expected"),
+    [
+        ("no", "free, non-certificate"),
+        ("yes", "paid certificate"),
+        ("", None),
+    ],
+)
+def test_certificate_preference_implies_price(certificate_desired, expected):
+    """Certificate tracks are the paid ones, so the block spells out the price implication"""
+    block = memory.build_learner_context(
+        {"certificate_desired": certificate_desired}, None
+    )
+    if expected is None:
+        assert block == ""
+    else:
+        assert expected in block
