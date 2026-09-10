@@ -64,6 +64,14 @@ conversation in front of it. Learners can view and clear their notes through the
 Clearing is designed so that a background update still in flight can't quietly restore
 what was just deleted.
 
+Technically this follows LangGraph's long-term memory model rather than inventing one: a
+profile document per user, kept behind LangGraph's `BaseStore` interface, written in the
+background after the conversation rather than by the agent mid-turn. The store
+implementation is ours, a thin `DjangoMemoryStore` over a `LearnerMemoryNote` table, and so
+is the extraction call, one structured-output request through `ChatLiteLLM`. Everything
+runs on the existing Django/Postgres, Redis, and Celery stack; no vector search and no new
+memory service. The Alternatives section says why not `PostgresStore` or `langmem`.
+
 I'd use free-text notes for v1 rather than a table of individual facts. Structured facts
 would make single-fact editing and "where did this come from" easier, but they wouldn't fix
 the harder problem, which is a model misreading "this topic". We can revisit if rewrites
@@ -89,27 +97,59 @@ now evaluation cases.
 
 ## Approach
 
-**Profile.** mit-learn needs a small new endpoint that returns the six profile fields for a
-learner, restricted to service-to-service calls. learn-ai caches the result for 12 hours,
-so a profile edit can take up to that long to reach the bots. The prototype uses a stub for
-this endpoint; that is the one piece of work outside learn-ai. If the fetch fails or times
-out, the chat continues without the profile.
+**Profile.** Add `GET /api/v0/profiles/<global_id>/preferences/` to mit-learn, requiring
+service authentication and returning only the six profile fields. learn-ai calls it with
+the ID of the authenticated user, never one from the request, and caches the result for 12
+hours, so a profile edit can take up to that long to reach the bots. The prototype uses a
+stub for this endpoint; it is the one piece of work outside learn-ai. The fetch has a
+timeout, and if it fails the chat continues without the profile. Learned notes are read
+separately so a profile failure doesn't hide them too.
 
-**Notes.** Each of the three sections is capped at about 1,500 characters and records when
-it was last updated. Three full sections add roughly a page of text to every request, which
-costs money per message; I want to measure that during the pilot before deciding whether
-to shorten them. Topic scope has to survive in the text: "advanced data science courses"
-must not become "advanced courses".
+**Notes.** Three new Django models in `ai_chatbots/models.py`:
 
-**Updating the notes.** The Django checkpointer already saves every conversation (a
-"checkpoint" is the saved state of a conversation after each reply). After a reply is
-saved, learn-ai records a small pointer to it: this learner, this bot, this exchange (one
-learner message plus the bot's reply) is waiting to be looked at. It doesn't copy the
-conversation anywhere. About 15 minutes later a background job reads the waiting exchanges
-for that learner, with a little earlier conversation for context, and runs the cheap
-check and, if warranted, the rewrite. Then it saves the notes and deletes the pointers in
-one step. The mechanics that make this safe under concurrent chats, crashes, and "clear
-memory" are in the collapsed section at the end for anyone reviewing the code.
+- `LearnerMemoryNote`: one row per user and key (`about`, `instructions`,
+  `instructions:<bot>`), with the text and a last-updated timestamp. A foreign key to the
+  user gives cascade deletes.
+- `LearnerMemoryState`: one row per user holding a `generation` counter, incremented each
+  time the learner clears memory, and a `cleared_at` timestamp. This is what stops a stale
+  background update from restoring cleared notes.
+- `PendingMemoryTurn`: one row per exchange waiting to be processed, described below.
+
+`DjangoMemoryStore` in `ai_chatbots/memorystores.py` exposes the notes through LangGraph's
+`BaseStore` interface, namespaced by the learner's `global_id`. It's a thin adapter over
+the same table, so an agent-side memory tool or a later retry of `langmem` can plug in
+without a rewrite. Authorization, ordering, and forgetting are handled by the Django models
+around it, not by the store.
+
+Each section is capped at `AI_MEMORY_MAX_CHARS` (1,500) characters. Three full sections add
+roughly a page of text, on the order of 1,100 tokens, to every request. I want to measure
+that cost during the pilot before deciding whether to shorten them. Topic scope has to
+survive in the text: "advanced data science courses" must not become "advanced courses".
+
+**Updating the notes.** The `AsyncDjangoCheckpointer` already saves every conversation as
+`DjangoCheckpoint` rows (a checkpoint is the saved state of a thread after each reply).
+Rather than copy conversation text into another table, the consumer saves a
+`PendingMemoryTurn` after the reply's checkpoint is committed: the user, bot, generation,
+a foreign key to that checkpoint, and a hash of its messages. Each row means "this
+exchange (the checkpoint's last learner message plus the bot's reply) is waiting to be
+looked at."
+
+The first pending row for a learner schedules the `process_learner_memory` Celery task
+`AI_MEMORY_DELAY_SECONDS` (15 minutes) later; rows arriving during that window join the
+same run. A periodic `requeue_stale_memory_turns` task picks up anything left behind. The
+task takes a per-learner Redis lock, reads the oldest pending rows up to a batch limit,
+and renders each referenced checkpoint into labelled learner/assistant text with a few
+earlier messages for context. A cheap gate model (`AI_MEMORY_GATE_MODEL`, gpt-4o-mini to
+start) answers yes or no on whether there's anything worth remembering. If yes, the
+extraction model (`AI_MEMORY_EXTRACTION_MODEL`, gpt-4.1 to start) receives the current
+notes plus the rendered exchanges and returns a `MemoryRevision`, a pydantic structured
+output with the three sections. After validation, the notes are saved and the processed
+rows deleted in one transaction. Both models are configurable and should be compared on
+the evaluation cases before we treat the choice as settled.
+
+The details that make this safe under concurrent chats, crashes, and "clear memory"
+(generation checks, hash verification, lock lifetimes, retry policy) are in the collapsed
+section at the end for anyone reviewing the code.
 
 **Using memory in the prompt.** Profile fields and learned notes are labelled separately
 and clearly marked as learner-supplied data, not instructions to the bot. The
@@ -139,13 +179,16 @@ rollout. Recommendation, syllabus, video, and edX tutor bots are included where 
 identity is available. Anonymous chats are unchanged. Canvas stays out until its
 integration sends a verified learner identity; the shared service token alone doesn't.
 
-**Viewing and clearing.** v1 has `GET /api/v0/memory/` to see the notes and
-`DELETE /api/v0/memory/` to clear them, plus Django admin for staff. Frontend controls,
+**Viewing and clearing.** `LearnerMemoryView` in learn-ai serves `GET /api/v0/memory/` to
+see the notes and `DELETE /api/v0/memory/` to clear them; Django admin shows them to staff.
+DELETE takes the same per-learner lock with a short bounded wait, and in one transaction
+clears the notes, deletes pending rows, and increments the generation, so neither a queued
+task nor a response already in progress can bring the old notes back. Frontend controls,
 per-fact editing, and a separate "don't remember me" setting can come later; API access is
-enough for the internal pilot, but we should decide when the UI ships before broad rollout.
-Clearing learned notes doesn't clear the MIT Learn profile or chat history, and can't
-recall a prompt already sent to a model. We should explain those limits to learners. New
-explicit statements after a clear create new memory; old statements don't come back.
+enough for the internal pilot, but we should decide when the UI ships before broad
+rollout. Clearing learned notes doesn't clear the MIT Learn profile or chat history, and
+can't recall a prompt already sent to a model. We should explain those limits to learners.
+New explicit statements after a clear create new memory; old statements don't come back.
 
 Deleting a local learn-ai user deletes their notes and pending work. Account deletion
 propagating from mit-learn is an existing gap for chat sessions too; that's tracked
@@ -190,21 +233,26 @@ once, and whether declining a certificate should stop the bot asking about price
 or we need per-fact editing. For now I'd keep the smaller design.
 
 **Memory libraries.** This follows the "profile with background updates" pattern from
-LangChain's memory docs, and the notes sit behind LangGraph's store interface so an
-agent-side memory tool or a later retry of `langmem` could plug in without a rewrite. I
-tried `langmem` first. Its update loop didn't converge reliably through LiteLLM, which is
-how learn-ai reaches every model, and its one-document-per-user shape doesn't fit per-bot
-sections, so extraction is one direct structured-output call instead. LangGraph's own
-Postgres store manages its tables outside Django migrations and has no user foreign key,
-so "forget me" would be manual cleanup; a Django table gives us cascade deletes for free.
-Mem0, Zep/Graphiti, and Letta don't seem to earn their setup for three short notes per
-learner. That may change if we need many memories, past-event retrieval, or relationships
-between facts.
+LangChain's memory docs. Two pieces are ours, each for a reason. The store is
+`DjangoMemoryStore` rather than LangGraph's `PostgresStore`, because `PostgresStore`
+manages its tables outside Django migrations and has no user foreign key, so "forget me"
+would be manual cleanup instead of a cascade delete. And extraction is one
+structured-output call rather than `langmem`: I tried `langmem` first, and its trustcall
+patch loop didn't converge reliably through `ChatLiteLLM`, which is how learn-ai reaches
+every model; its one-document-per-namespace shape also doesn't fit per-bot sections.
+Retrying `langmem` on a later version would need a re-test through `ChatLiteLLM` and a
+comparison on the same evaluation cases. The queueing around extraction (pending turns,
+per-user lock, generation counter) is outside what any memory library covers; it's
+ordinary background-job plumbing. Mem0, Zep/Graphiti, and Letta don't seem to earn their
+setup for three short notes per learner. That may change if we need many memories,
+past-event retrieval, or relationships between facts.
 
-**Simpler queueing.** A per-learner lock and a clear counter without the pending-work
-table would be simpler, but would lose updates whenever a job skipped a held lock or
-crashed. The pending table costs one small model and handles both without assuming a
-repeated model call is harmless.
+**Simpler queueing.** A per-learner lock and generation counter without `PendingMemoryTurn`
+would be simpler, but would lose updates whenever a task skipped a held lock or crashed.
+The pending table costs one small model and handles both without assuming a repeated model
+call is harmless. A plain Django model without the `BaseStore` adapter would also work for
+three fixed notes; the adapter is kept for the plug-in reason above. A larger event ledger
+or revision scheme can wait unless we add independent writers.
 
 **Keeping memory in mit-learn.** Would simplify ownership, but learn-ai already has the
 conversations and the background workers, and it would need a write API. Keep it here,
@@ -212,9 +260,10 @@ with the cross-service deletion dependency acknowledged.
 
 ## Consequences
 
-Adds two small tables (notes and pending work) and a per-learner clear counter. No new
-service; everything runs on the existing Django/Postgres, Redis, and Celery setup.
-Conversation text stays where it is.
+Adds three small tables (`LearnerMemoryNote`, `LearnerMemoryState`, `PendingMemoryTurn`),
+a `BaseStore` adapter, two Celery tasks, and one API view. No new service; everything runs
+on the existing Django/Postgres, Redis, and Celery setup. Conversation text stays in the
+checkpointer.
 
 Costs: extra prompt tokens on every request, a short profile-fetch delay on cache misses,
 and a gate call plus an occasional rewrite per learner per batch. New memory isn't
