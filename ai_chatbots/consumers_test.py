@@ -1244,7 +1244,10 @@ async def test_handle_passes_learner_context_and_queues_extraction(
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
     assert recommendation_consumer.bot.learner_context == "## About this learner"
     extract.delay.assert_called_once_with(
-        recommendation_consumer.scope["user"].global_id, "hello"
+        recommendation_consumer.scope["user"].global_id,
+        "ResourceRecommendationBot",
+        "hello",
+        "Hi there",
     )
 
 
@@ -1265,10 +1268,10 @@ async def test_handle_skips_extraction_when_memory_disabled(
     extract.delay.assert_not_called()
 
 
-async def test_tutor_handle_never_extracts(
+async def test_tutor_handle_extracts_too(
     mocker, mock_http_consumer_send, tutor_consumer
 ):
-    """Tutor threads read the learner context but are excluded from extraction"""
+    """Tutor threads read and write learner memory like every other bot"""
     mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
     mocker.patch(
         "ai_chatbots.consumers.get_learner_context",
@@ -1291,4 +1294,6 @@ async def test_tutor_handle_never_extracts(
     }
     await tutor_consumer.handle(json.dumps(payload))
     assert tutor_consumer.bot.learner_context == "## About this learner"
-    extract.delay.assert_not_called()
+    extract.delay.assert_called_once_with(
+        tutor_consumer.scope["user"].global_id, "TutorBot", "help", "Hi"
+    )

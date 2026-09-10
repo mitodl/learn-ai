@@ -43,6 +43,7 @@ from ai_chatbots.api import (
     get_search_tool_metadata,
     query_tutorbot_output,
 )
+from ai_chatbots.memory import TUTOR_RULES_WIN
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.utils import (
@@ -678,7 +679,9 @@ class TutorBot(BaseChatbot):
             # ponytail: the tutor package builds its own system prompt; a trailing
             # SystemMessage survives its history slice and is stripped before saving.
             # Upgrade: a learner_context argument on message_tutor.
-            chat_history.append(SystemMessage(content=self.learner_context))
+            chat_history.append(
+                SystemMessage(content=f"{self.learner_context}\n\n{TUTOR_RULES_WIN}")
+            )
         self.llm.callbacks = await self.set_callbacks(
             properties=await self.get_tool_metadata()
         )

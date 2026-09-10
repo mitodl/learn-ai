@@ -38,6 +38,7 @@ from ai_chatbots.factories import (
     SystemMessageFactory,
     ToolMessageFactory,
 )
+from ai_chatbots.memory import TUTOR_RULES_WIN
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
@@ -1347,5 +1348,6 @@ async def test_tutor_injects_learner_context_as_system_message(mocker):
         pass
     chat_history = mock_tutor.call_args.args[4]
     assert isinstance(chat_history[-1], SystemMessage)
-    assert chat_history[-1].content == "## About this learner\n- Nurse"
+    assert chat_history[-1].content.startswith("## About this learner\n- Nurse")
+    assert TUTOR_RULES_WIN in chat_history[-1].content
     assert chat_history[-2].content == "help"

@@ -5,7 +5,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from langchain.chat_models import init_chat_model
-from langmem import create_memory_store_manager
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from ai_chatbots.memorystores import DjangoMemoryStore
@@ -14,23 +14,23 @@ from main.features import is_enabled
 log = logging.getLogger(__name__)
 
 CHAT_MEMORY_FLAG = "CHAT_MEMORY"
-MEMORY_KEY = "default"  # langmem's fixed key for a single-document profile
-# Wording matters: a polite "use this" version still lost to the static prompt's
-# "ask clarifying questions" examples with gpt-4o-mini; this one wins while appended.
+ABOUT_KEY = "about"
+INSTRUCTIONS_KEY = "instructions"
+# Only the recommendation bot can act on topics, certificate and delivery preferences
+FULL_PROFILE_BOTS = {"ResourceRecommendationBot"}
+
 CONTEXT_INSTRUCTION = (
     "# Learner context\n"
-    "The learner has ALREADY answered the clarifying questions below through their "
-    "profile. Treat these as their answers and do not ask them again. Search now using "
-    "them; only ask about things not listed here."
+    "What follows is known about this learner from their MIT Learn profile and earlier "
+    "chats. Treat it as their answers: do not ask for anything stated here, and follow "
+    "the instructions under 'How this learner wants to be helped'."
 )
-# Without this, memory changed nothing downstream: "machine learning" in current focus
-# still gave search_courses(q="data science") and social-science results despite avoid.
-SEARCH_INSTRUCTION = (
-    "When you search, put the current focus in the query and, after searching, leave "
-    "out any result about a topic listed under Avoid."
+ABOUT_HEADING = "## About this learner"
+INSTRUCTIONS_HEADING = "## How this learner wants to be helped"
+TUTOR_RULES_WIN = (
+    "These learner preferences shape tone and format only; your tutoring rules always "
+    "take precedence over them."
 )
-PROFILE_HEADING = "## About this learner (stated in their MIT Learn profile)"
-MEMORY_HEADING = "## Learned from prior chats"
 # Certificate tracks are the paid ones at MIT Learn, so this field also answers price.
 CERTIFICATE_TEXT = {
     "yes": "wants one (paid certificate courses are fine)",
@@ -40,31 +40,50 @@ CERTIFICATE_TEXT = {
 
 
 class LearnerMemory(BaseModel):
-    """What the chatbots learned about a learner; one document, revised over time."""
+    """Free-form memory: shared facts, shared instructions, one bot's instructions."""
 
-    background: str = Field("", description="Education, occupation, prior knowledge")
-    goals_and_interests: str = Field("", description="What they want to learn and why")
-    learning_preferences: str = Field(
-        "", description="Format, pace, delivery and level preferences"
+    about: str = Field(
+        "",
+        description="Durable facts about the learner as a person: background, "
+        "occupation, education level, goals, constraints such as available time.",
     )
-    current_focus: str = Field("", description="What they are working on right now")
-    avoid: str = Field(
-        "", description="Topics, fields or resource types they asked not to be shown"
+    instructions: str = Field(
+        "",
+        description="How the learner wants every chatbot to behave: tone, length, "
+        "level of jargon, format.",
+    )
+    bot_instructions: str = Field(
+        "",
+        description="How the learner wants this particular chatbot to behave, "
+        "including topics or kinds of results they asked not to be shown.",
     )
 
 
-EXTRACTION_INSTRUCTIONS = """You maintain a short profile of a learner using MIT Open
-Learning chatbots. Update it from the conversation: keep it factual, about the learner
-only, and under 1500 characters in total. You only ever see the learner's own
-messages. Record preferences, background, goals, current focus, and anything they
-asked not to be recommended (put that under avoid). A bare question with no
-personal detail says nothing about the learner: then change nothing. Never record
-names, emails, quiz or problem answers, grades, or problem identifiers. Drop anything
-the learner contradicts."""
+EXTRACTION_INSTRUCTIONS = """You maintain notes about a learner who uses MIT Open
+Learning chatbots. You are given the chatbot that was in use, the current notes, the
+learner's latest message and the chatbot's reply. Return the revised notes.
+
+Rules:
+- Record only the learner's own statements. The assistant's reply is context for
+  understanding the learner's message and never a source of facts or preferences.
+- Only durable information: who the learner is, what they want in general, how they
+  want to be helped. Skip anything that only matters for this one thread, such as the
+  specific course, lecture or question at hand.
+- 'about' is for facts about the person. 'instructions' is for how every chatbot should
+  behave. 'bot_instructions' is for preferences that only make sense for the chatbot in
+  use, including things they asked not to be shown.
+- Never record names, emails, problem statements, attempted or correct answers, hints,
+  grades, scores, or problem identifiers.
+- Keep each section under {max_chars} characters. Drop anything the learner contradicts.
+  If the message adds nothing durable, return the notes unchanged."""
 
 
 def memory_namespace(global_id: str) -> tuple[str, str]:
     return ("memories", global_id)
+
+
+def bot_instructions_key(bot_name: str) -> str:
+    return f"{INSTRUCTIONS_KEY}:{bot_name}"
 
 
 def fetch_learner_profile(global_id: str) -> dict:  # noqa: ARG001
@@ -103,70 +122,109 @@ def memory_enabled(user) -> bool:
     return is_enabled(CHAT_MEMORY_FLAG, default=False, opt_unique_id=user.global_id)
 
 
-def get_learner_memory(global_id: str) -> dict | None:
-    item = DjangoMemoryStore().get(memory_namespace(global_id), MEMORY_KEY)
-    return item.value.get("content") if item else None
+def load_learner_memory(global_id: str, bot_name: str) -> LearnerMemory:
+    store = DjangoMemoryStore()
+    ns = memory_namespace(global_id)
+
+    def text(key):
+        item = store.get(ns, key)
+        return item.value.get("text", "") if item else ""
+
+    return LearnerMemory(
+        about=text(ABOUT_KEY),
+        instructions=text(INSTRUCTIONS_KEY),
+        bot_instructions=text(bot_instructions_key(bot_name)),
+    )
 
 
-def build_learner_context(profile: dict, memory: dict | None) -> str:
-    """Render the prompt block; blank fields are skipped, empty input gives ''."""
-    lines = []
-    profile_rows = [
-        ("Topics of interest", [t["name"] for t in profile.get("topic_interests", [])]),
-        ("Goals", profile.get("goals")),
-        ("Current education", profile.get("current_education")),
-        ("Certificate", CERTIFICATE_TEXT.get(profile.get("certificate_desired"))),
-        ("Time commitment", profile.get("time_commitment")),
-        ("Preferred delivery", profile.get("delivery")),
-    ]
-    profile_lines = [
+def save_learner_memory(global_id: str, bot_name: str, mem: LearnerMemory) -> None:
+    """Write the sections that changed; never create empty ones."""
+    store = DjangoMemoryStore()
+    ns = memory_namespace(global_id)
+    current = load_learner_memory(global_id, bot_name)
+    for key, revised, old in (
+        (ABOUT_KEY, mem.about, current.about),
+        (INSTRUCTIONS_KEY, mem.instructions, current.instructions),
+        (
+            bot_instructions_key(bot_name),
+            mem.bot_instructions,
+            current.bot_instructions,
+        ),
+    ):
+        text = revised.strip()[: settings.AI_MEMORY_MAX_CHARS]
+        if text and text != old:
+            store.put(ns, key, {"text": text})
+
+
+def _profile_lines(bot_name: str, profile: dict) -> list[str]:
+    rows = [("Education", profile.get("current_education"))]
+    if bot_name in FULL_PROFILE_BOTS:
+        rows += [
+            (
+                "Topics of interest",
+                [t["name"] for t in profile.get("topic_interests", [])],
+            ),
+            ("Goals", profile.get("goals")),
+            ("Certificate", CERTIFICATE_TEXT.get(profile.get("certificate_desired"))),
+            ("Time commitment", profile.get("time_commitment")),
+            ("Preferred delivery", profile.get("delivery")),
+        ]
+    return [
         f"- {label}: {', '.join(v) if isinstance(v, list) else v}"
-        for label, v in profile_rows
+        for label, v in rows
         if v
     ]
-    if profile_lines:
-        lines += [CONTEXT_INSTRUCTION, PROFILE_HEADING, *profile_lines]
-    if memory:
-        memory_lines = [
-            f"- {field.replace('_', ' ').capitalize()}: {text}"
-            for field, text in memory.items()
-            if text
-        ]
-        if memory_lines:
-            body = "\n".join(memory_lines)[: settings.AI_MEMORY_MAX_CHARS]
-            if not lines:
-                lines.append(CONTEXT_INSTRUCTION)
-            lines += [MEMORY_HEADING, body, SEARCH_INSTRUCTION]
+
+
+def build_learner_context(bot_name: str, profile: dict, mem: LearnerMemory) -> str:
+    """Render the block for one bot; '' when nothing is known."""
+    cap = settings.AI_MEMORY_MAX_CHARS
+    about = _profile_lines(bot_name, profile)
+    if mem.about:
+        about.append(mem.about[:cap])
+    instructions = [t[:cap] for t in (mem.instructions, mem.bot_instructions) if t]
+    if not about and not instructions:
+        return ""
+    lines = [CONTEXT_INSTRUCTION]
+    if about:
+        lines += [ABOUT_HEADING, *about]
+    if instructions:
+        lines += [INSTRUCTIONS_HEADING, *instructions]
     return "\n".join(lines)
 
 
-def get_learner_context(user) -> str:
+def get_learner_context(user, bot_name: str) -> str:
     """Return the learner context block, or '' if disabled or anonymous."""
     if not memory_enabled(user):
         return ""
     try:
         return build_learner_context(
-            fetch_learner_profile(user.global_id), get_learner_memory(user.global_id)
+            bot_name,
+            fetch_learner_profile(user.global_id),
+            load_learner_memory(user.global_id, bot_name),
         )
     except Exception:
         log.exception("Learner context unavailable for %s", user.global_id)
         return ""
 
 
-def get_memory_manager():
-    """
-    Return the langmem store manager that revises the single LearnerMemory document.
-
-    ponytail: init_chat_model, not ChatLiteLLM. trustcall's patch loop never converges
-    with ChatLiteLLM (GraphRecursionError, observed with gpt-4o-mini), so the extraction
-    model bypasses the LiteLLM proxy for now.
-    """
-    return create_memory_store_manager(
-        init_chat_model(settings.AI_MEMORY_EXTRACTION_MODEL, temperature=0),
-        schemas=[LearnerMemory],
-        instructions=EXTRACTION_INSTRUCTIONS,
-        default_factory=lambda _config: LearnerMemory(),
-        enable_inserts=False,
-        namespace=("memories", "{langgraph_user_id}"),
-        store=DjangoMemoryStore(),
+def extract_learner_memory(
+    global_id: str, bot_name: str, message: str, response: str
+) -> None:
+    """One structured LLM call revises the three sections from the latest exchange."""
+    current = load_learner_memory(global_id, bot_name)
+    llm = init_chat_model(settings.AI_MEMORY_EXTRACTION_MODEL, temperature=0)
+    revised = llm.with_structured_output(LearnerMemory).invoke(
+        [
+            SystemMessage(
+                EXTRACTION_INSTRUCTIONS.format(max_chars=settings.AI_MEMORY_MAX_CHARS)
+            ),
+            HumanMessage(
+                f"Chatbot in use: {bot_name}\n\n"
+                f"Current notes:\n{current.model_dump_json(indent=1)}\n\n"
+                f"Learner's message:\n{message}\n\n"
+                f"Chatbot's reply (context only):\n{response[:2000]}"
+            ),
+        ]
     )
+    save_learner_memory(global_id, bot_name, revised)

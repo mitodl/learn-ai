@@ -79,8 +79,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     # Each bot consumer should define a unique ROOM_NAME
     ROOM_NAME = None
-    # Tutor threads are read-only for learner memory: never extract from them
-    EXTRACT_LEARNER_MEMORY = True
     learner_context = ""
 
     serializer_class = RecommendationChatRequestSerializer
@@ -347,7 +345,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 thread_id, message_text, serializer
             )
             self.learner_context = await sync_to_async(get_learner_context)(
-                self.scope.get("user")
+                self.scope.get("user"), self.ROOM_NAME
             )
             self.bot = await sync_to_async(self.create_chatbot)(
                 serializer, checkpointer
@@ -373,7 +371,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     await self.send_chunk(chunk)
                     output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
-            await self.queue_memory_extraction(message_text)
+            await self.queue_memory_extraction(message_text, "".join(output))
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
@@ -395,11 +393,13 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_chunk("", more_body=False)
             await self.disconnect()
 
-    async def queue_memory_extraction(self, message: str) -> None:
-        """Queue revision of the learner's memory document from this message."""
+    async def queue_memory_extraction(self, message: str, response: str) -> None:
+        """Queue revision of the learner's memory from this exchange."""
         user = self.scope.get("user")
-        if self.EXTRACT_LEARNER_MEMORY and await sync_to_async(memory_enabled)(user):
-            extract_learner_memory.delay(user.global_id, message)
+        if await sync_to_async(memory_enabled)(user):
+            extract_learner_memory.delay(
+                user.global_id, self.ROOM_NAME, message, response
+            )
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
@@ -610,7 +610,6 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = TutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
     throttle_scope = "tutor_bot"
-    EXTRACT_LEARNER_MEMORY = False
 
     def create_chatbot(
         self,
@@ -665,7 +664,6 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = CanvasTutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
     throttle_scope = "tutor_bot"
-    EXTRACT_LEARNER_MEMORY = False
 
     def create_chatbot(
         self,
