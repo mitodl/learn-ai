@@ -377,7 +377,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     await self.send_chunk(chunk)
                     output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
-            await self.queue_memory_extraction(message_text, "".join(output))
+            await self.queue_memory_extraction()
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
@@ -404,23 +404,25 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         user = self.scope.get("user")
         if not memory_enabled(user):
             return "", 0
-        return get_learner_context(user, self.ROOM_NAME), memory_generation(user)
+        # generation first: a clear that lands between the two reads must invalidate
+        # the exchange, not slip past it with fresh-looking context
+        generation = memory_generation(user)
+        return get_learner_context(user, self.ROOM_NAME), generation
 
-    async def queue_memory_extraction(self, message: str, response: str) -> None:
+    async def queue_memory_extraction(self) -> None:
         """Record the exchange for extraction; a first pending turn starts the timer."""
         user = self.scope.get("user")
-        if not await sync_to_async(memory_enabled)(user):
-            return
-        first = await sync_to_async(record_memory_turn)(
-            user,
-            self.ROOM_NAME,
-            self.thread_id,
-            message,
-            response,
-            generation=self.memory_generation,
-        )
-        if first:
-            schedule_learner_memory(user.id)
+        try:
+            if not await sync_to_async(memory_enabled)(user):
+                return
+            first = await sync_to_async(record_memory_turn)(
+                user, self.ROOM_NAME, self.thread_id, generation=self.memory_generation
+            )
+            if first:
+                await sync_to_async(schedule_learner_memory)(user.id)
+        except Exception:
+            # best-effort: the reply has already streamed, never surface this in chat
+            log.exception("Could not queue memory extraction for %s", self.user_id)
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""

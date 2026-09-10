@@ -1,8 +1,10 @@
 """Learner context: stated profile (from MIT Learn) plus memory learned from chats."""
 
+import hashlib
 import json
 import logging
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import timedelta
 
 from django.conf import settings
@@ -242,15 +244,21 @@ def memory_enabled(user) -> bool:
     return is_enabled(CHAT_MEMORY_FLAG, default=False, opt_unique_id=user.global_id)
 
 
-def fit_length(text: str, cap: int | None = None) -> str:
-    """Cut at the last clause boundary before the cap rather than mid-sentence."""
+def fit_length(text: str, cap: int | None = None) -> str | None:
+    """
+    Return the text within the cap, dropping whole trailing clauses to get there.
+
+    None when no clause boundary exists before the cap: a mid-clause cut can turn
+    "only advanced data science courses" into "only advanced", so callers keep
+    what they had instead.
+    """
     text = text.strip()
     cap = cap or settings.AI_MEMORY_MAX_CHARS
     if len(text) <= cap:
         return text
     head = text[:cap]
     cut = max(head.rfind("; "), head.rfind(". "))
-    return (head[:cut] if cut > 0 else head).rstrip(" ;.")
+    return head[:cut].rstrip(" ;.") if cut > 0 else None
 
 
 # --- notes ---------------------------------------------------------------------
@@ -278,6 +286,9 @@ def save_notes(user, revised: dict[str, str]) -> None:
     current = load_notes(user)
     for key, raw in revised.items():
         text = fit_length(raw)
+        if text is None:
+            log.warning("Memory section %s over the limit, kept previous", key)
+            continue
         if text != current.get(key, ""):
             store.put(ns, key, {"text": text} if text else None)
 
@@ -309,9 +320,11 @@ def build_learner_context(bot_name: str, profile: dict, mem: LearnerMemory) -> s
     """Render the block for one bot, profile and learned notes labelled separately."""
     cap = settings.AI_MEMORY_MAX_CHARS
     profile_lines = _profile_lines(bot_name, profile)
-    about = fit_length(mem.about, cap) if mem.about else ""
+    about = (fit_length(mem.about, cap) or mem.about[:cap]) if mem.about else ""
     instructions = [
-        fit_length(t, cap) for t in (mem.instructions, mem.bot_instructions) if t
+        fit_length(t, cap) or t[:cap]
+        for t in (mem.instructions, mem.bot_instructions)
+        if t
     ]
     if not (profile_lines or about or instructions):
         return ""
@@ -396,28 +409,43 @@ def clear_learner_memory(user) -> None:
 # --- pending turns ---------------------------------------------------------------
 
 
-def record_memory_turn(  # noqa: PLR0913
-    user, bot_name: str, thread_id: str, message: str, response: str, *, generation: int
-) -> bool:
+def _checkpoint_messages(cp: DjangoCheckpoint) -> list[dict]:
+    data = cp.checkpoint if isinstance(cp.checkpoint, dict) else {}
+    messages = data.get("channel_values", {}).get("messages", [])
+    return [m for m in messages if isinstance(m, dict)]
+
+
+def checkpoint_hash(cp: DjangoCheckpoint) -> str:
+    """Fingerprint of the message list; a rewritten checkpoint no longer matches."""
+    payload = json.dumps(_checkpoint_messages(cp), sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def record_memory_turn(user, bot_name: str, thread_id: str, *, generation: int) -> bool:
     """
-    Save one finished exchange for extraction.
+    Queue the checkpoint this exchange just produced for extraction.
 
     Returns True when this is the learner's first pending turn, so the caller
     schedules the task; later turns join that batch. Discarded (False) if memory
-    was cleared while the bot was replying.
+    was cleared while the bot was replying or no checkpoint was written.
     """
+    cp = DjangoCheckpoint.objects.filter(thread_id=thread_id).order_by("-id").first()
+    if not cp:
+        log.warning("No checkpoint for thread %s, memory turn dropped", thread_id)
+        return False
     with transaction.atomic():
         state = _locked_state(user)
         if state.generation != generation:
             return False
         first = not PendingMemoryTurn.objects.filter(user=user).exists()
-        PendingMemoryTurn.objects.create(
-            user=user,
+        PendingMemoryTurn.objects.get_or_create(
+            checkpoint=cp,
             generation=generation,
-            bot=bot_name,
-            thread_id=thread_id,
-            message=message,
-            response=response[: settings.AI_MEMORY_REPLY_CHARS],
+            defaults={
+                "user": user,
+                "bot": bot_name,
+                "checkpoint_hash": checkpoint_hash(cp),
+            },
         )
     return first
 
@@ -441,74 +469,110 @@ def stuck_turn_count() -> int:
     ).count()
 
 
-def _select_batch(user, generation: int) -> list[PendingMemoryTurn]:
-    rows = PendingMemoryTurn.objects.filter(
-        user=user, generation=generation, attempts__lt=settings.AI_MEMORY_MAX_ATTEMPTS
-    ).order_by("created_on", "id")[: settings.AI_MEMORY_BATCH_SIZE]
-    batch, total = [], 0
-    for row in rows:
-        total += len(row.message) + len(row.response)
-        if batch and total > settings.AI_MEMORY_BATCH_CHARS:
-            break
-        batch.append(row)
-    return batch
+@dataclass
+class Exchange:
+    """One learner turn read back from its checkpoint."""
+
+    bot: str
+    thread_id: str
+    message: str
+    reply: str
+    history: list[str]
+
+    def __len__(self) -> int:
+        return len(self.message) + len(self.reply) + sum(map(len, self.history))
 
 
-def _thread_learner_messages(thread_id: str) -> list[str]:
-    """Learner messages in the thread's newest checkpoint, oldest first."""
-    cp = (
-        DjangoCheckpoint.objects.filter(thread_id=thread_id)
-        .order_by("-created_on", "-id")
-        .first()
-    )
-    if not cp:
-        return []
-    data = cp.checkpoint if isinstance(cp.checkpoint, dict) else {}
-    messages = data.get("channel_values", {}).get("messages", [])
-    humans = [
-        m["kwargs"]["content"]
-        for m in messages
-        if isinstance(m, dict) and m.get("kwargs", {}).get("type") == "human"
-    ]
-    return [h for h in humans if isinstance(h, str)]
+def _human_and_ai_texts(cp: DjangoCheckpoint) -> tuple[list[str], list[str]]:
+    humans, ais = [], []
+    for m in _checkpoint_messages(cp):
+        kwargs = m.get("kwargs", {})
+        content = kwargs.get("content")
+        if not isinstance(content, str):
+            continue
+        if kwargs.get("type") == "human":
+            humans.append(content)
+        elif kwargs.get("type") == "ai" and content:
+            ais.append(content)
+    return humans, ais
 
 
-def thread_history(user, thread_id: str, before: str, cleared_at) -> list[str]:
+def load_exchange(row: PendingMemoryTurn, cleared_at) -> Exchange | None:
     """
-    Earlier learner messages in the learner's own thread, for context.
+    Read the exchange from the referenced checkpoint; None if it can't be trusted.
 
-    A thread that predates a memory clear contributes nothing: its history could
-    hand the extractor the facts the learner asked us to forget.
+    Skipped when the checkpoint was rewritten (hash mismatch), belongs to another
+    learner, or has no learner message. History is the earlier learner messages,
+    each bounded; a thread that predates a memory clear contributes none, since
+    it could hand the extractor the facts the learner asked us to forget.
     """
+    cp = row.checkpoint
+    if checkpoint_hash(cp) != row.checkpoint_hash:
+        return None
     session = (
-        UserChatSession.objects.filter(thread_id=thread_id, user=user)
+        UserChatSession.objects.filter(thread_id=cp.thread_id, user=row.user)
         .only("created_on")
         .first()
     )
-    if not session or (cleared_at and session.created_on <= cleared_at):
-        return []
-    humans = _thread_learner_messages(thread_id)
-    if before in humans:
-        humans = humans[: humans.index(before)]
-    return humans[-settings.AI_MEMORY_HISTORY_MESSAGES :]
+    if not session:
+        return None
+    humans, ais = _human_and_ai_texts(cp)
+    if not humans:
+        return None
+    limit = settings.AI_MEMORY_REPLY_CHARS
+    history = []
+    if not (cleared_at and session.created_on <= cleared_at):
+        history = [
+            h[:limit] for h in humans[:-1][-settings.AI_MEMORY_HISTORY_MESSAGES :]
+        ]
+    return Exchange(
+        bot=row.bot,
+        thread_id=cp.thread_id,
+        message=humans[-1],
+        reply=(ais[-1] if ais else "")[:limit],
+        history=history,
+    )
 
 
-def render_batch(user, batch: list[PendingMemoryTurn], cleared_at) -> str:
+def _select_batch(
+    user, state: LearnerMemoryState
+) -> list[tuple[PendingMemoryTurn, Exchange | None]]:
+    """Oldest rows first, within the count and input limits; bad rows ride along."""
+    rows = (
+        PendingMemoryTurn.objects.filter(
+            user=user,
+            generation=state.generation,
+            attempts__lt=settings.AI_MEMORY_MAX_ATTEMPTS,
+        )
+        .select_related("checkpoint")
+        .order_by("created_on", "id")[: settings.AI_MEMORY_BATCH_SIZE]
+    )
+    batch, total = [], 0
+    for row in rows:
+        exchange = load_exchange(row, state.cleared_at)
+        if exchange:
+            total += len(exchange)
+            if total > settings.AI_MEMORY_BATCH_CHARS and any(x for _, x in batch):
+                break
+        batch.append((row, exchange))
+    return batch
+
+
+def render_batch(exchanges: list[Exchange]) -> str:
     """Exchanges in order, labelled by bot, with per-thread context before the first."""
     parts, seen = [], {}
-    for row in batch:
-        if row.thread_id not in seen:
-            seen[row.thread_id] = len(seen) + 1
-            history = thread_history(user, row.thread_id, row.message, cleared_at)
-            if history:
+    for x in exchanges:
+        if x.thread_id not in seen:
+            seen[x.thread_id] = len(seen) + 1
+            if x.history:
                 parts.append(
-                    f"[{row.bot}, thread {seen[row.thread_id]}] earlier learner "
-                    "messages (context only, already reflected in the notes):\n"
-                    + "\n".join(f"- {m}" for m in history)
+                    f"[{x.bot}, thread {seen[x.thread_id]}] earlier learner messages "
+                    "(context only, already reflected in the notes):\n"
+                    + "\n".join(f"- {m}" for m in x.history)
                 )
         parts.append(
-            f"[{row.bot}, thread {seen[row.thread_id]}] Learner: {row.message}\n"
-            f"[{row.bot}] Chatbot reply (context only): {row.response}"
+            f"[{x.bot}, thread {seen[x.thread_id]}] Learner: {x.message}\n"
+            f"[{x.bot}] Chatbot reply (context only): {x.reply}"
         )
     return "\n\n".join(parts)
 
@@ -594,20 +658,32 @@ def process_learner_memory(user_id: int) -> str:
         if not acquired:
             return "locked"
         state, _ = LearnerMemoryState.objects.get_or_create(user=user)
-        batch = _select_batch(user, state.generation)
-        if not batch:
-            return "empty"
-        ids = [row.id for row in batch]
-        PendingMemoryTurn.objects.filter(id__in=ids).update(attempts=F("attempts") + 1)
+        batch = _select_batch(user, state)
+        return _process_batch(user, state, batch) if batch else "empty"
+
+
+def _process_batch(user, state, batch) -> str:
+    ids = [row.id for row, _ in batch]
+    PendingMemoryTurn.objects.filter(id__in=ids).update(attempts=F("attempts") + 1)
+    exchanges = [x for _, x in batch if x]
+    if len(exchanges) < len(batch):
+        log.warning(
+            "%d memory turns for user %s had unusable checkpoints, skipped",
+            len(batch) - len(exchanges),
+            user.id,
+        )
+    revised = None
+    if exchanges:
         notes = load_notes(user)
-        rendered = render_batch(user, batch, state.cleared_at)
-        revised = None
+        rendered = render_batch(exchanges)
         if worth_extracting(rendered, notes):
-            revised = revise_notes(rendered, notes, {row.bot for row in batch})
-        with transaction.atomic():
-            if _locked_state(user).generation != state.generation:
-                return "cleared"  # DELETE already removed the rows
-            if revised:
-                save_notes(user, revised)
-            PendingMemoryTurn.objects.filter(id__in=ids).delete()
-        return "saved" if revised else "skipped"
+            revised = revise_notes(rendered, notes, {x.bot for x in exchanges})
+    with transaction.atomic():
+        if _locked_state(user).generation != state.generation:
+            return "cleared"  # DELETE already removed the rows
+        if revised:
+            save_notes(user, revised)
+        PendingMemoryTurn.objects.filter(id__in=ids).delete()
+    if not exchanges:
+        return "unusable"
+    return "saved" if revised else "skipped"

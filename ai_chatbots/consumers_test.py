@@ -1250,11 +1250,33 @@ async def test_handle_passes_learner_context_and_queues_extraction(
         user,
         "ResourceRecommendationBot",
         recommendation_consumer.thread_id,
-        "hello",
-        "Hi there",
         generation=3,
     )
     schedule.assert_called_once_with(user.id)
+
+
+async def test_handle_queue_failure_never_reaches_the_chat(
+    mocker, mock_http_consumer_send, recommendation_consumer
+):
+    """A broker or database error after the reply is logged, not sent as a chat error"""
+    mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
+    mocker.patch("ai_chatbots.consumers.get_learner_context", return_value="")
+    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=0)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi"]))
+        ),
+    )
+    mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=True)
+    mocker.patch(
+        "ai_chatbots.consumers.schedule_learner_memory", side_effect=OSError("broker")
+    )
+    log = mocker.patch("ai_chatbots.consumers.log")
+    error = mocker.patch.object(recommendation_consumer, "send_error_response")
+    await recommendation_consumer.handle(json.dumps({"message": "hello"}))
+    log.exception.assert_called_once()
+    error.assert_not_called()
 
 
 async def test_handle_later_turns_join_the_pending_batch(
@@ -1323,10 +1345,5 @@ async def test_tutor_handle_extracts_too(
     await tutor_consumer.handle(json.dumps(payload))
     assert tutor_consumer.bot.learner_context == "## About this learner"
     record.assert_called_once_with(
-        tutor_consumer.scope["user"],
-        "TutorBot",
-        tutor_consumer.thread_id,
-        "help",
-        "Hi",
-        generation=0,
+        tutor_consumer.scope["user"], "TutorBot", tutor_consumer.thread_id, generation=0
     )
