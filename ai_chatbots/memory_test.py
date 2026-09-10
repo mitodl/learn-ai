@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth.models import AnonymousUser
 
 from ai_chatbots import memory, prompts
+from ai_chatbots.factories import CheckpointFactory
 from ai_chatbots.memorystores import DjangoMemoryStore
 from main.factories import UserFactory
 
@@ -160,10 +161,47 @@ def test_load_learner_memory_roundtrip():
     )
 
 
+def _lc(kind, content):
+    return {
+        "lc": 1,
+        "type": "constructor",
+        "id": ["langchain", "schema", "messages", kind],
+        "kwargs": {"type": kind.replace("Message", "").lower(), "content": content},
+    }
+
+
+def test_recent_learner_messages_reads_latest_checkpoint():
+    """Human messages of the thread, oldest first, from the newest checkpoint only"""
+    thread = "t-1"
+    older = CheckpointFactory.create(thread_id=thread)
+    older.checkpoint = {"channel_values": {"messages": [_lc("HumanMessage", "stale")]}}
+    older.save()
+    newest = CheckpointFactory.create(thread_id=thread)
+    newest.checkpoint = {
+        "channel_values": {
+            "messages": [
+                _lc("HumanMessage", "find ecology courses"),
+                _lc("AIMessage", "here you go"),
+                _lc("HumanMessage", "I'm a beginner on this topic"),
+            ]
+        }
+    }
+    newest.save()
+    assert memory.recent_learner_messages(thread) == [
+        "find ecology courses",
+        "I'm a beginner on this topic",
+    ]
+    assert memory.recent_learner_messages("no-such-thread") == []
+
+
 def test_extract_learner_memory_passes_context_and_saves(mocker, settings):
-    """One structured call gets bot name, current memory and the exchange; result is saved"""
+    """One structured call gets bot, current memory, thread history and the exchange"""
     settings.AI_MEMORY_MAX_CHARS = 1500
     memory.save_learner_memory("g3", REC, memory.LearnerMemory(about="nurse"))
+    mocker.patch(
+        "ai_chatbots.memory.recent_learner_messages",
+        return_value=["find ecology courses", "I'm a beginner on this topic"],
+    )
     llm = mocker.patch("ai_chatbots.memory.init_chat_model").return_value
     structured = llm.with_structured_output.return_value
     structured.invoke.return_value = memory.LearnerMemory(
@@ -172,14 +210,15 @@ def test_extract_learner_memory_passes_context_and_saves(mocker, settings):
         bot_instructions="avoid social science",
     )
     memory.extract_learner_memory(
-        "g3", REC, "I'm in Boston and not a social scientist", "Noted."
+        "g3", REC, "t-1", "I'm a beginner on this topic", "Noted."
     )
     llm.with_structured_output.assert_called_once_with(memory.LearnerMemory)
     prompt_text = "".join(m.content for m in structured.invoke.call_args.args[0])
     assert REC in prompt_text
     assert memory.BOT_PURPOSE[REC] in prompt_text
     assert "nurse" in prompt_text  # current memory shown
-    assert "I'm in Boston and not a social scientist" in prompt_text
+    assert "find ecology courses" in prompt_text  # earlier turn explains "this topic"
+    assert "I'm a beginner on this topic" in prompt_text
     assert "Noted." in prompt_text
     mem = memory.load_learner_memory("g3", REC)
     assert mem.about == "nurse in Boston"
@@ -198,8 +237,17 @@ def test_extraction_prompt_has_the_guard_rails():
         "a question is never a fact",
         "different chatbot",
         "do not append",
+        "keep the scope",
+        "current preference only",
+        "complaint",
     ):
         assert phrase in text
+
+
+def test_context_instruction_says_conversation_wins():
+    """Memory must never override what the learner says in the current thread"""
+    assert "this conversation" in memory.CONTEXT_INSTRUCTION
+    assert "override" in memory.CONTEXT_INSTRUCTION
 
 
 def test_recommendation_prompt_defers_to_learner_context():
@@ -211,3 +259,4 @@ def test_recommendation_prompt_defers_to_learner_context():
     assert (
         "search" in prompts.PROMPT_RECOMMENDATION.split("Learner context", 1)[1][:400]
     )
+    assert "before saying" in prompts.PROMPT_RECOMMENDATION

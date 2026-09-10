@@ -1391,6 +1391,7 @@ async def test_handle_passes_learner_context_and_queues_extraction(
     extract.delay.assert_called_once_with(
         recommendation_consumer.scope["user"].global_id,
         "ResourceRecommendationBot",
+        recommendation_consumer.thread_id,
         "hello",
         "Hi there",
     )
@@ -1440,5 +1441,9 @@ async def test_tutor_handle_extracts_too(
     await tutor_consumer.handle(json.dumps(payload))
     assert tutor_consumer.bot.learner_context == "## About this learner"
     extract.delay.assert_called_once_with(
-        tutor_consumer.scope["user"].global_id, "TutorBot", "help", "Hi"
+        tutor_consumer.scope["user"].global_id,
+        "TutorBot",
+        tutor_consumer.thread_id,
+        "help",
+        "Hi",
     )

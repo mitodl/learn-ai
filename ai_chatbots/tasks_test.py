@@ -74,9 +74,9 @@ def test_delete_stale_sessions():
 def test_extract_learner_memory_task_delegates(mocker):
     """The task hands everything to the memory module"""
     extract = mocker.patch("ai_chatbots.tasks.memory.extract_learner_memory")
-    extract_learner_memory("gid-1", "TutorBot", "plain english please", "Sure.")
+    extract_learner_memory("gid-1", "TutorBot", "t-1", "plain english please", "Sure.")
     extract.assert_called_once_with(
-        "gid-1", "TutorBot", "plain english please", "Sure."
+        "gid-1", "TutorBot", "t-1", "plain english please", "Sure."
     )
 
 
@@ -87,5 +87,5 @@ def test_extract_learner_memory_logs_and_swallows_errors(mocker):
         side_effect=RuntimeError("boom"),
     )
     log = mocker.patch("ai_chatbots.tasks.log")
-    extract_learner_memory("gid-1", "TutorBot", "hi", "hello")
+    extract_learner_memory("gid-1", "TutorBot", "t-1", "hi", "hello")
     log.exception.assert_called_once()

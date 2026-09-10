@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from ai_chatbots.memorystores import DjangoMemoryStore
+from ai_chatbots.models import DjangoCheckpoint
 from main.features import is_enabled
 
 log = logging.getLogger(__name__)
@@ -23,7 +24,9 @@ CONTEXT_INSTRUCTION = (
     "# Learner context\n"
     "What follows is known about this learner from their MIT Learn profile and earlier "
     "chats. Treat it as their answers: do not ask for anything stated here, and follow "
-    "the instructions under 'How this learner wants to be helped'."
+    "the instructions under 'How this learner wants to be helped'. What the learner "
+    "says in this conversation always overrides these notes; if they ask for something "
+    "the notes advise against, do what they ask now."
 )
 ABOUT_HEADING = "## About this learner"
 INSTRUCTIONS_HEADING = "## How this learner wants to be helped"
@@ -81,6 +84,15 @@ What counts:
   for resources" is not information and must not be written.
 - Only durable information. Skip anything that only matters for this one thread, such
   as the specific course, lecture or question at hand.
+- Keep the scope a preference came with. "Advanced courses for this topic" said while
+  discussing data science is "advanced courses in data science", never "advanced
+  courses". A level preference is per topic unless the learner says it applies to
+  everything. A learner can be advanced in one field and a beginner in another; record
+  both with their topics.
+- Store the current preference only, never the history of how it changed. If the
+  learner relaxes or reverses a preference, replace it; do not write "now willing to"
+  or "previously wanted". A complaint or question about the chatbot's answer ("you have
+  no basic courses?", "why didn't you show me those?") is never an instruction.
 - Never record names, emails, problem statements, attempted or correct answers, hints,
   grades, scores, or problem identifiers.
 
@@ -239,11 +251,34 @@ def get_learner_context(user, bot_name: str) -> str:
         return ""
 
 
+def recent_learner_messages(thread_id: str, limit: int = 8) -> list[str]:
+    """Return the learner's messages in this thread, oldest first, newest checkpoint."""
+    cp = (
+        DjangoCheckpoint.objects.filter(thread_id=thread_id)
+        .order_by("-created_on", "-id")
+        .first()
+    )
+    if not cp:
+        return []
+    data = cp.checkpoint if isinstance(cp.checkpoint, dict) else {}
+    messages = data.get("channel_values", {}).get("messages", [])
+    humans = [
+        m["kwargs"]["content"]
+        for m in messages
+        if isinstance(m, dict) and m.get("kwargs", {}).get("type") == "human"
+    ]
+    return [h for h in humans if isinstance(h, str)][-limit:]
+
+
 def extract_learner_memory(
-    global_id: str, bot_name: str, message: str, response: str
+    global_id: str, bot_name: str, thread_id: str, message: str, response: str
 ) -> None:
     """One structured LLM call revises the three sections from the latest exchange."""
     current = load_learner_memory(global_id, bot_name)
+    # Earlier turns give "this topic" its meaning; the latest message may not be
+    # checkpointed yet, so it is always appended explicitly.
+    history = [m for m in recent_learner_messages(thread_id) if m != message]
+    history_text = "\n".join(f"- {m}" for m in history) or "(none)"
     llm = init_chat_model(settings.AI_MEMORY_EXTRACTION_MODEL, temperature=0)
     revised = llm.with_structured_output(LearnerMemory).invoke(
         [
@@ -254,7 +289,10 @@ def extract_learner_memory(
                 f"Chatbot in use: {bot_name} "
                 f"({BOT_PURPOSE.get(bot_name, 'an MIT Open Learning chatbot')})\n\n"
                 f"Current notes:\n{current.model_dump_json(indent=1)}\n\n"
-                f"Learner's message:\n{message}\n\n"
+                f"Learner's earlier messages in this thread, oldest first (context "
+                f"for the latest message; already reflected in the notes):\n"
+                f"{history_text}\n\n"
+                f"Learner's latest message:\n{message}\n\n"
                 f"Chatbot's reply (context only):\n{response[:2000]}"
             ),
         ]
