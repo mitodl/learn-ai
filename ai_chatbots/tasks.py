@@ -21,15 +21,16 @@ def delete_stale_sessions():
 
 
 @app.task
-def extract_learner_memory(global_id: str, bot_name: str, message: str, response: str):
+def extract_learner_memory(
+    global_id: str, bot_name: str, thread_id: str, message: str, response: str
+):
     """
     Revise the learner's memory from one exchange. Best-effort.
 
-    ponytail: runs on every response and sees one exchange with no thread context.
-    Add the per-user 15 minute throttle and a last-processed marker (then feed the
-    thread's recent messages) when volume matters.
+    ponytail: runs on every response. Add the per-user 15 minute throttle and a
+    last-processed marker when volume matters.
     """
     try:
-        memory.extract_learner_memory(global_id, bot_name, message, response)
+        memory.extract_learner_memory(global_id, bot_name, thread_id, message, response)
     except Exception:
         log.exception("Memory extraction failed for %s", global_id)

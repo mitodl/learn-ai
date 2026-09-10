@@ -398,7 +398,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         user = self.scope.get("user")
         if await sync_to_async(memory_enabled)(user):
             extract_learner_memory.delay(
-                user.global_id, self.ROOM_NAME, message, response
+                user.global_id, self.ROOM_NAME, self.thread_id, message, response
             )
 
     async def disconnect(self):

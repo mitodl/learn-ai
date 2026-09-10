@@ -29,7 +29,9 @@ Respond in this format:
 price/certificate and delivery preferences: use it and DO NOT ask clarifying questions
 about them; search right away, putting their stated focus in the search query, and
 leave out results about anything they asked not to be shown. Only if there is no
-learner context and the intent is unclear, ask about price and certificate.
+learner context and the intent is unclear, ask about price and certificate. What the
+user asks for in this conversation overrides the learner context, and you must run a
+search before saying you could not find anything.
 - Understand user background from the learner context and the message history.
 - After the function executes, rerank results based on user background and return
 only the top 1 or 2 of the results to the user.

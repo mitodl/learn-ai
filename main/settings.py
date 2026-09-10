@@ -604,8 +604,9 @@ AI_DEFAULT_SYLLABUS_MAX_TOKENS = get_int("AI_DEFAULT_SYLLABUS_MAX_TOKENS", 16384
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "openai/gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 # provider:model form for langchain.chat_models.init_chat_model
+# gpt-4.1-mini lost scoped preferences and recorded complaints as rules; see the RFC
 AI_MEMORY_EXTRACTION_MODEL = get_string(
-    name="AI_MEMORY_EXTRACTION_MODEL", default="openai:gpt-4.1-mini"
+    name="AI_MEMORY_EXTRACTION_MODEL", default="openai:gpt-4.1"
 )
 AI_MEMORY_MAX_CHARS = get_int(name="AI_MEMORY_MAX_CHARS", default=1500)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
