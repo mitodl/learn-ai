@@ -29,7 +29,7 @@ Give AskTIM bots the learner's MIT Learn profile fields, and add short free-text
 learned from conversations that a background task keeps up to date. The benefit is fewer
 repeated questions and preferences that carry across sessions and bots.
 
-User memory will consiste of 2 pieces:
+User memory consists of two pieces:
 
 - **Profile fields.** mit-learn gets a small endpoint that returns the six profile
   preference fields (topic interests, goals, education level, certificate preference, time
@@ -39,11 +39,12 @@ User memory will consiste of 2 pieces:
   profile stays the source of truth; nothing is written back.
 - **Learned notes.** Short notes per learner: about them, how they want every bot to
   behave, and a per-bot section for how they want that bot to behave. Stored in three
-  small Django tables in learn-ai. After each reply the consumer records a pointer to that exchange;
-  X minutes later (5? 15?) a Celery task reads the pending exchanges, asks a cheap model
-  whether there's anything worth remembering, and if so asks a larger model to rewrite the
-  notes. Each note is capped at 1,500 characters, updates are guarded against race conditions,
-  and a `GET`/`DELETE /api/v0/memory/` endpoint lets learners view and clear what's stored.
+  small Django tables in learn-ai. After each reply the consumer records a pointer to that
+  exchange; 15 minutes later (configurable) a Celery task reads the pending exchanges, asks
+  a cheap model whether there's anything worth remembering, and if so asks a larger model
+  to rewrite the notes. Each note is capped at 1,500 characters, updates are guarded
+  against race conditions, and a `GET`/`DELETE /api/v0/memory/` endpoint lets learners
+  view and clear what's stored.
 
 Both are keyed on the authenticated user's `global_id` from the gateway; nothing in the
 request body or model output can select another learner. Both sit behind feature flags,
@@ -55,7 +56,8 @@ a "don't remember me" setting are follow-ups.
 
 The main question is what shape learned memory takes and who maintains it. Using the
 MIT Learn profile fields is common to every option; they differ in what, if anything, the
-bots learn from conversations.
+bots learn from conversations. All of them keep learned memory in learn-ai: it already has
+the conversations and the background workers, and mit-learn would need a write API.
 
 ### Option 1: Profile fields only, no learned memory
 
@@ -146,7 +148,8 @@ bots. None of the three covers queueing or clearing approaches; that plumbing is
 way.
 
 **Queueing: a pending-work table or a lock and counter alone.** A per-learner lock and a
-clear counter without `PendingMemoryTurn` would be simpler, but would lose updates whenever
+clear counter without a pending-work table (`PendingMemoryTurn`, described under Learner
+Memory Storage below) would be simpler, but would lose updates whenever
 a task skipped a held lock or crashed before commit. The pending table costs one small
 model and handles both without assuming a repeated model call is harmless. A larger event
 ledger or revision scheme can wait unless we add independent writers.
@@ -154,16 +157,13 @@ ledger or revision scheme can wait unless we add independent writers.
 ## Decision
 
 **Option 2**, shipped in two stages: profile fields first behind a feature flag (which is
-Option 1 on its own), then learned memory once the evaluation below passes. Keeping memory
-in mit-learn rather than learn-ai was also considered; learn-ai already has the
-conversations and the background workers, and mit-learn would need a write API, so it
-stays here with the cross-service deletion dependency acknowledged.
+Option 1 on its own), then learned memory once the evaluation below passes.
 
 What settles it: the profile fields alone don't cover the things learners actually repeat,
 and a small free-text design lets us find out whether conversational memory is any good
-before investing in per-fact editing (Option 3). If
-rewrites keep losing unrelated facts, or product needs per-fact editing, Option 3 is the
-next step and the `BaseStore` seam means it's a storage change, not a rewrite.
+before investing in per-fact editing (Option 3). If rewrites keep losing unrelated facts,
+or product needs per-fact editing, Option 3 is the next step and the `BaseStore` seam
+means it's a storage change, not a rewrite.
 
 Concretely, the MIT Learn profile stays the source of truth for the six profile fields, and
 learn-ai fetches and caches a copy. What the bots learn is stored in learn-ai as two
@@ -185,19 +185,12 @@ The next time they open the recommendation bot and ask "anything good on remote 
 the bot would search for online, beginner-friendly ecology-adjacent courses and answer
 briefly, without asking about their level or delivery preference first. Today it asks.
 
-Each bot reads the profile and notes at the start of every conversation. Updating the notes
-happens about 5/10/15 minutes after a reply (configurable), in the background. A cheap model
-(4o/5-mini?) first decides if the exchange contained anything worth remembering; most turns
-don't. If it did, a stronger model (gpt-4/5) rewrites the notes. Learners can view and clear
-their notes through the API, and clearing is designed so that a background update still in
-flight can't quietly restore what was just deleted.
-
 On the implementation choices above: the store is a thin `DjangoMemoryStore` over a
-`LearnerMemoryNote` table behind LangGraph's `BaseStore`, and extraction is one
-structured-output call through `ChatLiteLLM`. No vector search and no 3rd-party memory service
-for now.
+`LearnerMemoryNote` table behind LangGraph's `BaseStore`, extraction is one
+structured-output call through `ChatLiteLLM`, and pending exchanges go in a table. No
+vector search and no third-party memory service for now.
 
-Some things should never written to memory: names, email addresses, and anything from
+Some things should never be written to memory: names, email addresses, and anything from
 tutoring sessions that looks like assessment content (problem statements, attempted or
 correct answers, hints, grades, scores, problem identifiers). Instructions about how a bot
 should behave toward its own rules, tools, or permissions are also never remembered, so a
@@ -221,8 +214,6 @@ cases.
 Add `GET /api/v0/profiles/<global_id>/preferences/`, returning only the six profile fields:
 `topic_interests`, `goals`, `current_education`, `certificate_desired`, `time_commitment`,
 and `delivery`. No name, email, or avatar, which limits what a leaked token could expose.
-Limiting this endpoint to six fields doesn't reduce any other access the existing service
-token already has.
 
 #### Service Authentication
 
@@ -279,8 +270,7 @@ around it, not by the store.
 
 Each section is capped at `AI_MEMORY_MAX_CHARS` (1,500) characters. Three full sections add
 roughly a page of text, on the order of 1,100 tokens, to every request. I want to measure
-that cost during the pilot before deciding whether to shorten them. Topic scope has to
-survive in the text: "advanced data science courses" must not become "advanced courses".
+that cost during the pilot before deciding whether to shorten them.
 
 #### Memory Extraction Pipeline
 
@@ -307,8 +297,9 @@ The task reads each referenced checkpoint, not whichever checkpoint is latest, a
 the pinned learner message inside it. That message is the exchange, capped at
 `AI_MEMORY_MESSAGE_CHARS` (2000); the bot message that follows it is the reply, capped at
 `AI_MEMORY_REPLY_CHARS` (500); earlier learner messages are context, bounded by
-`AI_MEMORY_HISTORY_MESSAGES` and the same per-message cap. Each message is labelled by speaker, and the prompt says the
-reply can help interpret the learner's words but can't establish facts about them. A
+`AI_MEMORY_HISTORY_MESSAGES` and the same per-message cap. Each message is labelled by
+speaker, and the prompt says the reply can help interpret the learner's words but can't
+establish facts about them. A
 checkpoint isn't immutable: the error-recovery code in `ai_chatbots/utils.py` can rewrite
 its message list. So the worker verifies the stored hash before use, and if the checkpoint
 changed, was deleted, or no longer identifies the expected exchange, the row is skipped and
@@ -344,11 +335,10 @@ that `generation` still matches the value read at the start, and then saves the 
 deletes only the selected rows in one transaction. If the generation changed, the learner
 cleared memory mid-run and the result is discarded; the same check re-reads the feature
 flag, so a flag turned off mid-run also discards the result and drops the pending rows. A
-gate "no" or an all-unusable batch
-deletes the selected rows without touching the notes. A crash before commit leaves the
-whole batch pending, so the next run repeats both model calls and may write a different
-revision; a crash after commit leaves nothing to redo. Either way each exchange is
-applied to the notes at most once.
+gate "no" or an all-unusable batch deletes the selected rows without touching the notes. A
+crash before commit leaves the whole batch pending, so the next run repeats both model
+calls and may write a different revision; a crash after commit leaves nothing to redo.
+Either way each exchange is applied to the notes at most once.
 
 Each attempt increments the row's `attempts`; rows that reach `AI_MEMORY_MAX_ATTEMPTS`
 are excluded from future batches and counted for reporting. Nothing deletes them yet; that
@@ -426,10 +416,9 @@ that's tracked separately and this doesn't fix it.
 
 Processed rows are deleted when their batch commits. Source conversations stay under the
 existing chat-retention rules, and memory processing must not block a learner from
-deleting chat history. Workers respect the feature flag being turned off, and turning it
-back on shouldn't process an old backlog unexpectedly. Whole notes and transcripts aren't
-logged by default, and personalized prompts need to be accounted for in tracing access
-and retention: with LangSmith tracing enabled, traces will contain learner notes.
+deleting chat history. Whole notes and transcripts aren't logged by default, and
+personalized prompts need to be accounted for in tracing access and retention: with
+LangSmith tracing enabled, traces will contain learner notes.
 
 ### open-learning-ai-tutor
 
@@ -444,10 +433,10 @@ the tutor's own prompt can place and label it; that's a follow-up.
 
 #### Gateway and Service Token
 
-Two things to confirm rather than build: that the APISIX routes in front of learn-ai strip
+Nothing to build, two things to confirm: that the APISIX routes in front of learn-ai strip
 or replace any client-supplied `x-userinfo` header, and how `LEARN_ACCESS_TOKEN` is issued
-and rotated (see Service Authentication above). If we go the APISIX consumer route for the
-profile endpoint, that's a small route change on the mit-learn side of the gateway.
+and rotated (see Service Authentication). An APISIX consumer for the profile endpoint, if
+we go that way, is a small route change on the mit-learn side.
 
 ## Implementation Plan
 
