@@ -13,4 +13,4 @@ python3 manage.py createcachetable
 # run ONLY data migrations
 RUN_DATA_MIGRATIONS=true python3 manage.py migrate --noinput
 
-granian --interface asgi --host 0.0.0.0 --port 8001 --reload main.asgi:application
+granian --interface asgi --host 0.0.0.0 --port 8001 --reload --reload-ignore-dirs frontend-demo main.asgi:application
