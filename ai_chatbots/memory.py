@@ -211,29 +211,16 @@ def bot_instructions_key(bot_name: str) -> str:
 def fetch_learner_profile(global_id: str) -> dict:  # noqa: ARG001
     """
     ponytail: dummy stand-in for GET /api/v0/profiles/<global_id>/preferences/ on
-    mit-learn (see docs/rfc-learner-memory.md). Replace with async_request plus a
-    12h cache keyed on global_id and a short timeout; failure returns {}.
+    mit-learn (see docs/rfc-learner-memory-astra.md). Replace with async_request plus
+    a 12h cache keyed on global_id and a short timeout; failure returns {}.
     """
     return {
-        "topic_interests": [
-            {
-                "id": 731,
-                "name": "Science & Math",
-                "icon": "RiTestTubeLine",
-                "parent": None,
-                "channel_url": "https://learn.mit.edu/c/topic/science-math",
-            }
-        ],
+        "topic_interests": [{"name": "Science & Math"}],
         "goals": ["academic-excellence"],
         "current_education": "",
         "certificate_desired": "no",
         "time_commitment": "",
         "delivery": ["online"],
-        "preference_search_filters": {
-            "certification": False,
-            "topic": ["Science & Math"],
-            "delivery": ["online"],
-        },
     }
 
 
@@ -318,14 +305,9 @@ def _profile_lines(bot_name: str, profile: dict) -> list[str]:
 
 def build_learner_context(bot_name: str, profile: dict, mem: LearnerMemory) -> str:
     """Render the block for one bot, profile and learned notes labelled separately."""
-    cap = settings.AI_MEMORY_MAX_CHARS
     profile_lines = _profile_lines(bot_name, profile)
-    about = (fit_length(mem.about, cap) or mem.about[:cap]) if mem.about else ""
-    instructions = [
-        fit_length(t, cap) or t[:cap]
-        for t in (mem.instructions, mem.bot_instructions)
-        if t
-    ]
+    about = mem.about
+    instructions = [t for t in (mem.instructions, mem.bot_instructions) if t]
     if not (profile_lines or about or instructions):
         return ""
     lines = [CONTEXT_INSTRUCTION]
@@ -465,13 +447,6 @@ def stale_users() -> list[int]:
         .values_list("user_id", flat=True)
         .distinct()
     )
-
-
-def stuck_turn_count() -> int:
-    """Count turns that failed too often; kept, since retention policy is TBD (RFC)."""
-    return PendingMemoryTurn.objects.filter(
-        attempts__gte=settings.AI_MEMORY_MAX_ATTEMPTS
-    ).count()
 
 
 @dataclass

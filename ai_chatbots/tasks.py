@@ -33,18 +33,8 @@ def process_learner_memory(user_id: int):
         log.exception("Memory extraction failed for user %s", user_id)
 
 
-def schedule_learner_memory(user_id: int) -> None:
-    """Run extraction after the batching delay."""
-    process_learner_memory.apply_async(
-        (user_id,), countdown=settings.AI_MEMORY_DELAY_SECONDS
-    )
-
-
 @app.task
 def requeue_stale_memory_turns():
     """Recover pending turns whose task was lost or found the lock held."""
     for user_id in memory.stale_users():
         process_learner_memory.delay(user_id)
-    stuck = memory.stuck_turn_count()
-    if stuck:
-        log.error("%d learner memory turns exceeded the retry limit", stuck)
