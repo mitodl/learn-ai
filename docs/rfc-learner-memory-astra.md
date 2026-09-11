@@ -117,6 +117,12 @@ deletes for free, and can be swapped for either of the others later without touc
 bots. None of the three covers queueing or clearing approaches; that plumbing is ours either
 way.
 
+**Queueing: a pending-work table or a lock and counter alone.** A per-learner lock and a
+clear counter without `PendingMemoryTurn` would be simpler, but would lose updates whenever
+a task skipped a held lock or crashed before commit. The pending table costs one small
+model and handles both without assuming a repeated model call is harmless. A larger event
+ledger or revision scheme can wait unless we add independent writers.
+
 ## Decision
 
 **Option 2**, shipped in two stages: profile fields first behind a feature flag (which is
@@ -232,8 +238,9 @@ Three new Django models in `ai_chatbots/models.py`:
 - `LearnerMemoryState`: one row per user holding a `generation` counter, incremented each
   time the learner clears memory, and a `cleared_at` timestamp. This is what stops a stale
   background update from restoring cleared notes.
-- `PendingMemoryTurn`: one row per exchange waiting to be processed, described in the next
-  section.
+- `PendingMemoryTurn`: one row per exchange waiting to be processed, pointing at the
+  checkpoint rather than copying its text, and deleted once processed. Described in the
+  next section.
 
 `DjangoMemoryStore` in `ai_chatbots/memorystores.py` exposes the notes through LangGraph's
 `BaseStore` interface, namespaced by the learner's `global_id`. It's a thin adapter over
@@ -253,24 +260,60 @@ The `AsyncDjangoCheckpointer` already saves every conversation as `DjangoCheckpo
 conversation text into another table, the consumer saves a `PendingMemoryTurn` after the
 reply's checkpoint is committed: the user, bot, generation, a foreign key to that
 checkpoint, and a hash of its messages. Each row means "this exchange (the checkpoint's
-last learner message plus the bot's reply) is waiting to be looked at."
+last learner message plus the bot's reply) is waiting to be looked at." The row uses the
+user and thread the consumer already validated for the chat itself, the Celery task is
+scheduled only after the row commits, and the task receives the user ID, never the
+transcript. The same exchange can't be queued twice.
 
 The first pending row for a learner schedules the `process_learner_memory` Celery task
 `AI_MEMORY_DELAY_SECONDS` (15 minutes) later; rows arriving during that window join the
-same run. A periodic `requeue_stale_memory_turns` task picks up anything left behind. The
-task takes a per-learner Redis lock, reads the oldest pending rows up to a batch limit,
-and renders each referenced checkpoint into labelled learner/assistant text with a few
-earlier messages for context. A cheap gate model (`AI_MEMORY_GATE_MODEL`, gpt-4o-mini to
-start) answers yes or no on whether there's anything worth remembering. If yes, the
-extraction model (`AI_MEMORY_EXTRACTION_MODEL`, gpt-4.1 to start) receives the current
-notes plus the rendered exchanges and returns a `MemoryRevision`, a pydantic structured
-output with the three sections. After validation, the notes are saved and the processed
-rows deleted in one transaction. Both models are configurable and should be compared on
-the evaluation cases before we treat the choice as settled.
+same run and don't restart the timer. A periodic `requeue_stale_memory_turns` task finds
+learners with unprocessed rows and reschedules them, which covers a lost Celery send or a
+row that arrived just as a worker finished.
 
-The details that make this safe under concurrent chats, crashes, and "clear memory"
-(generation checks, hash verification, lock lifetimes, retry policy) are in the collapsed
-section at the end for anyone reviewing the code.
+The task reads each referenced checkpoint, not whichever checkpoint is latest. Its last
+learner message is the exchange; earlier learner messages are context, bounded by
+`AI_MEMORY_HISTORY_MESSAGES` and a per-message length, with at most `AI_MEMORY_REPLY_CHARS`
+(500) of the bot's reply. Each message is labelled by speaker, and the prompt says the
+reply can help interpret the learner's words but can't establish facts about them. A
+checkpoint isn't immutable: the error-recovery code in `ai_chatbots/utils.py` can rewrite
+its message list. So the worker verifies the stored hash before use, and if the checkpoint
+changed, was deleted, or no longer identifies the expected exchange, the row is skipped and
+counted rather than replaced with newer history. A transient database error is retried,
+not treated as deletion. If testing shows references are too often unusable by the time
+the task runs, we should reconsider storing a bounded copy of the input.
+
+A cheap gate model (`AI_MEMORY_GATE_MODEL`, gpt-4o-mini to start) answers yes or no on
+whether the batch contains anything worth remembering. If yes, the extraction model
+(`AI_MEMORY_EXTRACTION_MODEL`, gpt-4.1 to start) receives the current notes plus the
+rendered exchanges and returns a `MemoryRevision`, a pydantic structured output with the
+three sections. A batch spanning several bots keeps their labels and returns separate
+per-bot sections. Validation before saving: an empty section clears the existing one, and
+a section that doesn't fit the cap on a clean sentence boundary keeps the previous text
+rather than truncating mid-sentence. Both models are configurable and should be compared
+on the evaluation cases before we treat the choice as settled.
+
+#### Extraction Task Reliability
+
+The task acquires a per-learner Redis lock (`AI_MEMORY_LOCK_SECONDS`, longer than
+`AI_MEMORY_TASK_TIME_LIMIT`) so only one extraction runs per learner. If the lock is held,
+the rows are left for a later attempt. It reads the oldest pending rows up to
+`AI_MEMORY_BATCH_SIZE` and `AI_MEMORY_BATCH_CHARS`, ordered by creation time then ID, and
+no database transaction is held open across the model calls.
+
+After the models return, the task locks the learner's `LearnerMemoryState` row, checks
+that `generation` still matches the value read at the start, and then saves the notes and
+deletes only the selected rows in one transaction. If the generation changed, the learner
+cleared memory mid-run and the result is discarded. A gate "no" or an all-unusable batch
+deletes the selected rows without touching the notes. A crash before commit leaves the
+whole batch pending for the next run; a crash after commit leaves nothing to redo, so we
+never depend on a repeated model call giving the same answer.
+
+Each attempt increments the row's `attempts`; rows that reach `AI_MEMORY_MAX_ATTEMPTS`
+are excluded from future batches and counted for reporting. Nothing deletes them yet; that
+retention policy is an open question. Rows are ordered by when responses finished, not
+when requests began, which is worth testing with overlapping requests. If submission order
+turns out to matter, add a sequence number rather than trusting timestamps.
 
 #### Prompt Assembly
 
@@ -303,19 +346,39 @@ doesn't.
 #### Memory API: View and Clear
 
 `LearnerMemoryView` serves `GET /api/v0/memory/` to see the notes and
-`DELETE /api/v0/memory/` to clear them; Django admin shows them to staff. DELETE takes the
-same per-learner lock with a short bounded wait, and in one transaction clears the notes,
-deletes pending rows, and increments the generation, so neither a queued task nor a
-response already in progress can bring the old notes back. Frontend controls, per-fact
-editing, and a separate "don't remember me" setting can come later; API access is enough
-for the internal pilot, but we should decide when the UI ships before broad rollout.
-Clearing learned notes doesn't clear the MIT Learn profile or chat history, and can't
-recall a prompt already sent to a model. We should explain those limits to learners. New
-explicit statements after a clear create new memory; old statements don't come back.
+`DELETE /api/v0/memory/` to clear them; Django admin shows them to staff.
 
-Deleting a local learn-ai user deletes their notes and pending work. Account deletion
-propagating from mit-learn is an existing gap for chat sessions too; that's tracked
-separately and this doesn't fix it.
+DELETE takes the same per-learner Redis lock with a short bounded wait
+(`AI_MEMORY_CLEAR_WAIT_SECONDS`) and returns a retryable failure rather than a false
+success if it can't get it. In one transaction it clears the notes, deletes pending rows,
+and increments `generation`. That covers both directions of the race: a queued task that
+finishes afterward sees the changed generation and discards its result, and a chat
+response already in progress copied the generation when the request arrived and checks
+it hasn't changed before saving its pending row. After a clear, extraction uses only the
+messages identified by pending rows in the new generation; pre-clear messages in the same
+checkpoint are excluded rather than passed along as history, and if a new statement is
+too ambiguous without that context, it isn't recorded. This loses some context after a
+clear, but it avoids old facts leaking back in through an old thread's history.
+
+Frontend controls, per-fact editing, and a separate "don't remember me" setting can come
+later; API access is enough for the internal pilot, but we should decide when the UI
+ships before broad rollout. Clearing learned notes doesn't clear the MIT Learn profile or
+chat history, and can't recall a prompt already sent to a model. We should explain those
+limits to learners. New explicit statements after a clear create new memory; old
+statements don't come back.
+
+Deleting a local learn-ai user cascades to their notes, state row, and pending work.
+Account deletion propagating from mit-learn is an existing gap for chat sessions too;
+that's tracked separately and this doesn't fix it.
+
+#### Retention and Logging
+
+Processed rows are deleted when their batch commits. Source conversations stay under the
+existing chat-retention rules, and memory processing must not block a learner from
+deleting chat history. Workers respect the feature flag being turned off, and turning it
+back on shouldn't process an old backlog unexpectedly. Whole notes and transcripts aren't
+logged by default, and personalized prompts need to be accounted for in tracing access
+and retention: with LangSmith tracing enabled, traces will contain learner notes.
 
 ### open-learning-ai-tutor
 
@@ -356,7 +419,13 @@ profile endpoint, that's a small route change on the mit-learn side of the gatew
    - profile conflicts, the certificate/price policy, and the bot actually calling search
      with the preference rather than just mentioning it;
    - clearing memory mid-conversation, and chatting again in an old thread without the old
-     facts coming back.
+     facts coming back;
+   - and for the pipeline itself: empty-section clearing, batches from several bots, tasks
+     delivered out of order, lock contention, crashes before and after commit, rows
+     arriving during processing, recovery of stranded work, changed or deleted
+     checkpoints, duplicate rows, correct selection of the learner message and reply for
+     each bot (including the tutor), a pre-clear response finishing after a clear, user
+     isolation, unavailable dependencies, and input limits.
 
    Storage, ownership, and deletion get integration tests. Extraction and answer quality
    need real model runs; a mocked test can show input went in and output was saved, but
@@ -434,80 +503,3 @@ profile endpoint, that's a small route change on the mit-learn side of the gatew
 - **Cross-service deletion:** which issue tracks account deletion propagating from
   mit-learn, and when can the tutor expose a supported learner-context argument?
   Non-blocking.
-
-<details>
-<summary>Reliability details for code reviewers</summary>
-
-**Pending work records.** `PendingMemoryTurn` holds the user, generation, bot, a foreign
-key to the checkpoint the exchange produced, a hash of that checkpoint's messages, and a
-creation time. It is saved only after the checkpoint exists, using the user and thread the
-consumer already validated, and the Celery task is scheduled after the row commits. The
-task receives the user ID, never the transcript. Duplicates for the same learner,
-generation, and exchange are prevented using the thread and learner message ID.
-
-**Reading the exchange.** The worker reads the referenced checkpoint, not whichever is
-latest. Its last learner message is the exchange; earlier learner messages are context up
-to a configured count and per-message length, with at most 500 characters of the reply,
-each labelled by speaker. The reply helps interpret the learner's words but can't
-establish facts about them. A checkpoint isn't immutable: the error-recovery code in
-`ai_chatbots/utils.py` can rewrite its message list. The worker verifies the stored hash
-before use. If the checkpoint changed, was deleted, or no longer identifies the expected
-exchange, the row is skipped and counted, with no fallback to newer history. A transient
-database error is retried, not treated as deletion. If testing shows references are too
-often unusable by the time the task runs, reconsider storing a bounded copy of the input.
-
-**Scheduling.** The first pending row for a learner schedules a task in
-`AI_MEMORY_DELAY_SECONDS` (default 900). Later rows during that window join the same task
-and don't restart the timer. A periodic task (`requeue_stale_memory_turns`) finds learners
-with unprocessed rows and reschedules, which covers a lost Celery send or a row that
-arrived just as a worker finished.
-
-**The task.** Acquire a per-learner Redis lock (`AI_MEMORY_LOCK_SECONDS`, longer than
-`AI_MEMORY_TASK_TIME_LIMIT`). If it's held, leave the rows for a later attempt. Read the
-oldest rows up to `AI_MEMORY_BATCH_SIZE` and `AI_MEMORY_BATCH_CHARS`, ordered by creation
-time then ID. Run the gate model, then the extraction model, both with the current notes
-and the checkpoint context. A batch spanning several bots keeps their labels and returns
-separate per-bot sections. Don't hold a database transaction open across the model calls.
-After validating the result (an empty section clears the existing one; a section that
-doesn't fit the cap on a clean boundary keeps the previous text rather than truncating
-mid-sentence), lock the learner's generation row, check it still matches the value read at
-task start, then save the notes and delete only the selected rows in one transaction. If
-the generation changed, discard the result. A gate "no" deletes the selected rows without
-touching the notes. A crash before commit leaves the batch pending; a crash after leaves
-nothing to redo. Rows that repeatedly fail (`AI_MEMORY_MAX_ATTEMPTS`) are reported; their
-retention policy is TBD.
-
-**Ordering.** Rows are ordered by when responses finished, not when requests began. Worth
-testing with overlapping requests; if submission order matters, add a sequence rather than
-trusting timestamps.
-
-**Clearing.** `DELETE /api/v0/memory/` takes the same Redis lock with a bounded wait
-(`AI_MEMORY_CLEAR_WAIT_SECONDS`) and returns a retryable failure if it can't get it. In one
-transaction it clears the notes, deletes pending rows, and increments the generation. A
-response already in progress copies the generation at request time and checks it hasn't
-changed before saving its pending row. After a clear, extraction uses only the messages
-identified by pending rows in the new generation; pre-clear messages in the same
-checkpoint are excluded rather than passed as history. If a new statement is too ambiguous
-without that context, it isn't recorded.
-
-**Retention and logging.** Processed rows are deleted when their batch commits; source
-conversations stay under existing chat-retention rules, and memory processing must not
-block a learner from deleting chat history. Workers respect the write-disable flag, and
-re-enabling shouldn't process an old backlog unexpectedly. Don't log whole notes or
-transcripts by default; account for personalized prompts in tracing access and retention.
-
-**Simpler queueing, rejected.** A per-learner lock and generation counter without
-`PendingMemoryTurn` would be simpler, but would lose updates whenever a task skipped a held
-lock or crashed. The pending table costs one small model and handles both without assuming
-a repeated model call is harmless. A larger event ledger or revision scheme can wait unless
-we add independent writers.
-
-**Additional cases the evaluation and integration tests should cover:** empty-section
-clearing, batches from several bots, tasks delivered out of order, lock contention,
-crashes before and after commit, rows arriving during processing, recovery of stranded
-work, changed or deleted checkpoints, missing message references, duplicate rows, correct
-selection of the learner message and reply for each bot (including the tutor), a pre-clear
-response finishing after a clear, user isolation, unavailable dependencies, and input
-limits.
-
-</details>
