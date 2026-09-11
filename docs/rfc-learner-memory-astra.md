@@ -34,13 +34,16 @@ bots learn from conversations.
 Fetch the six profile fields from mit-learn and put them in every bot's prompt. Nothing is
 learned from conversations.
 
-**Tradeoffs:**
+**Pros:**
 
-- ✅ Small, low risk, no new storage, no model calls outside the chat itself
-- ✅ Learners already control the data through their MIT Learn profile
-- ❌ Covers only what the profile form asks; "plain English", "beginner ecology but
+- Small, low risk, no new storage, no model calls outside the chat itself
+- Learners already control the data through their MIT Learn profile
+
+**Cons:**
+
+- Covers only what the profile form asks; "plain English", "beginner ecology but
   advanced data science", or "don't show me MicroMasters" still have to be repeated
-- ❌ Doesn't tell us whether conversational memory is worth building
+- Doesn't tell us whether conversational memory is worth building
 
 ### Option 2: Free-text notes in learn-ai, rewritten in the background (recommended)
 
@@ -51,19 +54,22 @@ remembering and, if so, has a model rewrite the notes with the conversation in f
 This is the "profile document with background updates" pattern from LangChain's
 [memory docs](https://docs.langchain.com/oss/python/concepts/memory).
 
-**Tradeoffs:**
+**Pros:**
 
-- ✅ Captures what the profile can't, with a model that sees the conversation and the
+- Captures what the profile can't, with a model that sees the conversation and the
   existing notes together, so "yes, remember that" and topic-scoped preferences have a
   chance of being understood
-- ✅ Three fixed sections keep the prompt cost bounded and the storage trivial; runs on the
+- Three fixed sections keep the prompt cost bounded and the storage trivial; runs on the
   existing Django/Postgres, Redis, and Celery stack
-- ✅ Nothing happens while the learner waits; a bad extraction can be cleared and never
+- Nothing happens while the learner waits; a bad extraction can be cleared and never
   affects the reply that triggered it
-- ❌ Whole-note rewriting can drop unrelated facts or over-generalise a topic-specific
+
+**Cons:**
+
+- Whole-note rewriting can drop unrelated facts or over-generalise a topic-specific
   preference; this is the main quality risk and needs a real evaluation set
-- ❌ No per-fact editing or provenance in v1; learners can view and clear, not edit
-- ❌ Background processing needs ordinary but real plumbing (a per-learner lock, a pending
+- No per-fact editing or provenance in v1; learners can view and clear, not edit
+- Background processing needs ordinary but real plumbing (a per-learner lock, a pending
   queue, a clear counter) so that concurrent chats and "forget me" behave correctly
 
 ### Option 3: Structured facts table
@@ -71,34 +77,40 @@ This is the "profile document with background updates" pattern from LangChain's
 Store individual facts (`subject`, `predicate`, `value`, `source`, `confidence`) instead of
 prose, and have the extraction model emit adds, updates, and deletes against that table.
 
-**Tradeoffs:**
+**Pros:**
 
-- ✅ Per-fact editing, provenance, and targeted deletion come naturally
-- ✅ Updates are localised, so one rewrite can't accidentally lose an unrelated fact
-- ❌ Doesn't fix the harder problem, which is the model misreading "this topic" or a
+- Per-fact editing, provenance, and targeted deletion come naturally
+- Updates are localised, so one rewrite can't accidentally lose an unrelated fact
+
+**Cons:**
+
+- Doesn't fix the harder problem, which is the model misreading "this topic" or a
   one-time request; the same mistake just lands in a row instead of a sentence
-- ❌ A schema for open-ended preferences is hard to get right up front, and rendering
+- A schema for open-ended preferences is hard to get right up front, and rendering
   rows back into a prompt the bot uses well is its own design problem
-- ❌ More code and more tests for the same v1 outcome
+- More code and more tests for the same v1 outcome
 
 ### Option 4: A memory library or service
 
 Use `langmem` for extraction, or an external memory service (Mem0, Zep/Graphiti, Letta)
 for storage and retrieval.
 
-**Tradeoffs:**
+**Pros:**
 
-- ✅ Someone else maintains the extraction and retrieval logic
-- ✅ Vector retrieval and relationships between facts, if we ever need many memories per
+- Someone else maintains the extraction and retrieval logic
+- Vector retrieval and relationships between facts, if we ever need many memories per
   learner
-- ❌ I tried `langmem` first: its trustcall patch loop didn't converge reliably through
+
+**Cons:**
+
+- I tried `langmem` first: its trustcall patch loop didn't converge reliably through
   `ChatLiteLLM`, which is how learn-ai reaches every model, and its one-document-per-user
   shape doesn't fit per-bot sections
-- ❌ LangGraph's own `PostgresStore` manages its tables outside Django migrations and has no
+- LangGraph's own `PostgresStore` manages its tables outside Django migrations and has no
   user foreign key, so "forget me" would be manual cleanup instead of a cascade delete
-- ❌ An external service is a new dependency with its own auth, deletion, and data-residency
+- An external service is a new dependency with its own auth, deletion, and data-residency
   story, for what is currently three short notes per learner
-- ❌ None of them cover the queueing and clearing semantics; that plumbing is ours either way
+- None of them cover the queueing and clearing semantics; that plumbing is ours either way
 
 ## Decision
 
@@ -161,13 +173,17 @@ now evaluation cases.
 
 ## Approach
 
-**Profile.** Add `GET /api/v0/profiles/<global_id>/preferences/` to mit-learn, returning
-only the six profile fields (no name, email, or avatar, which limits what a leaked token
-could expose). learn-ai calls it with the `global_id` of the authenticated learner, never an
-ID from the request body, and caches the result for 12 hours, so a profile edit can take up
-to that long to reach the bots. The fetch has a timeout, and if it fails the chat continues
-without the profile. Learned notes are read separately so a profile failure doesn't hide
-them too. The prototype uses a stub for this endpoint.
+### mit-learn
+
+#### Profile Preferences API Endpoint
+
+Add `GET /api/v0/profiles/<global_id>/preferences/`, returning only the six profile fields:
+`topic_interests`, `goals`, `current_education`, `certificate_desired`, `time_commitment`,
+and `delivery`. No name, email, or avatar, which limits what a leaked token could expose.
+Limiting this endpoint to six fields doesn't reduce any other access the existing service
+token already has.
+
+#### Service Authentication
 
 Authentication reuses what learn-ai already does for content-file and learning-resource
 search: every server-side call to mit-learn carries `Authorization: Bearer
@@ -183,15 +199,26 @@ pinning down with DevOps as part of this work.
 
 The new endpoint has to be restricted to that service identity, not to any logged-in
 user, or a browser session could read other learners' preferences by guessing a
-`global_id`. The simplest option is a DRF permission class in mit-learn that allows only
-users in a designated group or an allowlist setting of service `global_id`s, and learn-ai's
-account goes in it. The alternative is an APISIX key-auth consumer for learn-ai, the way
-learn-ai itself authenticates the Canvas plugin with `canvas_token`, which would keep the
-endpoint off the user-facing OIDC route entirely. I lean toward the permission class since
-it needs no gateway change, but either works. Limiting this endpoint to six fields doesn't
-reduce any other access the existing token already has.
+`global_id`. The simplest option is a DRF permission class that allows only users in a
+designated group or an allowlist setting of service `global_id`s, and learn-ai's account
+goes in it. The alternative is an APISIX key-auth consumer for learn-ai, the way learn-ai
+itself authenticates the Canvas plugin with `canvas_token`, which would keep the endpoint
+off the user-facing OIDC route entirely. I lean toward the permission class since it needs
+no gateway change, but either works.
 
-**Notes.** Three new Django models in `ai_chatbots/models.py`:
+### learn-ai
+
+#### Profile Preferences Fetch and Cache
+
+learn-ai calls the endpoint above with the `global_id` of the authenticated learner, never
+an ID from the request body, and caches the result for 12 hours, so a profile edit can take
+up to that long to reach the bots. The fetch has a timeout, and if it fails the chat
+continues without the profile. Learned notes are read separately so a profile failure
+doesn't hide them too. The prototype uses a stub for this call.
+
+#### Learner Memory Storage
+
+Three new Django models in `ai_chatbots/models.py`:
 
 - `LearnerMemoryNote`: one row per user and key (`about`, `instructions`,
   `instructions:<bot>`), with the text and a last-updated timestamp. A foreign key to the
@@ -199,7 +226,8 @@ reduce any other access the existing token already has.
 - `LearnerMemoryState`: one row per user holding a `generation` counter, incremented each
   time the learner clears memory, and a `cleared_at` timestamp. This is what stops a stale
   background update from restoring cleared notes.
-- `PendingMemoryTurn`: one row per exchange waiting to be processed, described below.
+- `PendingMemoryTurn`: one row per exchange waiting to be processed, described in the next
+  section.
 
 `DjangoMemoryStore` in `ai_chatbots/memorystores.py` exposes the notes through LangGraph's
 `BaseStore` interface, namespaced by the learner's `global_id`. It's a thin adapter over
@@ -212,13 +240,14 @@ roughly a page of text, on the order of 1,100 tokens, to every request. I want t
 that cost during the pilot before deciding whether to shorten them. Topic scope has to
 survive in the text: "advanced data science courses" must not become "advanced courses".
 
-**Updating the notes.** The `AsyncDjangoCheckpointer` already saves every conversation as
-`DjangoCheckpoint` rows (a checkpoint is the saved state of a thread after each reply).
-Rather than copy conversation text into another table, the consumer saves a
-`PendingMemoryTurn` after the reply's checkpoint is committed: the user, bot, generation,
-a foreign key to that checkpoint, and a hash of its messages. Each row means "this
-exchange (the checkpoint's last learner message plus the bot's reply) is waiting to be
-looked at."
+#### Memory Extraction Pipeline
+
+The `AsyncDjangoCheckpointer` already saves every conversation as `DjangoCheckpoint` rows
+(a checkpoint is the saved state of a thread after each reply). Rather than copy
+conversation text into another table, the consumer saves a `PendingMemoryTurn` after the
+reply's checkpoint is committed: the user, bot, generation, a foreign key to that
+checkpoint, and a hash of its messages. Each row means "this exchange (the checkpoint's
+last learner message plus the bot's reply) is waiting to be looked at."
 
 The first pending row for a learner schedules the `process_learner_memory` Celery task
 `AI_MEMORY_DELAY_SECONDS` (15 minutes) later; rows arriving during that window join the
@@ -237,13 +266,14 @@ The details that make this safe under concurrent chats, crashes, and "clear memo
 (generation checks, hash verification, lock lifetimes, retry policy) are in the collapsed
 section at the end for anyone reviewing the code.
 
-**Using memory in the prompt.** Profile fields and learned notes are labelled separately
-and clearly marked as learner-supplied data, not instructions to the bot. The
-recommendation bot gets all six profile fields; other bots initially get education level
-plus the shared notes and their own section. Application and tutoring rules always win.
-Within those, what the learner says now wins over what they said before, and the profile
-wins over an older note when they directly conflict. Nothing is written back to the MIT
-Learn profile.
+#### Prompt Assembly
+
+Profile fields and learned notes are labelled separately and clearly marked as
+learner-supplied data, not instructions to the bot. The recommendation bot gets all six
+profile fields; other bots initially get education level plus the shared notes and their
+own section. Application and tutoring rules always win. Within those, what the learner
+says now wins over what they said before, and the profile wins over an older note when
+they directly conflict. Nothing is written back to the MIT Learn profile.
 
 For v1 the bot is told about preferences in its prompt and decides how to search; we
 don't automatically turn preferences into search filters in code. That would need product
@@ -252,33 +282,52 @@ prompt has to say explicitly to use relevant preferences in searches and to sear
 claiming nothing matches, because in testing the bot sometimes acknowledged a preference
 and then ignored it.
 
-For the tutor pilot, the notes are appended to the messages sent to the model with an
-explicit statement that tutoring rules win. A proper `learner_context` argument in
-`open-learning-ai-tutor` is a follow-up.
+#### Learner Identity and Bot Scope
 
-**Identity.** Everything is keyed on the authenticated user's MIT Learn ID. Request
-fields, cookies, and model output can't select someone else's profile or memory. This
-relies on the API gateway (APISIX) to tell learn-ai who the logged-in user is; learn-ai
-trusts that header rather than authenticating it independently. If that gateway setting
-were wrong, one person's memory could be shown to another, so confirming it is part of
-rollout. Recommendation, syllabus, video, and edX tutor bots are included where that
-identity is available. Anonymous chats are unchanged. Canvas stays out until its
-integration sends a verified learner identity; the shared service token alone doesn't.
+Everything is keyed on the authenticated user's `global_id`. Request fields, cookies, and
+model output can't select someone else's profile or memory. This relies on the APISIX
+gateway in front of learn-ai to tell it who the logged-in user is via `x-userinfo`;
+learn-ai's middleware decodes that header rather than authenticating it independently. If
+that gateway setting were wrong, one person's memory could be shown to another, so
+confirming it is part of rollout. Recommendation, syllabus, video, and edX tutor bots are
+included where that identity is available. Anonymous chats are unchanged. Canvas stays out
+until its integration sends a verified learner identity; the shared service token alone
+doesn't.
 
-**Viewing and clearing.** `LearnerMemoryView` in learn-ai serves `GET /api/v0/memory/` to
-see the notes and `DELETE /api/v0/memory/` to clear them; Django admin shows them to staff.
-DELETE takes the same per-learner lock with a short bounded wait, and in one transaction
-clears the notes, deletes pending rows, and increments the generation, so neither a queued
-task nor a response already in progress can bring the old notes back. Frontend controls,
-per-fact editing, and a separate "don't remember me" setting can come later; API access is
-enough for the internal pilot, but we should decide when the UI ships before broad
-rollout. Clearing learned notes doesn't clear the MIT Learn profile or chat history, and
-can't recall a prompt already sent to a model. We should explain those limits to learners.
-New explicit statements after a clear create new memory; old statements don't come back.
+#### Memory API: View and Clear
+
+`LearnerMemoryView` serves `GET /api/v0/memory/` to see the notes and
+`DELETE /api/v0/memory/` to clear them; Django admin shows them to staff. DELETE takes the
+same per-learner lock with a short bounded wait, and in one transaction clears the notes,
+deletes pending rows, and increments the generation, so neither a queued task nor a
+response already in progress can bring the old notes back. Frontend controls, per-fact
+editing, and a separate "don't remember me" setting can come later; API access is enough
+for the internal pilot, but we should decide when the UI ships before broad rollout.
+Clearing learned notes doesn't clear the MIT Learn profile or chat history, and can't
+recall a prompt already sent to a model. We should explain those limits to learners. New
+explicit statements after a clear create new memory; old statements don't come back.
 
 Deleting a local learn-ai user deletes their notes and pending work. Account deletion
 propagating from mit-learn is an existing gap for chat sessions too; that's tracked
 separately and this doesn't fix it.
+
+### open-learning-ai-tutor
+
+#### Learner Context for the Tutor
+
+For the tutor pilot, learn-ai appends the notes to the messages sent to the model with an
+explicit statement that tutoring rules win. That works without touching the tutor package.
+The proper fix is a supported `learner_context` argument in `open-learning-ai-tutor` so
+the tutor's own prompt can place and label it; that's a follow-up.
+
+### ol-infrastructure
+
+#### Gateway and Service Token
+
+Two things to confirm rather than build: that the APISIX routes in front of learn-ai strip
+or replace any client-supplied `x-userinfo` header, and how `LEARN_ACCESS_TOKEN` is issued
+and rotated (see Service Authentication above). If we go the APISIX consumer route for the
+profile endpoint, that's a small route change on the mit-learn side of the gateway.
 
 ## Implementation Plan
 
