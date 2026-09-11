@@ -858,6 +858,39 @@ async def test_tutor_agent_handle(
     assert mock_http_consumer_send.send_headers.call_count == 1
 
 
+async def test_canvas_tutor_handle_traces_run_and_problem_set(
+    mocker, mock_http_consumer_send, canvas_tutor_consumer
+):
+    """The root trace should carry the tutor's course run and problem set."""
+    response = SystemMessageFactory.create()
+    canvas_tutor_consumer.scope["user"].is_superuser = True
+    mocker.patch(
+        "ai_chatbots.chatbots.get_canvas_problem_set",
+        new_callable=AsyncMock,
+        return_value="problem_set",
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.TutorBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(list(response.content.split(" ")))
+            )
+        ),
+    )
+    mock_trace = mocker.patch("ai_chatbots.consumers.trace")
+    data = {
+        "message": "What should i try next?",
+        "run_readable_id": "run1",
+        "problem_set_title": "Problem Set 1",
+    }
+
+    await canvas_tutor_consumer.handle(json.dumps(data))
+
+    metadata = mock_trace.call_args.kwargs["metadata"]
+    assert metadata["run_readable_id"] == data["run_readable_id"]
+    assert metadata["problem_set_title"] == data["problem_set_title"]
+
+
 async def canvas_test_tutor_agent_handle(
     mocker,
     mock_http_consumer_send,

@@ -646,6 +646,24 @@ class TutorBot(BaseChatbot):
         self.problem_set = None
         self.problem_data_loaded = False
 
+    def get_trace_properties(
+        self,
+        extra_state: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        """
+        Return the tutor's course run and problem set.  They arrive as init
+        kwargs rather than graph state, so they are read off the instance
+        instead of via TRACE_STATE_KEYS.
+        """
+        return {
+            key: value
+            for key, value in (
+                ("run_readable_id", self.run_readable_id),
+                ("problem_set_title", self.problem_set_title),
+            )
+            if value
+        }
+
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
         await self.load_problem_data()
