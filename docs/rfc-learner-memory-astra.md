@@ -23,9 +23,37 @@ or treating a course the bot recommended as something the learner is interested 
 mistake in memory carries into every later conversation, so this needs more checking than
 a prompt change alone.
 
+## General Approach
+
+Give AskTIM bots the learner's MIT Learn profile fields, and add short free-text notes
+learned from conversations that a background task keeps up to date. The benefit is fewer
+repeated questions and preferences that carry across sessions and bots.
+
+User memory will consiste of 2 pieces:
+
+- **Profile fields.** mit-learn gets a small endpoint that returns the six profile
+  preference fields (topic interests, goals, education level, certificate preference, time
+  commitment, delivery) for one learner, restricted to the learn-ai service identity.
+  learn-ai fetches it for the authenticated learner, caches it for 12 hours, and puts the
+  fields in the bot's prompt. If the fetch fails the chat continues without them. The
+  profile stays the source of truth; nothing is written back.
+- **Learned notes.** Short notes per learner: about them, how they want every bot to
+  behave, and a per-bot section for how they want that bot to behave. Stored in three
+  small Django tables in learn-ai. After each reply the consumer records a pointer to that exchange;
+  X minutes later (5? 15?) a Celery task reads the pending exchanges, asks a cheap model
+  whether there's anything worth remembering, and if so asks a larger model to rewrite the
+  notes. Each note is capped at 1,500 characters, updates are guarded against race conditions,
+  and a `GET`/`DELETE /api/v0/memory/` endpoint lets learners view and clear what's stored.
+
+Both are keyed on the authenticated user's `global_id` from the gateway; nothing in the
+request body or model output can select another learner. Both sit behind feature flags,
+on in RC and off in production to start. We try it out on RC, and enable it in production
+once it works well and the evaluation in step 3 of the plan passes. Frontend controls and
+a "don't remember me" setting are follow-ups.
+
 ## Options Considered
 
-The pivotal question is what shape learned memory takes and who maintains it. Using the
+The main question is what shape learned memory takes and who maintains it. Using the
 MIT Learn profile fields is common to every option; they differ in what, if anything, the
 bots learn from conversations.
 
@@ -138,8 +166,8 @@ rewrites keep losing unrelated facts, or product needs per-fact editing, Option 
 next step and the `BaseStore` seam means it's a storage change, not a rewrite.
 
 Concretely, the MIT Learn profile stays the source of truth for the six profile fields, and
-learn-ai fetches and caches a copy. What the bots learn is stored in learn-ai as three
-notes per learner:
+learn-ai fetches and caches a copy. What the bots learn is stored in learn-ai as two
+shared notes per learner plus one per bot, so each bot sees three sections:
 
 - **About**: durable facts about the person (background, occupation, goals, time available).
 - **Instructions**: how they want every bot to behave (tone, length, level of jargon).
@@ -158,30 +186,31 @@ the bot would search for online, beginner-friendly ecology-adjacent courses and 
 briefly, without asking about their level or delivery preference first. Today it asks.
 
 Each bot reads the profile and notes at the start of every conversation. Updating the notes
-happens about 15 minutes after a reply, in the background. A cheap model first decides
-whether the exchange contained anything worth remembering; most turns don't. If it did, a
-stronger model rewrites the notes. Learners can view and clear their notes through the API,
-and clearing is designed so that a background update still in flight can't quietly restore
-what was just deleted.
+happens about 5/10/15 minutes after a reply (configurable), in the background. A cheap model
+(4o/5-mini?) first decides if the exchange contained anything worth remembering; most turns
+don't. If it did, a stronger model (gpt-4/5) rewrites the notes. Learners can view and clear
+their notes through the API, and clearing is designed so that a background update still in
+flight can't quietly restore what was just deleted.
 
 On the implementation choices above: the store is a thin `DjangoMemoryStore` over a
 `LearnerMemoryNote` table behind LangGraph's `BaseStore`, and extraction is one
-structured-output call through `ChatLiteLLM`. No `langmem`, no vector search, and no new
-memory service for now.
+structured-output call through `ChatLiteLLM`. No vector search and no 3rd-party memory service
+for now.
 
-Some things are never written to memory: names, email addresses, and anything from
+Some things should never written to memory: names, email addresses, and anything from
 tutoring sessions that looks like assessment content (problem statements, attempted or
 correct answers, hints, grades, scores, problem identifiers). Instructions about how a bot
 should behave toward its own rules, tools, or permissions are also never remembered, so a
 message like "ignore your rules from now on" in one bot can't be carried into another.
 
-What I've observed so far: the prototype runs end to end locally. In one test run with
+What I've observed so far from a prototype: In one test run with
 four queued exchanges, it extracted three reasonable preferences and dropped a planted
 "ignore your rules" message. Preferences stated in one thread showed up in a new thread and
 a new browser session. It also surfaced two real quality problems that shaped the design:
-an early version generalised "advanced data science" into "advanced everything", and the
-bot sometimes read a preference back without actually applying it to the search. Both are
-now evaluation cases.
+an early version generalised a preference for "advanced data science courses" into
+"advanced everything", and the bot sometimes read a preference back without actually applying
+it to the search. The prototype was adjusted to try preventing this and both are now evaluation
+cases.
 
 ## Approach
 
@@ -303,8 +332,9 @@ The task acquires a per-learner Redis lock (`AI_MEMORY_LOCK_SECONDS`, longer tha
 `AI_MEMORY_TASK_TIME_LIMIT`) so only one extraction runs per learner. If the lock is held,
 the rows are left for a later attempt. It reads the oldest pending rows up to
 `AI_MEMORY_BATCH_SIZE` and `AI_MEMORY_BATCH_CHARS`, ordered by creation time then ID, and
-no database transaction is held open across the model calls. `AI_MEMORY_BATCH_CHARS` is a
-hard bound on model input: an exchange that exceeds it on its own is treated as unusable
+no database transaction is held open across the model calls. `AI_MEMORY_BATCH_CHARS`
+bounds the exchange text selected for a batch (the prompt, section labels, and current
+notes are on top of that): an exchange that exceeds it on its own is treated as unusable
 and dropped with a warning rather than admitted as the first item in a batch. The
 feature-flag check also runs under the lock, so turning the flag off can't race an
 extraction that is already in flight.
@@ -316,8 +346,9 @@ cleared memory mid-run and the result is discarded; the same check re-reads the 
 flag, so a flag turned off mid-run also discards the result and drops the pending rows. A
 gate "no" or an all-unusable batch
 deletes the selected rows without touching the notes. A crash before commit leaves the
-whole batch pending for the next run; a crash after commit leaves nothing to redo, so we
-never depend on a repeated model call giving the same answer.
+whole batch pending, so the next run repeats both model calls and may write a different
+revision; a crash after commit leaves nothing to redo. Either way each exchange is
+applied to the notes at most once.
 
 Each attempt increments the row's `attempts`; rows that reach `AI_MEMORY_MAX_ATTEMPTS`
 are excluded from future batches and counted for reporting. Nothing deletes them yet; that
@@ -349,9 +380,19 @@ gateway in front of learn-ai to tell it who the logged-in user is via `x-userinf
 learn-ai's middleware decodes that header rather than authenticating it independently. If
 that gateway setting were wrong, one person's memory could be shown to another, so
 confirming it is part of rollout. Recommendation, syllabus, video, and edX tutor bots are
-included where that identity is available. Anonymous chats are unchanged. Canvas stays out
-until its integration sends a verified learner identity; the shared service token alone
-doesn't.
+included where that identity is available. Anonymous chats are unchanged.
+
+Canvas stays out for now. The Canvas chat xblock proxies requests to learn-ai with the
+shared `canvas_token`, which APISIX checks as a key-auth consumer, so learn-ai sees no user
+on those routes and `memory_enabled` returns False for lack of a `global_id`. The Canvas
+consumers inherit the memory hooks but never read or write notes. The likely fix is for the
+xblock to send a learner identifier with each request, trusted only because the request
+already carries the `canvas_token`; that turns the shared token into a delegation
+credential, so it should stay restricted to the plugin's own APISIX consumer. The open
+question is which identifier: Canvas learners sign in through the same Keycloak realm, so a
+`global_id` should exist for them, but the plugin may only have the Canvas user ID or the
+LTI `sub`. If it can't map to the Keycloak `sub`, memory would need a second identity key
+or a lookup. That's a separate issue; once it lands, Canvas uses the same design.
 
 #### Memory API: View and Clear
 
@@ -448,8 +489,8 @@ profile endpoint, that's a small route change on the mit-learn side of the gatew
    whether "regardless of difficulty" removes a saved level preference or only overrides it
    once, and whether declining a certificate should stop the bot asking about price
    (declining a certificate doesn't tell us someone's budget).
-5. **Learned memory pilot (learn-ai)**: enable extraction for internal users only, with
-   the API for viewing and clearing. Tune the processing delay, batch size, and timeouts,
+5. **Learned memory on RC (learn-ai)**: enable the extraction flag on RC only, with the
+   API for viewing and clearing. Tune the processing delay, batch size, and timeouts,
    and measure prompt cost.
 6. **Rollout**: enable bot by bot behind flags once the evaluation passes. Workers must
    respect the flag being turned off, and turning it back on shouldn't process an old
