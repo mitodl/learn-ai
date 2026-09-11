@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from enum import Enum
 
 import httpx
@@ -23,6 +24,10 @@ AI_MESSAGE_ID = ["langchain", "schema", "messages", "AIMessage"]
 # HTTP statuses that indicate transient upstream failures worth retrying.
 # Other 4xx codes are deterministic and should not be retried.
 RETRYABLE_STATUS_CODES = frozenset({408, 429, 502, 503, 504})
+
+# edx block and asset ids embed the course run they belong to:
+# block-v1:<org>+<course>+<run>+type@<type>+block@<id>
+EDX_BLOCK_ID_RE = re.compile(r"^(?:block|asset)-v1:([^+]+\+[^+]+\+[^+]+)\+type@")
 
 # httpx exceptions that represent transient network/transport failures.
 RETRYABLE_EXCEPTIONS = (
@@ -330,3 +335,26 @@ async def save_truncated_checkpoint(thread_id: str, keep_ids: set[str]) -> None:
         )
 
     await update_checkpoint()
+
+
+def get_run_readable_id_from_block_id(block_id: str | None) -> str | None:
+    """
+    Derive the course run readable id from an edx block or asset id.
+
+    ``block-v1:MITxT+3.012Sx+3T2024+type@video+block@abc123``
+        -> ``course-v1:MITxT+3.012Sx+3T2024``
+
+    Args:
+        block_id: An edx block or asset id, or None
+
+    Returns:
+        The course run readable id, or None if the id is missing or is not
+        in the expected format.
+    """
+    if not block_id:
+        return None
+    match = EDX_BLOCK_ID_RE.match(block_id)
+    if not match:
+        log.debug("Could not derive a course run from block id %s", block_id)
+        return None
+    return f"course-v1:{match.group(1)}"

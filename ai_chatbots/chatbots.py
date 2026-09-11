@@ -49,6 +49,7 @@ from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
     get_django_cache,
+    get_run_readable_id_from_block_id,
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
 )
@@ -651,15 +652,24 @@ class TutorBot(BaseChatbot):
         extra_state: dict[str, Any] | None = None,  # noqa: ARG002
     ) -> dict[str, Any]:
         """
-        Return the tutor's course run and problem set.  They arrive as init
-        kwargs rather than graph state, so they are read off the instance
-        instead of via TRACE_STATE_KEYS.
+        Return the identifiers for the problem the tutor was asked about.
+        They arrive as init kwargs rather than graph state, so they are read
+        off the instance instead of via TRACE_STATE_KEYS.
+
+        The two variants carry different identifiers -- canvas requests supply
+        a course run and problem set, edx requests supply a module id -- so
+        unset ones are dropped rather than traced as None.  edx requests have
+        no course run field, but the module id embeds one, so it is derived.
         """
+        run_readable_id = self.run_readable_id or get_run_readable_id_from_block_id(
+            self.edx_module_id
+        )
         return {
             key: value
             for key, value in (
-                ("run_readable_id", self.run_readable_id),
+                ("run_readable_id", run_readable_id),
                 ("problem_set_title", self.problem_set_title),
+                ("edx_module_id", self.edx_module_id),
             )
             if value
         }
@@ -889,6 +899,21 @@ class VideoGPTBot(TruncatingChatbot):
     JOB_ID = "VIDEO_GPT_JOB"
     STATE_CLASS = VideoGPTAgentState
     TRACE_STATE_KEYS = ("transcript_asset_id",)
+
+    def get_trace_properties(
+        self, extra_state: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """
+        Return the traced video identifiers, adding the course run that the
+        transcript asset id embeds.
+        """
+        properties = super().get_trace_properties(extra_state)
+        run_readable_id = get_run_readable_id_from_block_id(
+            properties.get("transcript_asset_id")
+        )
+        if run_readable_id:
+            properties["run_readable_id"] = run_readable_id
+        return properties
 
     def __init__(  # noqa: PLR0913
         self,
