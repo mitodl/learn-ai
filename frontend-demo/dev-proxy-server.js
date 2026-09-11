@@ -9,12 +9,19 @@ if (!proxyTarget) {
   process.exit(0)
 }
 
-httpProxy
-  .createProxyServer({
-    changeOrigin: true,
-    target: proxyTarget,
-    headers: {
-      Cookie: `${cookieName}=${cookieValue};`,
-    },
-  })
-  .listen(8004)
+const proxy = httpProxy.createProxyServer({
+  changeOrigin: true,
+  target: proxyTarget,
+  headers: {
+    Cookie: `${cookieName}=${cookieValue};`,
+  },
+})
+
+proxy.on("proxyReq", (proxyReq) => {
+  proxyReq.removeHeader("x-forwarded-host")
+  proxyReq.removeHeader("x-forwarded-proto")
+  proxyReq.removeHeader("x-forwarded-port")
+  proxyReq.removeHeader("x-forwarded-for")
+})
+
+proxy.listen(8004)
