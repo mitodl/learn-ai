@@ -114,7 +114,7 @@ memories, but they are a new dependency with their own auth, deletion, and data-
 story, for what is currently three short notes per learner. A thin Django-backed
 `BaseStore` over our own table keeps LangGraph's interface, gives us migrations and cascade
 deletes for free, and can be swapped for either of the others later without touching the
-bots. None of the three covers queueing or clearing semantics; that plumbing is ours either
+bots. None of the three covers queueing or clearing approaches; that plumbing is ours either
 way.
 
 ## Decision
