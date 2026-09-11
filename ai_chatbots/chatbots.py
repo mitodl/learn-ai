@@ -70,9 +70,6 @@ class BaseChatbot(ABC):
     JOB_ID = "BASECHAT_JOB"
     STATE_CLASS = AgentState
 
-    # extra_state keys identifying the resource the bot was asked about.
-    # They are attached to trace metadata so a trace can be tied back to the
-    # course/video/etc it is about.
     TRACE_STATE_KEYS: tuple[str, ...] = ()
 
     def __init__(  # noqa: PLR0913
@@ -348,9 +345,7 @@ class BaseChatbot(ABC):
             raise ValueError(error)
         try:
             trace_properties = self.get_trace_properties(extra_state)
-            # config["metadata"] is what LangChain propagates to every tracer
-            # as inheritable run metadata -- notably LangSmith, whose tracer is
-            # installed globally from env vars and never appears in callbacks.
+
             self.config["metadata"] = {
                 **self.config.get("metadata", {}),
                 **trace_properties,
@@ -655,11 +650,6 @@ class TutorBot(BaseChatbot):
         Return the identifiers for the problem the tutor was asked about.
         They arrive as init kwargs rather than graph state, so they are read
         off the instance instead of via TRACE_STATE_KEYS.
-
-        The two variants carry different identifiers -- canvas requests supply
-        a course run and problem set, edx requests supply a module id -- so
-        unset ones are dropped rather than traced as None.  edx requests have
-        no course run field, but the module id embeds one, so it is derived.
         """
         run_readable_id = self.run_readable_id or get_run_readable_id_from_block_id(
             self.edx_module_id
