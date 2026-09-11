@@ -341,8 +341,8 @@ calls and may write a different revision; a crash after commit leaves nothing to
 Either way each exchange is applied to the notes at most once.
 
 Each attempt increments the row's `attempts`; rows that reach `AI_MEMORY_MAX_ATTEMPTS`
-are excluded from future batches and counted for reporting. Nothing deletes them yet; that
-retention policy is an open question. Rows are ordered by when responses finished, not
+are excluded from future batches and visible in Django admin. Nothing deletes them yet;
+that retention policy is an open question. Rows are ordered by when responses finished, not
 when requests began, which is worth testing with overlapping requests. If submission order
 turns out to matter, add a sequence number rather than trusting timestamps.
 

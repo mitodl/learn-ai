@@ -16,7 +16,6 @@ from ai_chatbots.tasks import (
     delete_stale_sessions,
     process_learner_memory,
     requeue_stale_memory_turns,
-    schedule_learner_memory,
 )
 from main import settings
 from main.utils import now_in_utc
@@ -96,19 +95,9 @@ def test_process_learner_memory_logs_and_swallows_errors(mocker):
     log.exception.assert_called_once()
 
 
-def test_schedule_learner_memory_waits_the_batching_delay(mocker, settings):
-    settings.AI_MEMORY_DELAY_SECONDS = 123
-    apply = mocker.patch("ai_chatbots.tasks.process_learner_memory.apply_async")
-    schedule_learner_memory(7)
-    apply.assert_called_once_with((7,), countdown=123)
-
-
 def test_requeue_stale_memory_turns(mocker):
-    """Stranded users are re-queued; stuck turns are reported, not dropped"""
+    """Stranded users are re-queued"""
     mocker.patch("ai_chatbots.tasks.memory.stale_users", return_value=[1, 2])
-    mocker.patch("ai_chatbots.tasks.memory.stuck_turn_count", return_value=3)
     delay = mocker.patch("ai_chatbots.tasks.process_learner_memory.delay")
-    log = mocker.patch("ai_chatbots.tasks.log")
     requeue_stale_memory_turns()
     assert delay.call_args_list == [mocker.call(1), mocker.call(2)]
-    log.error.assert_called_once()

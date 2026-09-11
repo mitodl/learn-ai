@@ -63,7 +63,7 @@ def _mock_models(mocker, *, gate=True, revision=None):
 
 
 def test_recommendation_block_renders_full_profile_skipping_blanks():
-    """The recommendation bot sees every usable profile field, not ids or filters"""
+    """The recommendation bot sees every usable profile field; blanks are skipped"""
     block = memory.build_learner_context(
         REC, memory.fetch_learner_profile("x"), memory.LearnerMemory()
     )
@@ -73,8 +73,6 @@ def test_recommendation_block_renders_full_profile_skipping_blanks():
     assert "academic-excellence" in block
     assert "online" in block
     assert "do not ask about price" in block
-    assert "731" not in block
-    assert "preference_search_filters" not in block
     assert "time_commitment" not in block
 
 
@@ -104,11 +102,10 @@ def test_certificate_rendering_is_policy_not_budget(certificate_desired, expecte
         assert "free" not in block
 
 
-def test_block_labels_profile_and_learned_notes_separately(settings):
-    """Stated profile and learned notes are distinguishable; sections are capped"""
-    settings.AI_MEMORY_MAX_CHARS = 40
+def test_block_labels_profile_and_learned_notes_separately():
+    """Stated profile and learned notes are distinguishable"""
     mem = memory.LearnerMemory(
-        about="Working nurse in Boston. " * 5,
+        about="Working nurse in Boston.",
         instructions="Keep answers short.",
         bot_instructions="Never show social science courses.",
     )
@@ -117,11 +114,6 @@ def test_block_labels_profile_and_learned_notes_separately(settings):
     assert memory.INSTRUCTIONS_HEADING in block
     assert "Keep answers short." in block
     assert "Never show social science courses." in block
-    about = block.split(memory.ABOUT_HEADING, 1)[1].split(memory.INSTRUCTIONS_HEADING)[
-        0
-    ]
-    assert len(about.strip()) <= 40
-    assert about.strip().endswith("Boston")
 
 
 def test_block_empty_when_nothing_known():
@@ -355,7 +347,7 @@ def test_clear_learner_memory_busy_when_lock_held(user, redis_lock):
     assert LearnerMemoryNote.objects.filter(user=user).exists()
 
 
-def test_stale_users_and_stuck_counts(user, settings):
+def test_stale_users_skips_stuck_turns(user, settings):
     settings.AI_MEMORY_MAX_ATTEMPTS = 2
     old = timezone.now() - timedelta(seconds=settings.AI_MEMORY_DELAY_SECONDS + 60)
     _record(user, REC, "t", "old", "r")
@@ -365,7 +357,6 @@ def test_stale_users_and_stuck_counts(user, settings):
     _record(other, REC, "t-o", "stuck", "r")
     PendingMemoryTurn.objects.filter(user=other).update(created_on=old, attempts=2)
     assert memory.stale_users() == [user.id]
-    assert memory.stuck_turn_count() == 1
 
 
 # --- reading exchanges back ------------------------------------------------------

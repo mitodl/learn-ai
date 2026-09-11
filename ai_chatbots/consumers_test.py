@@ -1242,7 +1242,7 @@ async def test_handle_passes_learner_context_and_queues_extraction(
     )
     mocker.patch("ai_chatbots.consumers.memory_generation", return_value=3)
     record = mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=True)
-    schedule = mocker.patch("ai_chatbots.consumers.schedule_learner_memory")
+    schedule = mocker.patch("ai_chatbots.consumers.process_learner_memory.apply_async")
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
     assert recommendation_consumer.bot.learner_context == "## About this learner"
     user = recommendation_consumer.scope["user"]
@@ -1253,7 +1253,9 @@ async def test_handle_passes_learner_context_and_queues_extraction(
         recommendation_consumer.bot.message_id,
         generation=3,
     )
-    schedule.assert_called_once_with(user.id)
+    schedule.assert_called_once_with(
+        (user.id,), countdown=settings.AI_MEMORY_DELAY_SECONDS
+    )
 
 
 async def test_handle_queue_failure_never_reaches_the_chat(
@@ -1271,7 +1273,8 @@ async def test_handle_queue_failure_never_reaches_the_chat(
     )
     mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=True)
     mocker.patch(
-        "ai_chatbots.consumers.schedule_learner_memory", side_effect=OSError("broker")
+        "ai_chatbots.consumers.process_learner_memory.apply_async",
+        side_effect=OSError("broker"),
     )
     log = mocker.patch("ai_chatbots.consumers.log")
     error = mocker.patch.object(recommendation_consumer, "send_error_response")
@@ -1294,7 +1297,7 @@ async def test_handle_later_turns_join_the_pending_batch(
         ),
     )
     mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=False)
-    schedule = mocker.patch("ai_chatbots.consumers.schedule_learner_memory")
+    schedule = mocker.patch("ai_chatbots.consumers.process_learner_memory.apply_async")
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
     schedule.assert_not_called()
 

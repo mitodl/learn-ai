@@ -47,7 +47,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
-from ai_chatbots.tasks import schedule_learner_memory
+from ai_chatbots.tasks import process_learner_memory
 from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
@@ -423,7 +423,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 generation=self.memory_generation,
             )
             if first:
-                await sync_to_async(schedule_learner_memory)(user.id)
+                await sync_to_async(process_learner_memory.apply_async)(
+                    (user.id,), countdown=settings.AI_MEMORY_DELAY_SECONDS
+                )
         except Exception:
             # best-effort: the reply has already streamed, never surface this in chat
             log.exception("Could not queue memory extraction for %s", self.user_id)
