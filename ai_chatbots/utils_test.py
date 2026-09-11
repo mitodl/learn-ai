@@ -343,3 +343,32 @@ async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
     saved_data = json.loads(checkpoint.checkpoint)
     assert len(saved_data["channel_values"]["messages"]) == 1
     assert saved_data["channel_values"]["messages"][0]["kwargs"]["id"] == keep_msg.id
+
+
+@pytest.mark.parametrize(
+    ("block_id", "expected"),
+    [
+        # real ids sampled from the MIT Learn contentfiles API
+        (
+            "block-v1:MITxT+2.980x+2T2026+type@video+block@w9-tab1-video1",
+            "course-v1:MITxT+2.980x+2T2026",
+        ),
+        (
+            "asset-v1:xPRO+SysEngx4+R28+type@asset+block@subs_zH7uBLzOwM8.srt.sjson",
+            "course-v1:xPRO+SysEngx4+R28",
+        ),
+        (
+            "block-v1:MITxT+3.012Sx+3T2024+type@problem+block@abc123",
+            "course-v1:MITxT+3.012Sx+3T2024",
+        ),
+        # ids that carry no derivable run
+        ("course-v1:MITxT+3.012Sx+3T2024", None),
+        ("block-v1:MITxT+3.012Sx+type@problem+block@abc123", None),
+        ("not-a-block-id", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_get_run_readable_id_from_block_id(block_id, expected):
+    """The course run should be derived from edx block and asset ids."""
+    assert utils.get_run_readable_id_from_block_id(block_id) == expected
