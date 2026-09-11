@@ -90,27 +90,32 @@ prose, and have the extraction model emit adds, updates, and deletes against tha
   rows back into a prompt the bot uses well is its own design problem
 - More code and more tests for the same v1 outcome
 
-### Option 4: A memory library or service
+### Implementation choices that apply to Options 2 and 3
 
-Use `langmem` for extraction, or an external memory service (Mem0, Zep/Graphiti, Letta)
-for storage and retrieval.
+Whichever shape we pick, two narrower questions follow: what does the extraction, and
+where do the notes live. Both were tried in the prototype rather than judged from
+documentation.
 
-**Pros:**
+**Extraction: `langmem` or a direct model call.** `langmem` is LangChain's memory
+extraction package, and I tried it first. Its trustcall patch loop didn't converge reliably
+through `ChatLiteLLM`, which is how learn-ai reaches every model, and its
+one-document-per-user shape doesn't fit per-bot sections. A direct structured-output call
+is about thirty lines, returns a typed `MemoryRevision`, and is easier to steer with the
+prompt. The cost is that we own the extraction prompt and its evaluation. Retrying
+`langmem` on a later version would need a re-test through `ChatLiteLLM` and a comparison on
+the same evaluation cases; the `BaseStore` seam is what makes that retry cheap.
 
-- Someone else maintains the extraction and retrieval logic
-- Vector retrieval and relationships between facts, if we ever need many memories per
-  learner
-
-**Cons:**
-
-- I tried `langmem` first: its trustcall patch loop didn't converge reliably through
-  `ChatLiteLLM`, which is how learn-ai reaches every model, and its one-document-per-user
-  shape doesn't fit per-bot sections
-- LangGraph's own `PostgresStore` manages its tables outside Django migrations and has no
-  user foreign key, so "forget me" would be manual cleanup instead of a cascade delete
-- An external service is a new dependency with its own auth, deletion, and data-residency
-  story, for what is currently three short notes per learner
-- None of them cover the queueing and clearing semantics; that plumbing is ours either way
+**Storage: LangGraph's `PostgresStore`, an external memory service, or a Django-backed
+`BaseStore`.** `PostgresStore` is the obvious default, but it manages its tables outside
+Django migrations and has no user foreign key, so "forget me" would be manual cleanup
+instead of a cascade delete. External services (Mem0, Zep/Graphiti, Letta) add vector
+retrieval and relationships between facts, which we'd want if a learner had hundreds of
+memories, but they are a new dependency with their own auth, deletion, and data-residency
+story, for what is currently three short notes per learner. A thin Django-backed
+`BaseStore` over our own table keeps LangGraph's interface, gives us migrations and cascade
+deletes for free, and can be swapped for either of the others later without touching the
+bots. None of the three covers queueing or clearing semantics; that plumbing is ours either
+way.
 
 ## Decision
 
@@ -122,7 +127,7 @@ stays here with the cross-service deletion dependency acknowledged.
 
 What settles it: the profile fields alone don't cover the things learners actually repeat,
 and a small free-text design lets us find out whether conversational memory is any good
-before investing in per-fact editing (Option 3) or a memory service (Option 4). If
+before investing in per-fact editing (Option 3). If
 rewrites keep losing unrelated facts, or product needs per-fact editing, Option 3 is the
 next step and the `BaseStore` seam means it's a storage change, not a rewrite.
 
@@ -153,9 +158,10 @@ stronger model rewrites the notes. Learners can view and clear their notes throu
 and clearing is designed so that a background update still in flight can't quietly restore
 what was just deleted.
 
-Two pieces are ours rather than LangGraph's, for the reasons in Option 4: the store is a
-thin `DjangoMemoryStore` over a `LearnerMemoryNote` table, and extraction is one
-structured-output call through `ChatLiteLLM`. No vector search and no new memory service.
+On the implementation choices above: the store is a thin `DjangoMemoryStore` over a
+`LearnerMemoryNote` table behind LangGraph's `BaseStore`, and extraction is one
+structured-output call through `ChatLiteLLM`. No `langmem`, no vector search, and no new
+memory service for now.
 
 Some things are never written to memory: names, email addresses, and anything from
 tutoring sessions that looks like assessment content (problem statements, attempted or
