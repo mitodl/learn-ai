@@ -396,8 +396,10 @@ profile endpoint, that's a small route change on the mit-learn side of the gatew
   should tell us whether they are good enough for v1.
 - Extra prompt tokens on every request, a short profile-fetch delay on cache misses, and a
   gate call plus an occasional rewrite per learner per batch.
-- New memory isn't available for about 15 minutes after a conversation, and profile edits
-  can take up to 12 hours to appear.
+- Neither kind of memory is instant. Learned notes update after a configurable delay
+  (`AI_MEMORY_DELAY_SECONDS`, 15 minutes to start) and profile edits appear when the cache
+  expires (12 hours to start). Shorter values mean more extraction calls and more profile
+  fetches; both are worth tuning during the pilot rather than fixing now.
 - Occasionally an exchange is skipped because the conversation it points to was changed or
   deleted; I think that's better than keeping another copy of the transcript.
 - learn-ai trusts the gateway's identity header and mit-learn trusts the service token;
