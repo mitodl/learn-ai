@@ -259,11 +259,14 @@ The `AsyncDjangoCheckpointer` already saves every conversation as `DjangoCheckpo
 (a checkpoint is the saved state of a thread after each reply). Rather than copy
 conversation text into another table, the consumer saves a `PendingMemoryTurn` after the
 reply's checkpoint is committed: the user, bot, generation, a foreign key to that
-checkpoint, and a hash of its messages. Each row means "this exchange (the checkpoint's
-last learner message plus the bot's reply) is waiting to be looked at." The row uses the
-user and thread the consumer already validated for the chat itself, the Celery task is
-scheduled only after the row commits, and the task receives the user ID, never the
-transcript. The same exchange can't be queued twice.
+checkpoint, a hash of its messages, and the ID of the learner message the run just
+answered (every bot tags its outgoing `HumanMessage` with a UUID). Each row means "this
+exchange (that learner message plus the bot reply that follows it) is waiting to be looked
+at." Pinning the message rather than "the checkpoint's last message" means two replies
+racing in the same thread each get their own row instead of both resolving to whichever
+finished last. The row uses the user and thread the consumer already validated for the
+chat itself, the Celery task is scheduled only after the row commits, and the task
+receives the user ID, never the transcript. The same message can't be queued twice.
 
 The first pending row for a learner schedules the `process_learner_memory` Celery task
 `AI_MEMORY_DELAY_SECONDS` (15 minutes) later; rows arriving during that window join the
@@ -271,10 +274,11 @@ same run and don't restart the timer. A periodic `requeue_stale_memory_turns` ta
 learners with unprocessed rows and reschedules them, which covers a lost Celery send or a
 row that arrived just as a worker finished.
 
-The task reads each referenced checkpoint, not whichever checkpoint is latest. Its last
-learner message is the exchange; earlier learner messages are context, bounded by
-`AI_MEMORY_HISTORY_MESSAGES` and a per-message length, with at most `AI_MEMORY_REPLY_CHARS`
-(500) of the bot's reply. Each message is labelled by speaker, and the prompt says the
+The task reads each referenced checkpoint, not whichever checkpoint is latest, and finds
+the pinned learner message inside it. That message is the exchange, capped at
+`AI_MEMORY_MESSAGE_CHARS` (2000); the bot message that follows it is the reply, capped at
+`AI_MEMORY_REPLY_CHARS` (500); earlier learner messages are context, bounded by
+`AI_MEMORY_HISTORY_MESSAGES` and the same per-message cap. Each message is labelled by speaker, and the prompt says the
 reply can help interpret the learner's words but can't establish facts about them. A
 checkpoint isn't immutable: the error-recovery code in `ai_chatbots/utils.py` can rewrite
 its message list. So the worker verifies the stored hash before use, and if the checkpoint
@@ -299,12 +303,18 @@ The task acquires a per-learner Redis lock (`AI_MEMORY_LOCK_SECONDS`, longer tha
 `AI_MEMORY_TASK_TIME_LIMIT`) so only one extraction runs per learner. If the lock is held,
 the rows are left for a later attempt. It reads the oldest pending rows up to
 `AI_MEMORY_BATCH_SIZE` and `AI_MEMORY_BATCH_CHARS`, ordered by creation time then ID, and
-no database transaction is held open across the model calls.
+no database transaction is held open across the model calls. `AI_MEMORY_BATCH_CHARS` is a
+hard bound on model input: an exchange that exceeds it on its own is treated as unusable
+and dropped with a warning rather than admitted as the first item in a batch. The
+feature-flag check also runs under the lock, so turning the flag off can't race an
+extraction that is already in flight.
 
 After the models return, the task locks the learner's `LearnerMemoryState` row, checks
 that `generation` still matches the value read at the start, and then saves the notes and
 deletes only the selected rows in one transaction. If the generation changed, the learner
-cleared memory mid-run and the result is discarded. A gate "no" or an all-unusable batch
+cleared memory mid-run and the result is discarded; the same check re-reads the feature
+flag, so a flag turned off mid-run also discards the result and drops the pending rows. A
+gate "no" or an all-unusable batch
 deletes the selected rows without touching the notes. A crash before commit leaves the
 whole batch pending for the next run; a crash after commit leaves nothing to redo, so we
 never depend on a repeated model call giving the same answer.

@@ -102,6 +102,7 @@ class BaseChatbot(ABC):
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
         self.config = {"configurable": {"thread_id": self.thread_id}}
+        self.message_id: str | None = None  # id of the HumanMessage in the current run
         self.checkpointer = checkpointer
         if settings.AI_PROXY_CLASS:
             self.proxy = import_string(
@@ -371,8 +372,9 @@ class BaseChatbot(ABC):
             self.config["callbacks"] = await self.set_callbacks(
                 properties=trace_properties
             )
+            self.message_id = str(uuid4())
             state = {
-                "messages": [HumanMessage(message)],
+                "messages": [HumanMessage(message, id=self.message_id)],
                 **(extra_state or {}),
             }
             try:
@@ -723,7 +725,7 @@ class TutorBot(BaseChatbot):
         await self.load_problem_data()
 
         history = await self.get_latest_history()
-        message_id = str(uuid4())
+        message_id = self.message_id = str(uuid4())
         if history:
             json_history = json.loads(history.chat_json)
             chat_history = json_to_messages(  # noqa: RUF005
