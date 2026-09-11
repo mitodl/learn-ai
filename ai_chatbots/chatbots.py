@@ -629,7 +629,9 @@ class TutorBot(BaseChatbot):
 
         self.edx_module_id = edx_module_id
         self.block_siblings = block_siblings
-        self.run_readable_id = run_readable_id
+        self.run_readable_id = run_readable_id or get_run_readable_id_from_block_id(
+            edx_module_id
+        )
         self.problem_set_title = problem_set_title
 
         if not self.edx_module_id:
@@ -650,14 +652,12 @@ class TutorBot(BaseChatbot):
         Return the identifiers for the problem the tutor was asked about.
         They arrive as init kwargs rather than graph state, so they are read
         off the instance instead of via TRACE_STATE_KEYS.
+
         """
-        run_readable_id = self.run_readable_id or get_run_readable_id_from_block_id(
-            self.edx_module_id
-        )
         return {
             key: value
             for key, value in (
-                ("run_readable_id", run_readable_id),
+                ("run_readable_id", self.run_readable_id),
                 ("problem_set_title", self.problem_set_title),
                 ("edx_module_id", self.edx_module_id),
             )

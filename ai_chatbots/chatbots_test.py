@@ -436,6 +436,37 @@ async def test_edx_tutor_bot_trace_properties(mock_checkpointer):
 
 
 @pytest.mark.asyncio
+async def test_edx_tutor_bot_callback_metadata_has_derived_run(
+    mocker, mock_checkpointer
+):
+    """
+    The derived run must reach the Opik/PostHog callbacks too, not just the
+    LangSmith wrapper the consumer opens.  TutorBot.get_completion builds its
+    callbacks from get_tool_metadata(), bypassing BaseChatbot.get_completion.
+    """
+    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
+    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
+    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        new_callable=AsyncMock,
+        return_value=("problem_xml", "problem_set_xml"),
+    )
+    chatbot = await sync_to_async(TutorBot)(
+        "anonymous",
+        mock_checkpointer,
+        edx_module_id="block-v1:MITxT+3.012Sx+3T2024+type@problem+block@abc123",
+        block_siblings=["block1", "block2"],
+    )
+
+    await chatbot.set_callbacks(properties=await chatbot.get_tool_metadata())
+
+    metadata = mock_tracer.call_args.kwargs["metadata"]
+    assert metadata["run_readable_id"] == "course-v1:MITxT+3.012Sx+3T2024"
+    assert metadata["edx_module_id"] == chatbot.edx_module_id
+
+
+@pytest.mark.asyncio
 async def test_edx_tutor_bot_trace_properties_undecipherable_id(mock_checkpointer):
     """A module id with no derivable run should still trace the module id."""
     chatbot = await sync_to_async(TutorBot)(
