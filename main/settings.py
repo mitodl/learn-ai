@@ -623,6 +623,7 @@ AI_MEMORY_BATCH_SIZE = get_int(name="AI_MEMORY_BATCH_SIZE", default=10)
 AI_MEMORY_BATCH_CHARS = get_int(name="AI_MEMORY_BATCH_CHARS", default=8000)
 AI_MEMORY_HISTORY_MESSAGES = get_int(name="AI_MEMORY_HISTORY_MESSAGES", default=8)
 AI_MEMORY_REPLY_CHARS = get_int(name="AI_MEMORY_REPLY_CHARS", default=500)
+AI_MEMORY_MESSAGE_CHARS = get_int(name="AI_MEMORY_MESSAGE_CHARS", default=2000)
 AI_MEMORY_MAX_ATTEMPTS = get_int(name="AI_MEMORY_MAX_ATTEMPTS", default=3)
 AI_MEMORY_LLM_TIMEOUT = get_int(name="AI_MEMORY_LLM_TIMEOUT", default=60)
 # two model calls, each with one retry, plus database work; the Redis lock must outlive

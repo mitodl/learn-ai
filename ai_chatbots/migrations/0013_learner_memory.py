@@ -87,6 +87,7 @@ class Migration(migrations.Migration):
                 ("generation", models.PositiveIntegerField()),
                 ("bot", models.TextField()),
                 ("checkpoint_hash", models.CharField(max_length=64)),
+                ("message_id", models.CharField(max_length=64)),
                 ("attempts", models.PositiveIntegerField(default=0)),
                 (
                     "checkpoint",
@@ -108,7 +109,7 @@ class Migration(migrations.Migration):
                 "indexes": [
                     models.Index(fields=["user", "created_on"], name="pending_turn_idx")
                 ],
-                "unique_together": {("checkpoint", "generation")},
+                "unique_together": {("user", "message_id")},
             },
         ),
     ]

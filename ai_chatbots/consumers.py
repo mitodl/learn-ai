@@ -416,7 +416,11 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             if not await sync_to_async(memory_enabled)(user):
                 return
             first = await sync_to_async(record_memory_turn)(
-                user, self.ROOM_NAME, self.thread_id, generation=self.memory_generation
+                user,
+                self.ROOM_NAME,
+                self.thread_id,
+                self.bot.message_id,
+                generation=self.memory_generation,
             )
             if first:
                 await sync_to_async(schedule_learner_memory)(user.id)

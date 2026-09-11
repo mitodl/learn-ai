@@ -1250,6 +1250,7 @@ async def test_handle_passes_learner_context_and_queues_extraction(
         user,
         "ResourceRecommendationBot",
         recommendation_consumer.thread_id,
+        recommendation_consumer.bot.message_id,
         generation=3,
     )
     schedule.assert_called_once_with(user.id)
@@ -1345,5 +1346,9 @@ async def test_tutor_handle_extracts_too(
     await tutor_consumer.handle(json.dumps(payload))
     assert tutor_consumer.bot.learner_context == "## About this learner"
     record.assert_called_once_with(
-        tutor_consumer.scope["user"], "TutorBot", tutor_consumer.thread_id, generation=0
+        tutor_consumer.scope["user"],
+        "TutorBot",
+        tutor_consumer.thread_id,
+        tutor_consumer.bot.message_id,
+        generation=0,
     )

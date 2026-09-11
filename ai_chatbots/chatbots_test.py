@@ -289,7 +289,7 @@ async def test_get_completion(
     async for chunk in chatbot.get_completion(user_msg, debug=debug):
         results += str(chunk)
     mock_stream.assert_called_once_with(
-        {"messages": [HumanMessage(user_msg)]},
+        {"messages": [HumanMessage(user_msg, id=chatbot.message_id)]},
         chatbot.config,
         stream_mode="messages",
     )
@@ -444,8 +444,10 @@ async def test_syllabus_bot_get_completion_state(
         "course_id": ["mitx1.23"],
         "collection_name": ["vector512"],
     }
-    state = SyllabusAgentState(messages=[HumanMessage("hello")], **extra_state)
     async for _ in chatbot.get_completion("hello", extra_state=extra_state):
+        state = SyllabusAgentState(
+            messages=[HumanMessage("hello", id=chatbot.message_id)], **extra_state
+        )
         mock_openai_astream.assert_called_once_with(
             state,
             chatbot.config,
@@ -1156,12 +1158,13 @@ async def test_video_gpt_bot_get_completion_state(
             "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en"
         ]
     }
-    state = VideoGPTAgentState(
-        messages=[HumanMessage("What is this video about?")], **extra_state
-    )
     async for _ in chatbot.get_completion(
         "What is this video about?", extra_state=extra_state
     ):
+        state = VideoGPTAgentState(
+            messages=[HumanMessage("What is this video about?", id=chatbot.message_id)],
+            **extra_state,
+        )
         mock_openai_astream.assert_called_once_with(
             state,
             chatbot.config,
