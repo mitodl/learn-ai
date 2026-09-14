@@ -38,7 +38,7 @@ User memory consists of two pieces:
   15 minutes.
 
 Both use the signed-in learner's identity. One feature flag enables both, on in the
-release-candidate (RC) environment and off in production until the evaluation in step 3
+release-candidate (RC) environment and off in production until the evaluation in step 4
 of the plan passes. Clearing memory, learner-facing controls to view it, and a
 "don't remember me" setting are out of scope here and would be follow-ups.
 
@@ -464,7 +464,8 @@ OAuth token, not gateway configuration (see Service Authentication).
 ## Open Questions
 
 - **Product policy:** Does "regardless of difficulty" remove a saved level preference or
-  override it once? Should declining a certificate stop price questions? Step 4 resolves these.
+  override it once? Should declining a certificate stop price questions? Needs a product
+  decision before rollout (step 5); the evaluation in step 4 tests whichever answer we pick.
 - **Service token:** Which account owns `LEARN_ACCESS_TOKEN`, when does it expire, and
   who rotates it?
 - **Tuning:** processing delay, batch size, and fetch/task timeouts are all configurable
