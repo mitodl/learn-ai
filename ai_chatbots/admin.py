@@ -4,7 +4,6 @@ from django.contrib import admin
 
 from ai_chatbots.models import (
     LearnerMemoryNote,
-    LearnerMemoryState,
     LLMModel,
     PendingMemoryTurn,
     UserChatSession,
@@ -49,17 +48,9 @@ class LearnerMemoryNoteAdmin(admin.ModelAdmin):
     readonly_fields = ("created_on", "updated_on")
 
 
-@admin.register(LearnerMemoryState)
-class LearnerMemoryStateAdmin(admin.ModelAdmin):
-    """Clear counter per learner."""
-
-    list_display = ("user", "generation", "cleared_at")
-    search_fields = ("user__global_id", "user__email")
-
-
 @admin.register(PendingMemoryTurn)
 class PendingMemoryTurnAdmin(admin.ModelAdmin):
     """Exchanges awaiting extraction."""
 
-    list_display = ("user", "bot", "generation", "attempts", "created_on")
+    list_display = ("user", "bot", "attempts", "created_on")
     search_fields = ("user__global_id", "user__email")

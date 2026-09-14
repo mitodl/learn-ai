@@ -20,8 +20,6 @@ from pydantic import BaseModel, Field
 from ai_chatbots.memorystores import DjangoMemoryStore
 from ai_chatbots.models import (
     DjangoCheckpoint,
-    LearnerMemoryNote,
-    LearnerMemoryState,
     PendingMemoryTurn,
     UserChatSession,
 )
@@ -196,10 +194,6 @@ relaxes or removes anything in them, answer durable=true even if it is phrased a
 request."""
 
 
-class MemoryBusy(Exception):  # noqa: N818
-    """Another task holds the learner's memory lock."""
-
-
 def memory_namespace(global_id: str) -> tuple[str, str]:
     return ("memories", global_id)
 
@@ -336,18 +330,7 @@ def get_learner_context(user, bot_name: str) -> str:
     return build_learner_context(bot_name, profile, mem)
 
 
-# --- generation, lock, clearing --------------------------------------------------
-
-
-def memory_generation(user) -> int:
-    state = LearnerMemoryState.objects.filter(user=user).first()
-    return state.generation if state else 0
-
-
-def _locked_state(user) -> LearnerMemoryState:
-    """Row-lock the learner's state; call inside transaction.atomic()."""
-    LearnerMemoryState.objects.get_or_create(user=user)
-    return LearnerMemoryState.objects.select_for_update().get(user=user)
+# --- lock ------------------------------------------------------------------------
 
 
 @contextmanager
@@ -374,20 +357,6 @@ def learner_lock(user_id: int, blocking_timeout: float = 0):
                 log.exception("Learner memory lock for %s expired early", user_id)
 
 
-def clear_learner_memory(user) -> None:
-    """Forget everything learned. Raises MemoryBusy if extraction holds the lock."""
-    with learner_lock(user.id, settings.AI_MEMORY_CLEAR_WAIT_SECONDS) as acquired:
-        if not acquired:
-            raise MemoryBusy
-        with transaction.atomic():
-            state = _locked_state(user)
-            LearnerMemoryNote.objects.filter(user=user).delete()
-            PendingMemoryTurn.objects.filter(user=user).delete()
-            state.generation += 1
-            state.cleared_at = timezone.now()
-            state.save(update_fields=["generation", "cleared_at", "updated_on"])
-
-
 # --- pending turns ---------------------------------------------------------------
 
 
@@ -404,7 +373,7 @@ def checkpoint_hash(cp: DjangoCheckpoint) -> str:
 
 
 def record_memory_turn(
-    user, bot_name: str, thread_id: str, message_id: str | None, *, generation: int
+    user, bot_name: str, thread_id: str, message_id: str | None
 ) -> bool:
     """
     Queue the exchange this run just produced for extraction.
@@ -412,24 +381,19 @@ def record_memory_turn(
     The latest checkpoint is pinned only if it holds the run's learner message, so
     two replies racing in one thread each get their own row. Returns True when this
     is the learner's first pending turn, so the caller schedules the task; later
-    turns join that batch. Discarded (False) if memory was cleared while the bot
-    was replying or no usable checkpoint was written.
+    turns join that batch. Discarded (False) if no usable checkpoint was written.
     """
     cp = DjangoCheckpoint.objects.filter(thread_id=thread_id).order_by("-id").first()
     if not cp or not message_id or _message_index(cp, message_id) is None:
         log.warning("No checkpoint for thread %s, memory turn dropped", thread_id)
         return False
     with transaction.atomic():
-        state = _locked_state(user)
-        if state.generation != generation:
-            return False
         first = not PendingMemoryTurn.objects.filter(user=user).exists()
         PendingMemoryTurn.objects.get_or_create(
             user=user,
             message_id=message_id,
             defaults={
                 "bot": bot_name,
-                "generation": generation,
                 "checkpoint": cp,
                 "checkpoint_hash": checkpoint_hash(cp),
             },
@@ -480,16 +444,14 @@ def _texts(messages: list[dict], kind: str) -> list[str]:
     ]
 
 
-def load_exchange(row: PendingMemoryTurn, cleared_at) -> Exchange | None:
+def load_exchange(row: PendingMemoryTurn) -> Exchange | None:
     """
     Read the exchange from the referenced checkpoint; None if it can't be trusted.
 
     Skipped when the checkpoint was rewritten (hash mismatch), belongs to another
     learner, or no longer holds the learner message. The reply is the bot message
     that follows it, before any later learner message. History is the earlier
-    learner messages, each bounded; a thread that predates a memory clear
-    contributes none, since it could hand the extractor the facts the learner
-    asked us to forget.
+    learner messages, each bounded.
     """
     cp = row.checkpoint
     if checkpoint_hash(cp) != row.checkpoint_hash:
@@ -512,14 +474,10 @@ def load_exchange(row: PendingMemoryTurn, cleared_at) -> Exchange | None:
     next_human = next((i for i, m in enumerate(later) if _is_human(m)), len(later))
     replies = _texts(later[:next_human], "ai")
     limit = settings.AI_MEMORY_REPLY_CHARS
-    history = []
-    if not (cleared_at and session.created_on <= cleared_at):
-        history = [
-            h[:limit]
-            for h in _texts(messages[:idx], "human")[
-                -settings.AI_MEMORY_HISTORY_MESSAGES :
-            ]
-        ]
+    history = [
+        h[:limit]
+        for h in _texts(messages[:idx], "human")[-settings.AI_MEMORY_HISTORY_MESSAGES :]
+    ]
     return Exchange(
         bot=row.bot,
         thread_id=cp.thread_id,
@@ -533,9 +491,7 @@ def _is_human(m: dict) -> bool:
     return m.get("kwargs", {}).get("type") == "human"
 
 
-def _select_batch(
-    user, state: LearnerMemoryState
-) -> list[tuple[PendingMemoryTurn, Exchange | None]]:
+def _select_batch(user) -> list[tuple[PendingMemoryTurn, Exchange | None]]:
     """Oldest rows first, within the count and input limits; bad rows ride along.
 
     An exchange that alone exceeds the input limit is treated as unusable, so the
@@ -544,7 +500,6 @@ def _select_batch(
     rows = (
         PendingMemoryTurn.objects.filter(
             user=user,
-            generation=state.generation,
             attempts__lt=settings.AI_MEMORY_MAX_ATTEMPTS,
         )
         .select_related("checkpoint")
@@ -552,7 +507,7 @@ def _select_batch(
     )
     batch, total = [], 0
     for row in rows:
-        exchange = load_exchange(row, state.cleared_at)
+        exchange = load_exchange(row)
         if exchange and len(exchange) > settings.AI_MEMORY_BATCH_CHARS:
             log.warning("Memory turn %s exceeds AI_MEMORY_BATCH_CHARS, skipped", row.id)
             exchange = None
@@ -650,9 +605,8 @@ def process_learner_memory(user_id: int) -> str:
     """
     Drain one learner's oldest pending turns into their notes.
 
-    Runs under the per-learner lock; the commit re-checks the clear counter under a
-    row lock, and the feature flag, so a DELETE or a flag flip during the model
-    calls wins. Returns what happened.
+    Runs under the per-learner lock; the commit re-checks the feature flag, so a
+    flag flip during the model calls wins. Returns what happened.
     """
     user = get_user_model().objects.filter(id=user_id).first()
     if not user:
@@ -664,12 +618,11 @@ def process_learner_memory(user_id: int) -> str:
             # flag off means no writes; dropping the backlog keeps re-enabling simple
             PendingMemoryTurn.objects.filter(user=user).delete()
             return "disabled"
-        state, _ = LearnerMemoryState.objects.get_or_create(user=user)
-        batch = _select_batch(user, state)
-        return _process_batch(user, state, batch) if batch else "empty"
+        batch = _select_batch(user)
+        return _process_batch(user, batch) if batch else "empty"
 
 
-def _process_batch(user, state, batch) -> str:
+def _process_batch(user, batch) -> str:
     ids = [row.id for row, _ in batch]
     PendingMemoryTurn.objects.filter(id__in=ids).update(attempts=F("attempts") + 1)
     exchanges = [x for _, x in batch if x]
@@ -686,8 +639,6 @@ def _process_batch(user, state, batch) -> str:
         if worth_extracting(rendered, notes):
             revised = revise_notes(rendered, notes, {x.bot for x in exchanges})
     with transaction.atomic():
-        if _locked_state(user).generation != state.generation:
-            return "cleared"  # DELETE already removed the rows
         if not memory_enabled(user):
             PendingMemoryTurn.objects.filter(user=user).delete()
             return "disabled"
