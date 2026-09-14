@@ -1100,15 +1100,16 @@ wheels = [
 
 [[package]]
 name = "django-scim2"
-version = "0.19.1"
+version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
+    { name = "pygments" },
     { name = "scim2-filter-parser" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/59/da3061607de7be41d7e5bf484acb13510d631f8fcfcecd9f5e02dc5bf4f1/django_scim2-0.19.1.tar.gz", hash = "sha256:8126111160e76a880f6699babc5259f0345c9316c8018ce5dcc3f7579ccb9e89", size = 26988, upload-time = "2023-05-18T01:13:04.017Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/a8/6f17eda83638fe47eea87aca5b5dcb0b5092c3db7552f92d35e2a278d69f/django_scim2-0.23.0.tar.gz", hash = "sha256:d3e2a405b705c2445e69b2b5e6105463b63339cd735c7a2edd5dfa4c52f60c0c", size = 26076, upload-time = "2026-08-12T15:03:38.648Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/24/ca2cab008049239585434f7451a42757d7d258bf741316fd16587e564b74/django_scim2-0.19.1-py3-none-any.whl", hash = "sha256:845eaa64e72e4ddfe2aa54d21865721f8c1d59ecd9c06e72341eeb03ed6ba94e", size = 32072, upload-time = "2023-05-18T01:13:01.751Z" },
+    { url = "https://files.pythonhosted.org/packages/00/27/9e5c0f4a99ded1cdc1310f58fb731551e8cec30a932a9c382e783985171f/django_scim2-0.23.0-py3-none-any.whl", hash = "sha256:0b537bd8a9d38fc8ba59fa983bf1e27bf022baaa70198174b953edc32651ebdb", size = 32135, upload-time = "2026-08-12T15:03:39.596Z" },
 ]
 
 [[package]]
@@ -2751,7 +2752,7 @@ requires-dist = [
     { name = "django-ipware", specifier = ">=7.0.0,<8" },
     { name = "django-oauth-toolkit", specifier = ">=3.0.0,<4" },
     { name = "django-redis", specifier = ">=5.2.0,<7" },
-    { name = "django-scim2", specifier = ">=0.19.1,<0.20" },
+    { name = "django-scim2", specifier = ">=0.23,<0.24" },
     { name = "django-server-status", specifier = ">=0.7.0,<0.8" },
     { name = "django-storages", specifier = ">=1.13.2,<2" },
     { name = "djangorestframework", specifier = ">=3.14.0,<4" },
