@@ -684,6 +684,33 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
     ).aexists()
 
 
+async def test_consumer_handle_traces_course_id(
+    mocker, mock_http_consumer_send, syllabus_consumer
+):
+    """The root LangSmith trace should be tagged with the course being asked about."""
+    response = SystemMessageFactory.create().content.split(" ")
+    mocker.patch(
+        "ai_chatbots.chatbots.SyllabusBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
+        ),
+    )
+    mock_trace = mocker.patch("ai_chatbots.consumers.trace")
+    payload = {
+        "message": "what are the prerequisites",
+        "course_id": "MITx+6.00.1x",
+        "collection_name": "vector512",
+    }
+
+    await syllabus_consumer.handle(json.dumps(payload))
+
+    metadata = mock_trace.call_args.kwargs["metadata"]
+    assert metadata["course_id"] == payload["course_id"]
+    assert metadata["collection_name"] == payload["collection_name"]
+    # exclude_canvas is state, not a resource identifier, so it stays out
+    assert "exclude_canvas" not in metadata
+
+
 @pytest.mark.parametrize(
     ("error_class", "expected_status", "headers_sent"),
     [
@@ -786,6 +813,43 @@ async def test_rate_limit_message(mocker, wait_time, formatted_time, django_sess
     )
 
 
+async def test_edx_tutor_handle_traces_edx_module_id(
+    mocker, mock_http_consumer_send, tutor_consumer
+):
+    """The edx tutor traces its module id, the identifier its request carries."""
+    response = SystemMessageFactory.create()
+    tutor_consumer.scope["user"].is_superuser = True
+    mocker.patch(
+        "ai_chatbots.chatbots.get_problem_from_edx_block",
+        new_callable=AsyncMock,
+        return_value=("problem_xml", "problem_set_xml"),
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.TutorBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(list(response.content.split(" ")))
+            )
+        ),
+    )
+    mock_trace = mocker.patch("ai_chatbots.consumers.trace")
+    data = {
+        "message": "What should i try next?",
+        "edx_module_id": ("block-v1:MITxT+3.012Sx+3T2024+type@problem+block@abc123"),
+        "block_siblings": ["block1", "block2"],
+    }
+
+    await tutor_consumer.handle(json.dumps(data))
+
+    metadata = mock_trace.call_args.kwargs["metadata"]
+    assert metadata["edx_module_id"] == data["edx_module_id"]
+    # the edx request carries no course run field, so it is derived from the
+    # module id, which embeds it
+    assert metadata["run_readable_id"] == "course-v1:MITxT+3.012Sx+3T2024"
+    # the edx request carries no problem set, so it is not traced as None
+    assert "problem_set_title" not in metadata
+
+
 async def test_tutor_agent_handle(
     mocker,
     mock_http_consumer_send,
@@ -829,6 +893,39 @@ async def test_tutor_agent_handle(
         more_body=True,
     )
     assert mock_http_consumer_send.send_headers.call_count == 1
+
+
+async def test_canvas_tutor_handle_traces_run_and_problem_set(
+    mocker, mock_http_consumer_send, canvas_tutor_consumer
+):
+    """The root trace should carry the tutor's course run and problem set."""
+    response = SystemMessageFactory.create()
+    canvas_tutor_consumer.scope["user"].is_superuser = True
+    mocker.patch(
+        "ai_chatbots.chatbots.get_canvas_problem_set",
+        new_callable=AsyncMock,
+        return_value="problem_set",
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.TutorBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(
+                return_value=MockAsyncIterator(list(response.content.split(" ")))
+            )
+        ),
+    )
+    mock_trace = mocker.patch("ai_chatbots.consumers.trace")
+    data = {
+        "message": "What should i try next?",
+        "run_readable_id": "run1",
+        "problem_set_title": "Problem Set 1",
+    }
+
+    await canvas_tutor_consumer.handle(json.dumps(data))
+
+    metadata = mock_trace.call_args.kwargs["metadata"]
+    assert metadata["run_readable_id"] == data["run_readable_id"]
+    assert metadata["problem_set_title"] == data["problem_set_title"]
 
 
 async def canvas_test_tutor_agent_handle(
@@ -908,6 +1005,33 @@ async def test_video_gpt_create_chatbot(
     assert chatbot.user_id == async_user.global_id
     assert chatbot.temperature == 0.7
     assert chatbot.model == "gpt-3.5-turbo"
+
+
+async def test_video_gpt_handle_traces_asset_and_run(
+    mocker, mock_http_consumer_send, video_gpt_consumer
+):
+    """The video gpt trace should carry the asset id and its course run."""
+    response = SystemMessageFactory.create().content.split(" ")
+    mocker.patch(
+        "ai_chatbots.chatbots.VideoGPTBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
+        ),
+    )
+    mock_trace = mocker.patch("ai_chatbots.consumers.trace")
+    payload = {
+        "message": "what is this video about?",
+        "transcript_asset_id": (
+            "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-en"
+        ),
+    }
+
+    await video_gpt_consumer.handle(json.dumps(payload))
+
+    metadata = mock_trace.call_args.kwargs["metadata"]
+    assert metadata["transcript_asset_id"] == payload["transcript_asset_id"]
+    # the course run is derived from the asset id, which embeds it
+    assert metadata["run_readable_id"] == "course-v1:xPRO+LASERxE3+R15"
 
 
 async def test_video_agent_consumer_handle(

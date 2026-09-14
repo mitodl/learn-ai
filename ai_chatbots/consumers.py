@@ -356,6 +356,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     "thread_id": thread_id,
                     "user_id": self.user_id,
                     "model": self.bot.model,
+                    **self.bot.get_trace_properties(extra_state),
                 },
             ) as langsmith_trace:
                 output = []

@@ -49,6 +49,7 @@ from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
     get_django_cache,
+    get_run_readable_id_from_block_id,
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
 )
@@ -68,6 +69,8 @@ class BaseChatbot(ABC):
     TASK_NAME = "BASE_TASK"
     JOB_ID = "BASECHAT_JOB"
     STATE_CLASS = AgentState
+
+    TRACE_STATE_KEYS: tuple[str, ...] = ()
 
     def __init__(  # noqa: PLR0913
         self,
@@ -242,6 +245,24 @@ class BaseChatbot(ABC):
         )
         return checkpoint.id if checkpoint else None
 
+    def get_trace_properties(
+        self, extra_state: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """
+        Return extra properties to tag traces with, pulled from the state
+        keys named in TRACE_STATE_KEYS.  State values arrive as lists (they
+        are reducer-appended fields), so single-item lists are unwrapped.
+        """
+        state = extra_state or {}
+        properties = {}
+        for key in self.TRACE_STATE_KEYS:
+            value = state.get(key)
+            if isinstance(value, list) and len(value) == 1:
+                value = value[0]
+            if value:
+                properties[key] = value
+        return properties
+
     async def set_callbacks(
         self, properties: dict | None = None
     ) -> list[BaseCallbackHandler]:
@@ -323,7 +344,15 @@ class BaseChatbot(ABC):
             error = "Create agent before running"
             raise ValueError(error)
         try:
-            self.config["callbacks"] = await self.set_callbacks()
+            trace_properties = self.get_trace_properties(extra_state)
+
+            self.config["metadata"] = {
+                **self.config.get("metadata", {}),
+                **trace_properties,
+            }
+            self.config["callbacks"] = await self.set_callbacks(
+                properties=trace_properties
+            )
             state = {
                 "messages": [HumanMessage(message)],
                 **(extra_state or {}),
@@ -503,6 +532,7 @@ class SyllabusBot(TruncatingChatbot):
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
+    TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses")
 
     def __init__(  # noqa: PLR0913
         self,
@@ -599,7 +629,9 @@ class TutorBot(BaseChatbot):
 
         self.edx_module_id = edx_module_id
         self.block_siblings = block_siblings
-        self.run_readable_id = run_readable_id
+        self.run_readable_id = run_readable_id or get_run_readable_id_from_block_id(
+            edx_module_id
+        )
         self.problem_set_title = problem_set_title
 
         if not self.edx_module_id:
@@ -611,6 +643,26 @@ class TutorBot(BaseChatbot):
 
         self.problem_set = None
         self.problem_data_loaded = False
+
+    def get_trace_properties(
+        self,
+        extra_state: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        """
+        Return the identifiers for the problem the tutor was asked about.
+        They arrive as init kwargs rather than graph state, so they are read
+        off the instance instead of via TRACE_STATE_KEYS.
+
+        """
+        return {
+            key: value
+            for key, value in (
+                ("run_readable_id", self.run_readable_id),
+                ("problem_set_title", self.problem_set_title),
+                ("edx_module_id", self.edx_module_id),
+            )
+            if value
+        }
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the  tool"""
@@ -836,6 +888,22 @@ class VideoGPTBot(TruncatingChatbot):
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
     STATE_CLASS = VideoGPTAgentState
+    TRACE_STATE_KEYS = ("transcript_asset_id",)
+
+    def get_trace_properties(
+        self, extra_state: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """
+        Return the traced video identifiers, adding the course run that the
+        transcript asset id embeds.
+        """
+        properties = super().get_trace_properties(extra_state)
+        run_readable_id = get_run_readable_id_from_block_id(
+            properties.get("transcript_asset_id")
+        )
+        if run_readable_id:
+            properties["run_readable_id"] = run_readable_id
+        return properties
 
     def __init__(  # noqa: PLR0913
         self,
