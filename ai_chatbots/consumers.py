@@ -35,7 +35,6 @@ from ai_chatbots.constants import (
 from ai_chatbots.memory import (
     get_learner_context,
     memory_enabled,
-    memory_generation,
     record_memory_turn,
 )
 from ai_chatbots.models import UserChatSession
@@ -85,7 +84,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     # Each bot consumer should define a unique ROOM_NAME
     ROOM_NAME = None
     learner_context = ""
-    memory_generation = 0
 
     serializer_class = RecommendationChatRequestSerializer
     headers_sent = False
@@ -350,9 +348,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             checkpointer = await self.create_checkpointer(
                 thread_id, message_text, serializer
             )
-            self.learner_context, self.memory_generation = await sync_to_async(
-                self.load_learner_memory
-            )()
+            self.learner_context = await sync_to_async(self.load_learner_memory)()
             self.bot = await sync_to_async(self.create_chatbot)(
                 serializer, checkpointer
             )
@@ -400,15 +396,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_chunk("", more_body=False)
             await self.disconnect()
 
-    def load_learner_memory(self) -> tuple[str, int]:
-        """Context block plus the clear counter the exchange will be checked against."""
+    def load_learner_memory(self) -> str:
+        """Profile plus learned notes for the prompt; empty when memory is off."""
         user = self.scope.get("user")
         if not memory_enabled(user):
-            return "", 0
-        # generation first: a clear that lands between the two reads must invalidate
-        # the exchange, not slip past it with fresh-looking context
-        generation = memory_generation(user)
-        return get_learner_context(user, self.ROOM_NAME), generation
+            return ""
+        return get_learner_context(user, self.ROOM_NAME)
 
     async def queue_memory_extraction(self) -> None:
         """Record the exchange for extraction; a first pending turn starts the timer."""
@@ -421,7 +414,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 self.ROOM_NAME,
                 self.thread_id,
                 self.bot.message_id,
-                generation=self.memory_generation,
             )
             if first:
                 await sync_to_async(process_learner_memory.apply_async)(

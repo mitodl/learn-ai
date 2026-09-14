@@ -1385,7 +1385,6 @@ async def test_handle_passes_learner_context_and_queues_extraction(
             __aiter__=mocker.Mock(return_value=MockAsyncIterator(["Hi ", "there"]))
         ),
     )
-    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=3)
     record = mocker.patch("ai_chatbots.consumers.record_memory_turn", return_value=True)
     schedule = mocker.patch("ai_chatbots.consumers.process_learner_memory.apply_async")
     await recommendation_consumer.handle(json.dumps({"message": "hello"}))
@@ -1396,7 +1395,6 @@ async def test_handle_passes_learner_context_and_queues_extraction(
         "ResourceRecommendationBot",
         recommendation_consumer.thread_id,
         recommendation_consumer.bot.message_id,
-        generation=3,
     )
     schedule.assert_called_once_with(
         (user.id,), countdown=settings.AI_MEMORY_DELAY_SECONDS
@@ -1409,7 +1407,6 @@ async def test_handle_queue_failure_never_reaches_the_chat(
     """A broker or database error after the reply is logged, not sent as a chat error"""
     mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
     mocker.patch("ai_chatbots.consumers.get_learner_context", return_value="")
-    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=0)
     mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
         return_value=mocker.Mock(
@@ -1434,7 +1431,6 @@ async def test_handle_later_turns_join_the_pending_batch(
     """Only the learner's first pending turn schedules the task"""
     mocker.patch("ai_chatbots.consumers.memory_enabled", return_value=True)
     mocker.patch("ai_chatbots.consumers.get_learner_context", return_value="")
-    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=0)
     mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
         return_value=mocker.Mock(
@@ -1482,7 +1478,6 @@ async def test_tutor_handle_extracts_too(
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block", new_callable=AsyncMock
     )
-    mocker.patch("ai_chatbots.consumers.memory_generation", return_value=0)
     record = mocker.patch(
         "ai_chatbots.consumers.record_memory_turn", return_value=False
     )
@@ -1498,5 +1493,4 @@ async def test_tutor_handle_extracts_too(
         "TutorBot",
         tutor_consumer.thread_id,
         tutor_consumer.bot.message_id,
-        generation=0,
     )

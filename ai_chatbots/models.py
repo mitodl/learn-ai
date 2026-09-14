@@ -158,19 +158,6 @@ class LearnerMemoryNote(TimestampedModel):
         return f"{self.user_id}/{self.key}"
 
 
-class LearnerMemoryState(TimestampedModel):
-    """Per-user clear counter; the row is locked around every memory write."""
-
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memory_state"
-    )
-    generation = models.PositiveIntegerField(default=0)
-    cleared_at = models.DateTimeField(null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.user_id} gen {self.generation}"
-
-
 class PendingMemoryTurn(TimestampedModel):
     """
     One completed exchange awaiting memory extraction; deleted once processed.
@@ -183,7 +170,6 @@ class PendingMemoryTurn(TimestampedModel):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pending_turns"
     )
-    generation = models.PositiveIntegerField()
     bot = models.TextField()
     checkpoint = models.ForeignKey(DjangoCheckpoint, on_delete=models.CASCADE)
     checkpoint_hash = models.CharField(max_length=64)

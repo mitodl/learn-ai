@@ -638,7 +638,6 @@ AI_MEMORY_LLM_TIMEOUT = get_int(name="AI_MEMORY_LLM_TIMEOUT", default=60)
 # the hard limit (time limit + 30s) so a live worker never loses it
 AI_MEMORY_TASK_TIME_LIMIT = get_int(name="AI_MEMORY_TASK_TIME_LIMIT", default=300)
 AI_MEMORY_LOCK_SECONDS = get_int(name="AI_MEMORY_LOCK_SECONDS", default=360)
-AI_MEMORY_CLEAR_WAIT_SECONDS = get_int(name="AI_MEMORY_CLEAR_WAIT_SECONDS", default=5)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(

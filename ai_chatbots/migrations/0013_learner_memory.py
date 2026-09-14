@@ -13,35 +13,6 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name="LearnerMemoryState",
-            fields=[
-                (
-                    "id",
-                    models.AutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
-                    ),
-                ),
-                ("created_on", models.DateTimeField(auto_now_add=True, db_index=True)),
-                ("updated_on", models.DateTimeField(auto_now=True)),
-                ("generation", models.PositiveIntegerField(default=0)),
-                ("cleared_at", models.DateTimeField(blank=True, null=True)),
-                (
-                    "user",
-                    models.OneToOneField(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="memory_state",
-                        to=settings.AUTH_USER_MODEL,
-                    ),
-                ),
-            ],
-            options={
-                "abstract": False,
-            },
-        ),
-        migrations.CreateModel(
             name="LearnerMemoryNote",
             fields=[
                 (
@@ -84,7 +55,6 @@ class Migration(migrations.Migration):
                 ),
                 ("created_on", models.DateTimeField(auto_now_add=True, db_index=True)),
                 ("updated_on", models.DateTimeField(auto_now=True)),
-                ("generation", models.PositiveIntegerField()),
                 ("bot", models.TextField()),
                 ("checkpoint_hash", models.CharField(max_length=64)),
                 ("message_id", models.CharField(max_length=64)),
