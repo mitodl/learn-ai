@@ -258,6 +258,33 @@ async def test_search_content_files_cites_each_file(
 
 
 @pytest.mark.django_db
+async def test_search_content_files_collapses_chunks_of_one_file(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+):
+    """Chunks of the same file should share one citation, keeping the first url."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    key = "courses/some-course/pages/syllabus/"
+    for idx, result in enumerate(content_chunk_results["results"]):
+        result["key"] = key
+        result["url"] = f"https://mit.edu/file/{idx}"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == len(content_chunk_results["results"])
+    assert {result["id"] for result in results["results"]} == {key}
+    assert list(results["citation_sources"]) == [key]
+    assert results["citation_sources"][key]["citation_url"] == "https://mit.edu/file/0"
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     "tool", [search_content_files, search_related_course_content_files]
 )

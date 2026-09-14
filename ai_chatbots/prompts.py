@@ -62,6 +62,8 @@ sources you based that section on have citation urls.  If they do have a
 citation url, you MUST add citation links to that section.
 
 STEP 1: CHECK FOR relevant sources in the citation_sources section of the tool output.
+- Each result's "id" is its key in the citation_sources map: to cite a result,
+look up that result's id and use the citation_url you find there
 - DO NOT CITE SOURCES THAT ARE NOT IN THE citation_sources SECTION
 - DO CITE RELEVANT SOURCES THAT ARE IN THE citation_sources SECTION
 - DO NOT CITE THE SAME SOURCE MORE THAN ONCE
