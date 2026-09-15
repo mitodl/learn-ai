@@ -618,13 +618,13 @@ async def test_syllabus_bot_tool(
     expected_results = {
         "results": [
             {
-                "id": resource.get("key"),
+                "id": resource.get("url"),
                 **{key: resource.get(key) for key in retained_attributes},
             }
             for resource in raw_results
         ],
         "citation_sources": {
-            resource.get("key"): {
+            resource.get("url"): {
                 "citation_title": resource.get("title")
                 or resource.get("content_title"),
                 "citation_url": resource.get("url"),

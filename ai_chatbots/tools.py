@@ -290,17 +290,17 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
             # those from other sources do not.
             if exclude_canvas and (not platform or platform == "canvas"):
                 continue
-            # resource_point_id is the resource-level point id, shared by every
-            # chunk of every file in the course, so citations keyed on it all
-            # collapse onto whichever result happened to come back first
-            citation_key = result.get("key") or result["resource_point_id"]
+            # the citation url is what identifies a citation; resource_point_id
+            # is shared by every chunk of every file in a course, so keying on
+            # it collapsed every citation onto whichever result came back first
+            citation_key = result.get("url")
             simplified_result = {
                 "id": citation_key,
                 "chunk_content": result.get("chunk_content"),
                 "run_title": result.get("run_title"),
             }
             simplified_results.append(simplified_result)
-            if result.get("url") and not citations.get(citation_key):
+            if citation_key and not citations.get(citation_key):
                 citations[citation_key] = {
                     "citation_url": result.get("url"),
                     "citation_title": result.get("title")

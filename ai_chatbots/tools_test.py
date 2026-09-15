@@ -219,11 +219,11 @@ async def test_search_content_files(  # noqa: PLR0913
     assert results["metadata"]["search_url"] == search_url
     assert len(results["results"]) == len(content_chunk_results["results"])
     assert len(results["citation_sources"]) == len(
-        {result["key"] for result in content_chunk_results["results"] if result["url"]}
+        {result["url"] for result in content_chunk_results["results"] if result["url"]}
     )
     for result in content_chunk_results["results"]:
         if result["url"]:
-            assert results["citation_sources"][result["key"]] == {
+            assert results["citation_sources"][result["url"]] == {
                 "citation_url": result.get("url"),
                 "citation_title": (result.get("title") or result["content_title"]),
             }
@@ -264,13 +264,12 @@ async def test_search_content_files_collapses_chunks_of_one_file(
     syllabus_agent_state,
     content_chunk_results,
 ):
-    """Chunks of the same file should share one citation, keeping the first url."""
+    """Chunks sharing a url should share one citation."""
     settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    key = "courses/some-course/pages/syllabus/"
-    for idx, result in enumerate(content_chunk_results["results"]):
-        result["key"] = key
-        result["url"] = f"https://mit.edu/file/{idx}"
+    url = "https://mit.edu/courses/some-course/pages/syllabus/"
+    for result in content_chunk_results["results"]:
+        result["url"] = url
 
     results = json.loads(
         await search_content_files.ainvoke(
@@ -279,9 +278,32 @@ async def test_search_content_files_collapses_chunks_of_one_file(
     )
 
     assert len(results["results"]) == len(content_chunk_results["results"])
-    assert {result["id"] for result in results["results"]} == {key}
-    assert list(results["citation_sources"]) == [key]
-    assert results["citation_sources"][key]["citation_url"] == "https://mit.edu/file/0"
+    assert {result["id"] for result in results["results"]} == {url}
+    assert list(results["citation_sources"]) == [url]
+
+
+@pytest.mark.django_db
+async def test_search_content_files_keeps_uncitable_results(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+):
+    """A result with no url is still returned, with no citation to look up."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    uncitable = [r for r in content_chunk_results["results"] if not r["url"]]
+    assert uncitable, "fixture should include results with no url"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == len(content_chunk_results["results"])
+    assert len([r for r in results["results"] if r["id"] is None]) == len(uncitable)
+    assert None not in results["citation_sources"]
 
 
 @pytest.mark.django_db
@@ -320,7 +342,7 @@ async def test_search_canvas_content_files(  # noqa: PLR0913
     assert len(results["citation_sources"]) == (
         len(
             {
-                result["key"]
+                result["url"]
                 for result in content_chunk_results["results"]
                 if result["url"]
             }
