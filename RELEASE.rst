@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+Version 0.37.0
+--------------
+
+- Key citations by url, not the resource point id (#73)
+- Update dependency @typescript-eslint/utils to v8.70.0 (#70)
+- Update dependency django-scim2 to >=0.23,<0.24 (#71)
+
 Version 0.36.2
 --------------
 

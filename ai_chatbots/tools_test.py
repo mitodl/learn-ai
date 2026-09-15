@@ -219,20 +219,91 @@ async def test_search_content_files(  # noqa: PLR0913
     assert results["metadata"]["search_url"] == search_url
     assert len(results["results"]) == len(content_chunk_results["results"])
     assert len(results["citation_sources"]) == len(
-        {
-            result["resource_point_id"]
-            for result in content_chunk_results["results"]
-            if result["url"]
-        }
+        {result["url"] for result in content_chunk_results["results"] if result["url"]}
     )
-    for idx, result in enumerate(content_chunk_results["results"]):
-        if content_chunk_results["results"][idx]["url"]:
-            assert results["citation_sources"][
-                content_chunk_results["results"][idx]["resource_point_id"]
-            ] == {
+    for result in content_chunk_results["results"]:
+        if result["url"]:
+            assert results["citation_sources"][result["url"]] == {
                 "citation_url": result.get("url"),
                 "citation_title": (result.get("title") or result["content_title"]),
             }
+
+
+@pytest.mark.django_db
+async def test_search_content_files_cites_each_file(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+):
+    """Chunks sharing a resource_point_id should each keep their own citation url."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    for idx, result in enumerate(content_chunk_results["results"]):
+        # every chunk of a course carries the same resource-level point id
+        result["resource_point_id"] = "028cbf92-dded-5f7b-8b19-cd9c5a8b5c41"
+        result["url"] = f"https://mit.edu/file/{idx}"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    for idx, result in enumerate(results["results"]):
+        assert (
+            results["citation_sources"][result["id"]]["citation_url"]
+            == f"https://mit.edu/file/{idx}"
+        )
+
+
+@pytest.mark.django_db
+async def test_search_content_files_collapses_chunks_of_one_file(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+):
+    """Chunks sharing a url should share one citation."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    url = "https://mit.edu/courses/some-course/pages/syllabus/"
+    for result in content_chunk_results["results"]:
+        result["url"] = url
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == len(content_chunk_results["results"])
+    assert {result["id"] for result in results["results"]} == {url}
+    assert list(results["citation_sources"]) == [url]
+
+
+@pytest.mark.django_db
+async def test_search_content_files_keeps_uncitable_results(
+    settings,
+    mock_get_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+):
+    """A result with no url is still returned, with no citation to look up."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    uncitable = [r for r in content_chunk_results["results"] if not r["url"]]
+    assert uncitable, "fixture should include results with no url"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == len(content_chunk_results["results"])
+    assert len([r for r in results["results"] if r["id"] is None]) == len(uncitable)
+    assert None not in results["citation_sources"]
 
 
 @pytest.mark.django_db
@@ -271,7 +342,7 @@ async def test_search_canvas_content_files(  # noqa: PLR0913
     assert len(results["citation_sources"]) == (
         len(
             {
-                result["resource_point_id"]
+                result["url"]
                 for result in content_chunk_results["results"]
                 if result["url"]
             }
