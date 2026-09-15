@@ -2782,7 +2782,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opik", specifier = "~=2.1.22" },
+    { name = "opik", specifier = "~=2.2.47" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", extras = ["c"], specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },
@@ -3647,7 +3647,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.1.22"
+version = "2.2.55"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -3670,9 +3670,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/bb/8007bce35fbf8f4ee81cf433b4d231a1f4447242a8149d59b95b3db38258/opik-2.1.22.tar.gz", hash = "sha256:bdd1a211117baf5e86fae278cd2291e4a3ed51d536fd5b130c3bb458df660a0f", size = 1169626, upload-time = "2026-07-10T10:51:36.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/ca/1e87ef37b860b12c7a77338bc9c48258a580531ff9a282efb454f417d054/opik-2.2.55.tar.gz", hash = "sha256:b03f6ff8977b8a283be085a11275344c9a7343b72ebc5c51a7ac3d1ded505235", size = 1287567, upload-time = "2026-09-08T12:42:42.269Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/b5/9a0552de8e39a36e8e288ba3ff0337d0abcd117ddda7d753667a02d4507f/opik-2.1.22-py3-none-any.whl", hash = "sha256:c11bc8db4bdc370dd2ab6d6962901b9d2ae8e1ac04502ed53c27e4fe37f0ab98", size = 1854322, upload-time = "2026-07-10T10:51:34.556Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/38/43eabfc53a7cab831a6b22ecd73474620b17e80ca5159af490cf1a982996/opik-2.2.55-py3-none-any.whl", hash = "sha256:cce0619ce71179bca6193a82c68aed53e73361302632b9fc1aad9ffb795f7ac8", size = 1998628, upload-time = "2026-09-08T12:42:40.525Z" },
 ]
 
 [[package]]
