@@ -40,6 +40,14 @@ CELERY_BROKER_URL = get_string("CELERY_BROKER_URL", REDIS_URL)
 ENVIRONMENT = get_string("MITOL_ENVIRONMENT", "dev")
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
+# Opik calls sentry_sdk.init() with Comet's own DSN as soon as it's imported
+# (opik/__init__.py, gated on this env var), which replaces the client our
+# init_sentry() below installs and silently swallows every request-time error
+# for the rest of the process. Must be set before the first `import opik`
+# anywhere in the process, so it's set here, ahead of every other import that
+# could reach opik transitively.
+os.environ.setdefault("OPIK_SENTRY_ENABLE", "false")
+
 # initialize Sentry before doing anything else so we capture any config errors
 SENTRY_DSN = get_string("SENTRY_DSN", "")
 SENTRY_LOG_LEVEL = get_string("SENTRY_LOG_LEVEL", "ERROR")
