@@ -120,11 +120,10 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
 
         current_thread_id = None
-        self.user_id = self.get_ident()
+        ident = self.get_ident()
+        self.user_id = self.get_trace_ident()
         self.session_key = (
-            self.scope["cookies"].get(AI_SESSION_COOKIE_KEY)
-            or self.user_id
-            or uuid4().hex
+            self.scope["cookies"].get(AI_SESSION_COOKIE_KEY) or ident or uuid4().hex
         )
         anon_cookie = False
         if clear_history:

@@ -2,6 +2,8 @@
 
 import base64
 import datetime
+import hashlib
+import hmac
 import json
 import logging
 from enum import Flag, auto
@@ -19,6 +21,26 @@ log = logging.getLogger(__name__)
 
 # This is the Django ImageField max path size
 IMAGE_PATH_MAX_LENGTH = 100
+
+# Prefix for hashed anonymous user identifiers sent to external systems
+ANONYMOUS_IDENT_PREFIX = "anon:"
+
+
+def anonymize_ident(ident: str) -> str:
+    """
+    Derive a stable identifier for an anonymous user, safe to send to
+    external systems (LangSmith, Opik, PostHog, the LLM proxy).
+
+    Anonymous users are otherwise identified by their Django session key,
+    which is also the session cookie value - emitting it as-is would let
+    anyone with access to those traces replay the cookie and take over the
+    session. Keying the hash with SECRET_KEY makes it infeasible to recover
+    the session key from the hash.
+    """
+    digest = hmac.new(
+        settings.SECRET_KEY.encode(), ident.encode(), hashlib.sha256
+    ).hexdigest()
+    return f"{ANONYMOUS_IDENT_PREFIX}{digest}"
 
 
 def cache_page_for_anonymous_users(*cache_args, **cache_kwargs):

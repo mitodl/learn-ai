@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 
 from main.utils import (
+    anonymize_ident,
     chunks,
     get_user_from_apisix_headers,
     is_near_now,
@@ -171,3 +172,36 @@ def test_apisix_headers_ambiguous_identity_fails_closed(mocker, apisix_user_info
     request = _apisix_request(mocker, apisix_user_info, AnonymousUser())
 
     assert get_user_from_apisix_headers(request) is None
+
+
+def test_anonymize_ident_hides_raw_value():
+    """The raw ident should not appear in the anonymized output."""
+    session_key = "abc123def456"
+
+    result = anonymize_ident(session_key)
+
+    assert result.startswith("anon:")
+    assert session_key not in result
+
+
+def test_anonymize_ident_deterministic():
+    """The same ident should always hash to the same value."""
+    session_key = "abc123def456"
+
+    assert anonymize_ident(session_key) == anonymize_ident(session_key)
+
+
+def test_anonymize_ident_distinct_for_different_idents():
+    """Different idents should hash to different values."""
+    assert anonymize_ident("session_one") != anonymize_ident("session_two")
+
+
+def test_anonymize_ident_keyed_by_secret(settings):
+    """The hash should depend on SECRET_KEY, not just the ident."""
+    session_key = "abc123def456"
+    settings.SECRET_KEY = "first_secret_key"  # noqa: S105
+    first = anonymize_ident(session_key)
+    settings.SECRET_KEY = "second_secret_key"  # noqa: S105
+    second = anonymize_ident(session_key)
+
+    assert first != second
