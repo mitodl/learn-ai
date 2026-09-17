@@ -488,6 +488,8 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            course_id=serializer.validated_data.get("course_id"),
+            platform=serializer.validated_data.get("platform"),
         )
 
     def process_extra_state(self, data: dict) -> dict:
@@ -501,6 +503,10 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         }
         if related_courses:
             params["related_courses"] = related_courses
+        if data.get("platform"):
+            # A readable id can match resources on two platforms; when the
+            # request says which one, the tools scope their searches to it.
+            params["platform"] = [data["platform"]]
         return params
 
     def prepare_response(

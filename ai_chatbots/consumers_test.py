@@ -444,6 +444,22 @@ def test_syllabus_process_extra_state_with_related_courses(syllabus_consumer):
     assert result["related_courses"] == related
 
 
+@pytest.mark.parametrize("platform", ["xpro", None])
+def test_syllabus_process_extra_state_platform(syllabus_consumer, platform):
+    """
+    A platform sent with the request should reach the tools, so that a readable
+    id shared by two platforms is not searched under the wrong one.
+    """
+    result = syllabus_consumer.process_extra_state(
+        {
+            "message": "hello",
+            "course_id": "course-v1:PRO+AIGE",
+            "platform": platform,
+        }
+    )
+    assert result.get("platform") == ([platform] if platform else None)
+
+
 def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     """Test that the canvas syllabus process_extra_state function returns False for exclude_canvas."""
     assert canvas_syllabus_consumer.process_extra_state(

@@ -15,16 +15,39 @@ from ai_chatbots.utils import get_django_cache
 @pytest.mark.parametrize(
     "prompt", [prompts.PROMPT_SYLLABUS, prompts.PROMPT_SYLLABUS_CANVAS]
 )
-def test_syllabus_prompts_route_support_questions(prompt):
+def test_syllabus_prompts_route_by_subject(prompt):
     """
-    Both syllabus prompts should send questions the course content cannot
-    answer to the support center, not just platform questions.  Support
-    articles cover how a course is delivered too, and those questions read as
-    questions about the course itself.
+    Both syllabus prompts should route by what a question is about: the
+    resource's own facts (price included) come from its content, and the
+    support center covers platform and account help.
     """
-    assert "search_support_articles" in prompt
-    for topic in ("transcripts", "accessibility", "how long access"):
-        assert topic in prompt
+    content_paragraph, support_paragraph, tiebreak = (
+        " ".join(paragraph.split())
+        for paragraph in prompt.split("\n\n")
+        if paragraph.startswith(
+            (
+                'Start with "search_content_files"',
+                'Use "search_support_articles"',
+                "When a question involves money",
+            )
+        )
+    )
+    for topic in ("what it covers and requires", "what it costs and what it offers"):
+        assert topic in content_paragraph
+    for topic in (
+        "something is not working",
+        "already earned or paid for",
+        "paying, enrolling or requesting a refund",
+        "platform-wide policy",
+    ):
+        assert topic in support_paragraph
+    # money, certificates and enrollment are the topics that were sent to the
+    # support center wholesale, so the prompt splits them by subject
+    assert "costs, requires or offers is in its content" in tiebreak
+    # the support center has no articles about a course's captions or
+    # transcripts, so those questions do not belong to it
+    assert "transcript" not in support_paragraph
+    assert "caption" not in support_paragraph
 
 
 def test_langsmith_prompt_create(mocker):

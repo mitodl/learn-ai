@@ -40,6 +40,7 @@ from ai_chatbots.api import (
     DjangoCheckpoint,
     MessageTruncationNode,
     create_tutorbot_output_and_checkpoints,
+    get_resource_facts,
     get_search_tool_metadata,
     query_tutorbot_output,
 )
@@ -518,6 +519,7 @@ class SyllabusAgentState(SummaryState):
     """
 
     course_id: Annotated[list[str], add]
+    platform: Annotated[list[str] | None, add]
     collection_name: Annotated[list[str], add]
     related_courses: Annotated[list[str], add]
     # str representation of a boolean value, because the
@@ -532,7 +534,7 @@ class SyllabusBot(TruncatingChatbot):
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
-    TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses")
+    TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses", "platform")
 
     def __init__(  # noqa: PLR0913
         self,
@@ -545,6 +547,8 @@ class SyllabusBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         enable_related_courses: bool | None = False,
+        course_id: str | None = None,
+        platform: str | None = None,
     ):
         self.enable_related_courses = enable_related_courses
         super().__init__(
@@ -556,6 +560,11 @@ class SyllabusBot(TruncatingChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
+        # The graph captures the instructions, so the facts have to be in
+        # place before create_agent_graph below.
+        resource_facts = get_resource_facts(course_id, platform)
+        if resource_facts and self.instructions:
+            self.instructions = f"{self.instructions.rstrip()}\n\n{resource_facts}"
         if self.enable_related_courses and self.instructions:
             self.instructions += (
                 "\n\nIMPORTANT: You have two content search tools. Always "
@@ -566,8 +575,8 @@ class SyllabusBot(TruncatingChatbot):
                 "other courses in the same program. Combine results from both "
                 "tools to provide the most comprehensive answer. Neither of "
                 "them replaces search_support_articles, which is still the "
-                "tool to use for questions the course material does not "
-                "answer."
+                "tool for questions about how MIT platforms work rather than "
+                "about these courses."
             )
         self.agent = self.create_agent_graph()
 

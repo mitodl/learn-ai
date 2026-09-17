@@ -719,6 +719,12 @@ AI_COURSE_PLATFORM_ERROR_CACHE_DURATION = get_int(
 AI_COURSE_PLATFORM_LOOKUP_TIMEOUT = get_int(
     name="AI_COURSE_PLATFORM_LOOKUP_TIMEOUT", default=5
 )
+# How long the facts of a resource (price, dates, format, instructors) are
+# cached for, in seconds.  Shorter than the platform cache, since prices and
+# start dates do change.
+AI_RESOURCE_FACTS_CACHE_DURATION = get_int(
+    name="AI_RESOURCE_FACTS_CACHE_DURATION", default=60 * 60 * 6
+)
 
 
 # APISIX middleware settings

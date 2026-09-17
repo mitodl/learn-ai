@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from django.conf import settings
 from django.core.cache import caches
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
@@ -155,7 +156,16 @@ async def test_httpx_exception(mocker):
     result = await search_courses.ainvoke(
         {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
     )
-    assert result == '{"error": "An error occurred while searching"}'
+    # a failed search still reports what it tried, so the metadata shows a
+    # failure rather than an empty result set
+    assert json.loads(result) == {
+        "error": "An error occurred while searching",
+        "results": [],
+        "metadata": {
+            "search_url": "https://test.edu/search",
+            "parameters": {"q": "physics", "limit": 10},
+        },
+    }
 
 
 @pytest.mark.usefixtures("_no_retry_sleep")
@@ -171,7 +181,16 @@ async def test_search_courses_handles_http_status_error(
         {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
     )
 
-    assert result == '{"error": "An error occurred while searching"}'
+    # a failed search still reports what it tried, so the metadata shows a
+    # failure rather than an empty result set
+    assert json.loads(result) == {
+        "error": "An error occurred while searching",
+        "results": [],
+        "metadata": {
+            "search_url": "https://test.edu/search",
+            "parameters": {"q": "physics", "limit": 10},
+        },
+    }
     # Confirm the retry budget was actually exercised before giving up.
     assert mock_client.get.call_count == 3
 
@@ -182,6 +201,7 @@ async def test_search_courses_handles_http_status_error(
     [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
 )
 @pytest.mark.parametrize("no_collection_name", [True, False])
+@pytest.mark.parametrize("platform", [None, "ocw"])
 async def test_search_content_files(  # noqa: PLR0913
     settings,
     mock_get_content_files,
@@ -190,6 +210,7 @@ async def test_search_content_files(  # noqa: PLR0913
     search_url,
     limit,
     no_collection_name,
+    platform,
 ):
     """Test that the search_content_files tool returns expected results w/expected params."""
     settings.AI_MIT_SYLLABUS_URL = search_url
@@ -204,6 +225,9 @@ async def test_search_content_files(  # noqa: PLR0913
     if no_collection_name:
         expected_params.pop("collection_name")
         syllabus_agent_state.pop("collection_name")
+    if platform:
+        syllabus_agent_state["platform"] = [platform]
+        expected_params["platform"] = [platform]
 
     results = json.loads(
         await search_content_files.ainvoke(
@@ -513,7 +537,7 @@ def mock_support_requests(mocker, zendesk_article_results):
     course platform, and the Zendesk help center article search.
     """
 
-    def _mock_requests(platform="ocw", articles=None):
+    def _mock_requests(platform="ocw", articles=None, platforms=None):
         def _response(json_value):
             response = mocker.Mock()
             response.json.return_value = json_value
@@ -521,7 +545,8 @@ def mock_support_requests(mocker, zendesk_article_results):
             response.raise_for_status = mocker.Mock()
             return response
 
-        resources = {"results": [{"platform": {"code": platform}}] if platform else []}
+        codes = platforms if platforms is not None else ([platform] if platform else [])
+        resources = {"results": [{"platform": {"code": c}} for c in codes]}
 
         async def _get(url, **kwargs):
             """Answer based on which of the two APIs is being called."""
@@ -562,6 +587,18 @@ def support_state(course_id=COURSE_ID):
     return {"course_id": [course_id]}
 
 
+async def test_search_support_articles_duplicate_platforms(
+    settings, mock_support_requests
+):
+    """A readable id on two platforms should not scope the search to either."""
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    mock_client = mock_support_requests(platforms=["mitxonline", "xpro"])
+
+    await search_support_articles.ainvoke({"q": "pay", "state": support_state()})
+
+    assert "category" not in mock_client.get.call_args_list[1].kwargs["params"]
+
+
 async def test_search_support_articles(
     settings, mock_support_requests, zendesk_article_results
 ):
@@ -586,7 +623,7 @@ async def test_search_support_articles(
     assert mock_client.get.call_args_list[0].args[0] == LEARNING_RESOURCES_URL
     assert mock_client.get.call_args_list[0].kwargs["params"] == {
         "readable_id": COURSE_ID,
-        "limit": 1,
+        "limit": 5,
     }
     assert (
         mock_client.get.call_args_list[0].kwargs["timeout"]
@@ -875,7 +912,12 @@ async def test_search_support_articles_no_portal(settings, mock_support_requests
     result = json.loads(
         await search_support_articles.ainvoke({"q": "credit", "state": support_state()})
     )
-    assert result == {"results": []}
+    assert result == {
+        "results": [],
+        "support_center_url_to_offer_if_no_article_answers": None,
+        "citation_sources": {},
+        "metadata": {},
+    }
     mock_client.get.assert_not_called()
 
 
@@ -889,7 +931,12 @@ async def test_search_support_articles_portal_error(mocker, mock_support_request
         await search_support_articles.ainvoke({"q": "refund", "state": support_state()})
     )
 
-    assert results == {"results": []}
+    assert results == {
+        "results": [],
+        "support_center_url_to_offer_if_no_article_answers": settings.AI_ZENDESK_URL,
+        "citation_sources": {},
+        "metadata": {},
+    }
 
 
 def test_invalid_support_article_params():
@@ -940,7 +987,16 @@ async def test_search_courses_handles_invalid_json(mock_httpx_async_client):
         {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
     )
 
-    assert result == '{"error": "An error occurred while searching"}'
+    # a failed search still reports what it tried, so the metadata shows a
+    # failure rather than an empty result set
+    assert json.loads(result) == {
+        "error": "An error occurred while searching",
+        "results": [],
+        "metadata": {
+            "search_url": "https://test.edu/search",
+            "parameters": {"q": "physics", "limit": 10},
+        },
+    }
 
 
 def test_offered_by_enum_is_named_offered_by():

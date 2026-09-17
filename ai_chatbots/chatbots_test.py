@@ -39,6 +39,7 @@ from ai_chatbots.factories import (
     ToolMessageFactory,
 )
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
+from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
@@ -537,6 +538,43 @@ async def test_syllabus_bot_related_courses_instructions(mocker, mock_checkpoint
     assert "two search tools available" not in chatbot.instructions
     assert "for every user question" not in chatbot.instructions
     assert "search_support_articles" in chatbot.instructions
+
+
+@pytest.mark.asyncio
+async def test_syllabus_bot_resource_facts_instructions(mocker, mock_checkpointer):
+    """SyllabusBot should put the resource facts in its system prompt."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    mock_facts = mocker.patch(
+        "ai_chatbots.chatbots.get_resource_facts",
+        return_value="Facts about this resource:\n- Price: $250.00",
+    )
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        course_id="course-v1:PRO+AIGE",
+        platform="xpro",
+    )
+    mock_facts.assert_called_once_with("course-v1:PRO+AIGE", "xpro")
+    # the facts are added to the prompt, not in place of it
+    assert chatbot.instructions == (
+        f"{SYSTEM_PROMPT_MAPPING['syllabus'].rstrip()}\n\n"
+        "Facts about this resource:\n- Price: $250.00"
+    )
+
+
+@pytest.mark.asyncio
+async def test_syllabus_bot_no_resource_facts(mocker, mock_checkpointer):
+    """An unknown resource should leave the system prompt alone."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    mocker.patch("ai_chatbots.chatbots.get_resource_facts", return_value="")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        course_id="course-v1:No+Such",
+    )
+    assert chatbot.instructions == SYSTEM_PROMPT_MAPPING["syllabus"]
 
 
 @pytest.mark.asyncio
