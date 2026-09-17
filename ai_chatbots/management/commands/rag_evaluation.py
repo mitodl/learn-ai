@@ -110,6 +110,18 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--correctness-only",
+            dest="correctness_only",
+            action="store_true",
+            help=(
+                "Judge answers against their curated expected answers and "
+                "nothing else.  Use this to compare two versions of the code: "
+                "the other metrics score answers against the retrieval "
+                "context, so they penalize an answer that needed fewer tool "
+                "calls, or none."
+            ),
+        )
+        parser.add_argument(
             "--max-retries",
             dest="max_retries",
             required=False,
@@ -152,6 +164,7 @@ class Command(BaseCommand):
         batch_size = options["batch_size"]
         error_log_file = options["error_log_file"]
         require_expected = options["require_expected"]
+        correctness_only = options["correctness_only"]
         max_retries = options["max_retries"]
         retry_delay = options["retry_delay"]
 
@@ -174,6 +187,7 @@ class Command(BaseCommand):
                 max_retries=max_retries,
                 retry_delay=retry_delay,
                 require_expected=require_expected,
+                correctness_only=correctness_only,
             )
 
             # Validate bot names if provided

@@ -1,0 +1,157 @@
+{
+  "syllabus": [
+    {
+      "question": "Is this free or does it require payment?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "This workshop is not free.  It costs $250.00."
+    },
+    {
+      "question": "Can I watch the webinar for free?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "No.  The workshop costs $250.00, and there is no free or audit option."
+    },
+    {
+      "question": "How long is this workshop?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "It is a 90 minute workshop."
+    },
+    {
+      "question": "Who leads this workshop?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "Jeffrey Saviano."
+    },
+    {
+      "question": "Do I get a certificate for this?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "Yes.  It carries a certificate - a Certificate of Completion on MITx Online, or a Professional Certificate on MIT xPRO."
+    },
+    {
+      "question": "I paid for the workshop but I am not enrolled in it.",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "Says that the support center has no article covering a payment that did not result in enrollment, and points the learner to MIT Learn support to sort it out.  Troubleshooting steps that no support article states are wrong, however plausible they sound, and so is an answer drawn from articles about other programs such as DEDP or SDS."
+    },
+    {
+      "question": "How do I pay for this workshop?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "expected_output": "Explains how payment works on the MIT platform hosting the workshop and links to a support article about paying.  It does not answer with content from an unrelated course or program."
+    },
+    {
+      "question": "Is this course free or does it require payment?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "expected_output": "The course is free to audit.  A certificate costs $49.00."
+    },
+    {
+      "question": "How much does the certificate cost?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "expected_output": "$49.00."
+    },
+    {
+      "question": "Who teaches this course?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "expected_output": "J. Phillip Thompson, Lily Steponaitis and Katrin Kaeufer."
+    },
+    {
+      "question": "What topics does this course cover?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "expected_output": "It covers the core principles of just banking and how finance can be used as a tool for social and environmental change: the impact of different forms of banking on societal well-being, the challenges facing alternative banking models, and developments in financial technology."
+    },
+    {
+      "question": "The payment page will not load when I try to upgrade.  What should I do?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "expected_output": "Directs the learner to MIT Learn support for a page that is not working, with a link to the relevant support article.  It does not answer with the price of the course."
+    },
+    {
+      "question": "How do I get a receipt for what I paid?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "expected_output": "Explains how to obtain a receipt through the MIT platform or its support center, with a link to the relevant support article."
+    },
+    {
+      "question": "Is this course free?",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "Yes.  It is on MIT OpenCourseWare and is free."
+    },
+    {
+      "question": "Does this course offer a certificate?",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "No.  It is MIT OpenCourseWare material and carries no certificate."
+    },
+    {
+      "question": "Who are the instructors for this course?",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "Prof. Deepto Chakrabarty, Dr. Peter Dourmashkin, Dr. Michelle Tomasik, Prof. Anna Frebel and Prof. Vladan Vuletic."
+    },
+    {
+      "question": "How is this course graded?",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "Midterm exams 45%, final exam 25%, problem sets 10% and class participation 20%."
+    },
+    {
+      "question": "I cannot sign in to MIT Learn.",
+      "extra_state": {
+        "course_id": ["8.01SC+fall_2016"],
+        "collection_name": [null]
+      },
+      "expected_output": "Says that MIT OpenCourseWare itself needs no sign-in or account to read its material, and sends the learner to MIT Learn support (https://support.learn.mit.edu) for trouble with their own account, since no support article covers signing in.  An answer that leaves the learner with nowhere to go is wrong."
+    },
+    {
+      "question": "Do I get a certificate for this?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "platform": ["xpro"],
+        "collection_name": [null]
+      },
+      "expected_output": "Yes.  It carries a Professional Certificate on MIT xPRO."
+    }
+  ]
+}
