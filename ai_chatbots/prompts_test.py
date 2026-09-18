@@ -48,6 +48,11 @@ def test_syllabus_prompts_route_by_subject(prompt):
     # transcripts, so those questions do not belong to it
     assert "transcript" not in support_paragraph
     assert "caption" not in support_paragraph
+    # the resource facts are appended to the prompt rather than returned by a
+    # tool, so the "tool output only" rule has to admit them as a source
+    collapsed = " ".join(prompt.split())
+    assert "from the tool output and from the resource facts below" in collapsed
+    assert "OUTSIDE OF THE TOOL OUTPUT AND THE RESOURCE FACTS BELOW" in collapsed
 
 
 def test_langsmith_prompt_create(mocker):
