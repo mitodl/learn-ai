@@ -444,6 +444,22 @@ def test_syllabus_process_extra_state_with_related_courses(syllabus_consumer):
     assert result["related_courses"] == related
 
 
+@pytest.mark.parametrize("platform", ["xpro", None])
+def test_syllabus_process_extra_state_platform(syllabus_consumer, platform):
+    """
+    A platform sent with the request should reach the tools, so that a readable
+    id shared by two platforms is not searched under the wrong one.
+    """
+    result = syllabus_consumer.process_extra_state(
+        {
+            "message": "hello",
+            "course_id": "course-v1:PRO+AIGE",
+            "platform": platform,
+        }
+    )
+    assert result.get("platform") == ([platform] if platform else None)
+
+
 def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     """Test that the canvas syllabus process_extra_state function returns False for exclude_canvas."""
     assert canvas_syllabus_consumer.process_extra_state(
@@ -455,12 +471,16 @@ def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     }
 
 
-async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
-    """The correct chatbot class should be assigned to self.chatbot"""
+async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
+    """The canvas bot should get the same resource identifiers as the web one"""
+    mock_facts = mocker.patch(
+        "ai_chatbots.chatbots.get_resource_facts", return_value=""
+    )
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "test",
             "course_id": "MITx+6.00.1x",
+            "platform": "mitxonline",
             "model": "gpt-3.5-turbo",
         }
     )
@@ -470,6 +490,7 @@ async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
         serializer, InMemorySaver()
     )
     assert bot.__class__ == consumers.CanvasSyllabusBot
+    mock_facts.assert_called_once_with("MITx+6.00.1x", "mitxonline")
 
 
 @pytest.mark.parametrize(

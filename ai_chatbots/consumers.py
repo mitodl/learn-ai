@@ -468,19 +468,20 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = SyllabusChatRequestSerializer
     ROOM_NAME = SyllabusBot.__name__
     throttle_scope = "syllabus_bot"
+    bot_class = SyllabusBot
 
     def create_chatbot(
         self,
         serializer: SyllabusChatRequestSerializer,
         checkpointer: BaseCheckpointSaver,
     ):
-        """Return a SyllabusBot instance"""
+        """Return a syllabus bot instance"""
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
         enable_related_courses = bool(serializer.validated_data.get("related_courses"))
 
-        return SyllabusBot(
+        return self.bot_class(
             self.user_id,
             checkpointer,
             temperature=temperature,
@@ -488,6 +489,8 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            course_id=serializer.validated_data.get("course_id"),
+            platform=serializer.validated_data.get("platform"),
         )
 
     def process_extra_state(self, data: dict) -> dict:
@@ -501,6 +504,10 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         }
         if related_courses:
             params["related_courses"] = related_courses
+        if data.get("platform"):
+            # A readable id can match resources on two platforms; when the
+            # request says which one, the tools scope their searches to it.
+            params["platform"] = [data["platform"]]
         return params
 
     def prepare_response(
@@ -534,6 +541,7 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
 
     ROOM_NAME = "CanvasSyllabusBot"
     throttle_scope = "canvas_syllabus_bot"
+    bot_class = CanvasSyllabusBot
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
@@ -541,27 +549,6 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
             **super().process_extra_state(data),
             "exclude_canvas": [str(False)],
         }
-
-    def create_chatbot(
-        self,
-        serializer: SyllabusChatRequestSerializer,
-        checkpointer: BaseCheckpointSaver,
-    ):
-        """Return a SyllabusBot instance"""
-        temperature = serializer.validated_data.pop("temperature", None)
-        instructions = serializer.validated_data.pop("instructions", None)
-        model = serializer.validated_data.pop("model", None)
-        enable_related_courses = bool(serializer.validated_data.get("related_courses"))
-
-        return CanvasSyllabusBot(
-            self.user_id,
-            checkpointer,
-            temperature=temperature,
-            instructions=instructions,
-            model=model,
-            thread_id=self.thread_id,
-            enable_related_courses=enable_related_courses,
-        )
 
 
 class DemoCanvasSyllabusBotHttpConsumer(CanvasSyllabusBotHttpConsumer):

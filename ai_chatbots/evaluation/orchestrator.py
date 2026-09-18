@@ -52,6 +52,7 @@ class EvaluationOrchestrator:
         retry_delay: float = 5.0,
         *,
         require_expected: bool = False,
+        correctness_only: bool = False,
     ) -> EvaluationConfig:
         """Create evaluation configuration with metrics.
 
@@ -66,8 +67,38 @@ class EvaluationOrchestrator:
                 answers (ContextualPrecision, ContextualRecall). If False
                 (default), use reference-free metrics (Faithfulness, GEval)
                 that evaluate quality without expected answers.
+            correctness_only: If True, judge the answer against the curated
+                expected answer and nothing else.  The other metrics score the
+                answer against the retrieval context, which makes them
+                unusable for comparing two versions of the code that reach the
+                same answer through different tools, or through none at all.
         """
-        if require_expected:
+        if correctness_only:
+            if metric_thresholds is None:
+                metric_thresholds = {"Correctness": 0.7}
+            metrics = [
+                GEval(
+                    name="Correctness",
+                    criteria=(
+                        "Determine whether the actual output states the same "
+                        "facts as the expected output.  Numbers, prices, dates "
+                        "and names must match; extra detail is acceptable only "
+                        "if it does not contradict the expected output.  An "
+                        "answer about a different course, program or platform "
+                        "than the one asked about is incorrect, and so is "
+                        "saying no information could be found when the expected "
+                        "output supplies it."
+                    ),
+                    evaluation_params=[
+                        LLMTestCaseParams.INPUT,
+                        LLMTestCaseParams.ACTUAL_OUTPUT,
+                        LLMTestCaseParams.EXPECTED_OUTPUT,
+                    ],
+                    model=evaluation_model,
+                    threshold=metric_thresholds["Correctness"],
+                ),
+            ]
+        elif require_expected:
             if metric_thresholds is None:
                 metric_thresholds = {
                     "ContextualPrecision": 0.7,
