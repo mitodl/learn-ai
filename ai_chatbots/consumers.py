@@ -120,10 +120,11 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
 
         current_thread_id = None
-        self.user_id = self.get_ident()
+        self.ident = self.get_ident()
+        self.user_id = self.get_trace_ident()
         self.session_key = (
             self.scope["cookies"].get(AI_SESSION_COOKIE_KEY)
-            or self.user_id
+            or self.ident
             or uuid4().hex
         )
         anon_cookie = False
@@ -239,7 +240,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
         self.channel_layer = get_channel_layer()
         self.room_name = self.ROOM_NAME
-        self.room_group_name = f"{self.ROOM_NAME}_{self.user_id.replace('-', '_')}"[:90]
+        self.room_group_name = f"{self.ROOM_NAME}_{self.ident.replace('-', '_')}"[:90]
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         return current_thread_id, cookies
 
@@ -371,7 +372,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_error_response(400, err, cookies)
         except AsyncThrottled as err:
             log_msg = (
-                f"User {self.get_ident()} throttled on "
+                f"User {self.get_trace_ident()} throttled on "
                 f"{self.__class__.__name__} for {err.wait} seconds"
             )
             log.info(log_msg)

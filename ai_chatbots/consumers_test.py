@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
+from channels.layers import InMemoryChannelLayer
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
@@ -1368,3 +1369,61 @@ async def test_disconnect_without_channel_layer(mocker, recommendation_consumer)
 
     # Verify litellm cleanup was called
     mock_close.assert_called_once()
+
+
+@pytest.fixture
+def real_channel_layer(mocker):
+    """Use a channel layer that validates group names, unlike the conftest mock."""
+    layer = InMemoryChannelLayer()
+    mocker.patch("ai_chatbots.consumers.get_channel_layer", return_value=layer)
+    return layer
+
+
+async def test_anonymous_consumer_hides_session_key_from_external_ids(
+    mock_http_consumer_send, anonymous_consumer_setup, test_session_key
+):
+    """External ids are hashed while the raw key stays as the correlation key."""
+    consumer = anonymous_consumer_setup(test_session_key)
+
+    await consumer.assign_thread_cookies(consumer.scope["user"])
+
+    assert consumer.user_id.startswith("anon-")
+    assert test_session_key not in consumer.user_id
+    assert consumer.session_key == test_session_key
+
+
+async def test_anonymous_consumer_room_group_name_is_channels_safe(
+    mocker,
+    mock_http_consumer_send,
+    anonymous_consumer_setup,
+    test_session_key,
+    real_channel_layer,
+):
+    """Anonymous requests must join a group name the channel layer accepts."""
+    consumer = anonymous_consumer_setup(test_session_key)
+    serializer = mocker.Mock(validated_data={})
+
+    await consumer.prepare_response(serializer)
+
+    assert consumer.user_id not in consumer.room_group_name
+    assert consumer.channel_name in real_channel_layer.groups[consumer.room_group_name]
+
+
+async def test_throttle_log_omits_raw_session_key(
+    mocker, caplog, anonymous_consumer_setup, test_session_key
+):
+    """The throttle log line must not contain the raw anonymous session key."""
+    mocker.patch(
+        "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
+        side_effect=AsyncThrottled(30),
+    )
+    mocker.patch("ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock)
+    mocker.patch("ai_chatbots.consumers.SyllabusBotHttpConsumer.send_chunk")
+    consumer = anonymous_consumer_setup(test_session_key)
+
+    with caplog.at_level("INFO", logger="ai_chatbots.consumers"):
+        await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
+
+    assert "throttled on" in caplog.text
+    assert test_session_key not in caplog.text
+    assert consumer.get_trace_ident() in caplog.text
