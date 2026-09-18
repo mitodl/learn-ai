@@ -175,8 +175,7 @@ preferences. Restrict access with a group permission, following the
 shouldn't share a permission. An APISIX key-auth consumer would also work but needs a
 gateway change for no benefit here.
 
-Tokens are issued and expired in mit-learn's admin under OAuth2 Provider. Still to
-confirm: which user the current token belongs to, when it expires, and who rotates it.
+Tokens are issued and expired in mit-learn's admin under OAuth2 Provider.
 
 ### learn-ai
 
@@ -484,9 +483,8 @@ freshness matters more than coverage. Very open to other ideas.
 
 ## Implementation Plan
 
-1. **mit-learn**: the preferences endpoint and its group permission; the settings page
-   section calling learn-ai; confirm which user `LEARN_ACCESS_TOKEN` belongs to and when
-   it expires.
+1. **mit-learn**: the preferences endpoint and its group permission, and the settings
+   page section calling learn-ai.
 2. **learn-ai, behind the flag**: the profile fetch and cache, the three models, the
    extraction pipeline, and the memory endpoint, as described above.
 3. **RC**: enable the flag on RC only. Tune delay, batch size, and timeouts; measure
@@ -563,8 +561,6 @@ DevOps confirms APISIX strips client-supplied `x-userinfo` on the learn-ai route
   which would double as the disclosure. MIT Learn has learners who list secondary school
   as their education level, which argues for asking first. Product decision before
   rollout.
-- **Service token:** Which account owns `LEARN_ACCESS_TOKEN`, when does it expire, and
-  who rotates it?
 - **Enrollment history:** which phase 2 option, if the requirement becomes mandatory.
 - **Cross-service deletion:** how should account deletion in mit-learn reach learn-ai
   automatically?
