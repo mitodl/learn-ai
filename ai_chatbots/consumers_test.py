@@ -471,12 +471,16 @@ def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     }
 
 
-async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
-    """The correct chatbot class should be assigned to self.chatbot"""
+async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
+    """The canvas bot should get the same resource identifiers as the web one"""
+    mock_facts = mocker.patch(
+        "ai_chatbots.chatbots.get_resource_facts", return_value=""
+    )
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "test",
             "course_id": "MITx+6.00.1x",
+            "platform": "mitxonline",
             "model": "gpt-3.5-turbo",
         }
     )
@@ -486,6 +490,7 @@ async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
         serializer, InMemorySaver()
     )
     assert bot.__class__ == consumers.CanvasSyllabusBot
+    mock_facts.assert_called_once_with("MITx+6.00.1x", "mitxonline")
 
 
 @pytest.mark.parametrize(
