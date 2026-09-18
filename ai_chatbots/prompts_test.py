@@ -26,7 +26,7 @@ def test_syllabus_prompts_route_by_subject(prompt):
         for paragraph in prompt.split("\n\n")
         if paragraph.startswith(
             (
-                'Start with "search_content_files"',
+                'Use "search_content_files"',
                 'Use "search_support_articles"',
                 "When a question involves money",
             )

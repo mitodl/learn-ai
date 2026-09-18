@@ -96,10 +96,11 @@ REMEMBER: It's better to have NO citation than WRONG citations.
 
 # The syllabus prompts differ only in where the citation instructions go, so
 # the part that routes a question between the two search tools is shared.
-PROMPT_SYLLABUS_ROUTING = """Start with "search_content_files".  It searches this resource's own material and
-already has the resource identifier, so never put the course id in the query.  Use
-it for anything about the resource itself: what it covers and requires, when it
-runs, how it is delivered, what it costs and what it offers.
+PROMPT_SYLLABUS_ROUTING = """Use "search_content_files" for anything about the resource itself that the facts
+below do not answer: what it covers and requires, when it runs, how it is
+delivered, what it costs and what it offers.  It searches this resource's own
+material and already has the resource identifier, so never put the course id in
+the query.
 
 Use "search_support_articles" when the user needs help with an MIT platform or
 their account rather than facts about this resource: something is not working, they
