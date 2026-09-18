@@ -22,8 +22,9 @@ log = logging.getLogger(__name__)
 # This is the Django ImageField max path size
 IMAGE_PATH_MAX_LENGTH = 100
 
-# Prefix for hashed anonymous user identifiers sent to external systems
-ANONYMOUS_IDENT_PREFIX = "anon:"
+# Prefix for hashed anonymous user identifiers sent to external systems.
+# No colon: some callers embed the ident in Channels group names.
+ANONYMOUS_IDENT_PREFIX = "anon-"
 
 
 def anonymize_ident(ident: str) -> str:

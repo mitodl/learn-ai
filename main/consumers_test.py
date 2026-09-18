@@ -83,7 +83,7 @@ def test_get_trace_ident_hashes_anonymous_session_key(mocker):
 
     assert trace_ident == anonymize_ident(consumer.get_ident())
     assert session_key not in trace_ident
-    assert trace_ident.startswith("anon:")
+    assert trace_ident.startswith("anon-")
 
 
 @pytest.mark.django_db

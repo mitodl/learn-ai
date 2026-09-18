@@ -180,7 +180,7 @@ def test_anonymize_ident_hides_raw_value():
 
     result = anonymize_ident(session_key)
 
-    assert result.startswith("anon:")
+    assert result.startswith("anon-")
     assert session_key not in result
 
 
