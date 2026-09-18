@@ -1,6 +1,12 @@
 Release Notes
 =============
 
+Version 0.37.1
+--------------
+
+- Answer syllabus resource questions from the resource, not the support center (#78)
+- Disable Opik's own Sentry client so it stops replacing ours (#76)
+
 Version 0.37.0
 --------------
 

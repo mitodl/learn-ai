@@ -211,12 +211,22 @@ async def search_courses(
         return json.dumps(full_output)
     except Exception:
         log.exception("Error querying MIT API")
-        return json.dumps({"error": "An error occurred while searching"})
+        # keep the url and parameters, so a failed search is distinguishable
+        # from one that ran and found nothing
+        return json.dumps(
+            {
+                "error": "An error occurred while searching",
+                "results": [],
+                "metadata": {"search_url": search_url, "parameters": params},
+            }
+        )
 
 
 class SearchContentFilesToolSchema(pydantic.BaseModel):
     """
-    Schema for searching MIT contentfiles related to a particular learning resource.
+    Schema for searching MIT contentfiles related to a particular learning
+    resource, including its price, dates, format, instructors and
+    prerequisites.
     """
 
     q: str = Field(
@@ -314,7 +324,16 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         return json.dumps(full_output)
     except Exception:
         log.exception("Error querying MIT API")
-        return json.dumps({"error": "An error occurred while searching"})
+        # keep the url and parameters, so a failed search is distinguishable
+        # from one that ran and found nothing
+        return json.dumps(
+            {
+                "error": "An error occurred while searching",
+                "results": [],
+                "citation_sources": {},
+                "metadata": {"search_url": url, "parameters": params},
+            }
+        )
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
@@ -322,14 +341,19 @@ async def search_content_files(
     q: str, state: Annotated[dict, InjectedState], readable_id: str | None = None
 ) -> str:
     """
-    Search for detailed information about a particular MIT learning resource.
-    The resource is identified by its readable_id or course_id.
+    Search the content of one particular MIT learning resource, identified by
+    its readable_id or course_id.  It covers what the resource teaches, its
+    schedule, format, duration, instructors and prerequisites, what it costs,
+    whether it has a free or audit option, what a certificate for it costs, and
+    its enrollment and payment deadlines.  Use this first for any question that
+    could be specific to this resource.
     """
 
     url = settings.AI_MIT_SYLLABUS_URL
     course_id = state.get("course_id", [None])[-1] or readable_id
     collection_name = state.get("collection_name", [None])[-1]
     exclude_canvas = state.get("exclude_canvas", ["True"])[-1]
+    platform = (state.get("platform") or [None])[-1]
     params = {
         "q": q,
         "resource_readable_id": course_id,
@@ -337,6 +361,10 @@ async def search_content_files(
     }
     if collection_name:
         params["collection_name"] = collection_name
+    if platform:
+        # A readable id can match resources on two platforms; scope the search
+        # to the one the request named so the other one's content can't answer.
+        params["platform"] = [platform]
     return await _content_file_search(url, params, exclude_canvas=exclude_canvas)
 
 
@@ -410,13 +438,30 @@ async def get_video_transcript_chunk(
 class SearchSupportArticlesToolSchema(pydantic.BaseModel):
     """
     Schema to search the MIT Learn support center (Zendesk help center) for
-    articles about how MIT platforms work: enrollment, certificates, refunds,
-    payments, account and login issues, deadlines, technical problems, etc.
+    articles about using MIT platforms and accounts: transactions, access
+    problems, technical problems and platform-wide policies.  It does not cover
+    what a particular resource costs, requires or offers, or when it runs.
 
-    Here are some recommended tool parameters to apply for sample user prompts:
+    Here are some recommended tool parameters to apply for sample user prompts.
+    Keep the distinctive words of the problem, since this is a keyword search:
 
-    User: "How do I get a certificate for my course?"
+    User: "How can I pay for this course?"
+    Search parameters: q="payment"
+
+    User: "I cannot get to the certificate I earned"
     Search parameters: q="certificate"
+
+    User: "I paid for the course but am not enrolled in it"
+    Search parameters: q="paid not enrolled"
+
+    User: "The payment page will not load when I try to upgrade"
+    Search parameters: q="payment page not loading upgrade"
+
+    User: "I cannot log in to MIT Learn"
+    Search parameters: q="login"
+
+    User: "How do I unenroll?"
+    Search parameters: q="unenroll"
 
     User: "Can I get credit for OpenCourseWare courses?"
     Search parameters: q="credit"
@@ -434,6 +479,9 @@ class SearchSupportArticlesToolSchema(pydantic.BaseModel):
             Keywords describing the support question, i.e. "certificate", "refund",
             "unenroll", "password reset".  Use a few keywords rather than a full
             sentence, since this is a keyword search rather than a semantic one.
+            Keep the user's own distinctive words - "paid not enrolled", "payment
+            page not loading" - rather than replacing them with a category, since
+            "enrollment issue" or "payment problem" match almost any article.
             """
         )
     )
@@ -478,7 +526,7 @@ async def _get_course_platform(readable_id: str) -> str | None:
     try:
         response = await async_request(
             settings.AI_MIT_LEARNING_RESOURCES_URL,
-            {"readable_id": readable_id, "limit": 1},
+            {"readable_id": readable_id, "limit": 5},
             # A cheap metadata lookup, not a search, and every support search
             # waits on it, so it gets a tighter timeout than the default.
             timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
@@ -489,7 +537,11 @@ async def _get_course_platform(readable_id: str) -> str | None:
         )
         response.raise_for_status()
         results = response.json().get("results", [])
-        platform = (results[0].get("platform") or {}).get("code") if results else None
+        codes = {(r.get("platform") or {}).get("code") for r in results} - {None}
+        # A readable id can match resources on two platforms.  Picking one of
+        # them scopes the support search to the wrong help center section, so
+        # stay unscoped unless the matches agree.
+        platform = codes.pop() if len(codes) == 1 else None
     except Exception:
         log.exception("Error looking up the platform of course %s", readable_id)
         # Cache the failure briefly, so that an unreachable API is not retried
@@ -520,22 +572,52 @@ def _zendesk_categories(course_id: str | None, platform: str | None) -> list[str
     return categories
 
 
+def _support_output(
+    portal_url: str | None,
+    articles: list[dict] | None = None,
+    metadata: dict | None = None,
+) -> str:
+    """
+    Serialize the support search result.  The support center url is keyed by
+    what to do with it, because the model ignores the same instruction when it
+    is prose in the prompt or the tool docstring.
+    """
+    articles = articles or []
+    return json.dumps(
+        {
+            "results": articles,
+            "support_center_url_to_offer_if_no_article_answers": portal_url,
+            "citation_sources": {
+                article["id"]: {
+                    "citation_url": article["url"],
+                    "citation_title": article["title"],
+                }
+                for article in articles
+                if article["url"]
+            },
+            "metadata": metadata or {},
+        }
+    )
+
+
 @tool(args_schema=SearchSupportArticlesToolSchema)
 async def search_support_articles(q: str, state: Annotated[dict, InjectedState]) -> str:
     """
     Search the MIT Learn support center (help center) for up to date articles
-    about how MIT platforms and courses work: enrollment, certificates,
-    refunds, payments, accounts, logins, deadlines and technical issues, and
-    also how course material is delivered - video transcripts and captions,
-    accessibility, course formats, prerequisites, and how long access to the
-    content lasts.  Use this tool for any question about a course that is not
-    answered by the course content itself.  Returns the articles as a JSON
-    string.
+    about using MIT platforms and accounts: carrying out a transaction such as
+    paying, enrolling, unenrolling or requesting a refund, reaching something
+    already earned or paid for, signing in and other technical problems, and
+    platform-wide policies such as accessibility and how long access to course
+    material lasts.  It answers how to do something or what to do when it does
+    not work; what a resource costs, covers, requires or offers, and when it
+    runs, are in the resource's own content.  Returns the articles as a JSON
+    string, with a support center url to offer the user when none of the
+    articles it found answers their question.
     """
     portal_url = settings.AI_ZENDESK_URL
     if not portal_url:
         log.warning("No support portal url is configured")
-        return json.dumps({"results": []})
+        return _support_output(None)
 
     search_url = f"{portal_url.rstrip('/')}{ZENDESK_ARTICLE_SEARCH_PATH}"
     params = {"query": q, "per_page": settings.AI_ZENDESK_SEARCH_LIMIT}
@@ -544,7 +626,11 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
     # under discussion.
     course_ids = (state or {}).get("course_id") or [None]
     course_id = course_ids[-1]
-    platform = await _get_course_platform(course_id) if course_id else None
+    # A readable id can match resources on two platforms, so trust the
+    # platform the request supplied over looking one up by readable id.
+    platform = ((state or {}).get("platform") or [None])[-1]
+    if not platform and course_id:
+        platform = await _get_course_platform(course_id)
     categories = _zendesk_categories(course_id, platform)
     if categories:
         # The search endpoint takes a comma separated list of category ids
@@ -571,7 +657,7 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
         ]
     except Exception:
         log.exception("Error querying the support portal at %s", search_url)
-        return json.dumps({"results": []})
+        return _support_output(portal_url)
 
     if categories and not articles:
         # A stale category id is not an error: zendesk answers 200 with an
@@ -586,20 +672,12 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
             course_id,
         )
 
-    full_output = {
-        "results": articles,
-        "citation_sources": {
-            article["id"]: {
-                "citation_url": article["url"],
-                "citation_title": article["title"],
-            }
-            for article in articles
-            if article["url"]
-        },
-        "metadata": {
+    return _support_output(
+        portal_url,
+        articles,
+        metadata={
             "search_url": search_url,
             "parameters": params,
             "platform": platform,
         },
-    }
-    return json.dumps(full_output)
+    )

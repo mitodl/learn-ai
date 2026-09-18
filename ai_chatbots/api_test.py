@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.core.cache import caches
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
@@ -17,6 +18,7 @@ from ai_chatbots.api import (
     _should_create_checkpoint,
     create_tutor_checkpoints,
     create_tutorbot_output_and_checkpoints,
+    get_resource_facts,
 )
 from ai_chatbots.chatbots import SystemMessage
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
@@ -551,3 +553,154 @@ def test_find_nth_human_message_not_enough(sample_messages):
     # Should return 0 when there aren't enough human messages
     index = node.find_nth_human_message_from_end(messages, 10)
     assert index == 0
+
+
+AIGE_XPRO = {
+    "title": "A New Imperative for AI Governance and Ethics",
+    "platform": {"code": "xpro", "name": "MIT xPRO"},
+    "free": False,
+    "certification": True,
+    "certification_type": {"code": "professional", "name": "Professional Certificate"},
+    "prices": ["250.00"],
+    "delivery": [{"code": "online", "name": "Online"}],
+    "format": [{"code": "asynchronous", "name": "Asynchronous"}],
+    "pace": [{"code": "self_paced", "name": "Self-paced"}],
+    "duration": "90 minutes",
+    "next_start_date": "2026-12-01T18:00:00Z",
+    "best_run_id": 53288,
+    "runs": [
+        {
+            "id": 53288,
+            "run_id": "course-v1:xPRO+AIGE+R2",
+            "instructors": [{"full_name": "Jeffrey Saviano"}],
+        }
+    ],
+    "url": "https://xpro.mit.edu/courses/course-v1:PRO+AIGE/",
+}
+
+AIGE_MITXONLINE = {
+    **AIGE_XPRO,
+    "platform": {"code": "mitxonline", "name": "MITx Online"},
+    "prices": ["249.00"],
+    "best_run_id": 52665,
+    "runs": [{"id": 52665, "run_id": "course-v1:PRO+AIGE+R1", "instructors": []}],
+}
+
+
+@pytest.fixture
+def mock_resource_response(mocker):
+    """Mock the sync http client used for resource facts lookups"""
+    # the redis cache is a dummy in tests, so point the lookup at locmem
+    cache = caches["default"]
+    cache.clear()
+    mocker.patch("ai_chatbots.api.get_django_cache", return_value=cache)
+
+    def _mock(results, status_error=None):
+        response = mocker.MagicMock()
+        response.json.return_value = {"results": results}
+        if status_error:
+            response.raise_for_status.side_effect = status_error
+        client = mocker.patch("ai_chatbots.api.get_sync_http_client").return_value
+        client.get.return_value = response
+        return client
+
+    return _mock
+
+
+@pytest.mark.django_db
+def test_get_resource_facts(mock_resource_response):
+    """Facts for a single resource should cover price, format and instructors"""
+    client = mock_resource_response([AIGE_XPRO])
+    facts = get_resource_facts("course-v1:PRO+AIGE")
+    assert "authoritative" in facts
+    for line in (
+        "- Title: A New Imperative for AI Governance and Ethics",
+        "- Platform: MIT xPRO",
+        "- Free: no",
+        "- Price: $250.00",
+        "- Certificate: Professional Certificate",
+        "- Format: Online, Asynchronous, Self-paced",
+        "- Duration: 90 minutes",
+        "- Next start date: 2026-12-01",
+        "- Instructors: Jeffrey Saviano",
+        "- Url: https://xpro.mit.edu/courses/course-v1:PRO+AIGE/",
+    ):
+        assert line in facts
+    assert "platform" not in client.get.call_args.kwargs["params"]
+
+
+@pytest.mark.django_db
+def test_get_resource_facts_duplicate_readable_id(mock_resource_response):
+    """
+    A readable id shared by two platforms should return the facts of both,
+    rather than silently picking one of the two prices.
+    """
+    mock_resource_response([AIGE_MITXONLINE, AIGE_XPRO])
+    facts = get_resource_facts("course-v1:PRO+AIGE")
+    assert "more than one platform" in facts
+    assert "- Price: $249.00" in facts
+    assert "- Price: $250.00" in facts
+
+
+@pytest.mark.django_db
+def test_get_resource_facts_platform_filter(mock_resource_response):
+    """A requested platform should narrow the lookup"""
+    client = mock_resource_response([AIGE_XPRO])
+    get_resource_facts("course-v1:PRO+AIGE", "xpro")
+    assert client.get.call_args.kwargs["params"]["platform"] == "xpro"
+
+
+@pytest.mark.django_db
+def test_get_resource_facts_free_course(mock_resource_response):
+    """A free course should say so, and omit the fields it has no values for"""
+    mock_resource_response(
+        [
+            {
+                "title": "Introduction to Probability",
+                "platform": {"code": "mitxonline", "name": "MITx Online"},
+                "free": True,
+                "certification": False,
+                "prices": ["0.00", "300.00"],
+                "runs": [],
+            }
+        ]
+    )
+    facts = get_resource_facts("MITx+6.431x")
+    assert "- Free: yes" in facts
+    assert "- Price: $0.00, $300.00" in facts
+    assert "- Certificate: none" in facts
+    assert "Duration" not in facts
+    assert "Instructors" not in facts
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("results", [[], [{"platform": {"name": "MIT xPRO"}}]])
+def test_get_resource_facts_unknown_resource(mock_resource_response, results):
+    """An unknown resource, or one with no title, should produce no facts"""
+    mock_resource_response(results)
+    assert get_resource_facts("course-v1:NoSuch+Course") == ""
+
+
+@pytest.mark.django_db
+def test_get_resource_facts_error(mock_resource_response):
+    """A failed lookup should produce no facts rather than raising"""
+    mock_resource_response([AIGE_XPRO], status_error=Exception("API is down"))
+    assert get_resource_facts("course-v1:PRO+AIGE") == ""
+
+
+@pytest.mark.django_db
+def test_get_resource_facts_blank_readable_id(mock_resource_response):
+    """A resource with no readable id should not be looked up at all"""
+    client = mock_resource_response([AIGE_XPRO])
+    assert get_resource_facts(None) == ""
+    client.get.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_get_resource_facts_cached(mock_resource_response):
+    """The lookup should only happen once per resource"""
+    client = mock_resource_response([AIGE_XPRO])
+    first = get_resource_facts("course-v1:PRO+AIGE")
+    second = get_resource_facts("course-v1:PRO+AIGE")
+    assert first == second
+    assert client.get.call_count == 1

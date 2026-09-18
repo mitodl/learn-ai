@@ -3,6 +3,7 @@ Validate that our settings functions work
 """
 
 import importlib
+import os
 import re
 import sys
 import tomllib
@@ -120,6 +121,25 @@ class TestSettings(TestCase):
                 pytest.raises(ImproperlyConfigured),
             ):
                 self.reload_settings()
+
+    def test_opik_sentry_disabled_by_default(self):
+        """OPIK_SENTRY_ENABLE defaults to false so importing opik doesn't
+        replace our Sentry client with Comet's (see opik/__init__.py's
+        setup_sentry_error_tracker, gated on this var).
+        """
+        with mock.patch.dict("os.environ", REQUIRED_SETTINGS, clear=True):
+            self.reload_settings()
+            assert os.environ["OPIK_SENTRY_ENABLE"] == "false"
+
+    def test_opik_sentry_enable_respects_explicit_value(self):
+        """An operator can still opt back into Opik's own Sentry reporting."""
+        with mock.patch.dict(
+            "os.environ",
+            {**REQUIRED_SETTINGS, "OPIK_SENTRY_ENABLE": "true"},
+            clear=True,
+        ):
+            self.reload_settings()
+            assert os.environ["OPIK_SENTRY_ENABLE"] == "true"
 
     def test_server_side_cursors_enabled(self):
         """DISABLE_SERVER_SIDE_CURSORS should be false if MITOL_DB_DISABLE_SS_CURSORS is false"""

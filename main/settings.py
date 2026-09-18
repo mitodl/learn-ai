@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.37.0"
+VERSION = "0.37.1"
 
 log = logging.getLogger()
 
@@ -39,6 +39,14 @@ REDIS_URL = get_string("REDIS_URL", get_string("REDISCLOUD_URL", None))
 CELERY_BROKER_URL = get_string("CELERY_BROKER_URL", REDIS_URL)
 ENVIRONMENT = get_string("MITOL_ENVIRONMENT", "dev")
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
+# Opik calls sentry_sdk.init() with Comet's own DSN as soon as it's imported
+# (opik/__init__.py, gated on this env var), which replaces the client our
+# init_sentry() below installs and silently swallows every request-time error
+# for the rest of the process. Must be set before the first `import opik`
+# anywhere in the process, so it's set here, ahead of every other import that
+# could reach opik transitively.
+os.environ.setdefault("OPIK_SENTRY_ENABLE", "false")
 
 # initialize Sentry before doing anything else so we capture any config errors
 SENTRY_DSN = get_string("SENTRY_DSN", "")
@@ -710,6 +718,12 @@ AI_COURSE_PLATFORM_ERROR_CACHE_DURATION = get_int(
 # because it is a cheap metadata lookup that every support search waits on.
 AI_COURSE_PLATFORM_LOOKUP_TIMEOUT = get_int(
     name="AI_COURSE_PLATFORM_LOOKUP_TIMEOUT", default=5
+)
+# How long the facts of a resource (price, dates, format, instructors) are
+# cached for, in seconds.  Shorter than the platform cache, since prices and
+# start dates do change.
+AI_RESOURCE_FACTS_CACHE_DURATION = get_int(
+    name="AI_RESOURCE_FACTS_CACHE_DURATION", default=60 * 60 * 6
 )
 
 
