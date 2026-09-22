@@ -7,6 +7,7 @@ from django.utils.module_loading import import_string
 from django.utils.text import slugify
 
 from main.exceptions import AsyncThrottled
+from main.utils import anonymize_ident
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +39,22 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
             return user.global_id
         ident = self.get_session_key()
         return slugify(ident)
+
+    def get_trace_ident(self):
+        """
+        Get an identifier for the consumer user that is safe to emit to
+        external systems (trace/analytics providers such as LangSmith,
+        Opik, and PostHog).
+
+        Unlike get_ident(), which is used for throttling and returns the
+        raw session key for anonymous users, this hashes anonymous
+        identifiers so a live session cookie value never leaves the
+        process.
+        """
+        user = self.scope.get("user")
+        if isinstance(user, get_user_model()):
+            return user.global_id
+        return anonymize_ident(self.get_ident())
 
     async def throttled(self, wait):
         """
