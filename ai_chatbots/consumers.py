@@ -461,6 +461,19 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
         )
 
 
+class SearchSummaryBotHttpConsumer(RecommendationBotHttpConsumer):
+    """
+    Async HTTP consumer for the AI summary shown on the search page.
+
+    Uses the same bot as RecommendationBotHttpConsumer, but with its own
+    ROOM_NAME and throttle_scope so that summary threads/cookies and rate
+    limits are kept separate from the regular AskTIM chat.
+    """
+
+    ROOM_NAME = "SearchSummaryBot"
+    throttle_scope = "search_summary_bot"
+
+
 class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     """
     Async HTTP consumer for the syllabus bot.
