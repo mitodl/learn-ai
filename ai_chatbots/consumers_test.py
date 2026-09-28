@@ -15,7 +15,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
-from ai_chatbots.chatbots import ResourceRecommendationBot, SyllabusBot, VideoGPTBot
+from ai_chatbots.chatbots import SearchSummaryBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
@@ -291,7 +291,7 @@ async def test_search_summary_agent_handle(
     is_anon,
 ):
     """
-    The search summary consumer should use the recommendation bot but keep
+    The search summary consumer should use the search summary prompt and keep
     its own thread cookies, chat sessions, and throttle scope.
     """
     consumer = consumers.SearchSummaryBotHttpConsumer()
@@ -301,8 +301,8 @@ async def test_search_summary_agent_handle(
         "session": django_session,
     }
     consumer.channel_name = "test_channel"
-    mocker.patch(
-        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.SearchSummaryBot.get_completion",
         return_value=mocker.Mock(
             __aiter__=mocker.Mock(return_value=MockAsyncIterator(["summary"]))
         ),
@@ -314,7 +314,11 @@ async def test_search_summary_agent_handle(
 
     await consumer.handle(json.dumps({"message": "hello", "clear_history": True}))
 
-    assert isinstance(consumer.bot, ResourceRecommendationBot)
+    assert isinstance(consumer.bot, SearchSummaryBot)
+    assert consumer.bot.instructions == prompts.PROMPT_SEARCH_SUMMARY
+    mock_completion.assert_called_once_with(
+        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
+    )
     headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
     cookie_names = [
         value.decode().split("=")[0] for name, value in headers if name == b"Set-Cookie"

@@ -512,6 +512,17 @@ class ResourceRecommendationBot(TruncatingChatbot):
         return get_search_tool_metadata(thread_id, latest_state)
 
 
+class SearchSummaryBot(ResourceRecommendationBot):
+    """
+    Recommendation bot that summarizes relevant courses for a search query
+    on the MIT Learn search page.
+    """
+
+    PROMPT_TEMPLATE = "search_summary"
+    TASK_NAME = "SEARCH_SUMMARY_TASK"
+    JOB_ID = "SEARCH_SUMMARY_JOB"
+
+
 class SyllabusAgentState(SummaryState):
     """
     State for the syllabus bot. Passes course_id and
