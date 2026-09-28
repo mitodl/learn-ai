@@ -45,7 +45,11 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
-from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import (
+    CONTEXT_LOST_PROMPT,
+    PROMPT_SEARCH_SUMMARY_QUERY,
+    SYSTEM_PROMPT_MAPPING,
+)
 from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
@@ -515,12 +519,25 @@ class ResourceRecommendationBot(TruncatingChatbot):
 class SearchSummaryBot(ResourceRecommendationBot):
     """
     Recommendation bot that summarizes relevant courses for a search query
-    on the MIT Learn search page.
+    on the MIT Learn search page.  The first message of a thread is the search
+    query, which gets wrapped in the summary instructions; follow-up messages
+    are handled like any other recommendation bot conversation.
     """
 
-    PROMPT_TEMPLATE = "search_summary"
     TASK_NAME = "SEARCH_SUMMARY_TASK"
     JOB_ID = "SEARCH_SUMMARY_JOB"
+
+    async def get_completion(
+        self,
+        message: str,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
+        """Wrap the search query in the summary instructions for a new thread"""
+        state = await self.agent.aget_state(self.config)
+        if not (state and state.values.get("messages")):
+            message = PROMPT_SEARCH_SUMMARY_QUERY.format(query=message)
+        async for chunk in super().get_completion(message, **kwargs):
+            yield chunk
 
 
 class SyllabusAgentState(SummaryState):

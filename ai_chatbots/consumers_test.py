@@ -291,7 +291,7 @@ async def test_search_summary_agent_handle(
     is_anon,
 ):
     """
-    The search summary consumer should use the search summary prompt and keep
+    The search summary consumer should use the search summary bot and keep
     its own thread cookies, chat sessions, and throttle scope.
     """
     consumer = consumers.SearchSummaryBotHttpConsumer()
@@ -315,7 +315,7 @@ async def test_search_summary_agent_handle(
     await consumer.handle(json.dumps({"message": "hello", "clear_history": True}))
 
     assert isinstance(consumer.bot, SearchSummaryBot)
-    assert consumer.bot.instructions == prompts.PROMPT_SEARCH_SUMMARY
+    assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
     mock_completion.assert_called_once_with(
         "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
     )
