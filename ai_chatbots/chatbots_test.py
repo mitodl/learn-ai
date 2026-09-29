@@ -21,6 +21,7 @@ from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
+    SearchSummaryBot,
     SyllabusAgentState,
     SyllabusBot,
     TutorBot,
@@ -39,7 +40,7 @@ from ai_chatbots.factories import (
     ToolMessageFactory,
 )
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
-from ai_chatbots.prompts import SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
@@ -296,6 +297,45 @@ async def test_get_completion(
     if debug:
         assert '<!-- {"metadata"' in results
     assert "".join([value.decode() for value in expected_return_value]) in results
+
+
+@pytest.mark.parametrize("has_history", [True, False])
+async def test_search_summary_bot_get_completion(
+    mocker, mock_checkpointer, has_history
+):
+    """
+    Only the first message of a search summary thread should be wrapped in the
+    summary instructions; follow-ups should be sent as-is.
+    """
+    mock_parent_completion = mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=MockAsyncIterator(["summary"]),
+    )
+    chatbot = await sync_to_async(SearchSummaryBot)("anonymous", mock_checkpointer)
+    assert chatbot.instructions == SYSTEM_PROMPT_MAPPING["recommendation"]
+    mocker.patch.object(
+        chatbot.agent,
+        "aget_state",
+        return_value=mocker.Mock(
+            values={"messages": [HumanMessageFactory.create()] if has_history else []}
+        ),
+    )
+    extra_state = {"search_url": ["https://test.mit.edu/search"]}
+
+    results = [
+        chunk
+        async for chunk in chatbot.get_completion("physics", extra_state=extra_state)
+    ]
+
+    assert results == ["summary"]
+    expected_message = (
+        "physics"
+        if has_history
+        else PROMPT_SEARCH_SUMMARY_QUERY.format(query="physics")
+    )
+    mock_parent_completion.assert_called_once_with(
+        expected_message, extra_state=extra_state
+    )
 
 
 @pytest.mark.asyncio

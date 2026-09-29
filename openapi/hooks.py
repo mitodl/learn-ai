@@ -128,6 +128,57 @@ def add_channels_routes(result, generator, request, public):  # noqa: ARG001
             },
         }
     }
+    paths["/http/search_summary_agent/"] = {
+        "post": {
+            "operationId": "SearchSummaryAgentV0",
+            "description": "Search summary agent endpoint via AsyncHttpConsumer",
+            "tags": ["Channels"],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Search query or follow-up message",
+                                },
+                                "model": {
+                                    "type": "string",
+                                    "description": "The LLM model to use",
+                                },
+                                "temperature": {
+                                    "type": "number",
+                                    "format": "float",
+                                    "description": "The LLM temperature to use",
+                                },
+                                "instructions": {
+                                    "type": "string",
+                                    "description": "System prompt (admins only)",
+                                },
+                                "clear_history": {
+                                    "type": "boolean",
+                                    "description": "Whether to clear chat history",
+                                },
+                                "thread_id": {
+                                    "type": "string",
+                                    "description": "The thread id to use",
+                                },
+                            },
+                            "required": ["message"],
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": {
+                    "description": "Search Summary Agent stream",
+                    "content": {"text/event-stream": {"schema": {"type": "string"}}},
+                }
+            },
+        }
+    }
     paths["/http/syllabus_agent/"] = {
         "post": {
             "operationId": "SyllabusAgentV0",

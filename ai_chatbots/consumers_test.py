@@ -15,7 +15,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
-from ai_chatbots.chatbots import SyllabusBot, VideoGPTBot
+from ai_chatbots.chatbots import SearchSummaryBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
@@ -280,6 +280,58 @@ async def test_clear_history(  # noqa: PLR0913
     else:
         # anon thread_ids should have been cleared from cookie
         assert target_cookie == f"{bot_cookie}=;Path=/;"
+
+
+@pytest.mark.parametrize("is_anon", [True, False])
+async def test_search_summary_agent_handle(
+    mocker,
+    mock_http_consumer_send,
+    async_user,
+    django_session,
+    is_anon,
+):
+    """
+    The search summary consumer should use the search summary bot and keep
+    its own thread cookies, chat sessions, and throttle scope.
+    """
+    consumer = consumers.SearchSummaryBotHttpConsumer()
+    consumer.scope = {
+        "user": AnonymousUser() if is_anon else async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
+    consumer.channel_name = "test_channel"
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.SearchSummaryBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["summary"]))
+        ),
+    )
+
+    assert consumer.ROOM_NAME == "SearchSummaryBot"
+    assert consumer.ROOM_NAME != consumers.RecommendationBotHttpConsumer.ROOM_NAME
+    assert consumer.throttle_scope == "search_summary_bot"
+
+    await consumer.handle(json.dumps({"message": "hello", "clear_history": True}))
+
+    assert isinstance(consumer.bot, SearchSummaryBot)
+    assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
+    mock_completion.assert_called_once_with(
+        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
+    )
+    headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
+    cookie_names = [
+        value.decode().split("=")[0] for name, value in headers if name == b"Set-Cookie"
+    ]
+    assert f"SearchSummaryBot_{AI_THREAD_COOKIE_KEY}" in cookie_names
+    assert f"SearchSummaryBot_{AI_THREADS_ANONYMOUS_COOKIE_KEY}" in cookie_names
+    assert not any(
+        name.startswith(consumers.RecommendationBotHttpConsumer.ROOM_NAME)
+        for name in cookie_names
+    )
+    assert await UserChatSession.objects.filter(
+        thread_id=consumer.thread_id, agent="SearchSummaryBot"
+    ).aexists()
 
 
 async def test_http_request_complete_body(mocker):

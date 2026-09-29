@@ -21,6 +21,7 @@ from rest_framework.status import HTTP_200_OK
 from ai_chatbots.chatbots import (
     CanvasSyllabusBot,
     ResourceRecommendationBot,
+    SearchSummaryBot,
     SyllabusBot,
     TutorBot,
     VideoGPTBot,
@@ -434,6 +435,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
 
     ROOM_NAME = ResourceRecommendationBot.__name__
     throttle_scope = "recommendation_bot"
+    bot_class = ResourceRecommendationBot
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
@@ -451,7 +453,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
 
-        return ResourceRecommendationBot(
+        return self.bot_class(
             self.user_id,
             checkpointer,
             temperature=temperature,
@@ -459,6 +461,19 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
         )
+
+
+class SearchSummaryBotHttpConsumer(RecommendationBotHttpConsumer):
+    """
+    Async HTTP consumer for the AI summary shown on the search page.
+
+    Has its own ROOM_NAME and throttle_scope so that summary threads/cookies
+    and rate limits are kept separate from the regular AskTIM chat.
+    """
+
+    ROOM_NAME = SearchSummaryBot.__name__
+    throttle_scope = "search_summary_bot"
+    bot_class = SearchSummaryBot
 
 
 class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
