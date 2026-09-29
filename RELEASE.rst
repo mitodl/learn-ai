@@ -1,6 +1,16 @@
 Release Notes
 =============
 
+Version 0.37.2
+--------------
+
+- Asktim Summary in search results (#88)
+- Update dependency @tanstack/react-query to v5.103.1 (#82)
+- Update dependency ruff to v0.16.6 (#69)
+- Update dependency @mitodl/smoot-design to v6.37.0 (#81)
+- Update zizmorcore/zizmor-action action to v0.6.3 (#80)
+- Hash anonymous session identifiers before sending them to external trace/analytics systems (#77)
+
 Version 0.37.1
 --------------
 
