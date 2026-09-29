@@ -535,7 +535,10 @@ class SearchSummaryBot(ResourceRecommendationBot):
         """Wrap the search query in the summary instructions for a new thread"""
         state = await self.agent.aget_state(self.config)
         if not (state and state.values.get("messages")):
-            message = PROMPT_SEARCH_SUMMARY_QUERY.format(query=message)
+            # The query comes from a URL, so flatten it, keep it short, and strip
+            # anything that could close the <search_query> tag in the prompt.
+            query = " ".join(message.split())[:200].replace("<", "").replace(">", "")
+            message = PROMPT_SEARCH_SUMMARY_QUERY.format(query=query)
         async for chunk in super().get_completion(message, **kwargs):
             yield chunk
 
