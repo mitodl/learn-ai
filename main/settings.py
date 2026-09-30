@@ -682,6 +682,12 @@ AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
 
+# Azure OpenAI, used for `azure/` model ids when no AI proxy is configured.
+# Auth is an Entra bearer token from DefaultAzureCredential (workload identity
+# in-cluster, `az login` locally); the Azure accounts have key auth disabled.
+AZURE_OPENAI_ENDPOINT = get_string(name="AZURE_OPENAI_ENDPOINT", default="")
+AZURE_OPENAI_API_VERSION = get_string(name="AZURE_OPENAI_API_VERSION", default="")
+
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
 AI_PROXY_URL = get_string(name="AI_PROXY_URL", default="")
