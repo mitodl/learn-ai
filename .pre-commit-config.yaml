@@ -1,11 +1,6 @@
 ---
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-ci:
-  skip:
-    - prettier
-    # Because these are local hooks it seems like they won't easily run in pre-commit CI
-    - eslint
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -23,7 +18,8 @@ repos:
     hooks:
       - id: prettier
         name: prettier
-        entry: npx prettier --write
+        # Use the frontend lockfile's formatter; root npx installs a floating version.
+        entry: npm exec --prefix frontend-demo -- prettier --write
         language: node
         types_or:
           [javascript, jsx, ts, tsx, json, scss, sass, css, yaml, markdown]

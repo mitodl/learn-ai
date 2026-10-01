@@ -403,7 +403,7 @@ def test_list_all_prompts(client):
     assert response.status_code == 200
 
     results = response.json()
-    assert len(results) == 4
+    assert len(results) == len(CHATBOT_PROMPT_MAPPING)
 
     prompt_names = [item["prompt_name"] for item in results]
     assert sorted(prompt_names) == sorted(CHATBOT_PROMPT_MAPPING.keys())

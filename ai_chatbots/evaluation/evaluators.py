@@ -100,12 +100,17 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         """Create syllabus bot instance."""
         metadata = test_case.metadata or {}
         extra_init = metadata.get("extra_init", {})
+        extra_state = metadata.get("extra_state", {})
 
         return self.bot_class(
             "eval",
             checkpointer=None,
             model=model,
             instructions=instructions,
+            # the consumer passes these to the constructor as well as to the
+            # state, since the resource facts go into the system prompt
+            course_id=(extra_state.get("course_id") or [None])[-1],
+            platform=(extra_state.get("platform") or [None])[-1],
             **extra_init,
         )
 

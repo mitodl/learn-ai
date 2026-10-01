@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from freezegun import freeze_time
 
+from ai_chatbots.chatbots import ResourceRecommendationBot, SearchSummaryBot
 from ai_chatbots.factories import (
     CheckpointFactory,
     TutorBotOutputFactory,
@@ -69,3 +70,38 @@ def test_delete_stale_sessions():
         assert TutorBotOutput.objects.filter(id=output.id).exists()
     for cp in valid_checkpoints:
         assert DjangoCheckpoint.objects.filter(id=cp.id).exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("is_anon", [True, False])
+def test_delete_stale_sessions_search_summary(is_anon):
+    """
+    Search summary sessions without a follow-up message should be deleted once
+    they are older than AI_SEARCH_SUMMARY_EXPIRY_DAYS; other sessions are kept.
+    """
+
+    def create_session(agent, inputs, days_old):
+        with freeze_time(now_in_utc() - timedelta(days=days_old)):
+            session = UserChatSessionFactory.create(
+                agent=agent,
+                **({"user": None, "dj_session_key": uuid4().hex} if is_anon else {}),
+            )
+        CheckpointFactory.create_batch(
+            inputs, session=session, metadata={"source": "input"}
+        )
+        CheckpointFactory.create_batch(3, session=session, metadata={"source": "loop"})
+        return session
+
+    expired_days = settings.AI_SEARCH_SUMMARY_EXPIRY_DAYS + 1
+    unused = create_session(SearchSummaryBot.__name__, 1, expired_days)
+    followed_up = create_session(SearchSummaryBot.__name__, 2, expired_days)
+    recent = create_session(SearchSummaryBot.__name__, 1, 1)
+    other_agent = create_session(ResourceRecommendationBot.__name__, 1, expired_days)
+
+    delete_stale_sessions.apply()
+
+    assert not UserChatSession.objects.filter(id=unused.id).exists()
+    assert not DjangoCheckpoint.objects.filter(session_id=unused.id).exists()
+    for session in (followed_up, recent, other_agent):
+        assert UserChatSession.objects.filter(id=session.id).exists()
+        assert DjangoCheckpoint.objects.filter(session=session).count() > 0

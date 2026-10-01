@@ -21,6 +21,7 @@ from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
     ResourceRecommendationBot,
+    SearchSummaryBot,
     SyllabusAgentState,
     SyllabusBot,
     TutorBot,
@@ -39,6 +40,7 @@ from ai_chatbots.factories import (
     ToolMessageFactory,
 )
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
+from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from main.test_utils import assert_json_equal
@@ -297,6 +299,45 @@ async def test_get_completion(
     assert "".join([value.decode() for value in expected_return_value]) in results
 
 
+@pytest.mark.parametrize("has_history", [True, False])
+async def test_search_summary_bot_get_completion(
+    mocker, mock_checkpointer, has_history
+):
+    """
+    Only the first message of a search summary thread should be wrapped in the
+    summary instructions; follow-ups should be sent as-is.
+    """
+    mock_parent_completion = mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=MockAsyncIterator(["summary"]),
+    )
+    chatbot = await sync_to_async(SearchSummaryBot)("anonymous", mock_checkpointer)
+    assert chatbot.instructions == SYSTEM_PROMPT_MAPPING["recommendation"]
+    mocker.patch.object(
+        chatbot.agent,
+        "aget_state",
+        return_value=mocker.Mock(
+            values={"messages": [HumanMessageFactory.create()] if has_history else []}
+        ),
+    )
+    extra_state = {"search_url": ["https://test.mit.edu/search"]}
+
+    results = [
+        chunk
+        async for chunk in chatbot.get_completion("physics", extra_state=extra_state)
+    ]
+
+    assert results == ["summary"]
+    expected_message = (
+        "physics"
+        if has_history
+        else PROMPT_SEARCH_SUMMARY_QUERY.format(query="physics")
+    )
+    mock_parent_completion.assert_called_once_with(
+        expected_message, extra_state=extra_state
+    )
+
+
 @pytest.mark.asyncio
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
@@ -540,6 +581,43 @@ async def test_syllabus_bot_related_courses_instructions(mocker, mock_checkpoint
 
 
 @pytest.mark.asyncio
+async def test_syllabus_bot_resource_facts_instructions(mocker, mock_checkpointer):
+    """SyllabusBot should put the resource facts in its system prompt."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    mock_facts = mocker.patch(
+        "ai_chatbots.chatbots.get_resource_facts",
+        return_value="Facts about this resource:\n- Price: $250.00",
+    )
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        course_id="course-v1:PRO+AIGE",
+        platform="xpro",
+    )
+    mock_facts.assert_called_once_with("course-v1:PRO+AIGE", "xpro")
+    # the facts are added to the prompt, not in place of it
+    assert chatbot.instructions == (
+        f"{SYSTEM_PROMPT_MAPPING['syllabus'].rstrip()}\n\n"
+        "Facts about this resource:\n- Price: $250.00"
+    )
+
+
+@pytest.mark.asyncio
+async def test_syllabus_bot_no_resource_facts(mocker, mock_checkpointer):
+    """An unknown resource should leave the system prompt alone."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    mocker.patch("ai_chatbots.chatbots.get_resource_facts", return_value="")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        course_id="course-v1:No+Such",
+    )
+    assert chatbot.instructions == SYSTEM_PROMPT_MAPPING["syllabus"]
+
+
+@pytest.mark.asyncio
 async def test_syllabus_bot_no_related_courses_instructions(mocker, mock_checkpointer):
     """SyllabusBot should not append related courses instructions when disabled."""
     mocker.patch("ai_chatbots.chatbots.create_react_agent")
@@ -618,13 +696,13 @@ async def test_syllabus_bot_tool(
     expected_results = {
         "results": [
             {
-                "id": resource.get("resource_point_id"),
+                "id": resource.get("url"),
                 **{key: resource.get(key) for key in retained_attributes},
             }
             for resource in raw_results
         ],
         "citation_sources": {
-            resource.get("resource_point_id"): {
+            resource.get("url"): {
                 "citation_title": resource.get("title")
                 or resource.get("content_title"),
                 "citation_url": resource.get("url"),

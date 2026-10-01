@@ -20,6 +20,7 @@ from typing_extensions import TypedDict
 
 from ai_chatbots.constants import WRITES_MAPPING
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
+from ai_chatbots.utils import get_django_cache, get_sync_http_client
 from main.utils import now_in_utc
 
 log = logging.getLogger(__name__)
@@ -42,22 +43,23 @@ def get_search_tool_metadata(thread_id: str, latest_state: TypedDict) -> str:
         msg_content = tool_messages[-1].content
         try:
             content = json.loads(msg_content or "{}")
-            return {
-                "metadata": {
-                    "search_url": content.get("metadata", {}).get("search_url"),
-                    "search_parameters": content.get("metadata", {}).get(
-                        "parameters", []
-                    ),
-                    "search_results": content.get("results", []),
-                    "citation_sources": content.get("citation_sources", []),
-                    "thread_id": thread_id,
-                }
-            }
         except json.JSONDecodeError:
             log.exception(
                 "Error parsing tool metadata, not valid JSON: %s", msg_content
             )
             return {"error": "Error parsing tool metadata", "content": msg_content}
+        metadata = {
+            "search_url": content.get("metadata", {}).get("search_url"),
+            "search_parameters": content.get("metadata", {}).get("parameters", []),
+            "search_results": content.get("results", []),
+            "citation_sources": content.get("citation_sources", []),
+            "thread_id": thread_id,
+        }
+        if content.get("error"):
+            # a search that failed and one that matched nothing look the same
+            # otherwise
+            metadata["error"] = content["error"]
+        return {"metadata": metadata}
     else:
         return {}
 
@@ -382,3 +384,125 @@ class MessageTruncationNode(RunnableCallable):
         if len(human_indices) < n:
             return 0
         return human_indices[-n]
+
+
+RESOURCE_FACTS_CACHE_PREFIX = "resource_facts_"
+
+RESOURCE_FACTS_HEADER = (
+    "Facts about this resource from MIT Learn.  They are authoritative, so use "
+    "them to answer questions about price, dates, format, duration and "
+    "instructors instead of searching:"
+)
+
+RESOURCE_FACTS_MULTI_PLATFORM_HEADER = RESOURCE_FACTS_HEADER.rstrip(":") + (
+    ".  The same course is offered on more than one platform and the learner "
+    "could be asking about either, so give the facts for both unless they say "
+    "which platform they are on:"
+)
+
+
+RESOURCE_FACTS_FOOTER = (
+    "These facts describe the resource, not the learner's account, so trouble "
+    "signing in, paying or enrolling is still a question for "
+    "search_support_articles."
+)
+
+
+def _resource_run_instructors(resource: dict) -> str:
+    """Return the instructors of the resource's best run, if any"""
+    runs = resource.get("runs") or []
+    best_run = next(
+        (run for run in runs if run.get("id") == resource.get("best_run_id")),
+        runs[0] if runs else {},
+    )
+    return ", ".join(
+        instructor["full_name"]
+        for instructor in (best_run.get("instructors") or [])
+        if instructor.get("full_name")
+    )
+
+
+def _resource_fact_lines(resource: dict) -> list[str]:
+    """Return the fact lines for a single learning resource"""
+    prices = ", ".join(f"${price}" for price in (resource.get("prices") or []))
+    delivery = ", ".join(
+        item["name"]
+        for key in ("delivery", "format", "pace")
+        for item in (resource.get(key) or [])
+        if item.get("name")
+    )
+    platform = (resource.get("platform") or {}).get("name")
+    facts = {
+        "Title": resource.get("title"),
+        "Platform": platform,
+        "Free": "yes" if resource.get("free") else "no",
+        "Price": prices,
+        "Certificate": (resource.get("certification_type") or {}).get("name")
+        if resource.get("certification")
+        else "none",
+        "Format": delivery,
+        "Duration": resource.get("duration") or resource.get("time_commitment"),
+        "Next start date": (resource.get("next_start_date") or "")[:10],
+        "Instructors": _resource_run_instructors(resource),
+        "Url": resource.get("url") or resource.get("learn_url"),
+    }
+    return [f"- {label}: {value}" for label, value in facts.items() if value]
+
+
+def _resource_facts_block(resources: list[dict]) -> str:
+    """Render the facts of every resource matching a readable id"""
+    blocks = [
+        "\n".join(_resource_fact_lines(resource))
+        for resource in resources
+        if resource.get("title")
+    ]
+    if not blocks:
+        return ""
+    header = (
+        RESOURCE_FACTS_MULTI_PLATFORM_HEADER
+        if len(blocks) > 1
+        else RESOURCE_FACTS_HEADER
+    )
+    return "\n\n".join([header, *blocks, RESOURCE_FACTS_FOOTER])
+
+
+def get_resource_facts(readable_id: str, platform: str | None = None) -> str:
+    """
+    Return a block of authoritative facts about a learning resource, for
+    inclusion in a chatbot system prompt.  Cached, and empty if the resource
+    cannot be looked up: the content search still covers those questions.
+    """
+    if not readable_id:
+        return ""
+    cache = get_django_cache()
+    cache_key = f"{RESOURCE_FACTS_CACHE_PREFIX}{readable_id}:{platform or ''}"
+    cached_facts = cache.get(cache_key)
+    if cached_facts is not None:
+        return cached_facts
+    params = {"readable_id": readable_id, "limit": 5}
+    if platform:
+        params["platform"] = platform
+    try:
+        # Resources are public, so the lookup works without a token; httpx
+        # rejects an empty bearer header, so only send one when configured.
+        headers = (
+            {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
+            if settings.LEARN_ACCESS_TOKEN
+            else {}
+        )
+        response = get_sync_http_client().get(
+            settings.AI_MIT_LEARNING_RESOURCES_URL,
+            params=params,
+            headers=headers,
+            timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
+        )
+        response.raise_for_status()
+        facts = _resource_facts_block(response.json().get("results", []))
+    except Exception:
+        log.exception("Error looking up the facts of resource %s", readable_id)
+        # Cache the failure briefly, so an unreachable API is not retried in
+        # front of every message while it is down.
+        cache.set(cache_key, "", settings.AI_COURSE_PLATFORM_ERROR_CACHE_DURATION)
+        return ""
+    cache.set(cache_key, facts, settings.AI_RESOURCE_FACTS_CACHE_DURATION)
+    return facts

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
+from channels.layers import InMemoryChannelLayer
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
@@ -14,7 +15,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
-from ai_chatbots.chatbots import SyllabusBot, VideoGPTBot
+from ai_chatbots.chatbots import SearchSummaryBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
@@ -281,6 +282,58 @@ async def test_clear_history(  # noqa: PLR0913
         assert target_cookie == f"{bot_cookie}=;Path=/;"
 
 
+@pytest.mark.parametrize("is_anon", [True, False])
+async def test_search_summary_agent_handle(
+    mocker,
+    mock_http_consumer_send,
+    async_user,
+    django_session,
+    is_anon,
+):
+    """
+    The search summary consumer should use the search summary bot and keep
+    its own thread cookies, chat sessions, and throttle scope.
+    """
+    consumer = consumers.SearchSummaryBotHttpConsumer()
+    consumer.scope = {
+        "user": AnonymousUser() if is_anon else async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
+    consumer.channel_name = "test_channel"
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.SearchSummaryBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["summary"]))
+        ),
+    )
+
+    assert consumer.ROOM_NAME == "SearchSummaryBot"
+    assert consumer.ROOM_NAME != consumers.RecommendationBotHttpConsumer.ROOM_NAME
+    assert consumer.throttle_scope == "search_summary_bot"
+
+    await consumer.handle(json.dumps({"message": "hello", "clear_history": True}))
+
+    assert isinstance(consumer.bot, SearchSummaryBot)
+    assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
+    mock_completion.assert_called_once_with(
+        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
+    )
+    headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
+    cookie_names = [
+        value.decode().split("=")[0] for name, value in headers if name == b"Set-Cookie"
+    ]
+    assert f"SearchSummaryBot_{AI_THREAD_COOKIE_KEY}" in cookie_names
+    assert f"SearchSummaryBot_{AI_THREADS_ANONYMOUS_COOKIE_KEY}" in cookie_names
+    assert not any(
+        name.startswith(consumers.RecommendationBotHttpConsumer.ROOM_NAME)
+        for name in cookie_names
+    )
+    assert await UserChatSession.objects.filter(
+        thread_id=consumer.thread_id, agent="SearchSummaryBot"
+    ).aexists()
+
+
 async def test_http_request_complete_body(mocker):
     """Test the http request function with a complete message body"""
     mock_handle = mocker.patch(
@@ -444,6 +497,22 @@ def test_syllabus_process_extra_state_with_related_courses(syllabus_consumer):
     assert result["related_courses"] == related
 
 
+@pytest.mark.parametrize("platform", ["xpro", None])
+def test_syllabus_process_extra_state_platform(syllabus_consumer, platform):
+    """
+    A platform sent with the request should reach the tools, so that a readable
+    id shared by two platforms is not searched under the wrong one.
+    """
+    result = syllabus_consumer.process_extra_state(
+        {
+            "message": "hello",
+            "course_id": "course-v1:PRO+AIGE",
+            "platform": platform,
+        }
+    )
+    assert result.get("platform") == ([platform] if platform else None)
+
+
 def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     """Test that the canvas syllabus process_extra_state function returns False for exclude_canvas."""
     assert canvas_syllabus_consumer.process_extra_state(
@@ -455,12 +524,16 @@ def test_canvas_syllabus_process_extra_state(canvas_syllabus_consumer):
     }
 
 
-async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
-    """The correct chatbot class should be assigned to self.chatbot"""
+async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
+    """The canvas bot should get the same resource identifiers as the web one"""
+    mock_facts = mocker.patch(
+        "ai_chatbots.chatbots.get_resource_facts", return_value=""
+    )
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "test",
             "course_id": "MITx+6.00.1x",
+            "platform": "mitxonline",
             "model": "gpt-3.5-turbo",
         }
     )
@@ -470,6 +543,7 @@ async def test_canvas_syllabus_create_chatbot(canvas_syllabus_consumer):
         serializer, InMemorySaver()
     )
     assert bot.__class__ == consumers.CanvasSyllabusBot
+    mock_facts.assert_called_once_with("MITx+6.00.1x", "mitxonline")
 
 
 @pytest.mark.parametrize(
@@ -1347,3 +1421,61 @@ async def test_disconnect_without_channel_layer(mocker, recommendation_consumer)
 
     # Verify litellm cleanup was called
     mock_close.assert_called_once()
+
+
+@pytest.fixture
+def real_channel_layer(mocker):
+    """Use a channel layer that validates group names, unlike the conftest mock."""
+    layer = InMemoryChannelLayer()
+    mocker.patch("ai_chatbots.consumers.get_channel_layer", return_value=layer)
+    return layer
+
+
+async def test_anonymous_consumer_hides_session_key_from_external_ids(
+    mock_http_consumer_send, anonymous_consumer_setup, test_session_key
+):
+    """External ids are hashed while the raw key stays as the correlation key."""
+    consumer = anonymous_consumer_setup(test_session_key)
+
+    await consumer.assign_thread_cookies(consumer.scope["user"])
+
+    assert consumer.user_id.startswith("anon-")
+    assert test_session_key not in consumer.user_id
+    assert consumer.session_key == test_session_key
+
+
+async def test_anonymous_consumer_room_group_name_is_channels_safe(
+    mocker,
+    mock_http_consumer_send,
+    anonymous_consumer_setup,
+    test_session_key,
+    real_channel_layer,
+):
+    """Anonymous requests must join a group name the channel layer accepts."""
+    consumer = anonymous_consumer_setup(test_session_key)
+    serializer = mocker.Mock(validated_data={})
+
+    await consumer.prepare_response(serializer)
+
+    assert consumer.user_id not in consumer.room_group_name
+    assert consumer.channel_name in real_channel_layer.groups[consumer.room_group_name]
+
+
+async def test_throttle_log_omits_raw_session_key(
+    mocker, caplog, anonymous_consumer_setup, test_session_key
+):
+    """The throttle log line must not contain the raw anonymous session key."""
+    mocker.patch(
+        "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
+        side_effect=AsyncThrottled(30),
+    )
+    mocker.patch("ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock)
+    mocker.patch("ai_chatbots.consumers.SyllabusBotHttpConsumer.send_chunk")
+    consumer = anonymous_consumer_setup(test_session_key)
+
+    with caplog.at_level("INFO", logger="ai_chatbots.consumers"):
+        await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
+
+    assert "throttled on" in caplog.text
+    assert test_session_key not in caplog.text
+    assert consumer.get_trace_ident() in caplog.text

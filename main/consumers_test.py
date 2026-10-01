@@ -1,9 +1,11 @@
 """Tests for main consumer classes"""
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from rest_framework import exceptions
 
 from main.consumers import BaseThrottledAsyncConsumer
+from main.utils import anonymize_ident
 
 
 class MockThrottle(BaseThrottledAsyncConsumer):
@@ -61,3 +63,33 @@ async def test_throttle_consumer_throttled(wait_time):
     with pytest.raises(exceptions.Throttled) as excinfo:
         await consumer.throttled(wait_time)
     assert excinfo.value.wait == wait_time
+
+
+def _consumer_for(mocker, *, user, session_key):
+    """Build a bare consumer with a scope for identity tests."""
+    consumer = BaseThrottledAsyncConsumer()
+    mock_session = mocker.Mock()
+    mock_session.session_key = session_key
+    consumer.scope = {"user": user, "session": mock_session}
+    return consumer
+
+
+def test_get_trace_ident_hashes_anonymous_session_key(mocker):
+    """Anonymous users' trace ident should be a hash, not the raw session key."""
+    session_key = "abc123def456"
+    consumer = _consumer_for(mocker, user=AnonymousUser(), session_key=session_key)
+
+    trace_ident = consumer.get_trace_ident()
+
+    assert trace_ident == anonymize_ident(consumer.get_ident())
+    assert session_key not in trace_ident
+    assert trace_ident.startswith("anon-")
+
+
+@pytest.mark.django_db
+def test_get_trace_ident_returns_global_id_for_authenticated_user(mocker, user):
+    """Authenticated users' trace ident should still be their global_id."""
+    consumer = _consumer_for(mocker, user=user, session_key="abc123def456")
+
+    assert consumer.get_trace_ident() == user.global_id
+    assert consumer.get_trace_ident() == consumer.get_ident()

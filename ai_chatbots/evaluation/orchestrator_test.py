@@ -4,6 +4,7 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from deepeval.test_case import LLMTestCaseParams
 
 from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
@@ -90,6 +91,22 @@ class TestEvaluationOrchestrator:
         ]
         assert "ContextualPrecisionMetric" in underlying_metric_names
         assert "ContextualRecallMetric" in underlying_metric_names
+
+    def test_create_evaluation_config_correctness_only(self, orchestrator):
+        """correctness_only should score against the expected answer alone."""
+        config = orchestrator.create_evaluation_config(
+            ["gpt-4o"], "gpt-4o", correctness_only=True
+        )
+        assert len(config.metrics) == 1
+        metric = config.metrics[0]
+        assert isinstance(metric, TimeoutMetricWrapper)
+        assert metric.base_metric.name == "Correctness"
+        assert metric.base_metric.threshold == 0.7
+        assert metric.base_metric.evaluation_params == [
+            LLMTestCaseParams.INPUT,
+            LLMTestCaseParams.ACTUAL_OUTPUT,
+            LLMTestCaseParams.EXPECTED_OUTPUT,
+        ]
 
     @patch.dict(os.environ, {"CONFIDENT_AI_API_KEY": "test-api-key"})
     def test_create_evaluation_config_with_api_key(self, orchestrator):

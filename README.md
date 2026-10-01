@@ -70,24 +70,27 @@ Some caveats:
 
 ## Committing & Formatting
 
-To ensure commits to GitHub are safe, first install [pre-commit](https://pre-commit.com/):
+Code checks run with [prek](https://prek.j178.dev/), which reads `.pre-commit-config.yaml`. The `prek` check runs all hooks on pull requests, and [autofix.ci](https://autofix.ci/) pushes a commit with any fixes they make.
 
-```
-pip install pre_commit
-pre-commit install
-```
+Install the locked Python and frontend dependencies, then replace any existing pre-commit git hook:
 
-Running pre-commit can confirm your commit is safe to be pushed to GitHub and correctly formatted:
-
-```
-pre-commit run --all-files
+```bash
+uv sync
+(cd frontend-demo && corepack enable && yarn install --immutable)
+uv run prek install -f
 ```
 
-To automatically install precommit hooks when cloning a repo, you can run this:
+Running prek checks the repository's formatting and lint rules:
 
+```bash
+uv run prek run --all-files
 ```
+
+To automatically install prek hooks when cloning a repo, you can run this:
+
+```bash
 git config --global init.templateDir ~/.git-template
-pre-commit init-templatedir ~/.git-template
+uv run prek init-templatedir ~/.git-template
 ```
 
 ## Sample Requests

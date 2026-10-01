@@ -1,6 +1,38 @@
 Release Notes
 =============
 
+Version 0.37.1
+--------------
+
+- Answer syllabus resource questions from the resource, not the support center (#78)
+- Disable Opik's own Sentry client so it stops replacing ours (#76)
+
+Version 0.37.0
+--------------
+
+- Key citations by url, not the resource point id (#73)
+- Update dependency @typescript-eslint/utils to v8.70.0 (#70)
+- Update dependency django-scim2 to >=0.23,<0.24 (#71)
+
+Version 0.36.2
+--------------
+
+- add metadata to langsmith/opik trace (#68)
+- update dev proxy server (#67)
+- Ignore frontend-demo in granian dev reloader (#65)
+- fix(sentry): set max_request_body_size to small and scrub Postgres DETAIL rows (#62)
+- Fix Learn search tool divergences (#63)
+- Disable litellm aiohttp transport to stop pod memory leak (#64)
+- Update dependency next to v15.5.25 (#54)
+- Update dependency ruff to v0.16.4 (#55)
+- Update dependency @remixicon/react to v4.9.0 (#60)
+- Update dependency @mitodl/smoot-design to v6.34.0 (#56)
+- Adapt hallucination scoring to deepeval 4.2 (#46)
+- Update dependency drf-spectacular to >=0.30,<0.31 (#49)
+- Update dependency @typescript-eslint/utils to v8.69.0 (#48)
+- Update dependency @tanstack/react-query to v5.102.8 (#47)
+- Update dependency langchain-litellm to >=0.7,<0.8 (#50)
+
 Version 0.36.1
 --------------
 

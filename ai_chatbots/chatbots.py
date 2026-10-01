@@ -40,11 +40,16 @@ from ai_chatbots.api import (
     DjangoCheckpoint,
     MessageTruncationNode,
     create_tutorbot_output_and_checkpoints,
+    get_resource_facts,
     get_search_tool_metadata,
     query_tutorbot_output,
 )
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
-from ai_chatbots.prompts import CONTEXT_LOST_PROMPT, SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import (
+    CONTEXT_LOST_PROMPT,
+    PROMPT_SEARCH_SUMMARY_QUERY,
+    SYSTEM_PROMPT_MAPPING,
+)
 from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
@@ -511,6 +516,33 @@ class ResourceRecommendationBot(TruncatingChatbot):
         return get_search_tool_metadata(thread_id, latest_state)
 
 
+class SearchSummaryBot(ResourceRecommendationBot):
+    """
+    Recommendation bot that summarizes relevant courses for a search query
+    on the MIT Learn search page.  The first message of a thread is the search
+    query, which gets wrapped in the summary instructions; follow-up messages
+    are handled like any other recommendation bot conversation.
+    """
+
+    TASK_NAME = "SEARCH_SUMMARY_TASK"
+    JOB_ID = "SEARCH_SUMMARY_JOB"
+
+    async def get_completion(
+        self,
+        message: str,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
+        """Wrap the search query in the summary instructions for a new thread"""
+        state = await self.agent.aget_state(self.config)
+        if not (state and state.values.get("messages")):
+            # The query comes from a URL, so flatten it, keep it short, and strip
+            # anything that could close the <search_query> tag in the prompt.
+            query = " ".join(message.split())[:200].replace("<", "").replace(">", "")
+            message = PROMPT_SEARCH_SUMMARY_QUERY.format(query=query)
+        async for chunk in super().get_completion(message, **kwargs):
+            yield chunk
+
+
 class SyllabusAgentState(SummaryState):
     """
     State for the syllabus bot. Passes course_id and
@@ -518,6 +550,7 @@ class SyllabusAgentState(SummaryState):
     """
 
     course_id: Annotated[list[str], add]
+    platform: Annotated[list[str] | None, add]
     collection_name: Annotated[list[str], add]
     related_courses: Annotated[list[str], add]
     # str representation of a boolean value, because the
@@ -532,7 +565,7 @@ class SyllabusBot(TruncatingChatbot):
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     STATE_CLASS = SyllabusAgentState
-    TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses")
+    TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses", "platform")
 
     def __init__(  # noqa: PLR0913
         self,
@@ -545,6 +578,8 @@ class SyllabusBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         enable_related_courses: bool | None = False,
+        course_id: str | None = None,
+        platform: str | None = None,
     ):
         self.enable_related_courses = enable_related_courses
         super().__init__(
@@ -556,6 +591,11 @@ class SyllabusBot(TruncatingChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
+        # The graph captures the instructions, so the facts have to be in
+        # place before create_agent_graph below.
+        resource_facts = get_resource_facts(course_id, platform)
+        if resource_facts and self.instructions:
+            self.instructions = f"{self.instructions.rstrip()}\n\n{resource_facts}"
         if self.enable_related_courses and self.instructions:
             self.instructions += (
                 "\n\nIMPORTANT: You have two content search tools. Always "
@@ -566,8 +606,8 @@ class SyllabusBot(TruncatingChatbot):
                 "other courses in the same program. Combine results from both "
                 "tools to provide the most comprehensive answer. Neither of "
                 "them replaces search_support_articles, which is still the "
-                "tool to use for questions the course material does not "
-                "answer."
+                "tool for questions about how MIT platforms work rather than "
+                "about these courses."
             )
         self.agent = self.create_agent_graph()
 

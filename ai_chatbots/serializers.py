@@ -76,6 +76,7 @@ class SyllabusChatRequestSerializer(ChatRequestSerializer):
     """
 
     course_id = serializers.CharField(required=True, allow_blank=False)
+    platform = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     collection_name = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )

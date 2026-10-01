@@ -12,6 +12,11 @@ http_patterns = [
         name="recommendation_agent_sse",
     ),
     re_path(
+        r"http/search_summary_agent/",
+        consumers.SearchSummaryBotHttpConsumer.as_asgi(),
+        name="search_summary_agent_sse",
+    ),
+    re_path(
         r"http/syllabus_agent/",
         consumers.SyllabusBotHttpConsumer.as_asgi(),
         name="syllabus_agent_sse",
