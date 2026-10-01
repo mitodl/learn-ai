@@ -18,7 +18,8 @@ repos:
     hooks:
       - id: prettier
         name: prettier
-        entry: npx prettier --write
+        # Use the frontend lockfile's formatter; root npx installs a floating version.
+        entry: npm exec --prefix frontend-demo -- prettier --write
         language: node
         types_or:
           [javascript, jsx, ts, tsx, json, scss, sass, css, yaml, markdown]
