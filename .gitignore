@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
+# drf-serializer-orm-check writes a machine-local cache; autofix.ci must not commit it.
+.drf_lint_cache.json
+
 # C extensions
 *.so
 
