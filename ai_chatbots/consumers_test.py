@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import litellm
 import pytest
 from asgiref.sync import sync_to_async
 from channels.layers import InMemoryChannelLayer
@@ -12,6 +13,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.memory import InMemorySaver
+from openai import AsyncOpenAI
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
@@ -1359,68 +1361,17 @@ async def test_assign_thread_cookies_session_key_filtering(
         ).aexists()
 
 
-@pytest.mark.asyncio
-async def test_disconnect_closes_litellm_clients(mocker, recommendation_consumer):
-    """Test that disconnect properly closes LiteLLM async clients."""
-    # Mock litellm.close_litellm_async_clients
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    # Call disconnect
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_handles_litellm_exception(mocker, recommendation_consumer):
-    """Test that disconnect handles exceptions from LiteLLM cleanup gracefully."""
-    # Mock litellm.close_litellm_async_clients to raise an exception
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients",
-        side_effect=Exception("Test exception"),
-    )
-
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was attempted
-    mock_close.assert_called_once()
-    # Verify channel cleanup still happened despite exception
-    recommendation_consumer.channel_layer.group_discard.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_without_channel_layer(mocker, recommendation_consumer):
-    """Test disconnect works when channel_layer is not set."""
-    # Mock litellm
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Don't set channel_layer
-    if hasattr(recommendation_consumer, "channel_layer"):
-        delattr(recommendation_consumer, "channel_layer")
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
+async def test_disconnect_keeps_litellm_clients_open(recommendation_consumer):
+    """Disconnect must not close litellm's cached clients, later requests reuse them"""
+    client = AsyncOpenAI(api_key="test")
+    cache_key = f"test_disconnect_{uuid4()}"
+    litellm.in_memory_llm_clients_cache.set_cache(cache_key, client)
+    try:
+        await recommendation_consumer.disconnect()
+        assert not client.is_closed()
+    finally:
+        litellm.in_memory_llm_clients_cache.delete_cache(cache_key)
+        await client.close()
 
 
 @pytest.fixture

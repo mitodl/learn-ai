@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from http.cookies import SimpleCookie
 from uuid import uuid4
 
-import litellm
 from asgiref.sync import sync_to_async
 from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
@@ -391,12 +390,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
-        # Close any unclosed async HTTP clients from LiteLLM to prevent resource leaks
-        try:
-            await litellm.close_litellm_async_clients()
-        except Exception:
-            log.exception("Error closing LiteLLM async clients")
-
         # Clean up Django Channels group
         if hasattr(self, "channel_layer") and hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(
