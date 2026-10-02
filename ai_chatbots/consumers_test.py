@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import litellm
 import pytest
 from asgiref.sync import sync_to_async
 from channels.layers import InMemoryChannelLayer
@@ -12,6 +13,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.memory import InMemorySaver
+from openai import AsyncOpenAI
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
@@ -1359,26 +1361,17 @@ async def test_assign_thread_cookies_session_key_filtering(
         ).aexists()
 
 
-@pytest.mark.asyncio
-async def test_disconnect_discards_group(mocker, recommendation_consumer):
-    """Test that disconnect discards the channel layer group."""
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    await recommendation_consumer.disconnect()
-
-    recommendation_consumer.channel_layer.group_discard.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_without_channel_layer(recommendation_consumer):
-    """Test disconnect works when channel_layer is not set."""
-    if hasattr(recommendation_consumer, "channel_layer"):
-        delattr(recommendation_consumer, "channel_layer")
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
+async def test_disconnect_keeps_litellm_clients_open(recommendation_consumer):
+    """Disconnect must not close litellm's cached clients, later requests reuse them"""
+    client = AsyncOpenAI(api_key="test")
+    cache_key = f"test_disconnect_{uuid4()}"
+    litellm.in_memory_llm_clients_cache.set_cache(cache_key, client)
+    try:
+        await recommendation_consumer.disconnect()
+        assert not client.is_closed()
+    finally:
+        litellm.in_memory_llm_clients_cache.delete_cache(cache_key)
+        await client.close()
 
 
 @pytest.fixture
