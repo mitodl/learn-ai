@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.37.1"
+VERSION = "0.37.3"
 
 log = logging.getLogger()
 
@@ -653,7 +653,8 @@ PROBLEM_SET_URL = get_string(
     name="PROBLEM_SET_URL",
     default="https://api.learn.mit.edu/api/v0/tutor/problems/",
 )
-
+# Search summary threads that never got a follow-up are deleted after this many days
+AI_SEARCH_SUMMARY_EXPIRY_DAYS = get_int(name="AI_SEARCH_SUMMARY_EXPIRY_DAYS", default=7)
 # AI search settings
 AI_MIT_SEARCH_DETAIL_URL = get_string(
     name="AI_MIT_SEARCH_DETAIL_URL",

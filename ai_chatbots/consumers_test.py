@@ -4,17 +4,20 @@ import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import litellm
 import pytest
 from asgiref.sync import sync_to_async
+from channels.layers import InMemoryChannelLayer
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.memory import InMemorySaver
+from openai import AsyncOpenAI
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
-from ai_chatbots.chatbots import SyllabusBot, VideoGPTBot
+from ai_chatbots.chatbots import SearchSummaryBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
@@ -279,6 +282,58 @@ async def test_clear_history(  # noqa: PLR0913
     else:
         # anon thread_ids should have been cleared from cookie
         assert target_cookie == f"{bot_cookie}=;Path=/;"
+
+
+@pytest.mark.parametrize("is_anon", [True, False])
+async def test_search_summary_agent_handle(
+    mocker,
+    mock_http_consumer_send,
+    async_user,
+    django_session,
+    is_anon,
+):
+    """
+    The search summary consumer should use the search summary bot and keep
+    its own thread cookies, chat sessions, and throttle scope.
+    """
+    consumer = consumers.SearchSummaryBotHttpConsumer()
+    consumer.scope = {
+        "user": AnonymousUser() if is_anon else async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
+    consumer.channel_name = "test_channel"
+    mock_completion = mocker.patch(
+        "ai_chatbots.chatbots.SearchSummaryBot.get_completion",
+        return_value=mocker.Mock(
+            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["summary"]))
+        ),
+    )
+
+    assert consumer.ROOM_NAME == "SearchSummaryBot"
+    assert consumer.ROOM_NAME != consumers.RecommendationBotHttpConsumer.ROOM_NAME
+    assert consumer.throttle_scope == "search_summary_bot"
+
+    await consumer.handle(json.dumps({"message": "hello", "clear_history": True}))
+
+    assert isinstance(consumer.bot, SearchSummaryBot)
+    assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
+    mock_completion.assert_called_once_with(
+        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
+    )
+    headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
+    cookie_names = [
+        value.decode().split("=")[0] for name, value in headers if name == b"Set-Cookie"
+    ]
+    assert f"SearchSummaryBot_{AI_THREAD_COOKIE_KEY}" in cookie_names
+    assert f"SearchSummaryBot_{AI_THREADS_ANONYMOUS_COOKIE_KEY}" in cookie_names
+    assert not any(
+        name.startswith(consumers.RecommendationBotHttpConsumer.ROOM_NAME)
+        for name in cookie_names
+    )
+    assert await UserChatSession.objects.filter(
+        thread_id=consumer.thread_id, agent="SearchSummaryBot"
+    ).aexists()
 
 
 async def test_http_request_complete_body(mocker):
@@ -1306,65 +1361,72 @@ async def test_assign_thread_cookies_session_key_filtering(
         ).aexists()
 
 
-@pytest.mark.asyncio
-async def test_disconnect_closes_litellm_clients(mocker, recommendation_consumer):
-    """Test that disconnect properly closes LiteLLM async clients."""
-    # Mock litellm.close_litellm_async_clients
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
+async def test_disconnect_keeps_litellm_clients_open(recommendation_consumer):
+    """Disconnect must not close litellm's cached clients, later requests reuse them"""
+    client = AsyncOpenAI(api_key="test")
+    cache_key = f"test_disconnect_{uuid4()}"
+    litellm.in_memory_llm_clients_cache.set_cache(cache_key, client)
+    try:
+        await recommendation_consumer.disconnect()
+        assert not client.is_closed()
+    finally:
+        litellm.in_memory_llm_clients_cache.delete_cache(cache_key)
+        await client.close()
+
+
+@pytest.fixture
+def real_channel_layer(mocker):
+    """Use a channel layer that validates group names, unlike the conftest mock."""
+    layer = InMemoryChannelLayer()
+    mocker.patch("ai_chatbots.consumers.get_channel_layer", return_value=layer)
+    return layer
+
+
+async def test_anonymous_consumer_hides_session_key_from_external_ids(
+    mock_http_consumer_send, anonymous_consumer_setup, test_session_key
+):
+    """External ids are hashed while the raw key stays as the correlation key."""
+    consumer = anonymous_consumer_setup(test_session_key)
+
+    await consumer.assign_thread_cookies(consumer.scope["user"])
+
+    assert consumer.user_id.startswith("anon-")
+    assert test_session_key not in consumer.user_id
+    assert consumer.session_key == test_session_key
+
+
+async def test_anonymous_consumer_room_group_name_is_channels_safe(
+    mocker,
+    mock_http_consumer_send,
+    anonymous_consumer_setup,
+    test_session_key,
+    real_channel_layer,
+):
+    """Anonymous requests must join a group name the channel layer accepts."""
+    consumer = anonymous_consumer_setup(test_session_key)
+    serializer = mocker.Mock(validated_data={})
+
+    await consumer.prepare_response(serializer)
+
+    assert consumer.user_id not in consumer.room_group_name
+    assert consumer.channel_name in real_channel_layer.groups[consumer.room_group_name]
+
+
+async def test_throttle_log_omits_raw_session_key(
+    mocker, caplog, anonymous_consumer_setup, test_session_key
+):
+    """The throttle log line must not contain the raw anonymous session key."""
+    mocker.patch(
+        "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
+        side_effect=AsyncThrottled(30),
     )
-    mock_close.return_value = AsyncMock()
+    mocker.patch("ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock)
+    mocker.patch("ai_chatbots.consumers.SyllabusBotHttpConsumer.send_chunk")
+    consumer = anonymous_consumer_setup(test_session_key)
 
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
+    with caplog.at_level("INFO", logger="ai_chatbots.consumers"):
+        await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
 
-    # Call disconnect
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_handles_litellm_exception(mocker, recommendation_consumer):
-    """Test that disconnect handles exceptions from LiteLLM cleanup gracefully."""
-    # Mock litellm.close_litellm_async_clients to raise an exception
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients",
-        side_effect=Exception("Test exception"),
-    )
-
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was attempted
-    mock_close.assert_called_once()
-    # Verify channel cleanup still happened despite exception
-    recommendation_consumer.channel_layer.group_discard.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_without_channel_layer(mocker, recommendation_consumer):
-    """Test disconnect works when channel_layer is not set."""
-    # Mock litellm
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Don't set channel_layer
-    if hasattr(recommendation_consumer, "channel_layer"):
-        delattr(recommendation_consumer, "channel_layer")
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
+    assert "throttled on" in caplog.text
+    assert test_session_key not in caplog.text
+    assert consumer.get_trace_ident() in caplog.text

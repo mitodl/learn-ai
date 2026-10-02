@@ -305,6 +305,49 @@ export interface RecommendationAgentV0Request {
 /**
  *
  * @export
+ * @interface SearchSummaryAgentV0Request
+ */
+export interface SearchSummaryAgentV0Request {
+  /**
+   * Search query or follow-up message
+   * @type {string}
+   * @memberof SearchSummaryAgentV0Request
+   */
+  message: string
+  /**
+   * The LLM model to use
+   * @type {string}
+   * @memberof SearchSummaryAgentV0Request
+   */
+  model?: string
+  /**
+   * The LLM temperature to use
+   * @type {number}
+   * @memberof SearchSummaryAgentV0Request
+   */
+  temperature?: number
+  /**
+   * System prompt (admins only)
+   * @type {string}
+   * @memberof SearchSummaryAgentV0Request
+   */
+  instructions?: string
+  /**
+   * Whether to clear chat history
+   * @type {boolean}
+   * @memberof SearchSummaryAgentV0Request
+   */
+  clear_history?: boolean
+  /**
+   * The thread id to use
+   * @type {string}
+   * @memberof SearchSummaryAgentV0Request
+   */
+  thread_id?: string
+}
+/**
+ *
+ * @export
  * @interface SyllabusAgentV0Request
  */
 export interface SyllabusAgentV0Request {
@@ -476,6 +519,59 @@ export const ChannelsApiAxiosParamCreator = function (
       }
     },
     /**
+     * Search summary agent endpoint via AsyncHttpConsumer
+     * @param {SearchSummaryAgentV0Request} SearchSummaryAgentV0Request
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    searchSummaryAgentV0: async (
+      SearchSummaryAgentV0Request: SearchSummaryAgentV0Request,
+      options: RawAxiosRequestConfig = {},
+    ): Promise<RequestArgs> => {
+      // verify required parameter 'SearchSummaryAgentV0Request' is not null or undefined
+      assertParamExists(
+        "searchSummaryAgentV0",
+        "SearchSummaryAgentV0Request",
+        SearchSummaryAgentV0Request,
+      )
+      const localVarPath = `/http/search_summary_agent/`
+      // use dummy base URL string because the URL constructor only accepts absolute URLs.
+      const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL)
+      let baseOptions
+      if (configuration) {
+        baseOptions = configuration.baseOptions
+      }
+
+      const localVarRequestOptions = {
+        method: "POST",
+        ...baseOptions,
+        ...options,
+      }
+      const localVarHeaderParameter = {} as any
+      const localVarQueryParameter = {} as any
+
+      localVarHeaderParameter["Content-Type"] = "application/json"
+
+      setSearchParams(localVarUrlObj, localVarQueryParameter)
+      let headersFromBaseOptions =
+        baseOptions && baseOptions.headers ? baseOptions.headers : {}
+      localVarRequestOptions.headers = {
+        ...localVarHeaderParameter,
+        ...headersFromBaseOptions,
+        ...options.headers,
+      }
+      localVarRequestOptions.data = serializeDataIfNeeded(
+        SearchSummaryAgentV0Request,
+        localVarRequestOptions,
+        configuration,
+      )
+
+      return {
+        url: toPathString(localVarUrlObj),
+        options: localVarRequestOptions,
+      }
+    },
+    /**
      * Syllabus agent endpoint via AsyncHttpConsumer
      * @param {SyllabusAgentV0Request} SyllabusAgentV0Request
      * @param {*} [options] Override http request option.
@@ -567,6 +663,34 @@ export const ChannelsApiFp = function (configuration?: Configuration) {
         )(axios, operationBasePath || basePath)
     },
     /**
+     * Search summary agent endpoint via AsyncHttpConsumer
+     * @param {SearchSummaryAgentV0Request} SearchSummaryAgentV0Request
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    async searchSummaryAgentV0(
+      SearchSummaryAgentV0Request: SearchSummaryAgentV0Request,
+      options?: RawAxiosRequestConfig,
+    ): Promise<
+      (axios?: AxiosInstance, basePath?: string) => AxiosPromise<string>
+    > {
+      const localVarAxiosArgs =
+        await localVarAxiosParamCreator.searchSummaryAgentV0(
+          SearchSummaryAgentV0Request,
+          options,
+        )
+      const index = configuration?.serverIndex ?? 0
+      const operationBasePath =
+        operationServerMap["ChannelsApi.searchSummaryAgentV0"]?.[index]?.url
+      return (axios, basePath) =>
+        createRequestFunction(
+          localVarAxiosArgs,
+          globalAxios,
+          BASE_PATH,
+          configuration,
+        )(axios, operationBasePath || basePath)
+    },
+    /**
      * Syllabus agent endpoint via AsyncHttpConsumer
      * @param {SyllabusAgentV0Request} SyllabusAgentV0Request
      * @param {*} [options] Override http request option.
@@ -625,6 +749,23 @@ export const ChannelsApiFactory = function (
         .then((request) => request(axios, basePath))
     },
     /**
+     * Search summary agent endpoint via AsyncHttpConsumer
+     * @param {ChannelsApiSearchSummaryAgentV0Request} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    searchSummaryAgentV0(
+      requestParameters: ChannelsApiSearchSummaryAgentV0Request,
+      options?: RawAxiosRequestConfig,
+    ): AxiosPromise<string> {
+      return localVarFp
+        .searchSummaryAgentV0(
+          requestParameters.SearchSummaryAgentV0Request,
+          options,
+        )
+        .then((request) => request(axios, basePath))
+    },
+    /**
      * Syllabus agent endpoint via AsyncHttpConsumer
      * @param {ChannelsApiSyllabusAgentV0Request} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -653,6 +794,20 @@ export interface ChannelsApiRecommendationAgentV0Request {
    * @memberof ChannelsApiRecommendationAgentV0
    */
   readonly RecommendationAgentV0Request: RecommendationAgentV0Request
+}
+
+/**
+ * Request parameters for searchSummaryAgentV0 operation in ChannelsApi.
+ * @export
+ * @interface ChannelsApiSearchSummaryAgentV0Request
+ */
+export interface ChannelsApiSearchSummaryAgentV0Request {
+  /**
+   *
+   * @type {SearchSummaryAgentV0Request}
+   * @memberof ChannelsApiSearchSummaryAgentV0
+   */
+  readonly SearchSummaryAgentV0Request: SearchSummaryAgentV0Request
 }
 
 /**
@@ -690,6 +845,25 @@ export class ChannelsApi extends BaseAPI {
     return ChannelsApiFp(this.configuration)
       .recommendationAgentV0(
         requestParameters.RecommendationAgentV0Request,
+        options,
+      )
+      .then((request) => request(this.axios, this.basePath))
+  }
+
+  /**
+   * Search summary agent endpoint via AsyncHttpConsumer
+   * @param {ChannelsApiSearchSummaryAgentV0Request} requestParameters Request parameters.
+   * @param {*} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof ChannelsApi
+   */
+  public searchSummaryAgentV0(
+    requestParameters: ChannelsApiSearchSummaryAgentV0Request,
+    options?: RawAxiosRequestConfig,
+  ) {
+    return ChannelsApiFp(this.configuration)
+      .searchSummaryAgentV0(
+        requestParameters.SearchSummaryAgentV0Request,
         options,
       )
       .then((request) => request(this.axios, this.basePath))

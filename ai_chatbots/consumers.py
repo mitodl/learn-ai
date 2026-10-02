@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from http.cookies import SimpleCookie
 from uuid import uuid4
 
-import litellm
 from asgiref.sync import sync_to_async
 from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
@@ -21,6 +20,7 @@ from rest_framework.status import HTTP_200_OK
 from ai_chatbots.chatbots import (
     CanvasSyllabusBot,
     ResourceRecommendationBot,
+    SearchSummaryBot,
     SyllabusBot,
     TutorBot,
     VideoGPTBot,
@@ -120,10 +120,11 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         anon_cookie_key = f"{self.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
 
         current_thread_id = None
-        self.user_id = self.get_ident()
+        self.ident = self.get_ident()
+        self.user_id = self.get_trace_ident()
         self.session_key = (
             self.scope["cookies"].get(AI_SESSION_COOKIE_KEY)
-            or self.user_id
+            or self.ident
             or uuid4().hex
         )
         anon_cookie = False
@@ -239,7 +240,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
         self.channel_layer = get_channel_layer()
         self.room_name = self.ROOM_NAME
-        self.room_group_name = f"{self.ROOM_NAME}_{self.user_id.replace('-', '_')}"[:90]
+        self.room_group_name = f"{self.ROOM_NAME}_{self.ident.replace('-', '_')}"[:90]
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         return current_thread_id, cookies
 
@@ -371,7 +372,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_error_response(400, err, cookies)
         except AsyncThrottled as err:
             log_msg = (
-                f"User {self.get_ident()} throttled on "
+                f"User {self.get_trace_ident()} throttled on "
                 f"{self.__class__.__name__} for {err.wait} seconds"
             )
             log.info(log_msg)
@@ -389,12 +390,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
-        # Close any unclosed async HTTP clients from LiteLLM to prevent resource leaks
-        try:
-            await litellm.close_litellm_async_clients()
-        except Exception:
-            log.exception("Error closing LiteLLM async clients")
-
         # Clean up Django Channels group
         if hasattr(self, "channel_layer") and hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(
@@ -433,6 +428,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
 
     ROOM_NAME = ResourceRecommendationBot.__name__
     throttle_scope = "recommendation_bot"
+    bot_class = ResourceRecommendationBot
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
@@ -450,7 +446,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
 
-        return ResourceRecommendationBot(
+        return self.bot_class(
             self.user_id,
             checkpointer,
             temperature=temperature,
@@ -458,6 +454,19 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
         )
+
+
+class SearchSummaryBotHttpConsumer(RecommendationBotHttpConsumer):
+    """
+    Async HTTP consumer for the AI summary shown on the search page.
+
+    Has its own ROOM_NAME and throttle_scope so that summary threads/cookies
+    and rate limits are kept separate from the regular AskTIM chat.
+    """
+
+    ROOM_NAME = SearchSummaryBot.__name__
+    throttle_scope = "search_summary_bot"
+    bot_class = SearchSummaryBot
 
 
 class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
