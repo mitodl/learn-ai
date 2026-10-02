@@ -9,6 +9,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
 from langchain_litellm import ChatLiteLLM
@@ -1074,6 +1075,121 @@ async def test_get_llm_no_tools(mocker, mock_checkpointer):
     # Verify bind_tools was NOT called
     mock_llm_instance.bind_tools.assert_not_called()
     assert chatbot.llm == mock_llm_instance
+
+
+@pytest.mark.asyncio
+async def test_get_llm_azure(settings, mocker, mock_checkpointer):
+    """An azure/ model gets the Azure endpoint, API version, and token provider."""
+    from ai_chatbots.models import LLMModel
+
+    settings.AZURE_OPENAI_ENDPOINT = "https://example.openai.azure.com/"
+    settings.AZURE_OPENAI_API_VERSION = "2024-10-21"
+    token_provider = mocker.Mock(return_value="entra-token")
+    mocker.patch(
+        "ai_chatbots.utils.get_azure_ad_token_provider", return_value=token_provider
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+    await sync_to_async(LLMModel.objects.update_or_create)(
+        litellm_id="azure/gpt-5.2",
+        defaults={"provider": "azure", "name": "gpt-5.2", "reasoning_effort": "none"},
+    )
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="azure/gpt-5.2"
+    )
+
+    assert chatbot.llm.model == "azure/gpt-5.2"
+    assert chatbot.llm.api_base == settings.AZURE_OPENAI_ENDPOINT
+    assert chatbot.llm.model_kwargs == {
+        "reasoning_effort": "none",
+        "api_version": "2024-10-21",
+        "azure_ad_token_provider": token_provider,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_llm_azure_streams_with_token_provider(
+    settings, mocker, mock_checkpointer
+):
+    """The streaming path hands the token provider and API version to litellm."""
+    settings.AZURE_OPENAI_ENDPOINT = "https://example.openai.azure.com/"
+    settings.AZURE_OPENAI_API_VERSION = "2024-10-21"
+    token_provider = mocker.Mock(return_value="entra-token")
+    mocker.patch(
+        "ai_chatbots.utils.get_azure_ad_token_provider", return_value=token_provider
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+    mock_acompletion = mocker.patch(
+        "litellm.acompletion",
+        new_callable=AsyncMock,
+        return_value=MockAsyncIterator(
+            [{"choices": [{"delta": {"role": "assistant", "content": "hi"}}]}]
+        ),
+    )
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model="azure/gpt-4o"
+    )
+
+    chunks = [chunk async for chunk in chatbot.llm.astream("hello")]
+
+    assert "".join(chunk.content for chunk in chunks) == "hi"
+    call_kwargs = mock_acompletion.call_args.kwargs
+    assert call_kwargs["model"] == "azure/gpt-4o"
+    assert call_kwargs["stream"] is True
+    assert call_kwargs["api_base"] == settings.AZURE_OPENAI_ENDPOINT
+    assert call_kwargs["api_version"] == "2024-10-21"
+    assert call_kwargs["azure_ad_token_provider"] is token_provider
+
+
+@pytest.mark.asyncio
+async def test_get_llm_azure_no_endpoint(settings, mocker, mock_checkpointer):
+    """An azure/ model without AZURE_OPENAI_ENDPOINT fails loudly."""
+    settings.AZURE_OPENAI_ENDPOINT = ""
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+    with pytest.raises(ImproperlyConfigured, match="AZURE_OPENAI_ENDPOINT"):
+        await sync_to_async(ResourceRecommendationBot)(
+            "user", mock_checkpointer, model="azure/gpt-4o"
+        )
+
+
+@pytest.mark.parametrize(
+    ("use_proxy", "model_name"),
+    [(True, "azure/gpt-4o"), (False, "openai/gpt-4o")],
+)
+@pytest.mark.asyncio
+async def test_get_llm_azure_not_applied(
+    settings, mocker, mock_checkpointer, use_proxy, model_name
+):
+    """Azure kwargs are skipped for non-azure models and when a proxy is set."""
+    mocker.patch("ai_chatbots.proxies.LiteLLMProxy.create_proxy_user")
+    mock_token_provider = mocker.patch("ai_chatbots.utils.get_azure_ad_token_provider")
+    mock_llm = mocker.patch("ai_chatbots.chatbots.ChatLiteLLM")
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
+    settings.AZURE_OPENAI_ENDPOINT = "https://example.openai.azure.com/"
+    settings.AI_PROXY_CLASS = "LiteLLMProxy" if use_proxy else None
+    settings.AI_PROXY_URL = "http://proxy.url"
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, model=model_name
+    )
+
+    mock_token_provider.assert_not_called()
+    call_kwargs = mock_llm.call_args.kwargs
+    assert call_kwargs["model"] == f"{chatbot.proxy_prefix}{model_name}"
+    assert call_kwargs.get("api_base") != settings.AZURE_OPENAI_ENDPOINT
+    assert "api_version" not in call_kwargs["model_kwargs"]
+    assert "azure_ad_token_provider" not in call_kwargs["model_kwargs"]
 
 
 @pytest.mark.parametrize(
