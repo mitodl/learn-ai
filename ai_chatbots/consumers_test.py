@@ -1360,67 +1360,25 @@ async def test_assign_thread_cookies_session_key_filtering(
 
 
 @pytest.mark.asyncio
-async def test_disconnect_closes_litellm_clients(mocker, recommendation_consumer):
-    """Test that disconnect properly closes LiteLLM async clients."""
-    # Mock litellm.close_litellm_async_clients
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Mock channel layer
+async def test_disconnect_discards_group(mocker, recommendation_consumer):
+    """Test that disconnect discards the channel layer group."""
     recommendation_consumer.channel_layer = mocker.Mock()
     recommendation_consumer.channel_layer.group_discard = AsyncMock()
     recommendation_consumer.room_group_name = "test_room"
 
-    # Call disconnect
     await recommendation_consumer.disconnect()
 
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_handles_litellm_exception(mocker, recommendation_consumer):
-    """Test that disconnect handles exceptions from LiteLLM cleanup gracefully."""
-    # Mock litellm.close_litellm_async_clients to raise an exception
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients",
-        side_effect=Exception("Test exception"),
-    )
-
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was attempted
-    mock_close.assert_called_once()
-    # Verify channel cleanup still happened despite exception
     recommendation_consumer.channel_layer.group_discard.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_disconnect_without_channel_layer(mocker, recommendation_consumer):
+async def test_disconnect_without_channel_layer(recommendation_consumer):
     """Test disconnect works when channel_layer is not set."""
-    # Mock litellm
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Don't set channel_layer
     if hasattr(recommendation_consumer, "channel_layer"):
         delattr(recommendation_consumer, "channel_layer")
 
     # Call disconnect - should not raise exception
     await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
 
 
 @pytest.fixture
