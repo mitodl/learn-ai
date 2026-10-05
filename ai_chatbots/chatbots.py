@@ -44,6 +44,7 @@ from ai_chatbots.api import (
     get_search_tool_metadata,
     query_tutorbot_output,
 )
+from ai_chatbots.constants import AZURE_MODEL_PREFIX
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
     CONTEXT_LOST_PROMPT,
@@ -53,6 +54,7 @@ from ai_chatbots.prompts import (
 from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
+    get_azure_openai_kwargs,
     get_django_cache,
     get_run_readable_id_from_block_id,
     save_truncated_checkpoint,
@@ -128,6 +130,19 @@ class BaseChatbot(ABC):
         Bind the LLM to any tools if they are present.
         """
         model_spec = LLMModel.objects.filter(litellm_id=self.model).first()
+        # Set reasoning effort if specified for the model
+        model_kwargs = (
+            {"reasoning_effort": model_spec.reasoning_effort}
+            if model_spec and model_spec.reasoning_effort
+            else {}
+        )
+        # A configured proxy handles azure/ models itself
+        azure_kwargs = (
+            get_azure_openai_kwargs()
+            if not self.proxy and self.model.startswith(AZURE_MODEL_PREFIX)
+            else {}
+        )
+        model_kwargs.update(azure_kwargs.pop("model_kwargs", {}))
         llm = ChatLiteLLM(
             model=f"{self.proxy_prefix}{self.model}",
             streaming=True,
@@ -135,10 +150,8 @@ class BaseChatbot(ABC):
             # (langchain_litellm already defaults this on; we set it so the
             # behavior survives a library default change.)
             stream_options={"include_usage": True},
-            # Set reasoning effort if specified for the model
-            model_kwargs={"reasoning_effort": model_spec.reasoning_effort}
-            if model_spec and model_spec.reasoning_effort
-            else {},
+            model_kwargs=model_kwargs,
+            **azure_kwargs,
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
