@@ -1,12 +1,14 @@
 """Permission classes for ai_chatbots views"""
 
-from math import log
+import logging
 
 from rest_framework.permissions import BasePermission
 
 from ai_chatbots.constants import AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.models import UserChatSession
 from main.utils import decode_value
+
+log = logging.getLogger(__name__)
 
 
 class IsThreadOwner(BasePermission):
