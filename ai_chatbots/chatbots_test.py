@@ -1083,7 +1083,7 @@ async def test_get_llm_azure(settings, mocker, mock_checkpointer):
     from ai_chatbots.models import LLMModel
 
     settings.AZURE_OPENAI_ENDPOINT = "https://example.openai.azure.com/"
-    settings.AZURE_OPENAI_API_VERSION = "2024-10-21"
+    settings.AZURE_OPENAI_API_VERSION = "v1"
     token_provider = mocker.Mock(return_value="entra-token")
     mocker.patch(
         "ai_chatbots.utils.get_azure_ad_token_provider", return_value=token_provider
@@ -1105,7 +1105,7 @@ async def test_get_llm_azure(settings, mocker, mock_checkpointer):
     assert chatbot.llm.api_base == settings.AZURE_OPENAI_ENDPOINT
     assert chatbot.llm.model_kwargs == {
         "reasoning_effort": "none",
-        "api_version": "2024-10-21",
+        "api_version": "v1",
         "azure_ad_token_provider": token_provider,
     }
 
@@ -1116,7 +1116,7 @@ async def test_get_llm_azure_streams_with_token_provider(
 ):
     """The streaming path hands the token provider and API version to litellm."""
     settings.AZURE_OPENAI_ENDPOINT = "https://example.openai.azure.com/"
-    settings.AZURE_OPENAI_API_VERSION = "2024-10-21"
+    settings.AZURE_OPENAI_API_VERSION = "v1"
     token_provider = mocker.Mock(return_value="entra-token")
     mocker.patch(
         "ai_chatbots.utils.get_azure_ad_token_provider", return_value=token_provider
@@ -1143,7 +1143,7 @@ async def test_get_llm_azure_streams_with_token_provider(
     assert call_kwargs["model"] == "azure/gpt-4o"
     assert call_kwargs["stream"] is True
     assert call_kwargs["api_base"] == settings.AZURE_OPENAI_ENDPOINT
-    assert call_kwargs["api_version"] == "2024-10-21"
+    assert call_kwargs["api_version"] == "v1"
     assert call_kwargs["azure_ad_token_provider"] is token_provider
 
 
