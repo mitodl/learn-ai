@@ -596,6 +596,10 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
     name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
+# Chat widgets are embedded on other origins, so the thread cookies need
+# SameSite=None;Secure. Turn this off only for plain-HTTP local development,
+# where browsers reject Secure cookies.
+AI_CHATBOTS_COOKIE_CROSS_SITE = get_bool("AI_CHATBOTS_COOKIE_CROSS_SITE", True)  # noqa: FBT003
 AI_CITED_PROMPTS = get_list_of_str("AI_CITED_PROMPTS", default=[])
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o-mini")
@@ -612,6 +616,7 @@ AI_DEFAULT_SYLLABUS_MAX_TOKENS = get_int("AI_DEFAULT_SYLLABUS_MAX_TOKENS", 16384
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "openai/gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
+AI_DEFAULT_SUPPORT_MODEL = get_string("AI_DEFAULT_SUPPORT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(
     name="AI_MAX_MESSAGE_LENGTH", default=6000
@@ -682,6 +687,12 @@ AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
 
+# TEMPORARY (hq#13712): when non-empty, litellm streams this canned string back
+# instead of calling a provider, so the chat path can be exercised without
+# credentials. Leave empty in every deployed environment. No tool calls are
+# emitted in this mode.
+AI_MOCK_RESPONSE = get_string(name="AI_MOCK_RESPONSE", default="")
+
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
 AI_PROXY_URL = get_string(name="AI_PROXY_URL", default="")
@@ -703,6 +714,16 @@ AI_ZENDESK_SEARCH_LIMIT = get_int(name="AI_ZENDESK_SEARCH_LIMIT", default=5)
 AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
     name="AI_ZENDESK_ARTICLE_MAX_CHARS", default=1500
 )
+
+# Zendesk support ticket creation (hq#13712). Kept separate from AI_ZENDESK_URL:
+# that one is the branded help center used for article search, while API calls
+# have to go to the canonical {subdomain}.zendesk.com host.
+AI_ZENDESK_API_URL = get_string(name="AI_ZENDESK_API_URL", default="")
+# An OAuth access token, not an API token: Zendesk stops honouring API tokens on
+# 2027-04-30 and new accounts can no longer create them.
+AI_ZENDESK_OAUTH_TOKEN = get_string(name="AI_ZENDESK_OAUTH_TOKEN", default="")
+# Defaults on so local dev and CI never need real Zendesk credentials.
+AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=True)
 # How long the platform of a course is cached for, in seconds.  A course does
 # not change platforms, so this only needs to expire often enough to pick up
 # resources that were not yet published at the time of the first lookup.

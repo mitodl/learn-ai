@@ -4,6 +4,7 @@ import dataclasses
 import datetime
 import re
 
+from django.conf import settings
 from named_enum import ExtendedEnum
 
 HYBRID_SEARCH_FEATURE_FLAG = "bot_hybrid_search_enabled"
@@ -46,6 +47,17 @@ class OfferedBy(ExtendedEnum):
 
 # Zendesk help center article search endpoint, appended to the help center base url
 ZENDESK_ARTICLE_SEARCH_PATH = "/api/v2/help_center/articles/search.json"
+
+# Zendesk ticket creation endpoint, appended to the API base url
+ZENDESK_TICKET_PATH = "/api/v2/tickets.json"
+
+# Tag applied to every ticket filed by the support intake widget, so these can be
+# told apart from tickets raised through the help center or by email.
+ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"
+
+# Added when the requester address was asserted by the caller rather than taken
+# from an authenticated session, so support does not read it as confirmed.
+ZENDESK_UNVERIFIED_REQUESTER_TAG = "tim_unverified_requester"
 
 # Zendesk help center category ids, as listed by the public category endpoint:
 #   curl -sL https://support.learn.mit.edu/api/v2/help_center/categories.json
@@ -99,7 +111,10 @@ class ChatbotCookie:
         Represent the cookie as a string
         """
         expire_str = f"Max-Age={self.max_age}" if self.max_age is not None else ""
-        return f"{self.name}={self.value};Path={self.path};{expire_str};"
+        cross_site = (
+            "SameSite=None;Secure;" if settings.AI_CHATBOTS_COOKIE_CROSS_SITE else ""
+        )
+        return f"{self.name}={self.value};Path={self.path};{expire_str};{cross_site}"
 
 
 WRITES_MAPPING = {"human": "__start__", "ai": "agent", "tool": "tools"}

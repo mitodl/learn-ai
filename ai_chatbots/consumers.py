@@ -2,6 +2,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from http.cookies import SimpleCookie
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from asgiref.sync import sync_to_async
@@ -21,6 +22,7 @@ from ai_chatbots.chatbots import (
     CanvasSyllabusBot,
     ResourceRecommendationBot,
     SearchSummaryBot,
+    SupportBot,
     SyllabusBot,
     TutorBot,
     VideoGPTBot,
@@ -37,6 +39,7 @@ from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
     ChatRequestSerializer,
     RecommendationChatRequestSerializer,
+    SupportChatRequestSerializer,
     SyllabusChatRequestSerializer,
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
@@ -48,6 +51,34 @@ from main.utils import decode_value, format_seconds
 from users.models import User
 
 log = logging.getLogger(__name__)
+
+
+class CrossOriginRequestError(Exception):
+    """A request whose origin is not in the CORS allow-list."""
+
+
+def _header(scope: dict, name: bytes) -> str:
+    """Return a request header from the ASGI scope, or ''."""
+    return next(
+        (
+            value.decode("latin-1")
+            for key, value in (scope.get("headers") or [])
+            if key.lower() == name
+        ),
+        "",
+    )
+
+
+def request_origin(scope: dict) -> str:
+    """
+    Return the origin the request came from, falling back to Referer the way
+    CsrfViewMiddleware does for browsers that send one but no Origin.
+    """
+    origin = _header(scope, b"origin")
+    if origin:
+        return origin
+    parts = urlsplit(_header(scope, b"referer"))
+    return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
 
 
 def build_csrf_cookie_header():
@@ -86,6 +117,24 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     def create_chatbot(self, serializer):
         """Return a bot instance"""
         raise NotImplementedError
+
+    def check_origin(self):
+        """
+        Reject a cross-site POST.
+
+        main/asgi.py routes these consumers ahead of django_asgi_app, so
+        CsrfViewMiddleware never runs for them, and the thread cookie is
+        SameSite=None when AI_CHATBOTS_COOKIE_CROSS_SITE is on. CORS stops an
+        attacker reading the reply, not sending the request - a text/plain POST
+        is a simple request and skips the preflight.
+
+        An absent origin is allowed: server-to-server callers send none, and a
+        Referrer-Policy can strip both headers.
+        """
+        origin = request_origin(self.scope)
+        allowed = settings.CORS_ALLOW_ORIGINS
+        if origin and "*" not in allowed and origin not in allowed:
+            raise CrossOriginRequestError(origin)
 
     def process_message(
         self, message_json: str, serializer_class: type[ChatRequestSerializer]
@@ -335,6 +384,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             return
         cookies = None
         try:
+            self.check_origin()
             await self.check_throttles()
             serializer = self.process_message(message, self.serializer_class)
             thread_id, cookies = await self.prepare_response(serializer)
@@ -367,6 +417,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     await self.send_chunk(chunk)
                     output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
+        except CrossOriginRequestError as err:
+            log.warning("Rejected chat request from origin %s", err)
+            await self.start_response(thread_id=None, status=403, cookies=cookies)
+            await self.send_chunk(
+                json.dumps({"error": {"message": "Origin not allowed."}})
+            )
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
@@ -765,3 +821,50 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
             agent=self.ROOM_NAME,
             object_id=serializer.validated_data.get("transcript_asset_id"),
         )
+
+
+class SupportBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the support intake bot.
+    """
+
+    serializer_class = SupportChatRequestSerializer
+    ROOM_NAME = SupportBot.__name__
+    throttle_scope = "support_bot"
+
+    def create_chatbot(
+        self,
+        serializer: SupportChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a SupportBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        instructions = serializer.validated_data.pop("instructions", None)
+        model = serializer.validated_data.pop("model", None)
+
+        return SupportBot(
+            self.user_id,
+            checkpointer,
+            temperature=temperature,
+            instructions=instructions,
+            model=model,
+            thread_id=self.thread_id,
+        )
+
+    def process_extra_state(self, data: dict) -> dict:
+        """
+        Pass the page the learner was on, plus their email if we know it.
+
+        The authenticated session wins, so a request body cannot name somebody
+        else as the requester for a signed-in learner. Hosts learn-ai holds no
+        session for, such as the edX MFE, fall back to the body. That is no
+        weaker than the alternative: an anonymous caller is otherwise asked to
+        type an address, and could type the same one.
+        """
+        session_email = getattr(self.scope.get("user", None), "email", "") or ""
+        return {
+            "page_url": [data.get("page_url", "")],
+            "user_email": [session_email or data.get("user_email", "") or ""],
+            # Carried separately so the ticket can say whether anyone checked.
+            "verified_email": [session_email],
+        }
