@@ -200,3 +200,17 @@ def test_support_serializer_rejects_a_malformed_user_email():
 
     assert not serializer.is_valid()
     assert "user_email" in serializer.errors
+
+
+def test_support_serializer_rejects_a_user_email_too_long_to_store():
+    """
+    UserChatSession.support_ticket_email is varchar(254). A longer address that
+    validated here would file the ticket and then blow up on save, leaving no
+    reference recorded and every retry filing again.
+    """
+    serializer = SupportChatRequestSerializer(
+        data={"message": "help", "user_email": f"{'a' * 300}@example.com"}
+    )
+
+    assert not serializer.is_valid()
+    assert "user_email" in serializer.errors
