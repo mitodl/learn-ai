@@ -319,6 +319,19 @@ async def test_calculate_writes_no_channel_values():
     assert calculate_writes({}) is None
 
 
+async def test_calculate_writes_null_updated_channels():
+    """
+    aupdate_state writes a checkpoint with updated_channels set to None, which
+    .get(key, default) returns as-is - the default only covers a missing key.
+    """
+    checkpoint = {
+        "updated_channels": None,
+        "channel_values": {"messages": [{"kwargs": {"type": "human"}}]},
+    }
+
+    assert calculate_writes(checkpoint) is None
+
+
 async def test_aput_adds_writes_when_missing():
     """Test that aput automatically adds writes to metadata when missing."""
     checkpoint_id = uuid4().hex
