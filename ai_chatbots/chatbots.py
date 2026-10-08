@@ -996,8 +996,14 @@ class SupportAgentState(SummaryState):
     page_url: Annotated[list[str], add]
     user_email: Annotated[list[str], add]
     verified_email: Annotated[list[str], add]
+    awaiting_send: Annotated[list[bool], add]
 
 
+SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
+SUPPORT_TICKET_REVIEW_FOOTER = (
+    'Anything else to add? Send it and I\'ll include it - otherwise reply "send" '
+    "and I'll pass this on."
+)
 SUPPORT_TICKET_FILED = (
     "Thanks - I've passed that on to the MIT Open Learning support team. Your "
     "reference number is {reference}, and they'll follow up at {email}."
@@ -1035,6 +1041,82 @@ def _reply_to_email(message: str) -> str:
     if len(EMAIL_IN_MESSAGE.sub(" ", message).split()) > REPLY_TO_MAX_OTHER_WORDS:
         return ""
     return address
+
+
+# Answers to "anything else to add?" that add nothing. Sending is never gated on
+# recognising one - they are only kept out of the description.
+CONFIRMATION_PHRASES = frozenset(
+    {
+        "send",
+        "send it",
+        "send it please",
+        "yes",
+        "yes please",
+        "y",
+        "yep",
+        "yeah",
+        "ok",
+        "okay",
+        "sure",
+        "go",
+        "go ahead",
+        "do it",
+        "confirm",
+        "confirmed",
+        "submit",
+        "file it",
+        "no",
+        "nope",
+        "nothing",
+        "nothing else",
+        "no thanks",
+        "no that's everything",
+        "no that's all",
+        "that's everything",
+        "that's all",
+        "that's it",
+        "done",
+    }
+)
+
+
+def _first(values: list[str]) -> str:
+    """Return the first non-empty value, or an empty string."""
+    return next((value for value in values if value), "")
+
+
+def _is_bare_confirmation(message: str) -> bool:
+    """Report whether the message is only the learner saying "go"."""
+    words = re.sub(r"[^a-z' ]", " ", (message or "").lower())
+    return " ".join(words.split()) in CONFIRMATION_PHRASES
+
+
+def _support_description(prior_messages: list, message: str) -> str:
+    """
+    Join everything the learner typed about the problem. An address they gave is
+    the reply-to, and a bare "send" is an answer to us, so neither belongs in
+    what support reads.
+    """
+    typed = [
+        msg.content
+        for msg in prior_messages
+        if isinstance(msg, HumanMessage) and msg.content
+    ]
+    typed.append(message)
+    return "\n\n".join(
+        text
+        for text in typed
+        if text and not _reply_to_email(text) and not _is_bare_confirmation(text)
+    )
+
+
+def _support_review(description: str, page_url: str, email: str) -> str:
+    """Show the learner the ticket before it exists, in their own words."""
+    lines = [SUPPORT_TICKET_REVIEW_HEADER, "", f"**Your message:** {description}"]
+    if page_url:
+        lines += ["", f"**Where you were:** {page_url}"]
+    lines += ["", f"**Reply to:** {email}", "", SUPPORT_TICKET_REVIEW_FOOTER]
+    return "\n".join(lines)
 
 
 def _ticket_subject(description: str) -> str:
@@ -1112,6 +1194,29 @@ class SupportBot(TruncatingChatbot):
         metadata = await self.get_metadata()
         yield f"\n\n<!-- {metadata} -->\n\n"
 
+    async def _file_the_ticket(
+        self, *, session, description: str, page_url: str, email: str, verified: bool
+    ) -> str:
+        """File the ticket and return the reply that reports how it went."""
+        result = await file_support_ticket(
+            subject=_ticket_subject(description),
+            description=description,
+            email=email,
+            page_url=page_url,
+            email_verified=verified,
+        )
+        if result.get("reference") is None:
+            # awaiting_send stays set, so the learner's next message retries
+            # rather than starting the review over.
+            return SUPPORT_TICKET_FAILED
+        if session:
+            session.support_ticket_reference = str(result["reference"])
+            session.support_ticket_email = email
+            await session.asave(
+                update_fields=["support_ticket_reference", "support_ticket_email"]
+            )
+        return SUPPORT_TICKET_FILED.format(reference=result["reference"], email=email)
+
     async def get_completion(
         self,
         message: str,
@@ -1120,9 +1225,10 @@ class SupportBot(TruncatingChatbot):
         **kwargs,
     ) -> AsyncGenerator[str, None]:
         """
-        File the ticket in code once the learner supplies an email. Leaving it
-        to the model means no ticket under AI_MOCK_RESPONSE, where it emits no
-        tool calls at all, and a ticket only when it feels like it otherwise.
+        Show the learner what will be sent, then file it on the turn after.
+        Both steps happen in code: leaving them to the model means no ticket
+        under AI_MOCK_RESPONSE, where it emits no tool calls at all, and a
+        ticket only when it feels like it otherwise.
         """
         extra_state = extra_state or {}
         session = await UserChatSession.objects.filter(
@@ -1144,14 +1250,9 @@ class SupportBot(TruncatingChatbot):
         prior_messages = prior_state.get("messages") or []
         # The widget sends the email with the opening message, so a retry after a
         # Zendesk failure has to read it from accumulated state as well.
-        known_email = next(
-            (
-                address
-                for address in (prior_state.get("user_email") or [])
-                + (extra_state.get("user_email") or [])
-                if address
-            ),
-            "",
+        known_email = _first(
+            (prior_state.get("user_email") or [])
+            + (extra_state.get("user_email") or [])
         )
         email = known_email or _reply_to_email(message)
 
@@ -1165,52 +1266,39 @@ class SupportBot(TruncatingChatbot):
                 yield chunk
             return
 
-        description = next(
-            (
-                msg.content
-                for msg in prior_messages
-                if isinstance(msg, HumanMessage) and msg.content
-            ),
-            message,
-        )
+        description = _support_description(prior_messages, message)
         # The widget sends page_url with the opening message, not with the email
         # that triggers filing, so prefer the URLs accumulated in graph state.
-        page_url = next(
-            (
-                url
-                for url in reversed(
+        page_url = _first(
+            list(
+                reversed(
                     (prior_state.get("page_url") or [])
                     + (extra_state.get("page_url") or [])
                 )
-                if url
-            ),
-            "",
-        )
-        verified = email in (
-            (prior_state.get("verified_email") or [])
-            + (extra_state.get("verified_email") or [])
-        )
-        result = await file_support_ticket(
-            subject=_ticket_subject(description),
-            description=description,
-            email=email,
-            page_url=page_url,
-            email_verified=verified,
+            )
         )
 
-        if result.get("reference") is None:
+        if not any(prior_state.get("awaiting_send") or []):
             async for chunk in self._reply_without_the_model(
-                message, SUPPORT_TICKET_FAILED, extra_state
+                message,
+                _support_review(description, page_url, email),
+                # An address parsed out of this turn reaches state no other way,
+                # and the turn that files has to still know it.
+                {**extra_state, "user_email": [email], "awaiting_send": [True]},
             ):
                 yield chunk
             return
 
-        if session:
-            session.support_ticket_reference = str(result["reference"])
-            session.support_ticket_email = email
-            await session.asave(
-                update_fields=["support_ticket_reference", "support_ticket_email"]
-            )
-        filed = SUPPORT_TICKET_FILED.format(reference=result["reference"], email=email)
-        async for chunk in self._reply_without_the_model(message, filed, extra_state):
+        verified = email in (
+            (prior_state.get("verified_email") or [])
+            + (extra_state.get("verified_email") or [])
+        )
+        reply = await self._file_the_ticket(
+            session=session,
+            description=description,
+            page_url=page_url,
+            email=email,
+            verified=verified,
+        )
+        async for chunk in self._reply_without_the_model(message, reply, extra_state):
             yield chunk
