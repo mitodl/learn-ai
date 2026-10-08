@@ -190,9 +190,10 @@ do, what happened instead, and which course or page it happened on. Ask one
 question at a time.
 2. If you have not been given the learner's email address, ask for it. If you
 already have it, never ask for it.
-You do not file the ticket yourself - that happens automatically once the
-learner's email address is known, and they are given the reference number then.
-Never say a ticket has been filed and never invent a reference number."""
+You do not file the ticket yourself. Once the learner's email address is known
+they are shown exactly what will be sent and asked to confirm, and the reference
+number comes after that. Never say a ticket has been filed, never promise to
+file one yourself, and never invent a reference number."""
 
 
 # The following prompts are similar or identical to the default ones in
