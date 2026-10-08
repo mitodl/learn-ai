@@ -694,13 +694,15 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
     )
 
 
-async def file_support_ticket(
+async def file_support_ticket(  # noqa: PLR0913
     *,
     subject: str,
     description: str,
     email: str,
     page_url: str = "",
     email_verified: bool = False,
+    url: str = "",
+    name: str = "",
 ) -> dict:
     """Create a Zendesk ticket, returning {"reference": ...} or {"error": ...}."""
     if settings.AI_ZENDESK_STUB_MODE:
@@ -729,16 +731,19 @@ async def file_support_ticket(
 
     try:
         client = get_async_http_client()
+        ticket_data = {
+            "subject": subject,
+            "comment": {"body": body},
+            "requester": {"email": email.strip(), "name": email.strip()},
+            "tags": tags,
+        }
+        if url:
+            ticket_data["url"] = url
+        if name:
+            ticket_data["name"] = name
         response = await client.post(
             f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_TICKET_PATH}",
-            json={
-                "ticket": {
-                    "subject": subject,
-                    "comment": {"body": body},
-                    "requester": {"email": email.strip(), "name": email.strip()},
-                    "tags": tags,
-                }
-            },
+            json={"ticket": ticket_data},
             headers={"Authorization": f"Bearer {settings.AI_ZENDESK_OAUTH_TOKEN}"},
             timeout=settings.REQUESTS_TIMEOUT,
         )
