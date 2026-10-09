@@ -3,11 +3,14 @@
 import json
 import logging
 from typing import Annotated
+from uuid import uuid4
 
 import pydantic
 from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
@@ -16,12 +19,23 @@ from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
+    ZENDESK_NAME_FIELD_ID,
     ZENDESK_PLATFORM_CATEGORY_IDS,
+    ZENDESK_SUPPORT_INTAKE_TAG,
+    ZENDESK_TICKET_PATH,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
+    ZENDESK_UNVERIFIED_REQUESTER_TAG,
+    ZENDESK_URL_FIELD_ID,
+    ZENDESK_USERNAME_FIELD_ID,
     LearningResourceType,
     OfferedBy,
 )
-from ai_chatbots.utils import async_request, enum_zip, get_django_cache
+from ai_chatbots.utils import (
+    async_request,
+    enum_zip,
+    get_async_http_client,
+    get_django_cache,
+)
 from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
@@ -681,3 +695,77 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
             "platform": platform,
         },
     )
+
+
+async def file_support_ticket(  # noqa: PLR0913
+    *,
+    subject: str,
+    description: str,
+    email: str,
+    page_url: str = "",
+    name: str = "",
+    username: str = "",
+    email_verified: bool = False,
+) -> dict:
+    """Create a Zendesk ticket, returning {"reference": ...} or {"error": ...}."""
+    if settings.AI_ZENDESK_STUB_MODE:
+        # Loud on purpose: the learner is told their request was filed, and
+        # nothing was. A quiet stub left on in production looks like success.
+        log.warning(
+            "AI_ZENDESK_STUB_MODE is on - no Zendesk ticket was created, "
+            "but the learner was told one was."
+        )
+        return {"reference": f"STUB-{uuid4().hex[:8].upper()}", "stub": True}
+
+    try:
+        validate_email((email or "").strip())
+    except ValidationError:
+        return {
+            "error": (
+                "That does not look like a valid email address. Ask the "
+                "learner for one before filing."
+            )
+        }
+
+    body = f"{description}\n\nPage: {page_url}" if page_url else description
+    tags = [ZENDESK_SUPPORT_INTAKE_TAG]
+    if not email_verified:
+        tags.append(ZENDESK_UNVERIFIED_REQUESTER_TAG)
+
+    custom_fields = [
+        {"id": field_id, "value": value}
+        for field_id, value in (
+            (ZENDESK_URL_FIELD_ID, page_url),
+            (ZENDESK_NAME_FIELD_ID, name),
+            (ZENDESK_USERNAME_FIELD_ID, username),
+        )
+        if value
+    ]
+
+    try:
+        client = get_async_http_client()
+        ticket_data = {
+            "subject": subject,
+            "comment": {"body": body},
+            "requester": {"email": email.strip(), "name": name or email.strip()},
+            "tags": tags,
+        }
+        if custom_fields:
+            ticket_data["custom_fields"] = custom_fields
+        response = await client.post(
+            f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_TICKET_PATH}",
+            json={"ticket": ticket_data},
+            headers={"Authorization": f"Bearer {settings.AI_ZENDESK_OAUTH_TOKEN}"},
+            timeout=settings.REQUESTS_TIMEOUT,
+        )
+        response.raise_for_status()
+        return {"reference": response.json()["ticket"]["id"], "stub": False}
+    except Exception as exc:  # noqa: BLE001
+        # No exc_info: the traceback's frame locals hold the learner's email and
+        # their problem description, and Sentry ships frame locals by default.
+        log.error(  # noqa: TRY400
+            "Failed to create Zendesk support ticket (%s, status %s)",
+            type(exc).__name__,
+            getattr(getattr(exc, "response", None), "status_code", "n/a"),
+        )
+        return {"error": "Could not file the support request. Please try again later."}

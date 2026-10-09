@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
@@ -44,12 +45,14 @@ from ai_chatbots.api import (
     get_search_tool_metadata,
     query_tutorbot_output,
 )
+from ai_chatbots.models import UserChatSession
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
     CONTEXT_LOST_PROMPT,
     PROMPT_SEARCH_SUMMARY_QUERY,
     SYSTEM_PROMPT_MAPPING,
 )
+from ai_chatbots.tools import file_support_ticket
 from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
@@ -128,6 +131,14 @@ class BaseChatbot(ABC):
         Bind the LLM to any tools if they are present.
         """
         model_spec = LLMModel.objects.filter(litellm_id=self.model).first()
+        model_kwargs = (
+            {"reasoning_effort": model_spec.reasoning_effort}
+            if model_spec and model_spec.reasoning_effort
+            else {}
+        )
+        # TEMPORARY (hq#13712): canned reply, no provider call. See settings.
+        if settings.AI_MOCK_RESPONSE:
+            model_kwargs["mock_response"] = settings.AI_MOCK_RESPONSE
         llm = ChatLiteLLM(
             model=f"{self.proxy_prefix}{self.model}",
             streaming=True,
@@ -135,10 +146,7 @@ class BaseChatbot(ABC):
             # (langchain_litellm already defaults this on; we set it so the
             # behavior survives a library default change.)
             stream_options={"include_usage": True},
-            # Set reasoning effort if specified for the model
-            model_kwargs={"reasoning_effort": model_spec.reasoning_effort}
-            if model_spec and model_spec.reasoning_effort
-            else {},
+            model_kwargs=model_kwargs,
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
             **kwargs,
@@ -976,3 +984,356 @@ class VideoGPTBot(TruncatingChatbot):
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+
+class SupportAgentState(SummaryState):
+    """
+    State for the support bot: the page the learner was on, who to reach them at
+    and under what name, and the subset of those addresses an authenticated
+    session vouched for.
+    """
+
+    page_url: Annotated[list[str], add]
+    user_email: Annotated[list[str], add]
+    verified_email: Annotated[list[str], add]
+    user_name: Annotated[list[str], add]
+    user_username: Annotated[list[str], add]
+    awaiting_send: Annotated[list[bool], add]
+
+
+SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
+SUPPORT_TICKET_REVIEW_FOOTER = (
+    'Anything else to add? Send it and I\'ll include it - otherwise reply "send" '
+    "and I'll pass this on."
+)
+SUPPORT_TICKET_FILED = (
+    "Thanks - I've passed that on to the MIT Open Learning support team. Your "
+    "reference number is {reference}, and they'll follow up at {email}."
+)
+SUPPORT_TICKET_ALREADY_FILED = (
+    "I've already filed this one for you - your reference number is {reference}, "
+    "and the support team will follow up at {email}."
+)
+SUPPORT_TICKET_FAILED = (
+    "Sorry, I could not file your support request just now. Please email "
+    "support directly and they'll pick it up."
+)
+
+EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
+
+ZENDESK_SUBJECT_MAX_LENGTH = 150
+# UserChatSession.support_ticket_email is an EmailField, so anything longer
+# would file the ticket and then blow up on save.
+EMAIL_MAX_LENGTH = 254
+REPLY_TO_MAX_OTHER_WORDS = 6
+
+
+def _reply_to_email(message: str) -> str:
+    """
+    Return the address only when the message reads as an answer to "what's your
+    email?". Addresses quoted inside prose belong to the problem, and filing
+    against one makes Zendesk email a stranger.
+    """
+    matches = EMAIL_IN_MESSAGE.findall(message or "")
+    if len(matches) != 1:
+        return ""
+    address = matches[0].rstrip(".")
+    if len(address) > EMAIL_MAX_LENGTH:
+        return ""
+    if len(EMAIL_IN_MESSAGE.sub(" ", message).split()) > REPLY_TO_MAX_OTHER_WORDS:
+        return ""
+    return address
+
+
+# Answers to "anything else to add?" that add nothing. Sending is never gated on
+# recognising one - they are only kept out of the description.
+CONFIRMATION_PHRASES = frozenset(
+    {
+        "send",
+        "send it",
+        "send it please",
+        "yes",
+        "yes please",
+        "y",
+        "yep",
+        "yeah",
+        "ok",
+        "okay",
+        "sure",
+        "go",
+        "go ahead",
+        "do it",
+        "confirm",
+        "confirmed",
+        "submit",
+        "file it",
+        "no",
+        "nope",
+        "nothing",
+        "nothing else",
+        "no thanks",
+        "no that's everything",
+        "no that's all",
+        "that's everything",
+        "that's all",
+        "that's it",
+        "done",
+    }
+)
+
+
+def _first(values: list[str]) -> str:
+    """Return the first non-empty value, or an empty string."""
+    return next((value for value in values if value), "")
+
+
+def _latest(values: list[str]) -> str:
+    """Return the last non-empty value, or an empty string."""
+    return _first(list(reversed(values)))
+
+
+def _is_bare_confirmation(message: str) -> bool:
+    """Report whether the message is only the learner saying "go"."""
+    words = re.sub(r"[^a-z' ]", " ", (message or "").lower())
+    return " ".join(words.split()) in CONFIRMATION_PHRASES
+
+
+def _support_description(prior_messages: list, message: str) -> str:
+    """
+    Join everything the learner typed about the problem. An address they gave is
+    the reply-to, and a bare "send" is an answer to us, so neither belongs in
+    what support reads.
+    """
+    typed = [
+        msg.content
+        for msg in prior_messages
+        if isinstance(msg, HumanMessage) and msg.content
+    ]
+    typed.append(message)
+    return "\n\n".join(
+        text
+        for text in typed
+        if text and not _reply_to_email(text) and not _is_bare_confirmation(text)
+    )
+
+
+def _support_review(description: str, page_url: str, email: str) -> str:
+    """Show the learner the ticket before it exists, in their own words."""
+    lines = [SUPPORT_TICKET_REVIEW_HEADER, "", f"**Your message:** {description}"]
+    if page_url:
+        lines += ["", f"**Where you were:** {page_url}"]
+    lines += ["", f"**Reply to:** {email}", "", SUPPORT_TICKET_REVIEW_FOOTER]
+    return "\n".join(lines)
+
+
+def _ticket_subject(description: str) -> str:
+    """Build a subject from the learner's own words, no model involved."""
+    subject = " ".join((description or "").split())
+    if len(subject) > ZENDESK_SUBJECT_MAX_LENGTH:
+        subject = f"{subject[: ZENDESK_SUBJECT_MAX_LENGTH - 1].rstrip()}…"
+    return subject or "Support request"
+
+
+class SupportBot(TruncatingChatbot):
+    """Service class for the support intake agent"""
+
+    PROMPT_TEMPLATE = "support"
+    TASK_NAME = "SUPPORT_TASK"
+    JOB_ID = "SUPPORT_JOB"
+    STATE_CLASS = SupportAgentState
+    TRACE_STATE_KEYS = ("page_url",)
+
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Support Chatbot",
+        model: str | None = None,
+        temperature: float | None = None,
+        instructions: str | None = None,
+        thread_id: str | None = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            checkpointer=checkpointer,
+            model=model or settings.AI_DEFAULT_SUPPORT_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
+        )
+        self.agent = self.create_agent_graph()
+
+    def create_tools(self):
+        """
+        No tools: the bot takes the problem in, it does not answer it, and the
+        ticket is filed deterministically in get_completion. A second,
+        model-driven filing path could only disagree with that one.
+        """
+        return []
+
+    async def get_tool_metadata(self) -> str:
+        """Return no metadata - this agent has no tools"""
+        return ""
+
+    async def _prior_state(self) -> dict:
+        """Return the graph state already accumulated on this thread."""
+        state = await self.agent.aget_state(self.config)
+        return (state.values if state else None) or {}
+
+    async def _reply_without_the_model(
+        self, message: str, reply: str, extra_state: dict
+    ) -> AsyncGenerator[str, None]:
+        """
+        Yield a reply the model had no part in, and leave the same trace behind
+        as a normal turn: the exchange written to the thread, and the metadata
+        comment the caller reads the thread_id out of.
+        """
+        yield reply
+        # as_node is required: with no checkpoint to infer from, or more than one
+        # candidate, LangGraph refuses the write as ambiguous.
+        await self.agent.aupdate_state(
+            self.config,
+            {"messages": [HumanMessage(message), AIMessage(reply)], **extra_state},
+            as_node="agent",
+        )
+        metadata = await self.get_metadata()
+        yield f"\n\n<!-- {metadata} -->\n\n"
+
+    async def _file_the_ticket(  # noqa: PLR0913
+        self,
+        *,
+        session,
+        description: str,
+        page_url: str,
+        email: str,
+        name: str,
+        username: str,
+        verified: bool,
+    ) -> str:
+        """File the ticket and return the reply that reports how it went."""
+        result = await file_support_ticket(
+            subject=_ticket_subject(description),
+            description=description,
+            email=email,
+            page_url=page_url,
+            name=name,
+            username=username,
+            email_verified=verified,
+        )
+        if result.get("reference") is None:
+            # awaiting_send stays set, so the learner's next message retries
+            # rather than starting the review over.
+            return SUPPORT_TICKET_FAILED
+        if session:
+            session.support_ticket_reference = str(result["reference"])
+            session.support_ticket_email = email
+            await session.asave(
+                update_fields=["support_ticket_reference", "support_ticket_email"]
+            )
+        return SUPPORT_TICKET_FILED.format(reference=result["reference"], email=email)
+
+    async def get_completion(
+        self,
+        message: str,
+        *,
+        extra_state: dict[str, Any] | None = None,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Show the learner what will be sent, then file it on the turn after.
+        Both steps happen in code: leaving them to the model means no ticket
+        under AI_MOCK_RESPONSE, where it emits no tool calls at all, and a
+        ticket only when it feels like it otherwise.
+        """
+        extra_state = extra_state or {}
+        session = await UserChatSession.objects.filter(
+            thread_id=self.thread_id
+        ).afirst()
+
+        if session and session.support_ticket_reference:
+            already_filed = SUPPORT_TICKET_ALREADY_FILED.format(
+                reference=session.support_ticket_reference,
+                email=session.support_ticket_email,
+            )
+            async for chunk in self._reply_without_the_model(
+                message, already_filed, extra_state
+            ):
+                yield chunk
+            return
+
+        prior_state = await self._prior_state()
+        prior_messages = prior_state.get("messages") or []
+        # The widget sends the email with the opening message, so a retry after a
+        # Zendesk failure has to read it from accumulated state as well. Latest
+        # wins, because the earliest may be the one the learner is correcting.
+        known_email = _latest(
+            (prior_state.get("user_email") or [])
+            + (extra_state.get("user_email") or [])
+        )
+        verified_email = _latest(
+            (prior_state.get("verified_email") or [])
+            + (extra_state.get("verified_email") or [])
+        )
+        # A learner who mistyped their address can only fix it by typing it
+        # again. One an authenticated session vouched for is not theirs to
+        # change: that would let the chat name a stranger as the requester.
+        email = verified_email or _reply_to_email(message) or known_email
+
+        # An address we were handed identifies the learner. One parsed out of a
+        # first message ("can't log in as x@y.com") is part of the problem, not a
+        # reply-to, so that case still waits to be asked.
+        if not email or (not known_email and not prior_messages):
+            async for chunk in super().get_completion(
+                message, extra_state=extra_state, **kwargs
+            ):
+                yield chunk
+            return
+
+        description = _support_description(prior_messages, message)
+        # The widget sends page_url with the opening message, not with the email
+        # that triggers filing, so prefer the URLs accumulated in graph state.
+        page_url = _latest(
+            (prior_state.get("page_url") or []) + (extra_state.get("page_url") or [])
+        )
+
+        if not any(prior_state.get("awaiting_send") or []):
+            async for chunk in self._reply_without_the_model(
+                message,
+                _support_review(description, page_url, email),
+                # An address parsed out of this turn reaches state no other way,
+                # and the turn that files has to still know it.
+                {**extra_state, "user_email": [email], "awaiting_send": [True]},
+            ):
+                yield chunk
+            return
+
+        verified = email in (
+            (prior_state.get("verified_email") or [])
+            + (extra_state.get("verified_email") or [])
+        )
+        name = _latest(
+            (prior_state.get("user_name") or []) + (extra_state.get("user_name") or [])
+        )
+        username = _latest(
+            (prior_state.get("user_username") or [])
+            + (extra_state.get("user_username") or [])
+        )
+        reply = await self._file_the_ticket(
+            session=session,
+            description=description,
+            page_url=page_url,
+            email=email,
+            name=name,
+            username=username,
+            verified=verified,
+        )
+        async for chunk in self._reply_without_the_model(
+            # A retry after a Zendesk failure reads the address back out of
+            # state, so a correction made on this turn has to land there.
+            message,
+            reply,
+            {**extra_state, "user_email": [email]},
+        ):
+            yield chunk

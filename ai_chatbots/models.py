@@ -18,6 +18,10 @@ class UserChatSession(TimestampedModel):
     title = models.CharField(max_length=255, blank=True)
     agent = models.CharField(max_length=128, blank=True, db_index=True)
     object_id = models.CharField(max_length=256, blank=True, db_index=True)
+    # Set once a ticket is filed for this thread, so a learner who keeps typing
+    # cannot open a second one.
+    support_ticket_reference = models.CharField(max_length=64, blank=True, default="")
+    support_ticket_email = models.EmailField(blank=True, default="")
 
     def __str__(self):
         user_id = self.user.global_id if self.user else self.dj_session_key
