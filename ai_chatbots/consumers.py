@@ -853,7 +853,7 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
 
     def process_extra_state(self, data: dict) -> dict:
         """
-        Pass the page the learner was on, plus their email if we know it.
+        Pass the page the learner was on, plus their name and email if we know them.
 
         The authenticated session wins, so a request body cannot name somebody
         else as the requester for a signed-in learner. Hosts learn-ai holds no
@@ -861,10 +861,17 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
         weaker than the alternative: an anonymous caller is otherwise asked to
         type an address, and could type the same one.
         """
-        session_email = getattr(self.scope.get("user", None), "email", "") or ""
+        user = self.scope.get("user", None)
+        session_email = getattr(user, "email", "") or ""
+        session_username = getattr(user, "username", "") or ""
+        session_name = getattr(user, "name", "") or session_username
         return {
             "page_url": [data.get("page_url", "")],
             "user_email": [session_email or data.get("user_email", "") or ""],
             # Carried separately so the ticket can say whether anyone checked.
             "verified_email": [session_email],
+            "user_name": [session_name],
+            # Kept distinct from user_name: a display name may stand in there,
+            # but Zendesk's username field should only ever be the account handle.
+            "user_username": [session_username],
         }
