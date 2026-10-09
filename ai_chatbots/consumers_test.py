@@ -1461,7 +1461,34 @@ def test_support_process_extra_state_trusts_only_the_session_email(
         "page_url": ["https://learn.mit.edu/courses/18.01/week-3"],
         "user_email": [async_user.email],
         "verified_email": [async_user.email],
+        "user_name": [async_user.name],
+        "user_username": [async_user.username],
     }
+
+
+def test_support_process_extra_state_names_a_user_without_a_name(
+    support_consumer, async_user
+):
+    """SSO accounts can reach us with no name set, so support gets the username."""
+    async_user.name = ""
+
+    extra_state = support_consumer.process_extra_state({"page_url": ""})
+
+    assert extra_state["user_name"] == [async_user.username]
+
+
+def test_support_process_extra_state_carries_the_username_separately(
+    support_consumer, async_user
+):
+    """
+    user_username always carries the account username, even when user_name is
+    showing the learner's display name instead - Zendesk gets both as distinct
+    fields rather than losing the username whenever a name is set.
+    """
+    extra_state = support_consumer.process_extra_state({"page_url": ""})
+
+    assert extra_state["user_name"] == [async_user.name]
+    assert extra_state["user_username"] == [async_user.username]
 
 
 def test_support_process_extra_state_falls_back_to_the_body_email(support_consumer):
@@ -1481,6 +1508,8 @@ def test_support_process_extra_state_falls_back_to_the_body_email(support_consum
         "page_url": [""],
         "user_email": ["learner@example.com"],
         "verified_email": [""],
+        "user_name": [""],
+        "user_username": [""],
     }
 
 
@@ -1490,7 +1519,13 @@ def test_support_process_extra_state_anonymous_learner(support_consumer):
 
     extra_state = support_consumer.process_extra_state({"page_url": ""})
 
-    assert extra_state == {"page_url": [""], "user_email": [""], "verified_email": [""]}
+    assert extra_state == {
+        "page_url": [""],
+        "user_email": [""],
+        "verified_email": [""],
+        "user_name": [""],
+        "user_username": [""],
+    }
 
 
 async def _handle_with_origin(mocker, consumer, origin, settings, allowed):
