@@ -722,8 +722,9 @@ AI_ZENDESK_API_URL = get_string(name="AI_ZENDESK_API_URL", default="")
 # An OAuth access token, not an API token: Zendesk stops honouring API tokens on
 # 2027-04-30 and new accounts can no longer create them.
 AI_ZENDESK_OAUTH_TOKEN = get_string(name="AI_ZENDESK_OAUTH_TOKEN", default="")
-# Defaults on so local dev and CI never need real Zendesk credentials.
-AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=True)
+# Defaults off: an environment that forgets this setting should fail to file
+# loudly, not tell every learner their request was filed and then drop it.
+AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
 # How long the platform of a course is cached for, in seconds.  A course does
 # not change platforms, so this only needs to expire often enough to pick up
 # resources that were not yet published at the time of the first lookup.
