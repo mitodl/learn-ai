@@ -11,10 +11,13 @@ from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
 from ai_chatbots.constants import (
+    ZENDESK_NAME_FIELD_ID,
     ZENDESK_PLATFORM_CATEGORY_IDS,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
+    ZENDESK_URL_FIELD_ID,
+    ZENDESK_USERNAME_FIELD_ID,
 )
 from ai_chatbots.tools import (
     COURSE_PLATFORM_CACHE_PREFIX,
@@ -1162,6 +1165,89 @@ async def test_file_support_ticket_without_page_url(
     assert result == {"reference": 77, "stub": False}
     _, kwargs = mock_patch.return_value.post.call_args
     assert kwargs["json"]["ticket"]["comment"]["body"] == "The week 3 video just spins."
+
+
+async def test_file_support_ticket_fills_the_zendesk_custom_fields(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    Support filters and views read the url and name ticket fields, which Zendesk
+    only populates from the custom_fields array - top level keys are dropped.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.tools.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(name="Ada Lovelace"))
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert ticket["custom_fields"] == [
+        {"id": ZENDESK_URL_FIELD_ID, "value": "https://learn.mit.edu/week-3"},
+        {"id": ZENDESK_NAME_FIELD_ID, "value": "Ada Lovelace"},
+    ]
+    assert ticket["requester"] == {
+        "email": "learner@example.com",
+        "name": "Ada Lovelace",
+    }
+
+
+async def test_file_support_ticket_fills_the_zendesk_username_custom_field(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    The username is the account handle, kept as its own custom field so it
+    survives even when the requester name above is a display name instead.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.tools.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(name="Ada Lovelace", username="ada"))
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert ticket["custom_fields"] == [
+        {"id": ZENDESK_URL_FIELD_ID, "value": "https://learn.mit.edu/week-3"},
+        {"id": ZENDESK_NAME_FIELD_ID, "value": "Ada Lovelace"},
+        {"id": ZENDESK_USERNAME_FIELD_ID, "value": "ada"},
+    ]
+
+
+async def test_file_support_ticket_names_the_requester_by_email_when_unknown(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """An anonymous learner gives us no name, so the address is all support gets."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.tools.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert ticket["requester"]["name"] == "learner@example.com"
+    assert ticket["custom_fields"] == [
+        {"id": ZENDESK_URL_FIELD_ID, "value": "https://learn.mit.edu/week-3"}
+    ]
+
+
+async def test_file_support_ticket_omits_empty_custom_fields(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """Zendesk rejects a custom field sent with an empty value."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.tools.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(page_url="", name=""))
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    assert "custom_fields" not in kwargs["json"]["ticket"]
 
 
 @pytest.mark.parametrize(

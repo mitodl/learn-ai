@@ -59,6 +59,13 @@ ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"
 # from an authenticated session, so support does not read it as confirmed.
 ZENDESK_UNVERIFIED_REQUESTER_TAG = "tim_unverified_requester"
 
+# Custom ticket field ids, from Admin Center > Objects and rules > Tickets >
+# Fields. Zendesk only reads these from the custom_fields array - the same names
+# sent as top level ticket keys are accepted and silently dropped.
+ZENDESK_URL_FIELD_ID = 51720932683537
+ZENDESK_NAME_FIELD_ID = 51721582949009
+ZENDESK_USERNAME_FIELD_ID = 51741744445201
+
 # Zendesk help center category ids, as listed by the public category endpoint:
 #   curl -sL https://support.learn.mit.edu/api/v2/help_center/categories.json
 #     41249004008859  About MIT Learn

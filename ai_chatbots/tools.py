@@ -19,11 +19,14 @@ from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
+    ZENDESK_NAME_FIELD_ID,
     ZENDESK_PLATFORM_CATEGORY_IDS,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_TICKET_PATH,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
+    ZENDESK_URL_FIELD_ID,
+    ZENDESK_USERNAME_FIELD_ID,
     LearningResourceType,
     OfferedBy,
 )
@@ -700,9 +703,9 @@ async def file_support_ticket(  # noqa: PLR0913
     description: str,
     email: str,
     page_url: str = "",
-    email_verified: bool = False,
-    url: str = "",
     name: str = "",
+    username: str = "",
+    email_verified: bool = False,
 ) -> dict:
     """Create a Zendesk ticket, returning {"reference": ...} or {"error": ...}."""
     if settings.AI_ZENDESK_STUB_MODE:
@@ -729,18 +732,26 @@ async def file_support_ticket(  # noqa: PLR0913
     if not email_verified:
         tags.append(ZENDESK_UNVERIFIED_REQUESTER_TAG)
 
+    custom_fields = [
+        {"id": field_id, "value": value}
+        for field_id, value in (
+            (ZENDESK_URL_FIELD_ID, page_url),
+            (ZENDESK_NAME_FIELD_ID, name),
+            (ZENDESK_USERNAME_FIELD_ID, username),
+        )
+        if value
+    ]
+
     try:
         client = get_async_http_client()
         ticket_data = {
             "subject": subject,
             "comment": {"body": body},
-            "requester": {"email": email.strip(), "name": email.strip()},
+            "requester": {"email": email.strip(), "name": name or email.strip()},
             "tags": tags,
         }
-        if url:
-            ticket_data["url"] = url
-        if name:
-            ticket_data["name"] = name
+        if custom_fields:
+            ticket_data["custom_fields"] = custom_fields
         response = await client.post(
             f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_TICKET_PATH}",
             json={"ticket": ticket_data},

@@ -988,14 +988,16 @@ class VideoGPTBot(TruncatingChatbot):
 
 class SupportAgentState(SummaryState):
     """
-    State for the support bot: the page the learner was on, the address to reach
-    them at, and the subset of those addresses an authenticated session vouched
-    for.
+    State for the support bot: the page the learner was on, who to reach them at
+    and under what name, and the subset of those addresses an authenticated
+    session vouched for.
     """
 
     page_url: Annotated[list[str], add]
     user_email: Annotated[list[str], add]
     verified_email: Annotated[list[str], add]
+    user_name: Annotated[list[str], add]
+    user_username: Annotated[list[str], add]
     awaiting_send: Annotated[list[bool], add]
 
 
@@ -1083,6 +1085,11 @@ CONFIRMATION_PHRASES = frozenset(
 def _first(values: list[str]) -> str:
     """Return the first non-empty value, or an empty string."""
     return next((value for value in values if value), "")
+
+
+def _latest(values: list[str]) -> str:
+    """Return the last non-empty value, or an empty string."""
+    return _first(list(reversed(values)))
 
 
 def _is_bare_confirmation(message: str) -> bool:
@@ -1194,8 +1201,16 @@ class SupportBot(TruncatingChatbot):
         metadata = await self.get_metadata()
         yield f"\n\n<!-- {metadata} -->\n\n"
 
-    async def _file_the_ticket(
-        self, *, session, description: str, page_url: str, email: str, verified: bool
+    async def _file_the_ticket(  # noqa: PLR0913
+        self,
+        *,
+        session,
+        description: str,
+        page_url: str,
+        email: str,
+        name: str,
+        username: str,
+        verified: bool,
     ) -> str:
         """File the ticket and return the reply that reports how it went."""
         result = await file_support_ticket(
@@ -1203,6 +1218,8 @@ class SupportBot(TruncatingChatbot):
             description=description,
             email=email,
             page_url=page_url,
+            name=name,
+            username=username,
             email_verified=verified,
         )
         if result.get("reference") is None:
@@ -1249,12 +1266,20 @@ class SupportBot(TruncatingChatbot):
         prior_state = await self._prior_state()
         prior_messages = prior_state.get("messages") or []
         # The widget sends the email with the opening message, so a retry after a
-        # Zendesk failure has to read it from accumulated state as well.
-        known_email = _first(
+        # Zendesk failure has to read it from accumulated state as well. Latest
+        # wins, because the earliest may be the one the learner is correcting.
+        known_email = _latest(
             (prior_state.get("user_email") or [])
             + (extra_state.get("user_email") or [])
         )
-        email = known_email or _reply_to_email(message)
+        verified_email = _latest(
+            (prior_state.get("verified_email") or [])
+            + (extra_state.get("verified_email") or [])
+        )
+        # A learner who mistyped their address can only fix it by typing it
+        # again. One an authenticated session vouched for is not theirs to
+        # change: that would let the chat name a stranger as the requester.
+        email = verified_email or _reply_to_email(message) or known_email
 
         # An address we were handed identifies the learner. One parsed out of a
         # first message ("can't log in as x@y.com") is part of the problem, not a
@@ -1269,13 +1294,8 @@ class SupportBot(TruncatingChatbot):
         description = _support_description(prior_messages, message)
         # The widget sends page_url with the opening message, not with the email
         # that triggers filing, so prefer the URLs accumulated in graph state.
-        page_url = _first(
-            list(
-                reversed(
-                    (prior_state.get("page_url") or [])
-                    + (extra_state.get("page_url") or [])
-                )
-            )
+        page_url = _latest(
+            (prior_state.get("page_url") or []) + (extra_state.get("page_url") or [])
         )
 
         if not any(prior_state.get("awaiting_send") or []):
@@ -1293,12 +1313,27 @@ class SupportBot(TruncatingChatbot):
             (prior_state.get("verified_email") or [])
             + (extra_state.get("verified_email") or [])
         )
+        name = _latest(
+            (prior_state.get("user_name") or []) + (extra_state.get("user_name") or [])
+        )
+        username = _latest(
+            (prior_state.get("user_username") or [])
+            + (extra_state.get("user_username") or [])
+        )
         reply = await self._file_the_ticket(
             session=session,
             description=description,
             page_url=page_url,
             email=email,
+            name=name,
+            username=username,
             verified=verified,
         )
-        async for chunk in self._reply_without_the_model(message, reply, extra_state):
+        async for chunk in self._reply_without_the_model(
+            # A retry after a Zendesk failure reads the address back out of
+            # state, so a correction made on this turn has to land there.
+            message,
+            reply,
+            {**extra_state, "user_email": [email]},
+        ):
             yield chunk
