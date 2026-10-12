@@ -129,11 +129,16 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         is a simple request and skips the preflight.
 
         An absent origin is allowed: server-to-server callers send none, and a
-        Referrer-Policy can strip both headers.
+        Referrer-Policy can strip both headers. So is an empty allow-list: this
+        gates every bot, and an environment that never needed to set
+        CORS_ALLOW_ORIGINS would otherwise start rejecting the chatbots that
+        work there today.
         """
         origin = request_origin(self.scope)
         allowed = settings.CORS_ALLOW_ORIGINS
-        if origin and "*" not in allowed and origin not in allowed:
+        if not allowed or "*" in allowed:
+            return
+        if origin and origin not in allowed:
             raise CrossOriginRequestError(origin)
 
     def process_message(
