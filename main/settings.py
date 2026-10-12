@@ -719,9 +719,13 @@ AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
 # that one is the branded help center used for article search, while API calls
 # have to go to the canonical {subdomain}.zendesk.com host.
 AI_ZENDESK_API_URL = get_string(name="AI_ZENDESK_API_URL", default="")
-# An OAuth access token, not an API token: Zendesk stops honouring API tokens on
-# 2027-04-30 and new accounts can no longer create them.
-AI_ZENDESK_OAUTH_TOKEN = get_string(name="AI_ZENDESK_OAUTH_TOKEN", default="")
+# OAuth client_credentials, not an API token: Zendesk stops honouring API tokens
+# on 2027-04-30 and new accounts can no longer create them. The backend mints a
+# short-lived access token from these and caches it (hq#13712).
+AI_ZENDESK_OAUTH_CLIENT_ID = get_string(name="AI_ZENDESK_OAUTH_CLIENT_ID", default="")
+AI_ZENDESK_OAUTH_CLIENT_SECRET = get_string(
+    name="AI_ZENDESK_OAUTH_CLIENT_SECRET", default=""
+)
 # Defaults off: an environment that forgets this setting should fail to file
 # loudly, not tell every learner their request was filed and then drop it.
 AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)

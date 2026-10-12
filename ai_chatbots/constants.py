@@ -53,6 +53,10 @@ ZENDESK_ARTICLE_SEARCH_PATH = "/api/v2/help_center/articles/search.json"
 # Zendesk ticket creation endpoint, appended to the API base url
 ZENDESK_TICKET_PATH = "/api/v2/tickets.json"
 
+# Zendesk OAuth token endpoint, appended to the API base url. Used to mint a
+# client_credentials access token for ticket creation.
+ZENDESK_OAUTH_TOKEN_PATH = "/oauth/tokens"  # noqa: S105
+
 # Tag applied to every ticket filed by the support intake widget, so these can be
 # told apart from tickets raised through the help center or by email.
 ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"

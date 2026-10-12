@@ -6,6 +6,7 @@ emit a tool call, so this returns a dict rather than tools.py's JSON string.
 """
 
 import logging
+from http import HTTPStatus
 from uuid import uuid4
 
 from django.conf import settings
@@ -13,13 +14,63 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
 from ai_chatbots.constants import (
+    ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_TICKET_PATH,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
 )
-from ai_chatbots.utils import get_async_http_client
+from ai_chatbots.utils import get_async_http_client, get_django_cache
 
 log = logging.getLogger(__name__)
+
+ZENDESK_TOKEN_CACHE_KEY = "zendesk_oauth_access_token"  # noqa: S105
+# client_credentials needs the scopes it will exercise: write the ticket, and
+# write the requester user Zendesk creates from the ticket's requester email.
+ZENDESK_OAUTH_SCOPE = "tickets:write users:write"
+# Re-mint this many seconds before the token's stated expiry, so an in-flight
+# request never files with a token that lapses mid-call.
+ZENDESK_TOKEN_EXPIRY_MARGIN = 60
+
+
+async def _get_access_token(client, *, force_refresh: bool = False) -> str:
+    """
+    Return a Zendesk access token, minting and caching one when needed.
+
+    client_credentials tokens are short-lived and carry no refresh token, so the
+    token is cached until just before it expires and re-minted on demand.
+    """
+    cache = get_django_cache()
+    if not force_refresh:
+        token = await cache.aget(ZENDESK_TOKEN_CACHE_KEY)
+        if token:
+            return token
+
+    response = await client.post(
+        f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_OAUTH_TOKEN_PATH}",
+        json={
+            "grant_type": "client_credentials",
+            "client_id": settings.AI_ZENDESK_OAUTH_CLIENT_ID,
+            "client_secret": settings.AI_ZENDESK_OAUTH_CLIENT_SECRET,
+            "scope": ZENDESK_OAUTH_SCOPE,
+        },
+        timeout=settings.REQUESTS_TIMEOUT,
+    )
+    response.raise_for_status()
+    data = response.json()
+    ttl = max(data["expires_in"] - ZENDESK_TOKEN_EXPIRY_MARGIN, 1)
+    await cache.aset(ZENDESK_TOKEN_CACHE_KEY, data["access_token"], ttl)
+    return data["access_token"]
+
+
+async def _post_ticket(client, ticket_data: dict, *, force_refresh: bool = False):
+    """POST the ticket with a (cached or freshly minted) access token."""
+    token = await _get_access_token(client, force_refresh=force_refresh)
+    return await client.post(
+        f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_TICKET_PATH}",
+        json={"ticket": ticket_data},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=settings.REQUESTS_TIMEOUT,
+    )
 
 
 def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
@@ -89,12 +140,10 @@ async def file_support_ticket(  # noqa: PLR0913
         }
         if custom_fields:
             ticket_data["custom_fields"] = custom_fields
-        response = await client.post(
-            f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_TICKET_PATH}",
-            json={"ticket": ticket_data},
-            headers={"Authorization": f"Bearer {settings.AI_ZENDESK_OAUTH_TOKEN}"},
-            timeout=settings.REQUESTS_TIMEOUT,
-        )
+        response = await _post_ticket(client, ticket_data)
+        if response.status_code == HTTPStatus.UNAUTHORIZED:
+            # The cached token can be revoked before its TTL; re-mint once.
+            response = await _post_ticket(client, ticket_data, force_refresh=True)
         response.raise_for_status()
         return {"reference": response.json()["ticket"]["id"], "stub": False}
     except Exception as exc:  # noqa: BLE001
