@@ -731,6 +731,13 @@ AI_ZENDESK_OAUTH_TOKEN = get_string(name="AI_ZENDESK_OAUTH_TOKEN", default="")
 # Defaults off: an environment that forgets this setting should fail to file
 # loudly, not tell every learner their request was filed and then drop it.
 AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
+# Custom ticket field ids, from Admin Center > Objects and rules > Tickets >
+# Fields. Minted per Zendesk instance, so they are configured rather than
+# hardcoded. 0 means unconfigured and the value is left off the ticket: Zendesk
+# rejects a whole ticket for a field id it does not recognise.
+AI_ZENDESK_URL_FIELD_ID = get_int(name="AI_ZENDESK_URL_FIELD_ID", default=0)
+AI_ZENDESK_NAME_FIELD_ID = get_int(name="AI_ZENDESK_NAME_FIELD_ID", default=0)
+AI_ZENDESK_USERNAME_FIELD_ID = get_int(name="AI_ZENDESK_USERNAME_FIELD_ID", default=0)
 # How long the platform of a course is cached for, in seconds.  A course does
 # not change platforms, so this only needs to expire often enough to pick up
 # resources that were not yet published at the time of the first lookup.

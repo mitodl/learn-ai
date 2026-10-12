@@ -53,7 +53,6 @@ from ai_chatbots.prompts import (
     PROMPT_SEARCH_SUMMARY_QUERY,
     SYSTEM_PROMPT_MAPPING,
 )
-from ai_chatbots.tools import file_support_ticket
 from ai_chatbots.utils import (
     async_request,
     comment_safe_json,
@@ -63,6 +62,7 @@ from ai_chatbots.utils import (
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
 )
+from ai_chatbots.zendesk import file_support_ticket
 from main.opik_keycloak_auth import is_opik_configured
 
 log = logging.getLogger(__name__)
