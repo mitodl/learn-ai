@@ -7,10 +7,12 @@ import pytest
 from httpx import RequestError
 
 from ai_chatbots.constants import (
+    ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
 )
-from ai_chatbots.zendesk import file_support_ticket
+from ai_chatbots.utils import get_django_cache
+from ai_chatbots.zendesk import ZENDESK_TOKEN_CACHE_KEY, file_support_ticket
 
 pytestmark = pytest.mark.django_db
 
@@ -19,17 +21,84 @@ URL_FIELD_ID = 51720932683537
 NAME_FIELD_ID = 51721582949009
 USERNAME_FIELD_ID = 51741744445201
 
+# A token already in the cache, so most tests file without hitting the mint
+# endpoint - the common case once an environment has warmed up.
+CACHED_TOKEN = "cached-zd-token"  # noqa: S105
+# What the mint endpoint hands back when the cache is cold.
+MINTED_TOKEN = "minted-zd-token"  # noqa: S105
+
 
 @pytest.fixture
-def zendesk_ticket_settings(settings):
-    """Stub mode off, credentials present, custom fields configured."""
+def token_cache(settings):
+    """
+    Point the default cache at locmem so the token actually persists.
+
+    The test default cache is a no-op DummyCache, which would make the
+    mint-and-cache behaviour untestable.
+    """
+    settings.CELERY_BROKER_URL = ""
+    settings.CACHES = {
+        **settings.CACHES,
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "zendesk-token-test",
+        },
+    }
+    cache = get_django_cache()
+    cache.clear()
+    return cache
+
+
+@pytest.fixture
+def zendesk_ticket_settings(settings, token_cache):
+    """Stub mode off, OAuth client configured, a token already cached."""
     settings.AI_ZENDESK_STUB_MODE = False
     settings.AI_ZENDESK_API_URL = "https://mitlearn.zendesk.com"
-    settings.AI_ZENDESK_OAUTH_TOKEN = "zdtoken"  # noqa: S105
+    settings.AI_ZENDESK_OAUTH_CLIENT_ID = "mit_odl_support"
+    settings.AI_ZENDESK_OAUTH_CLIENT_SECRET = "zdsecret"  # noqa: S105
     settings.AI_ZENDESK_URL_FIELD_ID = URL_FIELD_ID
     settings.AI_ZENDESK_NAME_FIELD_ID = NAME_FIELD_ID
     settings.AI_ZENDESK_USERNAME_FIELD_ID = USERNAME_FIELD_ID
+    token_cache.set(ZENDESK_TOKEN_CACHE_KEY, CACHED_TOKEN, 300)
     return settings
+
+
+def _response(mocker, json_body, status_code=200):
+    """Build a stand-in httpx response for the async client mock."""
+    response = mocker.Mock()
+    response.json.return_value = json_body
+    response.status_code = status_code
+    response.raise_for_status = mocker.Mock()
+    return response
+
+
+def _mock_zendesk_client(mocker, *, ticket_responses, expires_in=1799):
+    """
+    Patch the async client so mint POSTs and ticket POSTs get separate replies.
+
+    ``ticket_responses`` is consumed in order, so a test can hand back a 401
+    first and a success second to exercise the re-mint path.
+    """
+    mint_response = _response(
+        mocker,
+        {
+            "access_token": MINTED_TOKEN,
+            "token_type": "bearer",
+            "scope": "tickets:write users:write",
+            "expires_in": expires_in,
+        },
+    )
+    ticket_iter = iter(ticket_responses)
+
+    async def post(url, *_args, **_kwargs):
+        if url.endswith(ZENDESK_OAUTH_TOKEN_PATH):
+            return mint_response
+        return next(ticket_iter)
+
+    client = mocker.Mock()
+    client.post = mocker.AsyncMock(side_effect=post)
+    mocker.patch("ai_chatbots.zendesk.get_async_http_client", return_value=client)
+    return client
 
 
 def _ticket_args(**overrides):
@@ -101,7 +170,7 @@ async def test_file_support_ticket_posts_to_zendesk(
     assert "tim_support_intake" in ticket["tags"]
     assert "https://learn.mit.edu/week-3" in ticket["comment"]["body"]
     # OAuth bearer, not basic auth: Zendesk removes API tokens on 2027-04-30.
-    assert kwargs["headers"]["Authorization"] == "Bearer zdtoken"
+    assert kwargs["headers"]["Authorization"] == f"Bearer {CACHED_TOKEN}"
     assert "auth" not in kwargs
 
 
@@ -306,3 +375,73 @@ async def test_file_support_ticket_tags_an_unverified_requester(
     tags = kwargs["json"]["ticket"]["tags"]
     assert (ZENDESK_UNVERIFIED_REQUESTER_TAG in tags) is expect_tag
     assert ZENDESK_SUPPORT_INTAKE_TAG in tags
+
+
+async def test_file_support_ticket_mints_and_caches_token_when_cache_is_cold(
+    zendesk_ticket_settings, token_cache, mocker
+):
+    """A cold cache mints a client_credentials token, uses it, and caches it."""
+    token_cache.delete(ZENDESK_TOKEN_CACHE_KEY)
+    client = _mock_zendesk_client(
+        mocker, ticket_responses=[_response(mocker, {"ticket": {"id": 9}})]
+    )
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert result == {"reference": 9, "stub": False}
+    mint_call, ticket_call = client.post.call_args_list
+    # The mint request carries the client_credentials grant, not the ticket.
+    assert (
+        mint_call.args[0] == f"https://mitlearn.zendesk.com{ZENDESK_OAUTH_TOKEN_PATH}"
+    )
+    assert mint_call.kwargs["json"] == {
+        "grant_type": "client_credentials",
+        "client_id": "mit_odl_support",
+        "client_secret": "zdsecret",
+        "scope": "tickets:write users:write",
+    }
+    # The ticket is filed with the freshly minted token, which is now cached.
+    assert ticket_call.kwargs["headers"]["Authorization"] == f"Bearer {MINTED_TOKEN}"
+    assert token_cache.get(ZENDESK_TOKEN_CACHE_KEY) == MINTED_TOKEN
+
+
+async def test_file_support_ticket_uses_cached_token_without_minting(
+    zendesk_ticket_settings, mocker
+):
+    """A warm cache must file without a round trip to the mint endpoint."""
+    client = _mock_zendesk_client(
+        mocker, ticket_responses=[_response(mocker, {"ticket": {"id": 9}})]
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    posted_urls = [call.args[0] for call in client.post.call_args_list]
+    assert posted_urls == ["https://mitlearn.zendesk.com/api/v2/tickets.json"]
+
+
+async def test_file_support_ticket_remints_on_401(zendesk_ticket_settings, mocker):
+    """A cached token revoked before its TTL gets re-minted and the file retried."""
+    client = _mock_zendesk_client(
+        mocker,
+        ticket_responses=[
+            _response(mocker, {}, status_code=401),
+            _response(mocker, {"ticket": {"id": 9}}),
+        ],
+    )
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert result == {"reference": 9, "stub": False}
+    ticket_calls = [
+        call
+        for call in client.post.call_args_list
+        if call.args[0].endswith("/api/v2/tickets.json")
+    ]
+    assert len(ticket_calls) == 2
+    # The retry uses the re-minted token, not the stale cached one.
+    assert (
+        ticket_calls[0].kwargs["headers"]["Authorization"] == f"Bearer {CACHED_TOKEN}"
+    )
+    assert (
+        ticket_calls[1].kwargs["headers"]["Authorization"] == f"Bearer {MINTED_TOKEN}"
+    )
