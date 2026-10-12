@@ -1609,3 +1609,19 @@ async def test_handle_allows_any_origin_when_cors_is_wildcarded(
     )
 
     assert _response_status(mock_send) == 200
+
+
+async def test_handle_allows_any_origin_when_cors_is_unset(
+    mocker, syllabus_consumer, settings
+):
+    """
+    This check gates every bot, not just support intake. An environment that
+    never had to set CORS_ALLOW_ORIGINS would otherwise start 403ing the
+    chatbots that work there today, so an empty list means "not configured",
+    not "allow nothing".
+    """
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "https://learn.mit.edu", settings, []
+    )
+
+    assert _response_status(mock_send) == 200
