@@ -977,39 +977,6 @@ async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
-async def test_get_llm_mock_response(settings, mocker, mock_checkpointer):
-    """AI_MOCK_RESPONSE makes litellm return a canned reply instead of calling a provider."""
-    settings.AI_MOCK_RESPONSE = "Thanks, what is a good email to reach you?"
-    mocker.patch(
-        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
-        return_value=[],
-    )
-
-    chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="nonexistent-model"
-    )
-
-    assert chatbot.llm.model_kwargs["mock_response"] == (
-        "Thanks, what is a good email to reach you?"
-    )
-
-
-@pytest.mark.asyncio
-async def test_get_llm_no_mock_response_by_default(mocker, mock_checkpointer):
-    """Without the setting, deployed envs must still call the real model."""
-    mocker.patch(
-        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
-        return_value=[],
-    )
-
-    chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="nonexistent-model"
-    )
-
-    assert "mock_response" not in chatbot.llm.model_kwargs
-
-
-@pytest.mark.asyncio
 async def test_get_llm_model_not_found(mocker, mock_checkpointer):
     """Test that get_llm handles missing model_spec gracefully."""
     mocker.patch(
@@ -1715,8 +1682,8 @@ def _support_state(email=""):
 async def test_support_bot_reviews_before_it_files(mocker, mock_checkpointer):
     """
     Nothing reaches the support team until the learner has seen what is going.
-    The review is built in code for the same reason the ticket is: under
-    AI_MOCK_RESPONSE the model would paraphrase it into something untrue.
+    The review is built in code for the same reason the ticket is: a model
+    asked to repeat it back would paraphrase it into something untrue.
     """
     mock_file = mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",
@@ -2006,8 +1973,8 @@ async def test_support_bot_files_ticket_when_learner_gives_email(
 ):
     """
     The whole point of v1: the learner answers TIM's email question, confirms,
-    and a ticket exists. The LLM emits no tool calls under AI_MOCK_RESPONSE, so
-    leaving the filing to the model means no ticket is ever filed.
+    and a ticket exists. Filing happens in code, so it does not depend on the
+    model choosing to emit a tool call.
     """
     mock_file = mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",

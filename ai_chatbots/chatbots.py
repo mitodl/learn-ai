@@ -146,9 +146,6 @@ class BaseChatbot(ABC):
             else {}
         )
         model_kwargs.update(azure_kwargs.pop("model_kwargs", {}))
-        # TEMPORARY (hq#13712): canned reply, no provider call. See settings.
-        if settings.AI_MOCK_RESPONSE:
-            model_kwargs["mock_response"] = settings.AI_MOCK_RESPONSE
         llm = ChatLiteLLM(
             model=f"{self.proxy_prefix}{self.model}",
             streaming=True,
@@ -1254,9 +1251,9 @@ class SupportBot(TruncatingChatbot):
     ) -> AsyncGenerator[str, None]:
         """
         Show the learner what will be sent, then file it on the turn after.
-        Both steps happen in code: leaving them to the model means no ticket
-        under AI_MOCK_RESPONSE, where it emits no tool calls at all, and a
-        ticket only when it feels like it otherwise.
+        Both steps happen in code: a model asked to call a tool does it only
+        when it feels like it, and a learner who was told their request was
+        sent has no way to tell that nothing was filed.
         """
         extra_state = extra_state or {}
         session = await UserChatSession.objects.filter(
