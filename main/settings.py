@@ -693,12 +693,6 @@ LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
 AZURE_OPENAI_ENDPOINT = get_string(name="AZURE_OPENAI_ENDPOINT", default="")
 AZURE_OPENAI_API_VERSION = get_string(name="AZURE_OPENAI_API_VERSION", default="")
 
-# TEMPORARY (hq#13712): when non-empty, litellm streams this canned string back
-# instead of calling a provider, so the chat path can be exercised without
-# credentials. Leave empty in every deployed environment. No tool calls are
-# emitted in this mode.
-AI_MOCK_RESPONSE = get_string(name="AI_MOCK_RESPONSE", default="")
-
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
 AI_PROXY_URL = get_string(name="AI_PROXY_URL", default="")
