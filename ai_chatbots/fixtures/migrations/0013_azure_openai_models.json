@@ -1,0 +1,23 @@
+[
+  {
+    "provider": "azure",
+    "name": "gpt-4o",
+    "litellm_id": "azure/gpt-4o",
+    "enabled": false,
+    "temperature": 0.1
+  },
+  {
+    "provider": "azure",
+    "name": "gpt-5-mini",
+    "litellm_id": "azure/gpt-5-mini",
+    "enabled": false,
+    "reasoning_effort": "minimal"
+  },
+  {
+    "provider": "azure",
+    "name": "gpt-5.2",
+    "litellm_id": "azure/gpt-5.2",
+    "enabled": false,
+    "reasoning_effort": "none"
+  }
+]

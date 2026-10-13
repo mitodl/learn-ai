@@ -12,6 +12,8 @@ AI_ANONYMOUS_USER = "anonymous"
 AI_THREAD_COOKIE_KEY = "ai_thread_auth"
 AI_THREADS_ANONYMOUS_COOKIE_KEY = "ai_threads_anon"
 AI_SESSION_COOKIE_KEY = "ai_odl_unique_id"
+AZURE_MODEL_PREFIX = "azure/"
+AZURE_COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 
 class LearningResourceType(ExtendedEnum):

@@ -372,3 +372,21 @@ async def test_truncate_checkpoint_messages_filters_messages(mock_checkpointer):
 def test_get_run_readable_id_from_block_id(block_id, expected):
     """The course run should be derived from edx block and asset ids."""
     assert utils.get_run_readable_id_from_block_id(block_id) == expected
+
+
+def test_get_azure_ad_token_provider(mocker):
+    """The Entra credential and token provider are created once per process."""
+    mock_credential = mocker.patch("ai_chatbots.utils.DefaultAzureCredential")
+    mock_get_provider = mocker.patch("ai_chatbots.utils.get_bearer_token_provider")
+    utils.get_azure_ad_token_provider.cache_clear()
+    try:
+        first = utils.get_azure_ad_token_provider()
+        second = utils.get_azure_ad_token_provider()
+    finally:
+        utils.get_azure_ad_token_provider.cache_clear()
+
+    assert first is second is mock_get_provider.return_value
+    mock_credential.assert_called_once_with()
+    mock_get_provider.assert_called_once_with(
+        mock_credential.return_value, "https://cognitiveservices.azure.com/.default"
+    )
