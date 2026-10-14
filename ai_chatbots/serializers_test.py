@@ -192,6 +192,21 @@ def test_support_serializer_keeps_user_email():
     assert serializer.validated_data["user_email"] == "learner@mit.edu"
 
 
+def test_support_serializer_keeps_user_name_and_username():
+    """A host with no learn-ai session supplies the learner's name and handle."""
+    serializer = SupportChatRequestSerializer(
+        data={
+            "message": "my video will not play",
+            "user_name": "Ada Lovelace",
+            "user_username": "ada",
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["user_name"] == "Ada Lovelace"
+    assert serializer.validated_data["user_username"] == "ada"
+
+
 def test_support_serializer_rejects_a_malformed_user_email():
     """The address becomes the Zendesk requester, so junk must not reach the tool."""
     serializer = SupportChatRequestSerializer(
