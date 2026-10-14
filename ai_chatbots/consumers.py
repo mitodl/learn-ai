@@ -875,8 +875,8 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             "user_email": [session_email or data.get("user_email", "") or ""],
             # Carried separately so the ticket can say whether anyone checked.
             "verified_email": [session_email],
-            "user_name": [session_name],
+            "user_name": [session_name or data.get("user_name", "") or ""],
             # Kept distinct from user_name: a display name may stand in there,
             # but Zendesk's username field should only ever be the account handle.
-            "user_username": [session_username],
+            "user_username": [session_username or data.get("user_username", "") or ""],
         }

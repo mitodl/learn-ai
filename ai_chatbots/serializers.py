@@ -107,6 +107,10 @@ class SupportChatRequestSerializer(ChatRequestSerializer):
     user_email = serializers.EmailField(
         required=False, allow_blank=True, max_length=254
     )
+    # Display name and account handle for hosts with no learn-ai session; the
+    # consumer prefers the authenticated session over these, same as user_email.
+    user_name = TruncatedCharField(required=False, allow_blank=True, max_length=255)
+    user_username = TruncatedCharField(required=False, allow_blank=True, max_length=255)
 
 
 class UserChatSessionSerializer(serializers.ModelSerializer):

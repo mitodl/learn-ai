@@ -1501,16 +1501,40 @@ def test_support_process_extra_state_falls_back_to_the_body_email(support_consum
     support_consumer.scope["user"] = AnonymousUser()
 
     extra_state = support_consumer.process_extra_state(
-        {"page_url": "", "user_email": "learner@example.com"}
+        {
+            "page_url": "",
+            "user_email": "learner@example.com",
+            "user_name": "Ada Lovelace",
+            "user_username": "ada",
+        }
     )
 
     assert extra_state == {
         "page_url": [""],
         "user_email": ["learner@example.com"],
         "verified_email": [""],
-        "user_name": [""],
-        "user_username": [""],
+        "user_name": ["Ada Lovelace"],
+        "user_username": ["ada"],
     }
+
+
+def test_support_process_extra_state_prefers_session_over_body_name(
+    support_consumer, async_user
+):
+    """
+    A signed-in learner's name and handle come from the session, so a request
+    body cannot relabel the requester the same way it cannot for the email.
+    """
+    extra_state = support_consumer.process_extra_state(
+        {
+            "page_url": "",
+            "user_name": "Someone Else",
+            "user_username": "someone_else",
+        }
+    )
+
+    assert extra_state["user_name"] == [async_user.name]
+    assert extra_state["user_username"] == [async_user.username]
 
 
 def test_support_process_extra_state_anonymous_learner(support_consumer):
