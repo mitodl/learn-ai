@@ -35,6 +35,7 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
 )
+from ai_chatbots.learner_api import forwarded_learner_session
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
@@ -524,7 +525,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             self.body.append(message["body"])
         if not message.get("more_body"):
             try:
-                await self.handle(b"".join(self.body))
+                with forwarded_learner_session(self.scope):
+                    await self.handle(b"".join(self.body))
             except:  # noqa: E722
                 log.exception("Error in handling consumer http_request")
             finally:

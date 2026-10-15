@@ -355,6 +355,7 @@ async def test_http_request_complete_body(mocker):
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
     msg = {"body": b"test message without chunks"}
     with pytest.raises(consumers.StopConsumer):
         await consumer.http_request(msg)
@@ -367,6 +368,7 @@ async def test_http_request_chunked_body(mocker):
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
 
     # Test chunked message body with multiple chunks
     first_chunk = {"body": b"test", "more_body": True}
@@ -391,6 +393,7 @@ async def test_http_request_error(mocker):
         side_effect=Exception("Test exception"),
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
     with pytest.raises(consumers.StopConsumer):
         await consumer.http_request({"body": b"test"})
     mock_handle.assert_called_once()
