@@ -23,7 +23,6 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from urllib.parse import urljoin, urlsplit
 
 import httpx
 from django.conf import settings
@@ -41,6 +40,9 @@ _HOST_SETTINGS = {
 
 # Open edX course keys: course-v1:<org>+<course>+<run>
 COURSE_KEY_RE = re.compile(r"course-v1:[\w~.:-]+\+[\w~.:-]+\+[\w~.:-]+", re.ASCII)
+
+# RFC 6265 cookie-octet: anything else can't go in a Cookie header as-is
+COOKIE_VALUE_RE = re.compile(r"[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+")
 
 
 class LearnerAPIError(Exception):
@@ -96,7 +98,8 @@ _session: ContextVar[LearnerSession | None] = ContextVar(
 def _session_cookies(cookies: dict[str, str], name: str) -> dict[str, str]:
     """
     Get the named session cookie, plus the chunks APISIX splits a large session
-    into (``<name>2``, ``<name>3``, ...; see lua-resty-session).
+    into (``<name>2``, ``<name>3``, ...; see lua-resty-session). A malformed
+    value means no session.
     """
     if not name or not cookies.get(name):
         return {}
@@ -105,6 +108,8 @@ def _session_cookies(cookies: dict[str, str], name: str) -> dict[str, str]:
     while cookies.get(f"{name}{chunk}"):
         found[f"{name}{chunk}"] = cookies[f"{name}{chunk}"]
         chunk += 1
+    if not all(COOKIE_VALUE_RE.fullmatch(value) for value in found.values()):
+        return {}
     return found
 
 
@@ -153,14 +158,23 @@ async def _get(operation: str, host: str, path: str):
         raise LearnerAPIError(operation)
 
     base_url = getattr(settings, _HOST_SETTINGS[host][0])
-    url = urljoin(base_url, path)
-    base, target = urlsplit(base_url), urlsplit(url)
-    if not base.netloc or (target.scheme, target.netloc) != (base.scheme, base.netloc):
-        log.error("Learner API %s: %s is not on its configured host", operation, url)
+    try:
+        base = httpx.URL(base_url)
+        url = base.join(path)
+    except httpx.InvalidURL:
+        url = None
+    if (
+        url is None
+        or base.scheme != "https"
+        or not base.host
+        or (url.scheme, url.netloc) != (base.scheme, base.netloc)
+    ):
+        log.error("Learner API %s: base URL %r is not usable", operation, base_url)
         raise LearnerAPIError(operation)
 
-    # Exceptions are re-raised "from None" so the httpx error, whose request
-    # carries the cookies, isn't chained onto what callers log or send to Sentry.
+    # Any exception from here is re-raised "from None": the frames and httpx
+    # errors under it hold the Cookie header, and must not be chained onto what
+    # callers log or send to Sentry.
     try:
         async with httpx.AsyncClient(
             timeout=settings.REQUESTS_TIMEOUT, follow_redirects=False
@@ -168,7 +182,7 @@ async def _get(operation: str, host: str, path: str):
             response = await client.get(
                 url, headers={"Cookie": session.cookie_header(host)}
             )
-    except httpx.HTTPError as error:
+    except Exception as error:  # noqa: BLE001
         log.warning("Learner API %s failed: %s", operation, type(error).__name__)
         raise LearnerAPIError(operation) from None
 

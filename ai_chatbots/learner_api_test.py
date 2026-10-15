@@ -1,5 +1,6 @@
 """Tests for the learner API client"""
 
+import asyncio
 import copy
 import pickle
 
@@ -123,10 +124,12 @@ async def test_returned_cookies_are_not_sent_back(requests_sent, signed_in_scope
         ("signed_in", {}),
         ("signed_in", {f"{LEARN_COOKIE}2": "chunk-without-first-part"}),
         ("signed_in", {LEARN_COOKIE: ""}),
+        ("signed_in", {LEARN_COOKIE: "caf\xe9"}),
+        ("signed_in", {LEARN_COOKIE: "learn-1", f"{LEARN_COOKIE}2": "has space"}),
     ],
 )
 async def test_no_session_makes_no_request(mocker, requests_sent, user, cookies):
-    """Anonymous users, and requests without the session cookie, get no data."""
+    """Anonymous users, and requests without a usable session cookie, get no data."""
     if user == "signed_in":
         user = mocker.Mock(is_authenticated=True)
     with forwarded_learner_session({"user": user, "cookies": cookies}):
@@ -198,8 +201,13 @@ async def test_invalid_json_raises(requests_sent, signed_in_scope):
     requests_sent.responses["/mitxonline/api/v3/enrollments/"] = httpx.Response(
         200, text="<html>login</html>"
     )
-    with forwarded_learner_session(signed_in_scope), pytest.raises(LearnerAPIError):
+    with (
+        forwarded_learner_session(signed_in_scope),
+        pytest.raises(LearnerAPIError) as excinfo,
+    ):
         await get_enrollments()
+
+    assert excinfo.value.__suppress_context__ is True
 
 
 @pytest.mark.parametrize(
@@ -222,15 +230,43 @@ async def test_invalid_course_key_makes_no_request(
     assert requests_sent == []
 
 
-async def test_base_url_without_host_makes_no_request(
-    settings, requests_sent, signed_in_scope
+@pytest.mark.parametrize(
+    "base_url",
+    ["", "http://api.learn.test/", "https://api.learn.test:443x/", "/relative/"],
+)
+async def test_unusable_base_url_makes_no_request(
+    settings, requests_sent, signed_in_scope, base_url
 ):
-    """A misconfigured base URL never sends the session anywhere."""
-    settings.LEARNER_API_LEARN_BASE_URL = ""
+    """A misconfigured or non-https base URL never sends the session anywhere."""
+    settings.LEARNER_API_LEARN_BASE_URL = base_url
     with forwarded_learner_session(signed_in_scope), pytest.raises(LearnerAPIError):
         await get_enrollments()
 
     assert requests_sent == []
+
+
+async def test_concurrent_requests_keep_their_own_session(mocker, requests_sent):
+    """Two requests handled at once each send only their own learner's cookie."""
+
+    async def request_as(value):
+        scope = {
+            "user": mocker.Mock(is_authenticated=True),
+            "cookies": {LEARN_COOKIE: value},
+        }
+        with forwarded_learner_session(scope):
+            await asyncio.sleep(0)
+            await get_enrollments()
+            await asyncio.sleep(0)
+            await get_program_enrollments()
+
+    await asyncio.gather(request_as("learner-a"), request_as("learner-b"))
+
+    assert sorted(request.headers["Cookie"] for request in requests_sent) == [
+        f"{LEARN_COOKIE}=learner-a",
+        f"{LEARN_COOKIE}=learner-a",
+        f"{LEARN_COOKIE}=learner-b",
+        f"{LEARN_COOKIE}=learner-b",
+    ]
 
 
 def test_learner_session_hides_cookie_values():

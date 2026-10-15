@@ -25,6 +25,7 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
 )
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
+from ai_chatbots.learner_api import has_learner_session
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
 from main.factories import UserFactory
@@ -398,6 +399,27 @@ async def test_http_request_error(mocker):
         await consumer.http_request({"body": b"test"})
     mock_handle.assert_called_once()
     mock_log.assert_called_once_with("Error in handling consumer http_request")
+
+
+@pytest.mark.parametrize("signed_in", [True, False])
+async def test_http_request_scopes_learner_session(mocker, signed_in):
+    """The learner's session is available while handling the request, then gone."""
+    seen = []
+
+    async def handle(_consumer, _message):
+        seen.append(has_learner_session())
+
+    mocker.patch.object(consumers.SyllabusBotHttpConsumer, "handle", handle)
+    consumer = consumers.SyllabusBotHttpConsumer()
+    consumer.scope = {
+        "user": mocker.Mock(is_authenticated=True) if signed_in else AnonymousUser(),
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with pytest.raises(consumers.StopConsumer):
+        await consumer.http_request({"body": b"test"})
+
+    assert seen == [signed_in]
+    assert has_learner_session() is False
 
 
 @pytest.mark.parametrize("has_layer", [True, False])
