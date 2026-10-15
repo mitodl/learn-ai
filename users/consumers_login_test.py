@@ -1,0 +1,125 @@
+"""Tests for the user consumers"""
+
+import json
+from urllib.parse import quote
+
+import pytest
+from asgiref.testing import ApplicationCommunicator
+
+from users.consumers import LoginHttpConsumer
+
+AUTHORIZE_URL = (
+    "https://mitxonline.mit.edu/oauth2/authorize/?client_id=edx"
+    "&redirect_uri=https%3A%2F%2Fcourses.learn.mit.edu%2Fauth%2Fcomplete%2Fol-oauth2%2F"
+    "&state=abc123&response_type=code&code_challenge=xyz&code_challenge_method=S256"
+)
+
+
+@pytest.fixture(autouse=True)
+def allowed_hosts(settings):
+    """Allow the production hosts."""
+    settings.LOGIN_REDIRECT_ALLOWED_HOSTS = [
+        "mitxonline.mit.edu",
+        "courses.learn.mit.edu",
+        "learn.mit.edu",
+    ]
+
+
+@pytest.fixture(autouse=True)
+def no_channel_layer(mocker):
+    """
+    Run the consumer without a channel layer. Other tests leave a mocked one
+    cached, which the consumer would otherwise wait on.
+    """
+    mocker.patch("channels.consumer.get_channel_layer", return_value=None)
+
+
+async def get_login(query: str = "") -> dict:
+    """GET the login route with a query string; return status, headers, body."""
+    communicator = ApplicationCommunicator(
+        LoginHttpConsumer.as_asgi(),
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/http/login/",
+            "query_string": query.encode(),
+            "headers": [],
+        },
+    )
+    await communicator.send_input({"type": "http.request", "body": b""})
+    start = await communicator.receive_output(1)
+    body = b""
+    while True:
+        message = await communicator.receive_output(1)
+        body += message.get("body", b"")
+        if not message.get("more_body"):
+            break
+    await communicator.send_input({"type": "http.disconnect"})
+    await communicator.wait(1)
+    return {
+        "status": start["status"],
+        "headers": start.get("headers", []),
+        "body": body,
+    }
+
+
+@pytest.mark.parametrize(
+    "next_url",
+    [
+        "https://learn.mit.edu/dashboard",
+        "https://courses.learn.mit.edu/learning/course/course-v1:MITxT+18.01x+3T2026/home",
+        AUTHORIZE_URL,
+    ],
+)
+async def test_login_redirects_to_allowed_next(next_url):
+    """An allowed next URL is redirected to exactly, query string included."""
+    response = await get_login(f"next={quote(next_url, safe='')}")
+
+    assert response["status"] == 302
+    headers = dict(response["headers"])
+    assert headers[b"Location"].decode() == next_url
+    assert headers[b"Cache-Control"] == b"no-store"
+
+
+@pytest.mark.parametrize(
+    "next_url",
+    [
+        "https://learn.mit.edu.evil.test/",
+        "https://evil.test/?https://learn.mit.edu/",
+        "https://evil.test\\@learn.mit.edu/",
+        "https://learn.mit.edu@evil.test/",
+        "https://user@learn.mit.edu/",
+        "https://learn.mit.edu:8443/",
+        "https://sub.learn.mit.edu/",
+        "http://learn.mit.edu/",
+        "//learn.mit.edu/",
+        "/dashboard",
+        "javascript:alert(1)//learn.mit.edu",
+        " https://learn.mit.edu/",
+        "https://learn.mit.edu/\r\nSet-Cookie: x=1",
+        "https://learn.mit\t.edu/",
+        "",
+    ],
+)
+async def test_login_refuses_other_next(next_url):
+    """Anything but an https URL on an exactly allowed host is refused."""
+    response = await get_login(f"next={quote(next_url, safe='')}")
+
+    assert response["status"] == 400
+    assert b"Location" not in dict(response["headers"])
+
+
+async def test_login_refuses_repeated_next():
+    """Two next URLs are refused, even if both are allowed."""
+    url = quote("https://learn.mit.edu/", safe="")
+    response = await get_login(f"next={url}&next={url}")
+
+    assert response["status"] == 400
+
+
+async def test_login_without_next_returns_user_info():
+    """Without next, the login route still returns the user's info."""
+    response = await get_login()
+
+    assert response["status"] == 200
+    assert json.loads(response["body"]) == {"is_anonymous": True}

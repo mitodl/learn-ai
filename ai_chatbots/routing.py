@@ -3,7 +3,7 @@
 from django.urls import re_path
 
 from ai_chatbots import consumers
-from users.consumers import UserMetaHttpConsumer
+from users.consumers import LoginHttpConsumer, UserMetaHttpConsumer
 
 http_patterns = [
     re_path(
@@ -36,12 +36,16 @@ http_patterns = [
         consumers.VideoGPTBotHttpConsumer.as_asgi(),
         name="video_gpt_agent_sse",
     ),
-    # This gets two routes - user_meta doesn't require auth (in the APISIX settings)
-    # and login does.
+    # user_meta doesn't require auth (in the APISIX settings) and login does.
     re_path(
-        r"^http/(user_meta|login)/$",
+        r"^http/user_meta/$",
         UserMetaHttpConsumer.as_asgi(),
         name="user_meta",
+    ),
+    re_path(
+        r"^http/login/$",
+        LoginHttpConsumer.as_asgi(),
+        name="login",
     ),
     re_path(
         r"http/tutor_agent/",
