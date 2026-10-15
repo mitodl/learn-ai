@@ -90,6 +90,10 @@ async def test_login_redirects_to_allowed_next(next_url):
         "https://learn.mit.edu@evil.test/",
         "https://user@learn.mit.edu/",
         "https://learn.mit.edu:8443/",
+        "https://learn.mit.edu:443/",
+        "https://learn.mit.edu./",
+        "https%3A%2F%2Flearn.mit.edu%2F",
+        "https://learn.mit.edu/" + "a" * 2100,
         "https://sub.learn.mit.edu/",
         "http://learn.mit.edu/",
         "//learn.mit.edu/",
@@ -115,6 +119,13 @@ async def test_login_refuses_repeated_next():
     response = await get_login(f"next={url}&next={url}")
 
     assert response["status"] == 400
+
+
+async def test_login_keeps_non_ascii_next_path():
+    """A raw UTF-8 path in next is redirected percent-encoded, not garbled."""
+    response = await get_login("next=https://learn.mit.edu/caf\u00e9")
+
+    assert dict(response["headers"])[b"Location"] == b"https://learn.mit.edu/caf%C3%A9"
 
 
 async def test_login_without_next_returns_user_info():

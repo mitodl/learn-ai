@@ -99,7 +99,7 @@ class LoginHttpConsumer(UserMetaHttpConsumer):
     async def handle(self, message: str):
         """Redirect to an allowed ``next``, refuse any other, or return user info."""
         query = parse_qs(
-            self.scope.get("query_string", b"").decode("latin-1"),
+            self.scope.get("query_string", b"").decode("utf-8", "replace"),
             keep_blank_values=True,
         )
         if "next" not in query:
@@ -118,7 +118,15 @@ class LoginHttpConsumer(UserMetaHttpConsumer):
             )
             return
 
-        log.warning("Refused login redirect: next is not one allowed URL")
+        if len(next_urls) != 1:
+            log.warning("Refused login redirect: %d next URLs", len(next_urls))
+        else:
+            # Log the host only: the full URL may carry an OAuth state
+            try:
+                host = urlsplit(next_urls[0]).netloc
+            except ValueError:
+                host = "<unparseable>"
+            log.warning("Refused login redirect to host %r", host)
         await self.send_response(
             400,
             b"Invalid next URL",
