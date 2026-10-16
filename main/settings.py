@@ -653,10 +653,19 @@ PROBLEM_SET_URL = get_string(
     name="PROBLEM_SET_URL",
     default="https://api.learn.mit.edu/api/v0/tutor/problems/",
 )
-# Hosts the login route may redirect to with ?next=, matched exactly
+# Hosts the login route may redirect to with ?next=, matched exactly (with port)
 LOGIN_REDIRECT_ALLOWED_HOSTS = get_list_of_str(
     name="LOGIN_REDIRECT_ALLOWED_HOSTS",
-    default=["mitxonline.mit.edu", "courses.learn.mit.edu", "learn.mit.edu"],
+    default=[
+        "learn-ai.ol.mit.edu",
+        "mitxonline.mit.edu",
+        "courses.learn.mit.edu",
+        "learn.mit.edu",
+    ],
+)
+# Only turn off for local development, where the frontend is served over http
+LOGIN_REDIRECT_REQUIRE_HTTPS = get_bool(
+    name="LOGIN_REDIRECT_REQUIRE_HTTPS", default=True
 )
 # Search summary threads that never got a follow-up are deleted after this many days
 AI_SEARCH_SUMMARY_EXPIRY_DAYS = get_int(name="AI_SEARCH_SUMMARY_EXPIRY_DAYS", default=7)

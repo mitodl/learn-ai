@@ -71,7 +71,8 @@ class UserMetaHttpConsumer(AsyncHttpConsumer):
 
 def is_allowed_login_redirect(url: str) -> bool:
     """
-    Check that a login ``next`` URL is an absolute https URL on an allowed host.
+    Check that a login ``next`` URL is an absolute URL on an allowed host, and
+    https unless LOGIN_REDIRECT_REQUIRE_HTTPS is off.
 
     Hosts must match LOGIN_REDIRECT_ALLOWED_HOSTS exactly: no other port, user
     info or subdomain.
@@ -83,7 +84,7 @@ def is_allowed_login_redirect(url: str) -> bool:
     return url_has_allowed_host_and_scheme(
         url,
         allowed_hosts=set(settings.LOGIN_REDIRECT_ALLOWED_HOSTS),
-        require_https=True,
+        require_https=settings.LOGIN_REDIRECT_REQUIRE_HTTPS,
     ) and bool(urlsplit(url).netloc)
 
 

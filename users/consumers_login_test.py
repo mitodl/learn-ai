@@ -17,12 +17,14 @@ AUTHORIZE_URL = (
 
 @pytest.fixture(autouse=True)
 def allowed_hosts(settings):
-    """Allow the production hosts."""
+    """Allow the production hosts plus a local frontend, https only."""
     settings.LOGIN_REDIRECT_ALLOWED_HOSTS = [
         "mitxonline.mit.edu",
         "courses.learn.mit.edu",
         "learn.mit.edu",
+        "ai.open.odl.local:8003",
     ]
+    settings.LOGIN_REDIRECT_REQUIRE_HTTPS = True
 
 
 @pytest.fixture(autouse=True)
@@ -119,6 +121,21 @@ async def test_login_refuses_repeated_next():
     response = await get_login(f"next={url}&next={url}")
 
     assert response["status"] == 400
+
+
+@pytest.mark.parametrize(
+    ("require_https", "status"),
+    [(True, 400), (False, 302)],
+)
+async def test_login_http_next_only_without_https_requirement(
+    settings, require_https, status
+):
+    """A local http frontend is allowed only when https isn't required."""
+    settings.LOGIN_REDIRECT_REQUIRE_HTTPS = require_https
+    url = quote("http://ai.open.odl.local:8003/syllabus", safe="")
+    response = await get_login(f"next={url}")
+
+    assert response["status"] == status
 
 
 async def test_login_keeps_non_ascii_next_path():

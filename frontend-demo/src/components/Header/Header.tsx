@@ -10,7 +10,7 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import { ButtonLink } from "@mitodl/smoot-design"
-import { LOGIN_URL } from "@/constants"
+import { useLoginUrl } from "@/components/useLoginUrl"
 
 const AppBar = styled(MuiAppBar)(({ theme }) => ({
   padding: "16px 8px",
@@ -30,6 +30,7 @@ const AppBar = styled(MuiAppBar)(({ theme }) => ({
 
 const Header = () => {
   const me = useQuery(userQueries.me())
+  const loginUrl = useLoginUrl()
   return (
     <AppBar position="static">
       <Toolbar>
@@ -41,7 +42,7 @@ const Header = () => {
           <Link href="/">Learn AI Sandbox</Link>
         </Typography>
         {me.data?.anonymous ? (
-          <ButtonLink variant="tertiary" href={LOGIN_URL}>
+          <ButtonLink variant="tertiary" href={loginUrl}>
             Login
           </ButtonLink>
         ) : (
