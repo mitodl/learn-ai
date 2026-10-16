@@ -224,7 +224,13 @@ async def test_earlier_certificate_isnt_hidden_by_a_newer_run(records):
             end="2023-12-20T15:00:00Z",
             certificate={"link": "/certificate/abc/"},
         ),
-        enrollment(ECONOMICS, "1T2099", "Political Economy", start="2099-01-01Z"),
+        enrollment(
+            ECONOMICS,
+            "1T2099",
+            "Political Economy",
+            start="2099-01-01T00:00:00Z",
+            end=None,
+        ),
     ]
 
     certificate = await call(get_certificate_status, course="14.750x")
