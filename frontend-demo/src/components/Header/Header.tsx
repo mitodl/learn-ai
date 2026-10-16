@@ -10,7 +10,7 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import { ButtonLink } from "@mitodl/smoot-design"
-import { LOGIN_URL } from "@/constants"
+import { loginLinkProps } from "@/components/loginLinkProps"
 
 const AppBar = styled(MuiAppBar)(({ theme }) => ({
   padding: "16px 8px",
@@ -41,7 +41,7 @@ const Header = () => {
           <Link href="/">Learn AI Sandbox</Link>
         </Typography>
         {me.data?.anonymous ? (
-          <ButtonLink variant="tertiary" href={LOGIN_URL}>
+          <ButtonLink variant="tertiary" {...loginLinkProps}>
             Login
           </ButtonLink>
         ) : (
