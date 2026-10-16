@@ -25,7 +25,7 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
 )
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
-from ai_chatbots.learner_api import has_learner_session
+from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
 from main.factories import UserFactory
@@ -488,6 +488,40 @@ async def test_syllabus_create_chatbot_without_related_courses(
     assert "search_related_course_content_files" not in [
         tool.name for tool in chatbot.create_tools()
     ]
+
+
+@pytest.mark.parametrize(
+    ("signed_in", "flag_on", "expected"),
+    [(True, True, True), (True, False, False), (False, True, False)],
+)
+async def test_syllabus_create_chatbot_account_tools(  # noqa: PLR0913
+    mocker,
+    mock_http_consumer_send,
+    syllabus_consumer,
+    async_user,
+    signed_in,
+    flag_on,
+    expected,
+):
+    """Account tools are attached only for a learner session with the flag on."""
+    mocker.patch("ai_chatbots.consumers.feature_is_enabled", return_value=flag_on)
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={"message": "hello", "course_id": "MITx+6.00.1x"}
+    )
+    serializer.is_valid(raise_exception=True)
+    await syllabus_consumer.prepare_response(serializer)
+    scope = {
+        "user": async_user if signed_in else AnonymousUser(),
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with forwarded_learner_session(scope):
+        chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
+            serializer, InMemorySaver()
+        )
+
+    tool_names = [tool.name for tool in chatbot.create_tools()]
+    assert ("get_enrollments" in tool_names) is expected
+    assert ("get_course_progress" in chatbot.instructions) is expected
 
 
 @pytest.mark.parametrize(

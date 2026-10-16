@@ -27,12 +27,13 @@ from ai_chatbots.chatbots import (
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import (
+    ACCOUNT_TOOLS_FEATURE_FLAG,
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
 )
-from ai_chatbots.learner_api import forwarded_learner_session
+from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
@@ -45,6 +46,7 @@ from ai_chatbots.serializers import (
 from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
+from main.features import is_enabled as feature_is_enabled
 from main.utils import decode_value, format_seconds
 from users.models import User
 
@@ -491,6 +493,11 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
         enable_related_courses = bool(serializer.validated_data.get("related_courses"))
+        # Account tools need the learner's own session from this request, so
+        # anonymous users and requests without the session never get them.
+        enable_account_tools = has_learner_session() and feature_is_enabled(
+            ACCOUNT_TOOLS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
+        )
 
         return self.bot_class(
             self.user_id,
@@ -500,6 +507,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            enable_account_tools=enable_account_tools,
             course_id=serializer.validated_data.get("course_id"),
             platform=serializer.validated_data.get("platform"),
         )

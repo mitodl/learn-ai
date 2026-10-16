@@ -7,6 +7,8 @@ import re
 from named_enum import ExtendedEnum
 
 HYBRID_SEARCH_FEATURE_FLAG = "bot_hybrid_search_enabled"
+# Gives signed-in learners tools that read their own enrollments and records
+ACCOUNT_TOOLS_FEATURE_FLAG = "bot_account_tools_enabled"
 GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
 AI_ANONYMOUS_USER = "anonymous"
 AI_THREAD_COOKIE_KEY = "ai_thread_auth"
