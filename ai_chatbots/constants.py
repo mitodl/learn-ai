@@ -8,6 +8,8 @@ from django.conf import settings
 from named_enum import ExtendedEnum
 
 HYBRID_SEARCH_FEATURE_FLAG = "bot_hybrid_search_enabled"
+# Gives signed-in learners tools that read their own enrollments and records
+ACCOUNT_TOOLS_FEATURE_FLAG = "bot_account_tools_enabled"
 # MIT Learn search filters a client can pin for a recommendation thread,
 # e.g. a channel page's topic. The search tool always applies them.
 RECOMMENDATION_SEARCH_FILTERS = (
