@@ -2,6 +2,8 @@
 
 import json
 import logging
+import re
+from datetime import UTC, datetime
 from typing import Annotated
 
 import pydantic
@@ -12,6 +14,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
+from ai_chatbots import learner_api
 from ai_chatbots.constants import (
     HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
@@ -681,3 +684,327 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
             "platform": platform,
         },
     )
+
+
+# Account tools: read the signed-in learner's own records with learner_api.
+# The learner's session comes from the request (see learner_api), never from
+# tool arguments or state, and only the fields an answer needs reach the model.
+
+COULD_NOT_CHECK = (
+    "The learner's records could not be checked right now. Tell them you "
+    "couldn't check, and never conclude they have no enrollment, grade or "
+    "certificate."
+)
+
+
+class AccountToolSchema(pydantic.BaseModel):
+    """Schema for tools that read the signed-in learner's own records."""
+
+    course: str | None = Field(
+        default=None,
+        description=(
+            """
+            The course the learner is asking about, in their words: a course
+            number such as "18.01x" or "14.750x", or part of its title. Leave it
+            out when they mean the course this chat is about, or all of their
+            courses.
+            """
+        ),
+    )
+    state: Annotated[dict, InjectedState] = Field(
+        description="The agent state, which may include the course_id of the page."
+    )
+
+
+def _normalize(text: str | None) -> str:
+    """Lowercase and drop separators, so "18.01x" matches "MITx+18.01x"."""
+    return re.sub(r"[\s_+:./-]", "", text or "").lower()
+
+
+def _parse_date(value: str | None) -> datetime | None:
+    """Parse an ISO date from the APIs, or None."""
+    try:
+        return datetime.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
+def _run_status(run: dict, now: datetime) -> str:
+    """Say whether a course run is upcoming, in progress or ended."""
+    start, end = _parse_date(run.get("start_date")), _parse_date(run.get("end_date"))
+    if start and start > now:
+        return "upcoming"
+    if end and end < now:
+        return "ended"
+    return "in progress"
+
+
+def _course_tab_url(run: dict, tab: str) -> str | None:
+    """Link to a tab (progress, dates) of the run's course, or its home page."""
+    url = run.get("courseware_url")
+    if url and re.search(r"/home/?$", url):
+        return re.sub(r"/home/?$", f"/{tab}", url)
+    return url
+
+
+def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
+    """Keep the parts of a MITx Online enrollment that an answer needs."""
+    run = enrollment.get("run") or {}
+    course = run.get("course") or {}
+    grades = enrollment.get("grades") or []
+    grade = grades[0] if grades else None
+    certificate = enrollment.get("certificate")
+    return {
+        "course_title": course.get("title") or run.get("title"),
+        "course_id": course.get("readable_id"),
+        "run_id": run.get("courseware_id"),
+        "start_date": run.get("start_date"),
+        "end_date": run.get("end_date"),
+        "status": _run_status(run, now),
+        "self_paced": run.get("is_self_paced"),
+        "enrollment_mode": enrollment.get("enrollment_mode"),
+        "grade": {
+            "percent": grade.get("grade_percent"),
+            "letter": grade.get("letter_grade"),
+            "passed": grade.get("passed"),
+        }
+        if grade
+        else None,
+        "certificate_earned": bool(certificate),
+        "certificate_url": certificate.get("link")
+        if isinstance(certificate, dict)
+        else None,
+        "course_url": run.get("courseware_url"),
+        "progress_url": _course_tab_url(run, "progress"),
+        "dates_url": _course_tab_url(run, "dates"),
+    }
+
+
+def _id_segments(course_id: str | None) -> set[str]:
+    """Split "course-v1:MITxT+18.01x" into normalized parts: mitxt, 1801x, ..."""
+    return {_normalize(part) for part in re.split(r"[:+]", course_id or "") if part}
+
+
+def _match_course(summaries: list[dict], course: str) -> list[dict]:
+    """
+    Find the enrollments for a course the learner named: by its course or run
+    id, by a whole part of the id such as the course number "18.01x" or "18.01"
+    (so "8.01x" doesn't match it), or else by words in the title.
+    """
+    wanted = _normalize(course)
+    if not wanted:
+        return []
+    by_id = [
+        summary
+        for summary in summaries
+        if wanted in (_normalize(summary["course_id"]), _normalize(summary["run_id"]))
+        or {wanted, f"{wanted}x"} & _id_segments(summary["course_id"])
+    ]
+    if by_id:
+        return by_id
+    words = " ".join(course.lower().split())
+    return [
+        summary
+        for summary in summaries
+        if words in " ".join((summary["course_title"] or "").lower().split())
+    ]
+
+
+def _current_runs(summaries: list[dict]) -> list[dict]:
+    """Keep one enrollment per course: the run in progress, else the latest."""
+    order = {"in progress": 2, "upcoming": 1, "ended": 0}
+    best: dict[str, dict] = {}
+    for summary in summaries:
+        key = summary["course_id"] or summary["run_id"]
+        rank = (order[summary["status"]], summary["start_date"] or "")
+        current = best.get(key)
+        if current is None or rank > (
+            order[current["status"]],
+            current["start_date"] or "",
+        ):
+            best[key] = summary
+    return list(best.values())
+
+
+async def _course_enrollments(course: str | None, state: dict) -> dict:
+    """
+    Get the learner's enrollments for the course they named, or else the course
+    of the page they are chatting from, or else all of them.
+
+    Raises:
+        learner_api.LearnerAPIError: if the records can't be read
+    """
+    now = datetime.now(tz=UTC)
+    summaries = [
+        _enrollment_summary(enrollment, now)
+        for enrollment in await learner_api.get_enrollments()
+    ]
+    if course:
+        matches = _current_runs(_match_course(summaries, course))
+        if not matches:
+            return {
+                "enrollments": [],
+                "note": f"The learner has no enrollment matching {course!r}.",
+            }
+        result = {"enrollments": matches}
+        if len(matches) > 1:
+            result["note"] = (
+                "Several of the learner's courses match; ask which one they mean."
+            )
+        return result
+
+    page_course = ((state or {}).get("course_id") or [None])[-1]
+    if page_course:
+        matches = _current_runs(_match_course(summaries, page_course))
+        if matches:
+            return {"enrollments": matches, "course_on_page": page_course}
+        return {
+            "enrollments": _current_runs(summaries),
+            "note": "The learner is not enrolled in the course on this page.",
+        }
+    return {"enrollments": _current_runs(summaries)}
+
+
+def _could_not_check(operation: str) -> str:
+    """Report a failed lookup without suggesting the learner has no records."""
+    log.warning("Account tool %s couldn't read the learner's records", operation)
+    return json.dumps({"error": COULD_NOT_CHECK})
+
+
+def _only(summaries: list[dict], *fields: str) -> list[dict]:
+    """Keep the named fields, plus what identifies the course."""
+    keep = ("course_title", "course_id", "run_id", *fields)
+    return [{field: summary[field] for field in keep} for summary in summaries]
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_enrollments(
+    course: str | None,
+    state: Annotated[dict, InjectedState],  # noqa: ARG001
+):
+    """
+    Get the courses the signed-in learner is enrolled in on MITx Online: each
+    course run's dates, whether it is upcoming, in progress or ended, and the
+    enrollment mode (audit or verified). Use it for "what am I enrolled in",
+    "when does my course start" or "am I enrolled in X". Without a course it
+    returns all of the learner's courses, not just the one on this page.
+    """
+    try:
+        # All courses unless one is named: "what am I enrolled in" isn't about
+        # the course on the page, so the page's course isn't applied.
+        result = await _course_enrollments(course, {})
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_enrollments")
+    result["enrollments"] = _only(
+        result["enrollments"],
+        "start_date",
+        "end_date",
+        "status",
+        "self_paced",
+        "enrollment_mode",
+        "course_url",
+    )
+    return json.dumps(result)
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_course_progress(
+    course: str | None, state: Annotated[dict, InjectedState]
+):
+    """
+    Get the signed-in learner's current grade in a course (percent, letter and
+    whether it is passing) and a link to the course's Progress tab, where they
+    can see their progress assignment by assignment. Without a course it uses
+    the course of the page they are chatting from.
+    """
+    try:
+        result = await _course_enrollments(course, state)
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_course_progress")
+    result["enrollments"] = _only(
+        result["enrollments"], "status", "grade", "progress_url"
+    )
+    return json.dumps(result)
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_upcoming_assignments(
+    course: str | None, state: Annotated[dict, InjectedState]
+):
+    """
+    Get a link to the Dates tab of a course the signed-in learner is enrolled
+    in, which lists its assignments and due dates, and the run's own start and
+    end dates. It does not list the assignments themselves; send the learner to
+    the Dates tab for those. Without a course it uses the course of the page
+    they are chatting from.
+    """
+    try:
+        result = await _course_enrollments(course, state)
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_upcoming_assignments")
+    result["enrollments"] = _only(
+        result["enrollments"], "start_date", "end_date", "status", "dates_url"
+    )
+    return json.dumps(result)
+
+
+def _program_certificate_summary(certificate: dict) -> dict:
+    """Keep a program certificate's title, date and link; drop personal data."""
+    return {
+        "program_title": certificate.get("program_title"),
+        "completed_on": certificate.get("program_completion_timestamp"),
+        "certificate_url": certificate.get("program_letter_share_url"),
+    }
+
+
+def _program_enrollment_summary(enrollment: dict) -> dict:
+    """Keep a program enrollment's title and whether it earned a certificate."""
+    program = enrollment.get("program") or {}
+    certificate = enrollment.get("certificate")
+    return {
+        "program_title": program.get("title"),
+        "program_id": program.get("readable_id"),
+        "certificate_earned": bool(certificate),
+        "certificate_url": certificate.get("link")
+        if isinstance(certificate, dict)
+        else None,
+    }
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_certificate_status(
+    course: str | None, state: Annotated[dict, InjectedState]
+):
+    """
+    Get whether the signed-in learner has earned a certificate in a course,
+    with its link, plus their program enrollments and program certificates.
+    Use it for "did I get a certificate", "where is my certificate" or "have I
+    finished the program". Without a course it uses the course of the page
+    they are chatting from.
+    """
+    try:
+        result = await _course_enrollments(course, state)
+        programs = await learner_api.get_program_enrollments()
+        program_certificates = await learner_api.get_program_certificates()
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_certificate_status")
+    result["enrollments"] = _only(
+        result["enrollments"],
+        "status",
+        "enrollment_mode",
+        "certificate_earned",
+        "certificate_url",
+    )
+    result["programs"] = [_program_enrollment_summary(p) for p in programs]
+    result["program_certificates"] = [
+        _program_certificate_summary(c) for c in program_certificates
+    ]
+    return json.dumps(result)
+
+
+ACCOUNT_TOOLS = [
+    get_enrollments,
+    get_course_progress,
+    get_certificate_status,
+    get_upcoming_assignments,
+]

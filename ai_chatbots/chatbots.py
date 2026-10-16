@@ -606,10 +606,14 @@ class SyllabusBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         enable_related_courses: bool | None = False,
+        enable_account_tools: bool = False,
         course_id: str | None = None,
         platform: str | None = None,
     ):
         self.enable_related_courses = enable_related_courses
+        # Only for a signed-in learner whose request carries their session;
+        # see SyllabusBotHttpConsumer.create_chatbot.
+        self.enable_account_tools = enable_account_tools
         super().__init__(
             user_id,
             name=name,
@@ -637,6 +641,20 @@ class SyllabusBot(TruncatingChatbot):
                 "tool for questions about how MIT platforms work rather than "
                 "about these courses."
             )
+        if self.enable_account_tools and self.instructions:
+            self.instructions += (
+                "\n\nYou can also read the signed-in learner's own MITx Online "
+                "records with get_enrollments, get_course_progress, "
+                "get_certificate_status and get_upcoming_assignments. Use them "
+                "for questions about the learner's own enrollments, grades, "
+                "certificates and due dates, never search_content_files. They "
+                "default to the course this chat is about; pass course when the "
+                "learner names another one by number or title. If a tool says "
+                "it couldn't check, tell the learner that, and never tell them "
+                "they have no enrollment, grade or certificate. Link to the "
+                "course's Progress or Dates tab rather than guessing details "
+                "the tools don't return."
+            )
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -645,6 +663,8 @@ class SyllabusBot(TruncatingChatbot):
         if self.enable_related_courses:
             bot_tools.append(tools.search_related_course_content_files)
         bot_tools.append(tools.search_support_articles)
+        if self.enable_account_tools:
+            bot_tools.extend(tools.ACCOUNT_TOOLS)
         return bot_tools
 
     async def get_tool_metadata(self) -> str:
