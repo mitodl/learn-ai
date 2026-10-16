@@ -126,10 +126,24 @@ def records(mocker):
     }
 
 
-async def call(tool, course=None, page_course=None):
+async def call(tool, course=None, page_course=None, platform=None):
     """Invoke a tool the way the agent does, and decode its JSON."""
     state = {"course_id": [page_course]} if page_course else {}
+    if platform:
+        state["platform"] = [platform]
     return json.loads(await tool.ainvoke({"course": course, "state": state}))
+
+
+def test_model_sees_only_the_course_argument():
+    """The agent state is injected, never part of what the model can fill in."""
+    for tool in (
+        get_enrollments,
+        get_course_progress,
+        get_certificate_status,
+        get_upcoming_assignments,
+    ):
+        properties = tool.tool_call_schema.model_json_schema()["properties"]
+        assert list(properties) == ["course"]
 
 
 async def test_progress_defaults_to_the_page_course(records):
@@ -179,15 +193,45 @@ async def test_unmatched_course_says_no_enrollment(records):
     result = await call(get_course_progress, course="8.01x")
 
     assert result["enrollments"] == []
-    assert "no enrollment matching" in result["note"]
+    assert "no MITx Online enrollment matching" in result["note"]
 
 
 async def test_page_course_not_enrolled_lists_all(records):
     """On the page of a course the learner isn't in, list what they are in."""
-    result = await call(get_course_progress, page_course="course-v1:MITxT+8.01x")
+    result = await call(
+        get_course_progress, page_course="course-v1:MITxT+8.01x", platform="mitxonline"
+    )
 
-    assert "not enrolled in the course on this page" in result["note"]
+    assert "no MITx Online enrollment in the course on this page" in result["note"]
     assert len(result["enrollments"]) == 3
+
+
+async def test_page_on_another_platform_lists_nothing(records):
+    """On a course from another platform, say it can't be checked here."""
+    result = await call(get_course_progress, page_course="MITx+6.00.1x", platform="edx")
+
+    assert result["enrollments"] == []
+    assert "isn't on MITx Online" in result["note"]
+
+
+async def test_earlier_certificate_isnt_hidden_by_a_newer_run(records):
+    """A certificate from an ended run shows even with a newer run enrolled."""
+    records["enrollments"].return_value = [
+        enrollment(
+            ECONOMICS,
+            "3T2023",
+            "Political Economy",
+            end="2023-12-20T15:00:00Z",
+            certificate={"link": "/certificate/abc/"},
+        ),
+        enrollment(ECONOMICS, "1T2099", "Political Economy", start="2099-01-01Z"),
+    ]
+
+    certificate = await call(get_certificate_status, course="14.750x")
+    progress = await call(get_course_progress, course="14.750x")
+
+    assert certificate["enrollments"][0]["certificate_earned"] is True
+    assert progress["enrollments"][0]["run_id"] == f"{ECONOMICS}+1T2099"
 
 
 async def test_enrollments_list_all_courses_on_a_course_page(records):
@@ -236,12 +280,15 @@ async def test_upcoming_assignments_link_the_dates_tab(records):
     )
 
 
-async def test_certificate_status_drops_personal_data(records):
+async def test_certificate_status_drops_personal_data(settings, records):
     """Program certificates keep their title, date and link, nothing personal."""
+    settings.LEARNER_API_MITXONLINE_BASE_URL = "https://mitxonline.test/"
     result = await call(get_certificate_status, course="14.750x")
 
     assert result["enrollments"][0]["certificate_earned"] is True
-    assert result["enrollments"][0]["certificate_url"] == "/certificate/abc/"
+    assert result["enrollments"][0]["certificate_url"] == (
+        "https://mitxonline.test/certificate/abc/"
+    )
     assert result["program_certificates"] == [
         {
             "program_title": "Data, Economics",
@@ -262,6 +309,7 @@ async def test_certificate_status_drops_personal_data(records):
         (get_course_progress, "enrollments"),
         (get_upcoming_assignments, "enrollments"),
         (get_certificate_status, "enrollments"),
+        (get_certificate_status, "programs"),
         (get_certificate_status, "program_certificates"),
     ],
 )
