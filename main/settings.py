@@ -689,6 +689,10 @@ LEARNER_API_OPENEDX_COOKIE_NAME = get_string(
     name="LEARNER_API_OPENEDX_COOKIE_NAME",
     default="mitxonline-production-edx-lms-sessionid",
 )
+# Where MITx Online's own pages (certificates) are, to make their links absolute
+LEARNER_API_MITXONLINE_BASE_URL = get_string(
+    name="LEARNER_API_MITXONLINE_BASE_URL", default="https://mitxonline.mit.edu/"
+)
 # Search summary threads that never got a follow-up are deleted after this many days
 AI_SEARCH_SUMMARY_EXPIRY_DAYS = get_int(name="AI_SEARCH_SUMMARY_EXPIRY_DAYS", default=7)
 # AI search settings
