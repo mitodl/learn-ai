@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import React, { useState } from "react"
 import { ButtonLink } from "@mitodl/smoot-design"
-import { useLoginLinkProps } from "@/components/useLoginLinkProps"
+import { loginLinkProps } from "@/components/loginLinkProps"
 import {
   SearchInput,
   type SearchInputProps,
@@ -113,7 +113,6 @@ const getResultIcon = (result: VectorContentFile) => {
 
 const LearningMaterialsSearchContent: React.FC = () => {
   const me = useQuery(userQueries.me())
-  const loginLinkProps = useLoginLinkProps()
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [platform, setPlatform] = useState("")

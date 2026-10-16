@@ -12,13 +12,13 @@ const loginUrl = LOGIN_URL as string
  * URL changes the page makes without re-rendering (tab selection uses
  * history.pushState) and works before hydration falls back to plain login.
  */
-const useLoginLinkProps = () => ({
+const loginLinkProps = {
   href: loginUrl,
   onClick: (event: MouseEvent<HTMLAnchorElement>) => {
     const url = new URL(loginUrl, window.location.href)
     url.searchParams.set("next", window.location.href)
     event.currentTarget.href = url.toString()
   },
-})
+}
 
-export { useLoginLinkProps }
+export { loginLinkProps }

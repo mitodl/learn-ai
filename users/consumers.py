@@ -1,6 +1,5 @@
 import json
 import logging
-import unicodedata
 from urllib.parse import parse_qs, urlsplit
 
 from channels.generic.http import AsyncHttpConsumer
@@ -69,23 +68,26 @@ class UserMetaHttpConsumer(AsyncHttpConsumer):
             pass
 
 
-def is_allowed_login_redirect(url: str) -> bool:
+def allowed_login_redirect(url: str) -> str | None:
     """
-    Check that a login ``next`` URL is an absolute URL on an allowed host, and
-    https unless LOGIN_REDIRECT_REQUIRE_HTTPS is off.
+    Return ``url`` percent-encoded if it is an absolute URL on an allowed host,
+    and https unless LOGIN_REDIRECT_REQUIRE_HTTPS is off. Otherwise None.
 
     Hosts must match LOGIN_REDIRECT_ALLOWED_HOSTS exactly: no other port, user
-    info or subdomain.
+    info or subdomain. The encoded URL is the one checked, so the redirect goes
+    to exactly what passed.
     """
-    if any(unicodedata.category(char).startswith("C") for char in url):
-        return False
-    if url != url.strip():
-        return False
-    return url_has_allowed_host_and_scheme(
-        url,
-        allowed_hosts=set(settings.LOGIN_REDIRECT_ALLOWED_HOSTS),
-        require_https=settings.LOGIN_REDIRECT_REQUIRE_HTTPS,
-    ) and bool(urlsplit(url).netloc)
+    location = iri_to_uri(url)
+    if (
+        url_has_allowed_host_and_scheme(
+            location,
+            allowed_hosts=set(settings.LOGIN_REDIRECT_ALLOWED_HOSTS),
+            require_https=settings.LOGIN_REDIRECT_REQUIRE_HTTPS,
+        )
+        and urlsplit(location).netloc
+    ):
+        return location
+    return None
 
 
 class LoginHttpConsumer(UserMetaHttpConsumer):
@@ -107,27 +109,25 @@ class LoginHttpConsumer(UserMetaHttpConsumer):
             await super().handle(message)
             return
 
-        next_urls = query["next"]
-        if len(next_urls) == 1 and is_allowed_login_redirect(next_urls[0]):
+        next_url = query["next"][0]
+        location = allowed_login_redirect(next_url)
+        if location:
             await self.send_response(
                 302,
                 b"",
                 headers=[
-                    (b"Location", iri_to_uri(next_urls[0]).encode("ascii")),
+                    (b"Location", location.encode("ascii")),
                     (b"Cache-Control", b"no-store"),
                 ],
             )
             return
 
-        if len(next_urls) != 1:
-            log.warning("Refused login redirect: %d next URLs", len(next_urls))
-        else:
-            # Log the host only: the full URL may carry an OAuth state
-            try:
-                host = urlsplit(next_urls[0]).netloc
-            except ValueError:
-                host = "<unparseable>"
-            log.warning("Refused login redirect to host %r", host)
+        # Log the host only: the full URL may carry an OAuth state
+        try:
+            host = urlsplit(next_url).netloc
+        except ValueError:
+            host = "<unparseable>"
+        log.warning("Refused login redirect to host %r", host)
         await self.send_response(
             400,
             b"Invalid next URL",

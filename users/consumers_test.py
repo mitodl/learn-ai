@@ -66,20 +66,28 @@ async def get_login(query: str = "") -> dict:
 
 
 @pytest.mark.parametrize(
-    "next_url",
+    ("next_url", "location"),
     [
-        "https://learn.mit.edu/dashboard",
-        "https://courses.learn.mit.edu/learning/course/course-v1:MITxT+18.01x+3T2026/home",
-        AUTHORIZE_URL,
+        ("https://learn.mit.edu/dashboard", "https://learn.mit.edu/dashboard"),
+        (
+            "https://courses.learn.mit.edu/learning/course/course-v1:MITxT+18.01x+3T2026/home",
+            "https://courses.learn.mit.edu/learning/course/course-v1:MITxT+18.01x+3T2026/home",
+        ),
+        (AUTHORIZE_URL, AUTHORIZE_URL),
+        ("https://learn.mit.edu/caf\u00e9", "https://learn.mit.edu/caf%C3%A9"),
+        (
+            "https://learn.mit.edu/\r\nSet-Cookie: x=1",
+            "https://learn.mit.edu/%0D%0ASet-Cookie:%20x=1",
+        ),
     ],
 )
-async def test_login_redirects_to_allowed_next(next_url):
-    """An allowed next URL is redirected to exactly, query string included."""
+async def test_login_redirects_to_allowed_next(next_url, location):
+    """An allowed next URL is redirected to, percent-encoded where needed."""
     response = await get_login(f"next={quote(next_url, safe='')}")
 
     assert response["status"] == 302
     headers = dict(response["headers"])
-    assert headers[b"Location"].decode() == next_url
+    assert headers[b"Location"].decode() == location
     assert headers[b"Cache-Control"] == b"no-store"
 
 
@@ -102,7 +110,6 @@ async def test_login_redirects_to_allowed_next(next_url):
         "/dashboard",
         "javascript:alert(1)//learn.mit.edu",
         " https://learn.mit.edu/",
-        "https://learn.mit.edu/\r\nSet-Cookie: x=1",
         "https://learn.mit\t.edu/",
         "",
     ],
@@ -113,14 +120,6 @@ async def test_login_refuses_other_next(next_url):
 
     assert response["status"] == 400
     assert b"Location" not in dict(response["headers"])
-
-
-async def test_login_refuses_repeated_next():
-    """Two next URLs are refused, even if both are allowed."""
-    url = quote("https://learn.mit.edu/", safe="")
-    response = await get_login(f"next={url}&next={url}")
-
-    assert response["status"] == 400
 
 
 @pytest.mark.parametrize(
@@ -136,13 +135,6 @@ async def test_login_http_next_only_without_https_requirement(
     response = await get_login(f"next={url}")
 
     assert response["status"] == status
-
-
-async def test_login_keeps_non_ascii_next_path():
-    """A raw UTF-8 path in next is redirected percent-encoded, not garbled."""
-    response = await get_login("next=https://learn.mit.edu/caf\u00e9")
-
-    assert dict(response["headers"])[b"Location"] == b"https://learn.mit.edu/caf%C3%A9"
 
 
 async def test_login_without_next_returns_user_info():

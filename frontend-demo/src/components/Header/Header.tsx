@@ -10,7 +10,7 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import { ButtonLink } from "@mitodl/smoot-design"
-import { useLoginLinkProps } from "@/components/useLoginLinkProps"
+import { loginLinkProps } from "@/components/loginLinkProps"
 
 const AppBar = styled(MuiAppBar)(({ theme }) => ({
   padding: "16px 8px",
@@ -30,7 +30,6 @@ const AppBar = styled(MuiAppBar)(({ theme }) => ({
 
 const Header = () => {
   const me = useQuery(userQueries.me())
-  const loginLinkProps = useLoginLinkProps()
   return (
     <AppBar position="static">
       <Toolbar>
