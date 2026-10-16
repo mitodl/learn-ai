@@ -58,13 +58,23 @@ ENROLLMENTS = [
         "1T2020",
         "Calculus 1A",
         end="2020-06-01T00:00:00Z",
-        grade={"grade_percent": 41, "letter_grade": "F", "passed": False},
+        grade={
+            "grade": 0.41,
+            "grade_percent": 41,
+            "letter_grade": "F",
+            "passed": False,
+        },
     ),
     enrollment(
         CALCULUS,
         "3T2026",
         "Calculus 1A",
-        grade={"grade_percent": 88, "letter_grade": "B", "passed": True},
+        grade={
+            "grade": 0.88,
+            "grade_percent": 88,
+            "letter_grade": "B",
+            "passed": True,
+        },
     ),
     enrollment(
         ECONOMICS,
@@ -199,6 +209,22 @@ async def test_enrollments_keep_only_answer_fields(records):
     text = json.dumps(result)
     for field in ("upgrade_product_price", "edx_emails_subscription", "b2b"):
         assert field not in text
+
+
+async def test_unrecorded_grade_is_not_zero(records):
+    """MITx Online's 0 grade_percent with no grade recorded isn't reported as 0%."""
+    records["enrollments"].return_value = [
+        enrollment(
+            CALCULUS,
+            "3T2026",
+            "Calculus 1A",
+            grade={"grade": None, "grade_percent": 0, "passed": False},
+        )
+    ]
+
+    result = await call(get_course_progress, page_course=CALCULUS)
+
+    assert result["enrollments"][0]["grade"] is None
 
 
 async def test_upcoming_assignments_link_the_dates_tab(records):
