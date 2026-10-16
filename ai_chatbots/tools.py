@@ -1,10 +1,12 @@
 """Tools and schemas for AI agents"""
 
+import asyncio
 import json
 import logging
 import re
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urljoin
 
 import pydantic
 from asgiref.sync import sync_to_async
@@ -31,6 +33,9 @@ log = logging.getLogger(__name__)
 
 # Cache key prefix for the platform a course is offered on
 COURSE_PLATFORM_CACHE_PREFIX = "course_platform_"
+
+# Learn's platform code for MITx Online, the only platform the tools can read
+MITXONLINE_PLATFORM = "mitxonline"
 
 
 async def _is_hybrid_search_enabled() -> bool:
@@ -740,11 +745,17 @@ def _run_status(run: dict, now: datetime) -> str:
 
 
 def _course_tab_url(run: dict, tab: str) -> str | None:
-    """Link to a tab (progress, dates) of the run's course, or its home page."""
+    """Link to a tab (progress, dates) of the run's course, if it can be built."""
     url = run.get("courseware_url")
     if url and re.search(r"/home/?$", url):
         return re.sub(r"/home/?$", f"/{tab}", url)
-    return url
+    return None
+
+
+def _certificate_url(certificate) -> str | None:
+    """Make a MITx Online certificate's link (a path) absolute."""
+    link = certificate.get("link") if isinstance(certificate, dict) else None
+    return urljoin(settings.LEARNER_API_MITXONLINE_BASE_URL, link) if link else None
 
 
 def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
@@ -775,9 +786,7 @@ def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
         if grade
         else None,
         "certificate_earned": bool(certificate),
-        "certificate_url": certificate.get("link")
-        if isinstance(certificate, dict)
-        else None,
+        "certificate_url": _certificate_url(certificate),
         "course_url": run.get("courseware_url"),
         "progress_url": _course_tab_url(run, "progress"),
         "dates_url": _course_tab_url(run, "dates"),
@@ -814,23 +823,34 @@ def _match_course(summaries: list[dict], course: str) -> list[dict]:
     ]
 
 
-def _current_runs(summaries: list[dict]) -> list[dict]:
-    """Keep one enrollment per course: the run in progress, else the latest."""
+def _current_runs(
+    summaries: list[dict], *, prefer_certificate: bool = False
+) -> list[dict]:
+    """
+    Keep one enrollment per course: the run in progress, else the latest. With
+    prefer_certificate, a run that earned a certificate wins, so a newer run
+    doesn't hide a certificate from an earlier one.
+    """
     order = {"in progress": 2, "upcoming": 1, "ended": 0}
+
+    def rank(summary):
+        return (
+            prefer_certificate and summary["certificate_earned"],
+            order[summary["status"]],
+            summary["start_date"] or "",
+        )
+
     best: dict[str, dict] = {}
     for summary in summaries:
         key = summary["course_id"] or summary["run_id"]
-        rank = (order[summary["status"]], summary["start_date"] or "")
-        current = best.get(key)
-        if current is None or rank > (
-            order[current["status"]],
-            current["start_date"] or "",
-        ):
+        if key not in best or rank(summary) > rank(best[key]):
             best[key] = summary
     return list(best.values())
 
 
-async def _course_enrollments(course: str | None, state: dict) -> dict:
+async def _course_enrollments(
+    course: str | None, state: dict, *, prefer_certificate: bool = False
+) -> dict:
     """
     Get the learner's enrollments for the course they named, or else the course
     of the page they are chatting from, or else all of them.
@@ -843,12 +863,18 @@ async def _course_enrollments(course: str | None, state: dict) -> dict:
         _enrollment_summary(enrollment, now)
         for enrollment in await learner_api.get_enrollments()
     ]
+
+    def current(runs):
+        return _current_runs(runs, prefer_certificate=prefer_certificate)
+
     if course:
-        matches = _current_runs(_match_course(summaries, course))
+        matches = current(_match_course(summaries, course))
         if not matches:
             return {
                 "enrollments": [],
-                "note": f"The learner has no enrollment matching {course!r}.",
+                "note": (
+                    f"The learner has no MITx Online enrollment matching {course!r}."
+                ),
             }
         result = {"enrollments": matches}
         if len(matches) > 1:
@@ -857,16 +883,30 @@ async def _course_enrollments(course: str | None, state: dict) -> dict:
             )
         return result
 
-    page_course = ((state or {}).get("course_id") or [None])[-1]
+    state = state or {}
+    page_course = (state.get("course_id") or [None])[-1]
     if page_course:
-        matches = _current_runs(_match_course(summaries, page_course))
+        platform = (state.get("platform") or [None])[-1]
+        if platform and platform != MITXONLINE_PLATFORM:
+            return {
+                "enrollments": [],
+                "note": (
+                    "The course on this page isn't on MITx Online, so the "
+                    "learner's records for it can't be checked here."
+                ),
+            }
+        matches = current(_match_course(summaries, page_course))
         if matches:
             return {"enrollments": matches, "course_on_page": page_course}
         return {
-            "enrollments": _current_runs(summaries),
-            "note": "The learner is not enrolled in the course on this page.",
+            "enrollments": current(summaries),
+            "note": (
+                "The learner has no MITx Online enrollment in the course on this "
+                "page; it may be on another platform. These are their MITx "
+                "Online courses."
+            ),
         }
-    return {"enrollments": _current_runs(summaries)}
+    return {"enrollments": current(summaries)}
 
 
 def _could_not_check(operation: str) -> str:
@@ -969,9 +1009,7 @@ def _program_enrollment_summary(enrollment: dict) -> dict:
         "program_title": program.get("title"),
         "program_id": program.get("readable_id"),
         "certificate_earned": bool(certificate),
-        "certificate_url": certificate.get("link")
-        if isinstance(certificate, dict)
-        else None,
+        "certificate_url": _certificate_url(certificate),
     }
 
 
@@ -987,11 +1025,17 @@ async def get_certificate_status(
     they are chatting from.
     """
     try:
-        result = await _course_enrollments(course, state)
-        programs = await learner_api.get_program_enrollments()
-        program_certificates = await learner_api.get_program_certificates()
+        results = await asyncio.gather(
+            _course_enrollments(course, state, prefer_certificate=True),
+            learner_api.get_program_enrollments(),
+            learner_api.get_program_certificates(),
+            return_exceptions=True,
+        )
     except Exception:  # noqa: BLE001
         return _could_not_check("get_certificate_status")
+    if any(isinstance(item, BaseException) for item in results):
+        return _could_not_check("get_certificate_status")
+    result, programs, program_certificates = results
     result["enrollments"] = _only(
         result["enrollments"],
         "status",

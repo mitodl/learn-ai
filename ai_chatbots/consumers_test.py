@@ -504,7 +504,9 @@ async def test_syllabus_create_chatbot_account_tools(  # noqa: PLR0913
     expected,
 ):
     """Account tools are attached only for a learner session with the flag on."""
-    mocker.patch("ai_chatbots.consumers.feature_is_enabled", return_value=flag_on)
+    flag = mocker.patch(
+        "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on
+    )
     serializer = consumers.SyllabusChatRequestSerializer(
         data={"message": "hello", "course_id": "MITx+6.00.1x"}
     )
@@ -522,6 +524,8 @@ async def test_syllabus_create_chatbot_account_tools(  # noqa: PLR0913
     tool_names = [tool.name for tool in chatbot.create_tools()]
     assert ("get_enrollments" in tool_names) is expected
     assert ("get_course_progress" in chatbot.instructions) is expected
+    # Anonymous requests don't make a PostHog call
+    assert flag.called is signed_in
 
 
 @pytest.mark.parametrize(
