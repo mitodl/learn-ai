@@ -25,6 +25,7 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
 )
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
+from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
 from main.factories import UserFactory
@@ -342,6 +343,7 @@ async def test_http_request_complete_body(mocker):
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
     msg = {"body": b"test message without chunks"}
     with pytest.raises(consumers.StopConsumer):
         await consumer.http_request(msg)
@@ -354,6 +356,7 @@ async def test_http_request_chunked_body(mocker):
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
 
     # Test chunked message body with multiple chunks
     first_chunk = {"body": b"test", "more_body": True}
@@ -378,10 +381,32 @@ async def test_http_request_error(mocker):
         side_effect=Exception("Test exception"),
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
     with pytest.raises(consumers.StopConsumer):
         await consumer.http_request({"body": b"test"})
     mock_handle.assert_called_once()
     mock_log.assert_called_once_with("Error in handling consumer http_request")
+
+
+@pytest.mark.parametrize("signed_in", [True, False])
+async def test_http_request_scopes_learner_session(mocker, signed_in):
+    """The learner's session is available while handling the request, then gone."""
+    seen = []
+
+    async def handle(_consumer, _message):
+        seen.append(has_learner_session())
+
+    mocker.patch.object(consumers.SyllabusBotHttpConsumer, "handle", handle)
+    consumer = consumers.SyllabusBotHttpConsumer()
+    consumer.scope = {
+        "user": mocker.Mock(is_authenticated=True) if signed_in else AnonymousUser(),
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with pytest.raises(consumers.StopConsumer):
+        await consumer.http_request({"body": b"test"})
+
+    assert seen == [signed_in]
+    assert has_learner_session() is False
 
 
 @pytest.mark.parametrize("has_layer", [True, False])
@@ -463,6 +488,44 @@ async def test_syllabus_create_chatbot_without_related_courses(
     assert "search_related_course_content_files" not in [
         tool.name for tool in chatbot.create_tools()
     ]
+
+
+@pytest.mark.parametrize(
+    ("signed_in", "flag_on", "expected"),
+    [(True, True, True), (True, False, False), (False, True, False)],
+)
+async def test_syllabus_create_chatbot_account_tools(  # noqa: PLR0913
+    mocker,
+    mock_http_consumer_send,
+    syllabus_consumer,
+    async_user,
+    signed_in,
+    flag_on,
+    expected,
+):
+    """Account tools are attached only for a learner session with the flag on."""
+    flag = mocker.patch(
+        "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on
+    )
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={"message": "hello", "course_id": "MITx+6.00.1x"}
+    )
+    serializer.is_valid(raise_exception=True)
+    await syllabus_consumer.prepare_response(serializer)
+    scope = {
+        "user": async_user if signed_in else AnonymousUser(),
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with forwarded_learner_session(scope):
+        chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
+            serializer, InMemorySaver()
+        )
+
+    tool_names = [tool.name for tool in chatbot.create_tools()]
+    assert ("get_enrollments" in tool_names) is expected
+    assert ("get_course_progress" in chatbot.instructions) is expected
+    # Anonymous requests don't make a PostHog call
+    assert flag.called is signed_in
 
 
 @pytest.mark.parametrize(
