@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.14.*"
 resolution-markers = [
     "sys_platform != 'win32'",
@@ -13,9 +13,9 @@ exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for 
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
+mitol-django-common = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-observability = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-drf-lint = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
-mitol-django-common = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -2659,6 +2659,7 @@ wheels = [
 name = "learn-ai"
 version = "2026.10.15.1"
 source = { virtual = "." }
+default-groups = "all"
 dependencies = [
     { name = "aiohttp" },
     { name = "azure-identity" },
@@ -2817,7 +2818,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opik", specifier = "~=2.1.22" },
+    { name = "opik", specifier = "~=2.2.88" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", extras = ["c"], specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },
@@ -3717,7 +3718,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.1.22"
+version = "2.2.96"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -3726,6 +3727,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "litellm" },
     { name = "openai" },
+    { name = "orjson", marker = "platform_machine in 'x86_64 AMD64 aarch64 arm64 ARM64 i686 x86' and platform_python_implementation == 'CPython'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest" },
@@ -3740,9 +3742,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/bb/8007bce35fbf8f4ee81cf433b4d231a1f4447242a8149d59b95b3db38258/opik-2.1.22.tar.gz", hash = "sha256:bdd1a211117baf5e86fae278cd2291e4a3ed51d536fd5b130c3bb458df660a0f", size = 1169626, upload-time = "2026-07-10T10:51:36.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/19/fd244295c541554446470cf6370d0190e4c891d2ccd8dc7986395425ca9f/opik-2.2.96.tar.gz", hash = "sha256:b5ffc1143297b8e73d855ed540f844d74d414686b11495842534a522a5d51fd1", size = 1398653, upload-time = "2026-10-09T09:02:19.652Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/b5/9a0552de8e39a36e8e288ba3ff0337d0abcd117ddda7d753667a02d4507f/opik-2.1.22-py3-none-any.whl", hash = "sha256:c11bc8db4bdc370dd2ab6d6962901b9d2ae8e1ac04502ed53c27e4fe37f0ab98", size = 1854322, upload-time = "2026-07-10T10:51:34.556Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/19/bc33ac63a4233d7d4bc1037f0c8d6bf4f955905e54a643a374cda62bcffd/opik-2.2.96-py3-none-any.whl", hash = "sha256:cb288a8a7d2df2bec320501040c70a9d47ee85d8f24bffe7567c2d0b773d8cfc", size = 2135296, upload-time = "2026-10-09T09:02:17.385Z" },
 ]
 
 [[package]]
