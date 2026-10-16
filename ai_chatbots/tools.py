@@ -758,6 +758,10 @@ def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
     course = run.get("course") or {}
     grades = enrollment.get("grades") or []
     grade = grades[0] if grades else None
+    # grade_percent reads 0 when no grade is recorded, so it's only used
+    # alongside a recorded grade (a 0-1 fraction).
+    if grade and grade.get("grade") is None:
+        grade = None
     certificate = enrollment.get("certificate")
     return {
         "course_title": course.get("title") or run.get("title"),
