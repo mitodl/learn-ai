@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import React, { useState } from "react"
 import { ButtonLink } from "@mitodl/smoot-design"
-import { useLoginUrl } from "@/components/useLoginUrl"
+import { useLoginLinkProps } from "@/components/useLoginLinkProps"
 import {
   SearchInput,
   type SearchInputProps,
@@ -113,7 +113,7 @@ const getResultIcon = (result: VectorContentFile) => {
 
 const LearningMaterialsSearchContent: React.FC = () => {
   const me = useQuery(userQueries.me())
-  const loginUrl = useLoginUrl()
+  const loginLinkProps = useLoginLinkProps()
   const [inputValue, setInputValue] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [platform, setPlatform] = useState("")
@@ -158,7 +158,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
           sx={{ a: { textDecoration: "none", color: "inherit" } }}
         >
           You must&nbsp;
-          <ButtonLink variant="tertiary" href={loginUrl}>
+          <ButtonLink variant="tertiary" {...loginLinkProps}>
             Login
           </ButtonLink>
           &nbsp;to use this feature
