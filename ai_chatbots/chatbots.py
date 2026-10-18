@@ -1123,6 +1123,11 @@ def _support_description(prior_messages: list, message: str) -> str:
     Join everything the learner typed about the problem. An address they gave is
     the reply-to, and a bare "send" is an answer to us, so neither belongs in
     what support reads.
+
+    The opening message is kept whatever it looks like. Nobody has been asked
+    for an address at that point, so "I cannot log in as x@y.com" is the
+    problem even though it reads like the answer to that question - and
+    dropping it filed an empty ticket.
     """
     typed = [
         msg.content
@@ -1132,8 +1137,11 @@ def _support_description(prior_messages: list, message: str) -> str:
     typed.append(message)
     return "\n\n".join(
         text
-        for text in typed
-        if text and not _reply_to_email(text) and not _is_bare_confirmation(text)
+        for position, text in enumerate(typed)
+        if text
+        and (
+            position == 0 or not (_reply_to_email(text) or _is_bare_confirmation(text))
+        )
     )
 
 
@@ -1340,10 +1348,10 @@ class SupportBot(TruncatingChatbot):
                 yield chunk
             return
 
-        verified = email in (
-            (prior_state.get("verified_email") or [])
-            + (extra_state.get("verified_email") or [])
-        )
+        # Only this request's session can vouch for the address. Reading the
+        # thread's accumulated verifications would let any later turn inherit
+        # a sign-in it never presented.
+        verified = bool(email) and email in (extra_state.get("verified_email") or [])
         name = _latest(
             (prior_state.get("user_name") or []) + (extra_state.get("user_name") or [])
         )
