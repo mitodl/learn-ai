@@ -1007,12 +1007,13 @@ class SupportAgentState(SummaryState):
     user_name: Annotated[list[str], add]
     user_username: Annotated[list[str], add]
     awaiting_send: Annotated[list[bool], add]
+    confirm: Annotated[list[bool], add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
 SUPPORT_TICKET_REVIEW_FOOTER = (
-    'Anything else to add? Send it and I\'ll include it - otherwise reply "send" '
-    "and I'll pass this on."
+    'Reply "send" and I\'ll pass this on, or "cancel" to drop it. Anything else '
+    "you type I'll add to the request and show you again."
 )
 SUPPORT_TICKET_FILED = (
     "Thanks - I've passed that on to the MIT Open Learning support team. Your "
@@ -1023,8 +1024,12 @@ SUPPORT_TICKET_ALREADY_FILED = (
     "and the support team will follow up at {email}."
 )
 SUPPORT_TICKET_FAILED = (
-    "Sorry, I could not file your support request just now. Please email "
-    "support directly and they'll pick it up."
+    'Sorry, I could not file your support request just now. Reply "send" to try '
+    "again, or email support directly and they'll pick it up."
+)
+SUPPORT_TICKET_CANCELLED = (
+    "No problem - I haven't sent anything. Tell me what you'd like to change, or "
+    "start again whenever you're ready."
 )
 SUPPORT_ASK_EMAIL = (
     "Thanks for letting us know. What's the best email address for the support "
@@ -1087,6 +1092,10 @@ CONFIRMATION_PHRASES = frozenset(
         "confirmed",
         "submit",
         "file it",
+        "try again",
+        "retry",
+        "resend",
+        "send again",
         "no",
         "nope",
         "nothing",
@@ -1100,6 +1109,71 @@ CONFIRMATION_PHRASES = frozenset(
         "done",
     }
 )
+
+
+# A word here on its own calls the send off.
+CANCELLATION_TRIGGERS = frozenset(
+    {
+        "abort",
+        "cancel",
+        "canceled",
+        "cancelled",
+        "canceling",
+        "cancelling",
+        "discard",
+        "forget",
+        "nevermind",
+        "scrap",
+        "stop",
+        "wait",
+    }
+)
+# Everything a cancellation is allowed to be made of. A message containing one
+# word from outside this set is an edit, because re-showing the review costs a
+# turn while a wrong cancellation throws the learner's request away.
+CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
+    "actually",
+    "dont",
+    "don't",
+    "do",
+    "i",
+    "it",
+    "mind",
+    "my",
+    "never",
+    "no",
+    "not",
+    "please",
+    "request",
+    "send",
+    "sending",
+    "sorry",
+    "that",
+    "the",
+    "this",
+    "ticket",
+    "to",
+    "want",
+}
+NEGATIONS = frozenset({"dont", "don't", "no", "not"})
+CANCELLATION_MAX_WORDS = 8
+
+
+def _is_cancellation(message: str) -> bool:
+    """
+    Report whether the learner is calling the send off. "no" alone is not one:
+    it answers "anything else to add?", so reading it as a cancellation would
+    strand everyone who replies to the question we asked.
+    """
+    text = " ".join(re.sub(r"[^a-z' ]", " ", (message or "").lower()).split())
+    words = text.replace("never mind", "nevermind").split()
+    if not words or len(words) > CANCELLATION_MAX_WORDS:
+        return False
+    if not set(words) <= CANCELLATION_WORDS:
+        return False
+    if set(words) & CANCELLATION_TRIGGERS:
+        return True
+    return "send" in words and bool(set(words) & NEGATIONS)
 
 
 def _first(values: list[str]) -> str:
@@ -1140,8 +1214,42 @@ def _support_description(prior_messages: list, message: str) -> str:
         for position, text in enumerate(typed)
         if text
         and (
-            position == 0 or not (_reply_to_email(text) or _is_bare_confirmation(text))
+            position == 0
+            or not (
+                _reply_to_email(text)
+                or _is_bare_confirmation(text)
+                or _is_cancellation(text)
+            )
         )
+    )
+
+
+def _accumulated(prior_state: dict, extra_state: dict, key: str) -> str:
+    """
+    Latest non-empty value for a key, across the thread and this request.
+
+    The widget sends the page URL and the email with the opening message, not
+    with the turn that files, so both have to come back out of accumulated
+    state. Latest wins, because the earliest may be the one being corrected.
+    """
+    return _latest((prior_state.get(key) or []) + (extra_state.get(key) or []))
+
+
+def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
+    """
+    Decide who the support team should reply to.
+
+    A learner who mistyped their address can only fix it by typing it again.
+    One an authenticated session vouched for is not theirs to change: that
+    would let the chat name a stranger as the requester.
+    """
+    # On the opening message an address is part of the problem ("can't log in
+    # as x@y.com"), not a reply-to, so it only counts once we have asked.
+    parsed_reply_to = _reply_to_email(message) if prior_state.get("messages") else ""
+    return (
+        _accumulated(prior_state, extra_state, "verified_email")
+        or parsed_reply_to
+        or _accumulated(prior_state, extra_state, "user_email")
     )
 
 
@@ -1262,6 +1370,74 @@ class SupportBot(TruncatingChatbot):
             )
         return SUPPORT_TICKET_FILED.format(reference=result["reference"], email=email)
 
+    def _collect_the_request(
+        self, message: str, *, extra_state: dict, prior_state: dict
+    ) -> tuple[str, dict]:
+        """
+        Ask for what is still missing, then show the request back.
+
+        The intake conversation is scripted, not model-driven: it is a fixed
+        form (collect the problem and a reply-to, show it back, file), so a
+        model only adds a dependency and a way for every intake to fail.
+        """
+        prior_messages = prior_state.get("messages") or []
+        email = _support_email(prior_state, extra_state, message)
+        if not email:
+            return (
+                SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
+            ), {}
+        if not prior_messages:
+            # An authenticated learner's address arrives with the opening
+            # message; invite more detail before showing the review.
+            return SUPPORT_ASK_MORE, {"user_email": [email]}
+        return _support_review(
+            _support_description(prior_messages, message),
+            _accumulated(prior_state, extra_state, "page_url"),
+            email,
+            # An address parsed out of this turn reaches state no other way,
+            # and the turn that files has to still know it.
+        ), {"user_email": [email], "awaiting_send": [True]}
+
+    async def _send_edit_or_cancel(
+        self, message: str, *, extra_state: dict, prior_state: dict, session
+    ) -> tuple[str, dict]:
+        """Act on what the learner said about the request they were shown."""
+        if _is_cancellation(message):
+            return SUPPORT_TICKET_CANCELLED, {"awaiting_send": [False]}
+
+        prior_messages = prior_state.get("messages") or []
+        email = _support_email(prior_state, extra_state, message)
+        page_url = _accumulated(prior_state, extra_state, "page_url")
+
+        # confirm is the widget's Send button; the phrases are for learners who
+        # type instead. Anything else is an edit to the request, so it is shown
+        # back rather than sent - the learner has not read this version yet.
+        if not (
+            any(extra_state.get("confirm") or []) or _is_bare_confirmation(message)
+        ):
+            return _support_review(
+                _support_description(prior_messages, message), page_url, email
+            ), {"user_email": [email], "awaiting_send": [True]}
+
+        reply = await self._file_the_ticket(
+            session=session,
+            # What files is what the learner reviewed. This turn only approved
+            # it, so it stays out of the ticket whether they typed "send" or
+            # pressed a button that carried some words along with it.
+            description=_support_description(prior_messages, ""),
+            page_url=page_url,
+            email=email,
+            name=_accumulated(prior_state, extra_state, "user_name"),
+            username=_accumulated(prior_state, extra_state, "user_username"),
+            # Only this request's session can vouch for the address. Reading
+            # the thread's accumulated verifications would let any later turn
+            # inherit a sign-in it never presented.
+            verified=bool(email) and email in (extra_state.get("verified_email") or []),
+        )
+        # A retry after a Zendesk failure reads the address back out of state,
+        # so a correction made on this turn has to land there.
+        return reply, {"user_email": [email]}
+
     async def get_completion(
         self,
         message: str,
@@ -1279,100 +1455,31 @@ class SupportBot(TruncatingChatbot):
         session = await UserChatSession.objects.filter(
             thread_id=self.thread_id
         ).afirst()
+        prior_state = await self._prior_state()
 
         if session and session.support_ticket_reference:
-            already_filed = SUPPORT_TICKET_ALREADY_FILED.format(
-                reference=session.support_ticket_reference,
-                email=session.support_ticket_email,
+            reply, updates = (
+                SUPPORT_TICKET_ALREADY_FILED.format(
+                    reference=session.support_ticket_reference,
+                    email=session.support_ticket_email,
+                ),
+                {},
             )
-            async for chunk in self._reply_without_the_model(
-                message, already_filed, extra_state
-            ):
-                yield chunk
-            return
-
-        prior_state = await self._prior_state()
-        prior_messages = prior_state.get("messages") or []
-        # The widget sends the email with the opening message, so a retry after a
-        # Zendesk failure has to read it from accumulated state as well. Latest
-        # wins, because the earliest may be the one the learner is correcting.
-        known_email = _latest(
-            (prior_state.get("user_email") or [])
-            + (extra_state.get("user_email") or [])
-        )
-        verified_email = _latest(
-            (prior_state.get("verified_email") or [])
-            + (extra_state.get("verified_email") or [])
-        )
-        # On the opening message an address is part of the problem ("can't log in
-        # as x@y.com"), not a reply-to, so it only counts once we have asked.
-        parsed_reply_to = _reply_to_email(message) if prior_messages else ""
-        # A learner who mistyped their address can only fix it by typing it
-        # again. One an authenticated session vouched for is not theirs to
-        # change: that would let the chat name a stranger as the requester.
-        email = verified_email or parsed_reply_to or known_email
-
-        description = _support_description(prior_messages, message)
-        # The widget sends page_url with the opening message, not with the email
-        # that triggers filing, so prefer the URLs accumulated in graph state.
-        page_url = _latest(
-            (prior_state.get("page_url") or []) + (extra_state.get("page_url") or [])
-        )
-
-        if not any(prior_state.get("awaiting_send") or []):
-            # The intake conversation is scripted, not model-driven: it is a fixed
-            # form (collect the problem and a reply-to, show it back, file), so a
-            # model only adds a dependency and a way for every intake to fail.
-            if not email:
-                reply = SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
-                async for chunk in self._reply_without_the_model(
-                    message, reply, extra_state
-                ):
-                    yield chunk
-                return
-            if not prior_messages:
-                # An authenticated learner's address arrives with the opening
-                # message; invite more detail before showing the review.
-                async for chunk in self._reply_without_the_model(
-                    message, SUPPORT_ASK_MORE, {**extra_state, "user_email": [email]}
-                ):
-                    yield chunk
-                return
-            async for chunk in self._reply_without_the_model(
+        # Latest wins, not any(): a cancellation appends False, and reading the
+        # whole list would let the send the learner called off come back.
+        elif (prior_state.get("awaiting_send") or [False])[-1]:
+            reply, updates = await self._send_edit_or_cancel(
                 message,
-                _support_review(description, page_url, email),
-                # An address parsed out of this turn reaches state no other way,
-                # and the turn that files has to still know it.
-                {**extra_state, "user_email": [email], "awaiting_send": [True]},
-            ):
-                yield chunk
-            return
+                extra_state=extra_state,
+                prior_state=prior_state,
+                session=session,
+            )
+        else:
+            reply, updates = self._collect_the_request(
+                message, extra_state=extra_state, prior_state=prior_state
+            )
 
-        # Only this request's session can vouch for the address. Reading the
-        # thread's accumulated verifications would let any later turn inherit
-        # a sign-in it never presented.
-        verified = bool(email) and email in (extra_state.get("verified_email") or [])
-        name = _latest(
-            (prior_state.get("user_name") or []) + (extra_state.get("user_name") or [])
-        )
-        username = _latest(
-            (prior_state.get("user_username") or [])
-            + (extra_state.get("user_username") or [])
-        )
-        reply = await self._file_the_ticket(
-            session=session,
-            description=description,
-            page_url=page_url,
-            email=email,
-            name=name,
-            username=username,
-            verified=verified,
-        )
         async for chunk in self._reply_without_the_model(
-            # A retry after a Zendesk failure reads the address back out of
-            # state, so a correction made on this turn has to land there.
-            message,
-            reply,
-            {**extra_state, "user_email": [email]},
+            message, reply, {**extra_state, **updates}
         ):
             yield chunk
