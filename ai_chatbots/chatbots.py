@@ -1026,6 +1026,18 @@ SUPPORT_TICKET_FAILED = (
     "Sorry, I could not file your support request just now. Please email "
     "support directly and they'll pick it up."
 )
+SUPPORT_ASK_EMAIL = (
+    "Thanks for letting us know. What's the best email address for the support "
+    "team to reply to?"
+)
+SUPPORT_ASK_EMAIL_AGAIN = (
+    "I still need an email address so the support team can reply. What's the best "
+    "one to reach you at?"
+)
+SUPPORT_ASK_MORE = (
+    "Thanks for letting us know. Is there anything else you'd like to add before I "
+    "pass this on to the MIT Open Learning support team?"
+)
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
 
@@ -1247,7 +1259,7 @@ class SupportBot(TruncatingChatbot):
         message: str,
         *,
         extra_state: dict[str, Any] | None = None,
-        **kwargs,
+        **kwargs,  # noqa: ARG002
     ) -> AsyncGenerator[str, None]:
         """
         Show the learner what will be sent, then file it on the turn after.
@@ -1284,20 +1296,13 @@ class SupportBot(TruncatingChatbot):
             (prior_state.get("verified_email") or [])
             + (extra_state.get("verified_email") or [])
         )
+        # On the opening message an address is part of the problem ("can't log in
+        # as x@y.com"), not a reply-to, so it only counts once we have asked.
+        parsed_reply_to = _reply_to_email(message) if prior_messages else ""
         # A learner who mistyped their address can only fix it by typing it
         # again. One an authenticated session vouched for is not theirs to
         # change: that would let the chat name a stranger as the requester.
-        email = verified_email or _reply_to_email(message) or known_email
-
-        # An address we were handed identifies the learner. One parsed out of a
-        # first message ("can't log in as x@y.com") is part of the problem, not a
-        # reply-to, so that case still waits to be asked.
-        if not email or (not known_email and not prior_messages):
-            async for chunk in super().get_completion(
-                message, extra_state=extra_state, **kwargs
-            ):
-                yield chunk
-            return
+        email = verified_email or parsed_reply_to or known_email
 
         description = _support_description(prior_messages, message)
         # The widget sends page_url with the opening message, not with the email
@@ -1307,6 +1312,24 @@ class SupportBot(TruncatingChatbot):
         )
 
         if not any(prior_state.get("awaiting_send") or []):
+            # The intake conversation is scripted, not model-driven: it is a fixed
+            # form (collect the problem and a reply-to, show it back, file), so a
+            # model only adds a dependency and a way for every intake to fail.
+            if not email:
+                reply = SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
+                async for chunk in self._reply_without_the_model(
+                    message, reply, extra_state
+                ):
+                    yield chunk
+                return
+            if not prior_messages:
+                # An authenticated learner's address arrives with the opening
+                # message; invite more detail before showing the review.
+                async for chunk in self._reply_without_the_model(
+                    message, SUPPORT_ASK_MORE, {**extra_state, "user_email": [email]}
+                ):
+                    yield chunk
+                return
             async for chunk in self._reply_without_the_model(
                 message,
                 _support_review(description, page_url, email),
