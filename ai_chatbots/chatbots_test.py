@@ -1950,6 +1950,41 @@ async def test_support_bot_describes_every_turn_the_learner_typed(
 
 
 @pytest.mark.asyncio
+async def test_support_bot_keeps_an_opening_message_that_quotes_an_address(
+    mocker, mock_checkpointer
+):
+    """
+    "I cannot log in as x@y.com" is the single most likely way to open a
+    support request, and it reads to _reply_to_email exactly like an answer to
+    "what's your email?". Dropping it filed an empty ticket under the subject
+    "Support request". The opening message is the problem, whatever it looks
+    like.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    opening = "I cannot log in as learner@example.com"
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [
+            HumanMessage(opening),
+            AIMessage("What's your email address?"),
+            HumanMessage("learner@example.com"),
+            AIMessage("Here's what I'll send..."),
+        ],
+        state={"user_email": ["learner@example.com"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert mock_file.call_args.kwargs["description"] == opening
+    assert mock_file.call_args.kwargs["subject"] == opening
+
+
+@pytest.mark.asyncio
 async def test_support_bot_can_retry_a_failed_send(mocker, mock_checkpointer):
     """
     A Zendesk outage must not cost the learner the request. Their next message
@@ -2436,6 +2471,39 @@ async def test_support_bot_marks_a_session_email_as_verified(mocker, mock_checkp
         pass
 
     assert mock_file.call_args.kwargs["email_verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_inherit_verification_from_an_earlier_turn(
+    mocker, mock_checkpointer
+):
+    """
+    Verification describes the request in hand, not the thread. A turn that
+    arrives with no session - however it reached the thread - must not borrow
+    the sign-in an earlier turn had, or the ticket tells support an address was
+    checked when nobody checked it.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={
+            "page_url": ["https://learn.mit.edu/week-3"],
+            "user_email": ["signedin@mit.edu"],
+            "verified_email": ["signedin@mit.edu"],
+            "awaiting_send": [True],
+        },
+    )
+
+    anonymous = {"page_url": [""], "user_email": [""], "verified_email": [""]}
+    async for _ in chatbot.get_completion("send", extra_state=anonymous):
+        pass
+
+    assert mock_file.call_args.kwargs["email_verified"] is False
 
 
 @pytest.mark.parametrize(
