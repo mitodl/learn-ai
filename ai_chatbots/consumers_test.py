@@ -1463,6 +1463,7 @@ def test_support_process_extra_state_trusts_only_the_session_email(
         "verified_email": [async_user.email],
         "user_name": [async_user.name],
         "user_username": [async_user.username],
+        "confirm": [False],
     }
 
 
@@ -1491,6 +1492,23 @@ def test_support_process_extra_state_carries_the_username_separately(
     assert extra_state["user_username"] == [async_user.username]
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({}, False), ({"confirm": False}, False), ({"confirm": True}, True)],
+)
+def test_support_process_extra_state_carries_the_confirm_flag(
+    support_consumer, body, expected
+):
+    """
+    A widget with a Send button says so with confirm rather than a word the bot
+    has to recognise. Absent, it must read as "not confirmed" - a default that
+    files would send every request the learner never approved.
+    """
+    extra_state = support_consumer.process_extra_state({"page_url": "", **body})
+
+    assert extra_state["confirm"] == [expected]
+
+
 def test_support_process_extra_state_falls_back_to_the_body_email(support_consumer):
     """
     Nothing gives learn-ai an APISIX session for a learner arriving from the edX
@@ -1515,6 +1533,7 @@ def test_support_process_extra_state_falls_back_to_the_body_email(support_consum
         "verified_email": [""],
         "user_name": ["Ada Lovelace"],
         "user_username": ["ada"],
+        "confirm": [False],
     }
 
 
@@ -1549,6 +1568,7 @@ def test_support_process_extra_state_anonymous_learner(support_consumer):
         "verified_email": [""],
         "user_name": [""],
         "user_username": [""],
+        "confirm": [False],
     }
 
 

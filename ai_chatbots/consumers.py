@@ -888,4 +888,5 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             # Kept distinct from user_name: a display name may stand in there,
             # but Zendesk's username field should only ever be the account handle.
             "user_username": [session_username or data.get("user_username", "") or ""],
+            "confirm": [bool(data.get("confirm", False))],
         }

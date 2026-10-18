@@ -111,6 +111,9 @@ class SupportChatRequestSerializer(ChatRequestSerializer):
     # consumer prefers the authenticated session over these, same as user_email.
     user_name = TruncatedCharField(required=False, allow_blank=True, max_length=255)
     user_username = TruncatedCharField(required=False, allow_blank=True, max_length=255)
+    # Set by a widget that offers a Send button, so the learner's approval does
+    # not depend on the bot recognising the word they typed.
+    confirm = serializers.BooleanField(required=False, default=False)
 
 
 class UserChatSessionSerializer(serializers.ModelSerializer):
