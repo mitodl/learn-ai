@@ -596,10 +596,12 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
     name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
-# Chat widgets are embedded on other origins, so the thread cookies need
-# SameSite=None;Secure. Turn this off only for plain-HTTP local development,
-# where browsers reject Secure cookies.
-AI_CHATBOTS_COOKIE_CROSS_SITE = get_bool("AI_CHATBOTS_COOKIE_CROSS_SITE", True)  # noqa: FBT003
+# Sends the thread cookies as SameSite=None;Secure, which a widget embedded
+# outside mit.edu needs. Off by default: this covers every bot, other mit.edu
+# hosts are already same-site with the API, and switching it on gives up the
+# browser's own cross-site protection. Turning it on requires a populated
+# CORS_ALLOW_ORIGINS - BaseBotHttpConsumer.check_origin refuses the pair.
+AI_CHATBOTS_COOKIE_CROSS_SITE = get_bool("AI_CHATBOTS_COOKIE_CROSS_SITE", False)  # noqa: FBT003
 AI_CITED_PROMPTS = get_list_of_str("AI_CITED_PROMPTS", default=[])
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o-mini")

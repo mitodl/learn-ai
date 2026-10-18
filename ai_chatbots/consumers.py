@@ -129,14 +129,23 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         is a simple request and skips the preflight.
 
         An absent origin is allowed: server-to-server callers send none, and a
-        Referrer-Policy can strip both headers. So is an empty allow-list: this
-        gates every bot, and an environment that never needed to set
-        CORS_ALLOW_ORIGINS would otherwise start rejecting the chatbots that
-        work there today.
+        Referrer-Policy can strip both headers. So is an empty allow-list, but
+        only while the cookies stay same-site: this gates every bot, and an
+        environment that never needed to set CORS_ALLOW_ORIGINS would otherwise
+        start rejecting the chatbots that work there today. Turning on
+        cross-site cookies removes the browser's own protection and leaves the
+        allow-list as the only limit, so that combination has to fail closed
+        rather than silently allow every site.
         """
         origin = request_origin(self.scope)
         allowed = settings.CORS_ALLOW_ORIGINS
+        # Sandboxed iframes and data: URLs send this. Nothing that should embed
+        # a bot does, and it can never match an allow-list entry.
+        if origin == "null":
+            raise CrossOriginRequestError(origin)
         if not allowed or "*" in allowed:
+            if settings.AI_CHATBOTS_COOKIE_CROSS_SITE:
+                raise CrossOriginRequestError(origin or "unset allow-list")
             return
         if origin and origin not in allowed:
             raise CrossOriginRequestError(origin)

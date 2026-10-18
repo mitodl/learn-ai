@@ -1649,3 +1649,37 @@ async def test_handle_allows_any_origin_when_cors_is_unset(
     )
 
     assert _response_status(mock_send) == 200
+
+
+@pytest.mark.parametrize("allowed", [[], ["*"]])
+async def test_handle_rejects_everything_when_cross_site_cookies_lack_an_allow_list(
+    mocker, syllabus_consumer, settings, allowed
+):
+    """
+    Treating an unconfigured allow-list as "allow everything" is only safe while
+    the thread cookie stays same-site. Once it is SameSite=None any page can
+    send it along, and the allow-list is the only thing left deciding who may.
+    Refusing to run in that combination makes it a deployment error rather than
+    a silent hole.
+    """
+    settings.AI_CHATBOTS_COOKIE_CROSS_SITE = True
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "https://evil.example.com", settings, allowed
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_rejects_null_origin_even_with_no_allow_list(
+    mocker, syllabus_consumer, settings
+):
+    """
+    A sandboxed iframe and a data: URL both send Origin: null. Nothing that is
+    supposed to embed these bots does, and "null" can never be matched against
+    an allow-list, so it is refused regardless of configuration.
+    """
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "null", settings, []
+    )
+
+    assert _response_status(mock_send) == 403
