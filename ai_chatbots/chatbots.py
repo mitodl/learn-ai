@@ -1038,6 +1038,12 @@ SUPPORT_TICKET_CANCELLED = (
     "No problem - I haven't sent anything. Tell me what you'd like to change, or "
     "start again whenever you're ready."
 )
+SUPPORT_SEND_UNCLEAR = (
+    "I'm not sure whether that was a go-ahead or something to add, and I don't "
+    'want to guess. Reply "send" on its own to pass on the request exactly as '
+    'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
+    "updated version."
+)
 SUPPORT_TICKET_SENDING = (
     "I'm still sending that one over - give me a moment and I'll come back with "
     "the reference number."
@@ -1086,13 +1092,13 @@ def _reply_to_email(message: str) -> str:
     return address
 
 
-# Answers to "anything else to add?" that add nothing. Sending is never gated on
-# recognising one - they are only kept out of the description.
-CONFIRMATION_PHRASES = frozenset(
+# A whole message from this set is the learner saying "go ahead".
+AFFIRMATIVE_PHRASES = frozenset(
     {
         "send",
         "send it",
         "send it please",
+        "send again",
         "yes",
         "yes please",
         "y",
@@ -1111,12 +1117,22 @@ CONFIRMATION_PHRASES = frozenset(
         "try again",
         "retry",
         "resend",
-        "send again",
-        "no",
-        "nope",
+    }
+)
+# The word an affirmative can open with. Derived so the two cannot drift.
+AFFIRMATIVE_OPENERS = frozenset(phrase.split()[0] for phrase in AFFIRMATIVE_PHRASES)
+
+# A plain no. Under the review, where the question is whether to send, these
+# mean do not send.
+DECLINE_PHRASES = frozenset({"no", "nope", "no thanks", "no thank you"})
+
+# Answers to "anything else to add?" that add nothing. Before the review they
+# move things along; under it they are ambiguous - "that's all" may mean "go
+# ahead" or "I have nothing more" - so they are asked about, not acted on.
+NOTHING_MORE_PHRASES = frozenset(
+    {
         "nothing",
         "nothing else",
-        "no thanks",
         "no that's everything",
         "no that's all",
         "that's everything",
@@ -1125,6 +1141,10 @@ CONFIRMATION_PHRASES = frozenset(
         "done",
     }
 )
+
+# None of these are the problem the learner wants help with, so none of them
+# belong in what support reads.
+FILLER_PHRASES = AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
 
 
 # A word here on its own calls the send off.
@@ -1172,18 +1192,20 @@ CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
     "want",
 }
 NEGATIONS = frozenset({"dont", "don't", "no", "not"})
-CANCELLATION_MAX_WORDS = 8
+# Past this a reply is carrying real detail, not answering the question we
+# asked, so it is read as an edit rather than a yes or a no.
+SHORT_REPLY_MAX_WORDS = 8
+
+
+def _normalised(message: str) -> str:
+    """Reduce a message to lower-case words, so phrases can be matched."""
+    return " ".join(re.sub(r"[^a-z' ]", " ", (message or "").lower()).split())
 
 
 def _is_cancellation(message: str) -> bool:
-    """
-    Report whether the learner is calling the send off. "no" alone is not one:
-    it answers "anything else to add?", so reading it as a cancellation would
-    strand everyone who replies to the question we asked.
-    """
-    text = " ".join(re.sub(r"[^a-z' ]", " ", (message or "").lower()).split())
-    words = text.replace("never mind", "nevermind").split()
-    if not words or len(words) > CANCELLATION_MAX_WORDS:
+    """Report whether the learner is calling the send off."""
+    words = _normalised(message).replace("never mind", "nevermind").split()
+    if not words or len(words) > SHORT_REPLY_MAX_WORDS:
         return False
     if not set(words) <= CANCELLATION_WORDS:
         return False
@@ -1202,10 +1224,34 @@ def _latest(values: list[str]) -> str:
     return _first(list(reversed(values)))
 
 
-def _is_bare_confirmation(message: str) -> bool:
-    """Report whether the message is only the learner saying "go"."""
-    words = re.sub(r"[^a-z' ]", " ", (message or "").lower())
-    return " ".join(words.split()) in CONFIRMATION_PHRASES
+def _is_filler(message: str) -> bool:
+    """Report whether the message is an answer to us, with nothing for support."""
+    return _normalised(message) in FILLER_PHRASES
+
+
+def _is_affirmative(message: str) -> bool:
+    """Report whether the learner said, and said only, to go ahead."""
+    return _normalised(message) in AFFIRMATIVE_PHRASES
+
+
+def _is_decline(message: str) -> bool:
+    """Report whether the learner said no, plainly and nothing else."""
+    return _normalised(message) in DECLINE_PHRASES
+
+
+def _is_unclear_go_ahead(message: str) -> bool:
+    """
+    Report whether a short reply to the review reads as a yes carrying
+    something else. "yes please send it to support asap" adds nothing to the
+    ticket while "yes, and the course is 18.01" does, and nothing here can tell
+    them apart - so neither is guessed at.
+    """
+    words = _normalised(message).split()
+    if not words or len(words) > SHORT_REPLY_MAX_WORDS:
+        return False
+    return words[0] in AFFIRMATIVE_OPENERS or _normalised(message) in (
+        NOTHING_MORE_PHRASES
+    )
 
 
 def _support_description(prior_messages: list, message: str) -> str:
@@ -1221,8 +1267,17 @@ def _support_description(prior_messages: list, message: str) -> str:
     """
     typed = [
         msg.content
-        for msg in prior_messages
-        if isinstance(msg, HumanMessage) and msg.content
+        for position, msg in enumerate(prior_messages)
+        if isinstance(msg, HumanMessage)
+        and msg.content
+        # Dropped only where we came back and asked what it meant, so the
+        # chatter we could not read stays out while the same words typed
+        # anywhere else are still the learner's problem.
+        and SUPPORT_SEND_UNCLEAR
+        not in [
+            getattr(reply, "content", "")
+            for reply in prior_messages[position + 1 : position + 2]
+        ]
     ]
     typed.append(message)
     return "\n\n".join(
@@ -1231,11 +1286,7 @@ def _support_description(prior_messages: list, message: str) -> str:
         if text
         and (
             position == 0
-            or not (
-                _reply_to_email(text)
-                or _is_bare_confirmation(text)
-                or _is_cancellation(text)
-            )
+            or not (_reply_to_email(text) or _is_filler(text) or _is_cancellation(text))
         )
     )
 
@@ -1437,7 +1488,9 @@ class SupportBot(TruncatingChatbot):
         self, message: str, *, extra_state: dict, prior_state: dict, session
     ) -> tuple[str, dict]:
         """Act on what the learner said about the request they were shown."""
-        if _is_cancellation(message):
+        # The question on screen here is whether to send, so a plain "no"
+        # answers it. Cancelling costs a turn to undo; filing cannot be undone.
+        if _is_cancellation(message) or _is_decline(message):
             return SUPPORT_TICKET_CANCELLED, {"awaiting_send": [False]}
 
         prior_messages = prior_state.get("messages") or []
@@ -1447,9 +1500,9 @@ class SupportBot(TruncatingChatbot):
         # confirm is the widget's Send button; the phrases are for learners who
         # type instead. Anything else is an edit to the request, so it is shown
         # back rather than sent - the learner has not read this version yet.
-        if not (
-            any(extra_state.get("confirm") or []) or _is_bare_confirmation(message)
-        ):
+        if not (any(extra_state.get("confirm") or []) or _is_affirmative(message)):
+            if _is_unclear_go_ahead(message):
+                return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
             return _support_review(
                 _support_description(prior_messages, message), page_url, email
             ), {"user_email": [email], "awaiting_send": [True]}
