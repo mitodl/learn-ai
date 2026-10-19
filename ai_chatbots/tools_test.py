@@ -509,7 +509,10 @@ async def test_get_video_transcript_chunk(
 
 async def test_get_video_transcript_chunk_error(mocker):
     """A Learn failure is reported to the LLM as the shared error envelope."""
-    mocker.patch("ai_chatbots.learn.search_transcript", side_effect=learn.LearnError("502", "https://mit.edu/transcripts", {}))
+    mocker.patch(
+        "ai_chatbots.learn.search_transcript",
+        side_effect=learn.LearnError("502", "https://mit.edu/transcripts", {}),
+    )
 
     result = await get_video_transcript_chunk.ainvoke(
         {"q": "eigenvalues", "state": {"transcript_asset_id": ["asset-1"]}}
