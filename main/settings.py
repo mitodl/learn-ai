@@ -676,18 +676,19 @@ LOGIN_REDIRECT_REQUIRE_HTTPS = get_bool(
 )
 # Learner records, read with the learner's own forwarded session cookies.
 # See ai_chatbots/learner_api.py. Each cookie is only ever sent to its own host.
+# The cookie names default to none, so no session is read until a deployment
+# names its own: production's .learn.mit.edu cookie also reaches RC and CI hosts.
 LEARNER_API_LEARN_BASE_URL = get_string(
     name="LEARNER_API_LEARN_BASE_URL", default="https://api.learn.mit.edu/"
 )
 LEARNER_API_LEARN_COOKIE_NAME = get_string(
-    name="LEARNER_API_LEARN_COOKIE_NAME", default="mitlearn_apisix_session"
+    name="LEARNER_API_LEARN_COOKIE_NAME", default=""
 )
 LEARNER_API_OPENEDX_BASE_URL = get_string(
     name="LEARNER_API_OPENEDX_BASE_URL", default="https://courses.learn.mit.edu/"
 )
 LEARNER_API_OPENEDX_COOKIE_NAME = get_string(
-    name="LEARNER_API_OPENEDX_COOKIE_NAME",
-    default="mitxonline-production-edx-lms-sessionid",
+    name="LEARNER_API_OPENEDX_COOKIE_NAME", default=""
 )
 # Where MITx Online's own pages (certificates) are, to make their links absolute
 LEARNER_API_MITXONLINE_BASE_URL = get_string(
