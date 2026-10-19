@@ -127,7 +127,7 @@ async def test_login_refused_log_omits_user_info(caplog):
     next_url = "https://learner:secret-token@learn.mit.edu/"
     await get_login(f"next={quote(next_url, safe='')}")
 
-    assert "learn.mit.edu" in caplog.text
+    assert [record.args for record in caplog.records] == [("learn.mit.edu",)]
     assert "secret-token" not in caplog.text
 
 
