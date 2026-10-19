@@ -9,6 +9,7 @@ import logging
 from http import HTTPStatus
 from uuid import uuid4
 
+import httpx
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -30,6 +31,31 @@ ZENDESK_OAUTH_SCOPE = "tickets:write users:write"
 # Re-mint this many seconds before the token's stated expiry, so an in-flight
 # request never files with a token that lapses mid-call.
 ZENDESK_TOKEN_EXPIRY_MARGIN = 60
+# Timeouts that mean the request never left, so no ticket can have been made.
+UNDELIVERED_TIMEOUTS = (httpx.ConnectTimeout, httpx.PoolTimeout)
+
+
+class ZendeskTokenError(Exception):
+    """Minting the access token failed, so no ticket was ever posted."""
+
+
+def _outcome_is_unknown(exc: Exception) -> bool:
+    """
+    Say whether Zendesk may have created the ticket despite the failure.
+
+    Callers must not report a definite failure here: a retry would duplicate
+    the ticket, and telling the learner nothing was filed may be untrue.
+
+    Only positive evidence counts, so anything unrecognised - a wrapped mint
+    failure included - is read as nothing having been filed.
+    """
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is not None:
+        # Zendesk can create the ticket and still fail the response.
+        return status >= HTTPStatus.INTERNAL_SERVER_ERROR
+    return isinstance(exc, httpx.TimeoutException) and not isinstance(
+        exc, UNDELIVERED_TIMEOUTS
+    )
 
 
 async def _get_access_token(client, *, force_refresh: bool = False) -> str:
@@ -45,18 +71,23 @@ async def _get_access_token(client, *, force_refresh: bool = False) -> str:
         if token:
             return token
 
-    response = await client.post(
-        f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_OAUTH_TOKEN_PATH}",
-        json={
-            "grant_type": "client_credentials",
-            "client_id": settings.AI_ZENDESK_OAUTH_CLIENT_ID,
-            "client_secret": settings.AI_ZENDESK_OAUTH_CLIENT_SECRET,
-            "scope": ZENDESK_OAUTH_SCOPE,
-        },
-        timeout=settings.REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = await client.post(
+            f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_OAUTH_TOKEN_PATH}",
+            json={
+                "grant_type": "client_credentials",
+                "client_id": settings.AI_ZENDESK_OAUTH_CLIENT_ID,
+                "client_secret": settings.AI_ZENDESK_OAUTH_CLIENT_SECRET,
+                "scope": ZENDESK_OAUTH_SCOPE,
+            },
+            timeout=settings.REQUESTS_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        # Wrapped so the 5xx or timeout from here cannot be mistaken for one
+        # from the ticket POST, which may have filed in spite of it.
+        raise ZendeskTokenError from exc
     ttl = max(data["expires_in"] - ZENDESK_TOKEN_EXPIRY_MARGIN, 1)
     await cache.aset(ZENDESK_TOKEN_CACHE_KEY, data["access_token"], ttl)
     return data["access_token"]
@@ -109,7 +140,13 @@ async def file_support_ticket(  # noqa: PLR0913
     email_verified: bool = False,
     thread_id: str = "",
 ) -> dict:
-    """Create a Zendesk ticket, returning {"reference": ...} or {"error": ...}."""
+    """
+    Create a Zendesk ticket.
+
+    Returns {"reference": ...} on success. On failure, {"error": ...,
+    "uncertain": ...}, where uncertain means Zendesk may have created the
+    ticket regardless, so the caller must neither retry nor claim it failed.
+    """
     if settings.AI_ZENDESK_STUB_MODE:
         # Loud on purpose: the learner is told their request was filed, and
         # nothing was. A quiet stub left on in production looks like success.
@@ -126,7 +163,8 @@ async def file_support_ticket(  # noqa: PLR0913
             "error": (
                 "That does not look like a valid email address. Ask the "
                 "learner for one before filing."
-            )
+            ),
+            "uncertain": False,
         }
 
     body = f"{description}\n\nPage: {page_url}" if page_url else description
@@ -159,11 +197,18 @@ async def file_support_ticket(  # noqa: PLR0913
         response.raise_for_status()
         return {"reference": response.json()["ticket"]["id"], "stub": False}
     except Exception as exc:  # noqa: BLE001
+        uncertain = _outcome_is_unknown(exc)
         # No exc_info: the traceback's frame locals hold the learner's email and
         # their problem description, and Sentry ships frame locals by default.
         log.error(  # noqa: TRY400
-            "Failed to create Zendesk support ticket (%s, status %s)",
+            "Failed to create Zendesk support ticket (%s, status %s). May have "
+            "been filed anyway: %s. Search Zendesk for external_id %s.",
             type(exc).__name__,
             getattr(getattr(exc, "response", None), "status_code", "n/a"),
+            uncertain,
+            thread_id or "n/a",
         )
-        return {"error": "Could not file the support request. Please try again later."}
+        return {
+            "error": "Could not file the support request. Please try again later.",
+            "uncertain": uncertain,
+        }

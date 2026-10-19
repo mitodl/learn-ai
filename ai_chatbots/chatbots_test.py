@@ -27,6 +27,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
     SUPPORT_TICKET_CANCELLED,
+    SUPPORT_TICKET_MAYBE_FILED,
     SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
     SearchSummaryBot,
@@ -2956,3 +2957,46 @@ async def test_support_bot_releases_the_filing_lock_after_a_failure(
 
     assert mock_file.call_count == 2
     assert "4821" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
+    mocker, mock_checkpointer
+):
+    """
+    Zendesk can create the ticket and still fail to answer. Calling that a
+    failure invites the retry that duplicates it, so the thread stops instead
+    and every later message gets the same answer.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file.", "uncertain": True}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    first = await say("send")
+    # Three turns, because only clearing awaiting_send would drop the learner
+    # back into intake, re-show the review, and file on the send after that.
+    replies = [first, await say("still nothing"), await say("send")]
+
+    assert mock_file.call_count == 1
+    assert all(SUPPORT_TICKET_MAYBE_FILED in reply for reply in replies)
+    # The wording has to stop short of the claim the failure reply makes.
+    assert "could not" not in first.lower()
+    session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
+    assert session.support_ticket_reference == ""

@@ -4,7 +4,14 @@ import logging
 import re
 
 import pytest
-from httpx import RequestError
+from httpx import (
+    ConnectError,
+    ConnectTimeout,
+    HTTPStatusError,
+    PoolTimeout,
+    ReadTimeout,
+    RequestError,
+)
 
 from ai_chatbots.constants import (
     ZENDESK_OAUTH_TOKEN_PATH,
@@ -69,6 +76,15 @@ def _response(mocker, json_body, status_code=200):
     response.json.return_value = json_body
     response.status_code = status_code
     response.raise_for_status = mocker.Mock()
+    return response
+
+
+def _failing_response(mocker, status_code):
+    """Build a response that raises from raise_for_status, as httpx's does."""
+    response = _response(mocker, {}, status_code=status_code)
+    response.raise_for_status.side_effect = HTTPStatusError(
+        f"server said {status_code}", request=mocker.Mock(), response=response
+    )
     return response
 
 
@@ -413,6 +429,72 @@ async def test_file_support_ticket_reuses_the_key_on_the_401_retry(
         if call.args[0].endswith("/api/v2/tickets.json")
     ]
     assert keys == ["thread-abc", "thread-abc"]
+
+
+@pytest.mark.parametrize(
+    ("status_code", "uncertain"),
+    [(500, True), (502, True), (503, True), (400, False), (422, False)],
+)
+async def test_file_support_ticket_says_whether_zendesk_may_have_filed_it(
+    zendesk_ticket_settings, mocker, status_code, uncertain
+):
+    """
+    Zendesk can create the ticket and still fail the response, so a 5xx leaves
+    the outcome unknown. A rejection created nothing and is a plain failure.
+    """
+    _mock_zendesk_client(
+        mocker, ticket_responses=[_failing_response(mocker, status_code)]
+    )
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert "reference" not in result
+    assert result["uncertain"] is uncertain
+
+
+@pytest.mark.parametrize(
+    ("error", "uncertain"),
+    [
+        (ReadTimeout("zendesk took too long"), True),
+        (ConnectTimeout("never reached zendesk"), False),
+        (PoolTimeout("no connection free"), False),
+        (ConnectError("dns failure"), False),
+        (RequestError("zendesk is down"), False),
+    ],
+)
+async def test_file_support_ticket_says_a_lost_reply_is_not_a_refusal(
+    zendesk_ticket_settings, mock_httpx_async_client, error, uncertain
+):
+    """
+    A read timeout means the request went out and we stopped waiting, so a
+    ticket may exist. A connect failure never put it on the wire.
+    """
+    mock_patch = mock_httpx_async_client(
+        {},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+    mock_patch.return_value.post.side_effect = error
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert result["uncertain"] is uncertain
+
+
+async def test_file_support_ticket_is_sure_it_failed_when_the_mint_times_out(
+    zendesk_ticket_settings, token_cache, mocker
+):
+    """
+    A timeout minting the token happens before any ticket is posted, so there
+    is nothing on Zendesk's side to be unsure about.
+    """
+    token_cache.delete(ZENDESK_TOKEN_CACHE_KEY)
+    client = mocker.Mock()
+    client.post = mocker.AsyncMock(side_effect=ReadTimeout("mint took too long"))
+    mocker.patch("ai_chatbots.zendesk.get_async_http_client", return_value=client)
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert result["uncertain"] is False
 
 
 @pytest.mark.parametrize(
