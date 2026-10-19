@@ -5,6 +5,7 @@ import json
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 
 from main.factories import UserFactory
@@ -67,3 +68,86 @@ async def test_userinfo_with_sub_resolves_user():
     )
     assert user.is_authenticated
     assert user.global_id == "abc-123"
+
+
+async def test_userinfo_refreshes_a_changed_profile():
+    """
+    The support ticket is filed under this profile and tagged as verified, so a
+    stale address has the support team replying to the wrong place under our
+    assurance that it is the right one.
+    """
+    await sync_to_async(UserFactory.create)(
+        global_id="abc-123",
+        username="old-handle",
+        email="old@example.com",
+        name="Old Name",
+    )
+
+    user = await _scope_user(
+        [
+            _userinfo_header(
+                {
+                    "sub": "abc-123",
+                    "preferred_username": "new-handle",
+                    "email": "new@example.com",
+                    "name": "New Name",
+                }
+            )
+        ]
+    )
+
+    assert (user.username, user.email, user.name) == (
+        "new-handle",
+        "new@example.com",
+        "New Name",
+    )
+    stored = await get_user_model().objects.aget(global_id="abc-123")
+    assert (stored.username, stored.email, stored.name) == (
+        "new-handle",
+        "new@example.com",
+        "New Name",
+    )
+
+
+async def test_userinfo_without_a_claim_keeps_the_stored_value():
+    """A claim the gateway did not send is not an instruction to blank it."""
+    await sync_to_async(UserFactory.create)(
+        global_id="abc-123",
+        username="handle",
+        email="learner@example.com",
+        name="Some One",
+    )
+
+    user = await _scope_user([_userinfo_header({"sub": "abc-123"})])
+
+    assert (user.username, user.email, user.name) == (
+        "handle",
+        "learner@example.com",
+        "Some One",
+    )
+
+
+async def test_userinfo_keeps_the_request_alive_when_the_new_email_is_taken():
+    """
+    Both fields are unique. Letting the clash raise would take down every
+    request this learner makes, which is worse than a stale profile.
+    """
+    await sync_to_async(UserFactory.create)(global_id="other", email="taken@mit.edu")
+    await sync_to_async(UserFactory.create)(
+        global_id="abc-123", username="handle", email="learner@example.com"
+    )
+
+    user = await _scope_user(
+        [
+            _userinfo_header(
+                {
+                    "sub": "abc-123",
+                    "preferred_username": "handle",
+                    "email": "taken@mit.edu",
+                }
+            )
+        ]
+    )
+
+    assert user.is_authenticated
+    assert user.email == "learner@example.com"

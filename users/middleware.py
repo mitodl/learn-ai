@@ -6,6 +6,7 @@ import logging
 
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 
 log = logging.getLogger(__name__)
 
@@ -101,9 +102,39 @@ class ApisixChannelAuthMiddleware:
                 preferred_username,
                 user,
             )
-            user.save()
+            self.refresh_profile(
+                user, username=preferred_username, email=email, name=name
+            )
 
         return user
+
+    def refresh_profile(self, user, **claims):
+        """
+        Write back the claims the gateway says have changed.
+
+        The support bot files tickets under this profile and tells Zendesk the
+        address is verified, so a profile left stale here has us vouching for
+        somewhere the learner no longer reads.
+        """
+        stale = [
+            field
+            # A claim the gateway did not send is not an instruction to blank it.
+            for field, value in claims.items()
+            if value and getattr(user, field) != value
+        ]
+        if not stale:
+            return
+        for field in stale:
+            setattr(user, field, claims[field])
+        try:
+            user.save(update_fields=stale)
+        except IntegrityError:
+            # username and email are unique, so another row can already hold
+            # one of these. A stale profile beats failing every request.
+            log.exception(
+                "Could not refresh the profile for global_id %s", user.global_id
+            )
+            user.refresh_from_db()
 
     def __init__(self, app):
         """Init the class."""
