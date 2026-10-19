@@ -419,7 +419,10 @@ def test_get_transcript_block_id_view_no_contentfile(mocker, client):
 
 def test_get_transcript_block_id_view_learn_error(mocker, client):
     """A Learn failure is a 500 with a generic message."""
-    mocker.patch("ai_chatbots.learn.contentfiles", side_effect=learn.LearnError())
+    mocker.patch(
+        "ai_chatbots.learn.contentfiles",
+        side_effect=learn.LearnError("502", "https://mit.edu", {}),
+    )
 
     response = client.get(
         "/api/v0/get_transcript_edx_module_id/", {"edx_module_id": "block-1"}
@@ -444,7 +447,10 @@ def test_problem_set_list_view(mocker, client):
 
 def test_problem_set_list_view_learn_error(mocker, client):
     """A Learn failure is a 500 with a generic message."""
-    mocker.patch("ai_chatbots.learn.problem_set", side_effect=learn.LearnError())
+    mocker.patch(
+        "ai_chatbots.learn.problem_set",
+        side_effect=learn.LearnError("502", "https://mit.edu", {}),
+    )
 
     response = client.get(
         "/api/v0/problem_set_list/", {"run_readable_id": "course-v1:MITxT+1"}
