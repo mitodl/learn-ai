@@ -1008,6 +1008,7 @@ class SupportAgentState(SummaryState):
     user_username: Annotated[list[str], add]
     awaiting_send: Annotated[list[bool], add]
     confirm: Annotated[list[bool], add]
+    filing_uncertain: Annotated[list[bool], add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
@@ -1026,6 +1027,12 @@ SUPPORT_TICKET_ALREADY_FILED = (
 SUPPORT_TICKET_FAILED = (
     'Sorry, I could not file your support request just now. Reply "send" to try '
     "again, or email support directly and they'll pick it up."
+)
+SUPPORT_TICKET_MAYBE_FILED = (
+    "I didn't get an answer back from the support system, so I can't tell you "
+    "whether that went through. It may well have, so I won't send it a second "
+    "time and risk a duplicate. If you haven't heard from the MIT Open Learning "
+    "support team in a day or two, email them directly."
 )
 SUPPORT_TICKET_CANCELLED = (
     "No problem - I haven't sent anything. Tell me what you'd like to change, or "
@@ -1346,7 +1353,7 @@ class SupportBot(TruncatingChatbot):
         metadata = await self.get_metadata()
         yield f"\n\n<!-- {metadata} -->\n\n"
 
-    async def _send_to_zendesk(self, *, session, ticket: dict) -> str:
+    async def _send_to_zendesk(self, *, session, ticket: dict) -> tuple[str, dict]:
         """Call Zendesk and return the reply that reports how it went."""
         result = await file_support_ticket(
             subject=_ticket_subject(ticket["description"]),
@@ -1356,9 +1363,16 @@ class SupportBot(TruncatingChatbot):
             **ticket,
         )
         if result.get("reference") is None:
+            if result.get("uncertain"):
+                # A ticket may exist that we never learned the id of, so the
+                # thread stops here rather than risk filing a second one.
+                return SUPPORT_TICKET_MAYBE_FILED, {
+                    "awaiting_send": [False],
+                    "filing_uncertain": [True],
+                }
             # awaiting_send stays set, so the learner's next message retries
             # rather than starting the review over.
-            return SUPPORT_TICKET_FAILED
+            return SUPPORT_TICKET_FAILED, {}
         if session:
             session.support_ticket_reference = str(result["reference"])
             session.support_ticket_email = ticket["email"]
@@ -1367,14 +1381,14 @@ class SupportBot(TruncatingChatbot):
             )
         return SUPPORT_TICKET_FILED.format(
             reference=result["reference"], email=ticket["email"]
-        )
+        ), {}
 
-    async def _file_the_ticket(self, *, session, ticket: dict) -> str:
+    async def _file_the_ticket(self, *, session, ticket: dict) -> tuple[str, dict]:
         """File one ticket per thread, however many turns ask at once."""
         cache = get_django_cache()
         lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
         if not await cache.aadd(lock_key, value=True, timeout=SUPPORT_FILING_LOCK_TTL):
-            return SUPPORT_TICKET_SENDING
+            return SUPPORT_TICKET_SENDING, {}
         try:
             if session:
                 # The already-filed check ran before this turn did its work, so
@@ -1386,7 +1400,7 @@ class SupportBot(TruncatingChatbot):
                     return SUPPORT_TICKET_ALREADY_FILED.format(
                         reference=session.support_ticket_reference,
                         email=session.support_ticket_email,
-                    )
+                    ), {}
             return await self._send_to_zendesk(session=session, ticket=ticket)
         finally:
             await cache.adelete(lock_key)
@@ -1440,7 +1454,7 @@ class SupportBot(TruncatingChatbot):
                 _support_description(prior_messages, message), page_url, email
             ), {"user_email": [email], "awaiting_send": [True]}
 
-        reply = await self._file_the_ticket(
+        reply, filing_updates = await self._file_the_ticket(
             session=session,
             ticket={
                 # What files is what the learner reviewed. This turn only
@@ -1460,7 +1474,7 @@ class SupportBot(TruncatingChatbot):
         )
         # A retry after a Zendesk failure reads the address back out of state,
         # so a correction made on this turn has to land there.
-        return reply, {"user_email": [email]}
+        return reply, {"user_email": [email], **filing_updates}
 
     async def get_completion(
         self,
@@ -1489,6 +1503,10 @@ class SupportBot(TruncatingChatbot):
                 ),
                 {},
             )
+        # Zendesk may hold a ticket from a call it never answered, so nothing
+        # on this thread files again - there is no way to tell from here.
+        elif (prior_state.get("filing_uncertain") or [False])[-1]:
+            reply, updates = SUPPORT_TICKET_MAYBE_FILED, {}
         # Latest wins, not any(): a cancellation appends False, and reading the
         # whole list would let the send the learner called off come back.
         elif (prior_state.get("awaiting_send") or [False])[-1]:
