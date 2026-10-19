@@ -690,6 +690,68 @@ async def test_assign_thread_cookie_changed_account(syllabus_consumer, async_use
     assert cookies[0].value == encoded_thread_id
 
 
+async def test_assign_thread_cookie_ignores_a_signed_in_users_thread(
+    syllabus_consumer, async_user
+):
+    """
+    A request with no login must not pick up a thread that belongs to someone.
+
+    With no anon cookie the authenticated cookie is read instead, and the
+    ownership check only ran for signed-in requests. Cross-site cookies make
+    that reachable: the browser sends the thread cookie without the gateway's
+    login cookie, so the request arrives anonymous on the owner's thread.
+    """
+    owned_thread_id = uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: urlsafe_base64_encode(force_bytes(owned_thread_id)),
+        AI_SESSION_COOKIE_KEY: "a_passing_session_key",
+    }
+    syllabus_consumer.scope["user"] = AnonymousUser()
+
+    await UserChatSession.objects.all().adelete()
+    await UserChatSession.objects.acreate(
+        thread_id=owned_thread_id,
+        user=async_user,
+        agent=SyllabusBot.__name__,
+        dj_session_key="the_owners_session_key",
+    )
+
+    thread_id, _ = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    assert thread_id != owned_thread_id
+
+
+async def test_assign_thread_cookie_ignores_another_sessions_anon_thread(
+    syllabus_consumer,
+):
+    """
+    An anonymous thread belongs to the session that started it, and the anon
+    cookie was never checked against that session.
+    """
+    other_thread_id = uuid4().hex
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    syllabus_consumer.scope["cookies"] = {
+        anon_cookie_name: urlsafe_base64_encode(force_bytes(other_thread_id)),
+        AI_SESSION_COOKIE_KEY: "my_session_key",
+    }
+    syllabus_consumer.scope["user"] = AnonymousUser()
+
+    await UserChatSession.objects.all().adelete()
+    await UserChatSession.objects.acreate(
+        thread_id=other_thread_id,
+        user=None,
+        agent=SyllabusBot.__name__,
+        dj_session_key="someone_elses_session_key",
+    )
+
+    thread_id, _ = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    assert thread_id != other_thread_id
+
+
 @pytest.mark.parametrize(
     ("is_anon", "is_authorized", "same_key"),
     [

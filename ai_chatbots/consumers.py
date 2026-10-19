@@ -163,6 +163,28 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         serializer.is_valid(raise_exception=True)
         return serializer
 
+    async def may_continue_thread(self, thread_id: str, user: User) -> bool:
+        """
+        Say whether this request is allowed to carry on an existing thread.
+
+        One rule however the thread id arrived, body or cookie: it belongs to
+        the user who started it, or - with no login - to the session that did.
+        Without this the thread id is a bearer token, and whoever sends it
+        resumes the conversation. On the support bot that files the owner's
+        ticket.
+        """
+        session = await UserChatSession.objects.filter(thread_id=thread_id).afirst()
+        if not session:
+            # Nothing started yet, so there is no owner to contradict.
+            return True
+        if user and not user.is_anonymous:
+            return session.user_id == user.id
+        return bool(
+            session.user_id is None
+            and self.session_key
+            and session.dj_session_key == self.session_key
+        )
+
     async def assign_thread_cookies(
         self,
         user: User,
@@ -190,39 +212,17 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             or self.ident
             or uuid4().hex
         )
+        from_cookie = False
         anon_cookie = False
         if clear_history:
             # Create a new random thread id
             current_thread_id = uuid4().hex
-        elif (
-            # If an explicit thread_id is passed in the serializer,
-            # use it if not related to another user
-            thread_id
-            and (
-                # is a new thread?
-                not await UserChatSession.objects.filter(thread_id=thread_id).aexists()
-                or (
-                    # existing thread belonging to same user?
-                    user
-                    and not user.is_anonymous
-                    and (
-                        await UserChatSession.objects.filter(
-                            user=user, thread_id=thread_id
-                        ).aexists()
-                    )
-                )
-                or (
-                    # existing chat thread, anon user, same session key
-                    user.is_anonymous
-                    and await UserChatSession.objects.filter(
-                        user=None, thread_id=thread_id, dj_session_key=self.session_key
-                    ).aexists()
-                )
-            )
-        ):
+        elif thread_id and await self.may_continue_thread(thread_id, user):
+            # An explicit thread_id in the serializer wins over the cookies
             current_thread_id = thread_id
         else:
             # Use cookie thread id if any, check anon cookie first
+            from_cookie = True
             anon_cookie = True
             current_thread_id = decode_value(
                 self.scope["cookies"].get(anon_cookie_key) or ""
@@ -238,25 +238,21 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 current_thread_id, cookie_object_id = current_thread_id.split("|")
                 if object_id and object_id != cookie_object_id:
                     current_thread_id = None
-        if user and not user.is_anonymous:
-            if anon_cookie:
-                # Anon user has logged in, so associate any existing anon threads
-                # with the same session key
-                await (
-                    UserChatSession.objects.exclude(dj_session_key="")
-                    .filter(user_id=None, dj_session_key=self.session_key)
-                    .aupdate(user=user)
-                )
-            if not clear_history and current_thread_id:
-                # User may have logged in under a different account
-                session = (
-                    await UserChatSession.objects.filter(thread_id=current_thread_id)
-                    .select_related("user")
-                    .afirst()
-                )
-                current_thread_id = (
-                    None if (session and session.user != user) else current_thread_id
-                )
+        if anon_cookie and user and not user.is_anonymous:
+            # Anon user has logged in, so associate any existing anon threads
+            # with the same session key. This runs before the check below, so a
+            # thread the learner started before signing in is now theirs.
+            await (
+                UserChatSession.objects.exclude(dj_session_key="")
+                .filter(user_id=None, dj_session_key=self.session_key)
+                .aupdate(user=user)
+            )
+        if (
+            from_cookie
+            and current_thread_id
+            and not await self.may_continue_thread(current_thread_id, user)
+        ):
+            current_thread_id = None
         current_thread_id = current_thread_id or uuid4().hex
 
         # Incorporate object id into cookie value if present
