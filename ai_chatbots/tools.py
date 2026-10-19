@@ -875,10 +875,15 @@ async def _course_enrollments(
     if course:
         matches = current(_match_course(summaries, course))
         if not matches:
+            # The model matches loose names ("MITx 18.01x", "calc 1") better
+            # than a rule would, so let it pick from the learner's courses.
             return {
-                "enrollments": [],
+                "enrollments": current(summaries),
                 "note": (
-                    f"The learner has no MITx Online enrollment matching {course!r}."
+                    f"None of the learner's MITx Online courses matched {course!r} "
+                    "exactly. If one of these is clearly the course they mean, use "
+                    "it; if several could be, ask which; if none resembles it, say "
+                    "you don't see an enrollment in that course."
                 ),
             }
         result = {"enrollments": matches}

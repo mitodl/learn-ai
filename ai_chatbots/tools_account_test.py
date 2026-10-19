@@ -188,12 +188,14 @@ async def test_ambiguous_course_asks_which(records):
     assert "ask which" in result["note"]
 
 
-async def test_unmatched_course_says_no_enrollment(records):
-    """A course the learner isn't enrolled in is reported as such."""
-    result = await call(get_course_progress, course="8.01x")
+@pytest.mark.parametrize("course", ["8.01x", "MITx 18.01x"])
+async def test_unmatched_course_lists_all(records, course):
+    """An unmatched course lists the learner's courses for the model to pick from."""
+    result = await call(get_course_progress, course=course)
 
-    assert result["enrollments"] == []
-    assert "no MITx Online enrollment matching" in result["note"]
+    assert CALCULUS in {e["course_id"] for e in result["enrollments"]}
+    assert "matched" in result["note"]
+    assert "don't see an enrollment" in result["note"]
 
 
 async def test_page_course_not_enrolled_lists_all(records):
