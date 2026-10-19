@@ -319,7 +319,7 @@ async def test_search_summary_agent_handle(
     assert isinstance(consumer.bot, SearchSummaryBot)
     assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
     mock_completion.assert_called_once_with(
-        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
+        "hello", extra_state={"search_backend": ["vector"]}
     )
     headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
     cookie_names = [
