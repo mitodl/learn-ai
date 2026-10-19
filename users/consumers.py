@@ -122,9 +122,9 @@ class LoginHttpConsumer(UserMetaHttpConsumer):
             )
             return
 
-        # Log the host only: the full URL may carry an OAuth state
+        # Log the host only: the full URL may carry an OAuth state or user info
         try:
-            host = urlsplit(next_url).netloc
+            host = urlsplit(next_url).hostname
         except ValueError:
             host = "<unparseable>"
         log.warning("Refused login redirect to host %r", host)

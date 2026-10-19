@@ -122,6 +122,15 @@ async def test_login_refuses_other_next(next_url):
     assert b"Location" not in dict(response["headers"])
 
 
+async def test_login_refused_log_omits_user_info(caplog):
+    """The refusal log names the host, not credentials in the URL."""
+    next_url = "https://learner:secret-token@learn.mit.edu/"
+    await get_login(f"next={quote(next_url, safe='')}")
+
+    assert "learn.mit.edu" in caplog.text
+    assert "secret-token" not in caplog.text
+
+
 @pytest.mark.parametrize(
     ("require_https", "status"),
     [(True, 400), (False, 302)],
