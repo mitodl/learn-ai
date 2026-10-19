@@ -16,6 +16,7 @@ from httpx import (
 from ai_chatbots.constants import (
     ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
+    ZENDESK_UNVERIFIED_REQUESTER_NOTE,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
 )
 from ai_chatbots.utils import get_django_cache
@@ -258,7 +259,9 @@ async def test_file_support_ticket_without_page_url(
 
     assert result == {"reference": 77, "stub": False}
     _, kwargs = mock_patch.return_value.post.call_args
-    assert kwargs["json"]["ticket"]["comment"]["body"] == "The week 3 video just spins."
+    body = kwargs["json"]["ticket"]["comment"]["body"]
+    assert body.startswith("The week 3 video just spins.")
+    assert "Page:" not in body
 
 
 async def test_file_support_ticket_fills_the_zendesk_custom_fields(
@@ -367,6 +370,32 @@ async def test_file_support_ticket_omits_unconfigured_custom_fields(
     assert result == {"reference": 4821, "stub": False}
     _, kwargs = mock_patch.return_value.post.call_args
     assert "custom_fields" not in kwargs["json"]["ticket"]
+
+
+@pytest.mark.parametrize("email_verified", [True, False])
+async def test_file_support_ticket_says_in_the_body_who_vouched_for_the_requester(
+    zendesk_ticket_settings, mock_httpx_async_client, email_verified
+):
+    """
+    The name, username and email fields read identically whether a session
+    vouched for them or the learner typed them into a public chat box. An
+    agent about to act on the ticket reads the body, not the tag list.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(
+        **_ticket_args(
+            name="Ada Lovelace", username="ada", email_verified=email_verified
+        )
+    )
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    body = kwargs["json"]["ticket"]["comment"]["body"]
+    assert (ZENDESK_UNVERIFIED_REQUESTER_NOTE in body) is not email_verified
+    assert "The week 3 video just spins." in body
 
 
 async def test_file_support_ticket_keys_the_ticket_to_the_thread(

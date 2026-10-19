@@ -65,6 +65,15 @@ ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"
 # from an authenticated session, so support does not read it as confirmed.
 ZENDESK_UNVERIFIED_REQUESTER_TAG = "tim_unverified_requester"
 
+# The same warning in the body. The name and username fields look no different
+# when a learner typed them than when a session vouched for them, and an agent
+# about to act on the ticket reads the body rather than the tag list.
+ZENDESK_UNVERIFIED_REQUESTER_NOTE = (
+    "Note: the requester was not signed in. The email address, and any name or "
+    "username shown on this ticket, were entered in the chat and have not been "
+    "verified."
+)
+
 # Zendesk help center category ids, as listed by the public category endpoint:
 #   curl -sL https://support.learn.mit.edu/api/v2/help_center/categories.json
 #     41249004008859  About MIT Learn
