@@ -1,5 +1,6 @@
 """Tests for AI chatbots."""
 
+import asyncio
 import json
 import os
 import re
@@ -26,6 +27,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
     SUPPORT_TICKET_CANCELLED,
+    SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
     SearchSummaryBot,
     SupportBot,
@@ -50,6 +52,7 @@ from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
+from ai_chatbots.utils import get_django_cache
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -2794,3 +2797,162 @@ async def test_support_bot_files_on_an_explicit_confirm_flag(mocker, mock_checkp
 
     mock_file.assert_called_once()
     assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.fixture
+def support_filing_cache(settings):
+    """
+    Give the filing lock a cache that remembers, so the test exercises it.
+
+    get_django_cache returns the redis cache whenever a broker is configured,
+    and conftest makes that one a DummyCache: aadd there always succeeds, so the
+    lock would be a no-op and the test would pass without it.
+    """
+    settings.CELERY_BROKER_URL = ""
+    settings.CACHES = {
+        **settings.CACHES,
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "support-filing-test",
+        },
+    }
+    cache = get_django_cache()
+    cache.clear()
+    return cache
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_one_ticket_when_two_turns_land_together(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    Two sends on one thread must produce one ticket. The already-filed check
+    reads the reference the first turn has not written yet, so without a lock
+    around the call both turns get past it.
+    """
+    in_flight = asyncio.Event()
+    finish = asyncio.Event()
+    calls = 0
+
+    async def slow_file(**_kwargs):
+        # Only the first call hangs around. A second one getting this far is the
+        # bug, and it has to return so the assertion below reports it.
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            in_flight.set()
+            await finish.wait()
+        return {"reference": 4821}
+
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket", AsyncMock(side_effect=slow_file)
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    # A second request on the same thread is a second bot, not this one again.
+    other = await sync_to_async(SupportBot)(
+        "anonymous", mock_checkpointer, thread_id=chatbot.thread_id
+    )
+
+    async def drain(bot):
+        return "".join(
+            [
+                chunk
+                async for chunk in bot.get_completion(
+                    "send", extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    first = asyncio.create_task(drain(chatbot))
+    await in_flight.wait()
+    second_reply = await drain(other)
+    finish.set()
+    first_reply = await first
+
+    assert mock_file.call_count == 1
+    assert "4821" in first_reply
+    assert SUPPORT_TICKET_SENDING in second_reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_when_the_reference_lands_mid_turn(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    The already-filed check runs at the top of the turn, so an overlapping turn
+    can file after it and before this one calls Zendesk. Re-reading the row
+    before the call is what closes that window.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 9999}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    read_state = SupportBot._prior_state  # noqa: SLF001
+
+    async def file_in_another_turn(self):
+        await UserChatSession.objects.filter(thread_id=self.thread_id).aupdate(
+            support_ticket_reference="4821",
+            support_ticket_email="signedin@mit.edu",
+        )
+        return await read_state(self)
+
+    mocker.patch.object(SupportBot, "_prior_state", file_in_another_turn)
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert "4821" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_releases_the_filing_lock_after_a_failure(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    A failed send has to leave the thread free to retry. A lock held until its
+    TTL expires would answer the retry with "still sending" instead.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(side_effect=[{"error": "nope"}, {"reference": 4821}]),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "try again", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert mock_file.call_count == 2
+    assert "4821" in reply

@@ -353,6 +353,68 @@ async def test_file_support_ticket_omits_unconfigured_custom_fields(
     assert "custom_fields" not in kwargs["json"]["ticket"]
 
 
+async def test_file_support_ticket_keys_the_ticket_to_the_thread(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    Nothing local can tell a lost response from a refused one, so a retry after
+    a timeout would file twice. Zendesk has to be the one to say it already has
+    this ticket, and external_id is what lets a human find the pair if it does
+    not.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(thread_id="thread-abc"))
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    assert kwargs["headers"]["Idempotency-Key"] == "thread-abc"
+    assert kwargs["json"]["ticket"]["external_id"] == "thread-abc"
+
+
+async def test_file_support_ticket_without_a_thread_id(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """An empty key is not a key, and Zendesk rejects a ticket over a bad one."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    assert "Idempotency-Key" not in kwargs["headers"]
+    assert "external_id" not in kwargs["json"]["ticket"]
+
+
+async def test_file_support_ticket_reuses_the_key_on_the_401_retry(
+    zendesk_ticket_settings, mocker
+):
+    """
+    The re-mint posts the same ticket a second time. A fresh key there would be
+    a second ticket on the one occasion we know the first POST was not applied.
+    """
+    client = _mock_zendesk_client(
+        mocker,
+        ticket_responses=[
+            _response(mocker, {}, status_code=401),
+            _response(mocker, {"ticket": {"id": 4821}}),
+        ],
+    )
+
+    await file_support_ticket(**_ticket_args(thread_id="thread-abc"))
+
+    keys = [
+        call.kwargs["headers"]["Idempotency-Key"]
+        for call in client.post.call_args_list
+        if call.args[0].endswith("/api/v2/tickets.json")
+    ]
+    assert keys == ["thread-abc", "thread-abc"]
+
+
 @pytest.mark.parametrize(
     ("email_verified", "expect_tag"), [(True, False), (False, True)]
 )

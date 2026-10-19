@@ -1031,6 +1031,10 @@ SUPPORT_TICKET_CANCELLED = (
     "No problem - I haven't sent anything. Tell me what you'd like to change, or "
     "start again whenever you're ready."
 )
+SUPPORT_TICKET_SENDING = (
+    "I'm still sending that one over - give me a moment and I'll come back with "
+    "the reference number."
+)
 SUPPORT_ASK_EMAIL = (
     "Thanks for letting us know. What's the best email address for the support "
     "team to reply to?"
@@ -1045,6 +1049,11 @@ SUPPORT_ASK_MORE = (
 )
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
+
+SUPPORT_FILING_LOCK_PREFIX = "support_filing:"
+# Long enough for a slow Zendesk call, short enough that a worker killed
+# mid-call frees the thread instead of stranding the learner on "still sending".
+SUPPORT_FILING_LOCK_TTL = 60
 
 ZENDESK_SUBJECT_MAX_LENGTH = 150
 # UserChatSession.support_ticket_email is an EmailField, so anything longer
@@ -1337,26 +1346,14 @@ class SupportBot(TruncatingChatbot):
         metadata = await self.get_metadata()
         yield f"\n\n<!-- {metadata} -->\n\n"
 
-    async def _file_the_ticket(  # noqa: PLR0913
-        self,
-        *,
-        session,
-        description: str,
-        page_url: str,
-        email: str,
-        name: str,
-        username: str,
-        verified: bool,
-    ) -> str:
-        """File the ticket and return the reply that reports how it went."""
+    async def _send_to_zendesk(self, *, session, ticket: dict) -> str:
+        """Call Zendesk and return the reply that reports how it went."""
         result = await file_support_ticket(
-            subject=_ticket_subject(description),
-            description=description,
-            email=email,
-            page_url=page_url,
-            name=name,
-            username=username,
-            email_verified=verified,
+            subject=_ticket_subject(ticket["description"]),
+            # Zendesk de-duplicates on this, which is the only thing that can
+            # tell a retry after a lost response from a second request.
+            thread_id=self.thread_id,
+            **ticket,
         )
         if result.get("reference") is None:
             # awaiting_send stays set, so the learner's next message retries
@@ -1364,11 +1361,35 @@ class SupportBot(TruncatingChatbot):
             return SUPPORT_TICKET_FAILED
         if session:
             session.support_ticket_reference = str(result["reference"])
-            session.support_ticket_email = email
+            session.support_ticket_email = ticket["email"]
             await session.asave(
                 update_fields=["support_ticket_reference", "support_ticket_email"]
             )
-        return SUPPORT_TICKET_FILED.format(reference=result["reference"], email=email)
+        return SUPPORT_TICKET_FILED.format(
+            reference=result["reference"], email=ticket["email"]
+        )
+
+    async def _file_the_ticket(self, *, session, ticket: dict) -> str:
+        """File one ticket per thread, however many turns ask at once."""
+        cache = get_django_cache()
+        lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
+        if not await cache.aadd(lock_key, value=True, timeout=SUPPORT_FILING_LOCK_TTL):
+            return SUPPORT_TICKET_SENDING
+        try:
+            if session:
+                # The already-filed check ran before this turn did its work, so
+                # an overlapping turn may have filed since.
+                await session.arefresh_from_db(
+                    fields=["support_ticket_reference", "support_ticket_email"]
+                )
+                if session.support_ticket_reference:
+                    return SUPPORT_TICKET_ALREADY_FILED.format(
+                        reference=session.support_ticket_reference,
+                        email=session.support_ticket_email,
+                    )
+            return await self._send_to_zendesk(session=session, ticket=ticket)
+        finally:
+            await cache.adelete(lock_key)
 
     def _collect_the_request(
         self, message: str, *, extra_state: dict, prior_state: dict
@@ -1421,18 +1442,21 @@ class SupportBot(TruncatingChatbot):
 
         reply = await self._file_the_ticket(
             session=session,
-            # What files is what the learner reviewed. This turn only approved
-            # it, so it stays out of the ticket whether they typed "send" or
-            # pressed a button that carried some words along with it.
-            description=_support_description(prior_messages, ""),
-            page_url=page_url,
-            email=email,
-            name=_accumulated(prior_state, extra_state, "user_name"),
-            username=_accumulated(prior_state, extra_state, "user_username"),
-            # Only this request's session can vouch for the address. Reading
-            # the thread's accumulated verifications would let any later turn
-            # inherit a sign-in it never presented.
-            verified=bool(email) and email in (extra_state.get("verified_email") or []),
+            ticket={
+                # What files is what the learner reviewed. This turn only
+                # approved it, so it stays out of the ticket whether they typed
+                # "send" or pressed a button that carried some words along.
+                "description": _support_description(prior_messages, ""),
+                "page_url": page_url,
+                "email": email,
+                "name": _accumulated(prior_state, extra_state, "user_name"),
+                "username": _accumulated(prior_state, extra_state, "user_username"),
+                # Only this request's session can vouch for the address. Reading
+                # the thread's accumulated verifications would let any later turn
+                # inherit a sign-in it never presented.
+                "email_verified": bool(email)
+                and email in (extra_state.get("verified_email") or []),
+            },
         )
         # A retry after a Zendesk failure reads the address back out of state,
         # so a correction made on this turn has to land there.

@@ -62,13 +62,18 @@ async def _get_access_token(client, *, force_refresh: bool = False) -> str:
     return data["access_token"]
 
 
-async def _post_ticket(client, ticket_data: dict, *, force_refresh: bool = False):
+async def _post_ticket(
+    client, ticket_data: dict, *, idempotency_key: str = "", force_refresh: bool = False
+):
     """POST the ticket with a (cached or freshly minted) access token."""
     token = await _get_access_token(client, force_refresh=force_refresh)
+    headers = {"Authorization": f"Bearer {token}"}
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
     return await client.post(
         f"{settings.AI_ZENDESK_API_URL.rstrip('/')}{ZENDESK_TICKET_PATH}",
         json={"ticket": ticket_data},
-        headers={"Authorization": f"Bearer {token}"},
+        headers=headers,
         timeout=settings.REQUESTS_TIMEOUT,
     )
 
@@ -102,6 +107,7 @@ async def file_support_ticket(  # noqa: PLR0913
     name: str = "",
     username: str = "",
     email_verified: bool = False,
+    thread_id: str = "",
 ) -> dict:
     """Create a Zendesk ticket, returning {"reference": ...} or {"error": ...}."""
     if settings.AI_ZENDESK_STUB_MODE:
@@ -140,10 +146,16 @@ async def file_support_ticket(  # noqa: PLR0913
         }
         if custom_fields:
             ticket_data["custom_fields"] = custom_fields
-        response = await _post_ticket(client, ticket_data)
+        if thread_id:
+            # Zendesk de-duplicates on the header; external_id is what lets a
+            # human find the pair on an instance that does not honour it.
+            ticket_data["external_id"] = thread_id
+        response = await _post_ticket(client, ticket_data, idempotency_key=thread_id)
         if response.status_code == HTTPStatus.UNAUTHORIZED:
             # The cached token can be revoked before its TTL; re-mint once.
-            response = await _post_ticket(client, ticket_data, force_refresh=True)
+            response = await _post_ticket(
+                client, ticket_data, idempotency_key=thread_id, force_refresh=True
+            )
         response.raise_for_status()
         return {"reference": response.json()["ticket"]["id"], "stub": False}
     except Exception as exc:  # noqa: BLE001
