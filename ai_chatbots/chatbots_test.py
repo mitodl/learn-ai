@@ -26,6 +26,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
+    SUPPORT_SEND_UNCLEAR,
     SUPPORT_TICKET_CANCELLED,
     SUPPORT_TICKET_MAYBE_FILED,
     SUPPORT_TICKET_SENDING,
@@ -1730,16 +1731,15 @@ async def test_support_bot_reviews_before_it_files(mocker, mock_checkpointer):
 
 @pytest.mark.parametrize(
     "confirmation",
-    ["send", "Send it.", "yes please", "ok", "no, that's everything"],
+    ["send", "Send it.", "yes please", "ok", "go ahead", "Submit"],
 )
 @pytest.mark.asyncio
-async def test_support_bot_files_on_the_turn_after_the_review(
+async def test_support_bot_files_on_a_go_ahead_after_the_review(
     mocker, mock_checkpointer, confirmation
 ):
     """
-    The turn after the review always files, whatever the learner typed. We have
-    no way to carry on a conversation and file later, so anything that does not
-    file here strands the request.
+    A learner who has read the review and said yes has to get their request
+    filed on that turn - there is no later turn that would do it for them.
     """
     mock_file = mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",
@@ -2751,8 +2751,129 @@ async def test_support_bot_shows_an_edit_back_before_filing(mocker, mock_checkpo
 @pytest.mark.asyncio
 async def test_support_bot_treats_no_as_nothing_more_to_add(mocker, mock_checkpointer):
     """
-    "no" answers "anything else to add?", so it means proceed. Reading it as a
-    cancellation would strand every learner who answers the question we asked.
+    Before the review, "no" answers "anything else to add?", so it moves on to
+    the review. Reading it as a cancellation there would strand every learner
+    who answers the question we asked.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "no", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_PROBLEM in reply
+    assert SUPPORT_TICKET_CANCELLED not in reply
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    mock_file.assert_called_once()
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.parametrize("decline", ["no", "No.", "nope", "no thanks"])
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_when_the_learner_declines(
+    mocker, mock_checkpointer, decline
+):
+    """
+    Under the review the question on screen is whether to send, so "no" there
+    means do not send. Filing on it was the reported bug: the learner says no
+    and the support team gets the request anyway.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                decline, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_TICKET_CANCELLED in reply
+
+
+@pytest.mark.parametrize(
+    "reply_text",
+    [
+        "yes please send it to support asap",
+        "yes, and the course is 18.01",
+        "that's all",
+        "nothing else",
+        "done",
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_asks_when_the_go_ahead_is_unclear(
+    mocker, mock_checkpointer, reply_text
+):
+    """
+    "yes please send it to support asap" adds nothing to the ticket while
+    "yes, and the course is 18.01" does, and nothing here can tell them apart.
+    Guessing either way is wrong: one pastes chatter into the ticket, the other
+    files without the detail the learner just gave.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                reply_text, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_SEND_UNCLEAR in reply
+    assert reply_text not in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_the_send_pending_after_an_unclear_reply(
+    mocker, mock_checkpointer
+):
+    """
+    Asking must not drop the learner back into intake, and the words we could
+    not read must not reach the ticket.
     """
     mock_file = mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",
@@ -2766,11 +2887,48 @@ async def test_support_bot_treats_no_as_nothing_more_to_add(mocker, mock_checkpo
     )
 
     async for _ in chatbot.get_completion(
-        "no", extra_state=_support_state("signedin@mit.edu")
+        "yes please send it to support asap",
+        extra_state=_support_state("signedin@mit.edu"),
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
     ):
         pass
 
     mock_file.assert_called_once()
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.asyncio
+async def test_support_bot_treats_a_long_reply_as_an_edit(mocker, mock_checkpointer):
+    """
+    A reply long enough to carry real detail is an edit even when it opens with
+    "yes" - short chatter is what we cannot read, not a sentence.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    detail = "yes and the week 4 video spins on Firefox and Chrome as well"
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                detail, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert detail in reply
 
 
 @pytest.mark.asyncio
