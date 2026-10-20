@@ -298,8 +298,8 @@ async def _content_file_search(
         result = await learn.search_content_files(
             q, readable_ids, collection_name=collection_name, platform=platform
         )
-        # State stores the flag as a string; only the exact "False" disables it
-        exclude = exclude_canvas != "False"
+        # Consumers store the flag as a string, evaluation sets as a bool
+        exclude = str(exclude_canvas) != "False"
         shaped = []
         citations = {}
         for chunk in result.results:

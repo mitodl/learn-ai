@@ -8,6 +8,7 @@ LearnError on transport failure, non-2xx after retries, or a non-JSON body.
 
 import logging
 from typing import NamedTuple
+from urllib.parse import quote
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -140,7 +141,14 @@ async def problem_set(
 
     Learn redirects any other form of this URL to the trailing-slash one, and
     the transport does not follow redirects, so the URL is built canonically.
+    Each part is one escaped path segment, so a caller-supplied id cannot
+    reach another Learn endpoint with our token.
     """
-    path = "/".join(part for part in (run_readable_id, title) if part)
-    url = f"{settings.PROBLEM_SET_URL.rstrip('/')}/{path}/"
-    return await _get(url, {}, timeout=timeout)
+    parts = [part for part in (run_readable_id, title) if part]
+    base = settings.PROBLEM_SET_URL.rstrip("/")
+    if any(part in (".", "..") for part in parts):
+        # quote() leaves these alone and httpx would resolve them
+        msg = "Invalid problem set path"
+        raise LearnError(msg, base, {})
+    path = "/".join(quote(part, safe="") for part in parts)
+    return await _get(f"{base}/{path}/", {}, timeout=timeout)

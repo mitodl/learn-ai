@@ -650,15 +650,20 @@ async def test_search_content_files_readable_id_fallback(
     assert mock_search_content_files.call_args.args == ("main topics", "MITx+8.01")
 
 
-@pytest.mark.parametrize("exclude_canvas", [True, False])
+@pytest.mark.parametrize(
+    ("state_value", "exclude_canvas"),
+    # consumers send strings; evaluation sets (test_json) send bools
+    [("True", True), ("False", False), (True, True), (False, False)],
+)
 async def test_search_canvas_content_files(
     mock_search_content_files,
     syllabus_agent_state,
     content_chunk_results,
+    state_value,
     exclude_canvas,
 ):
     """Canvas chunks are returned only when exclude_canvas is False."""
-    syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
+    syllabus_agent_state["exclude_canvas"] = [state_value]
     for result in content_chunk_results["results"]:
         result["platform"]["code"] = "canvas"
 
