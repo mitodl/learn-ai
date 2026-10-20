@@ -1092,6 +1092,45 @@ ZENDESK_SUBJECT_MAX_LENGTH = 150
 # would file the ticket and then blow up on save.
 EMAIL_MAX_LENGTH = 254
 REPLY_TO_MAX_OTHER_WORDS = 6
+# Everything a message can be made of and still be only an address being handed
+# over. A word from outside this set means the message also says something, and
+# what it says is support's to read.
+REPLY_TO_ONLY_WORDS = frozenset(
+    {
+        "a",
+        "actually",
+        "address",
+        "an",
+        "and",
+        "at",
+        "best",
+        "can",
+        "contact",
+        "email",
+        "here",
+        "here's",
+        "i",
+        "is",
+        "it",
+        "it's",
+        "its",
+        "me",
+        "my",
+        "no",
+        "ok",
+        "okay",
+        "please",
+        "reach",
+        "sorry",
+        "sure",
+        "thanks",
+        "the",
+        "to",
+        "use",
+        "yes",
+        "you",
+    }
+)
 
 
 def _reply_to_email(message: str) -> str:
@@ -1243,6 +1282,18 @@ def _latest(values: list[str]) -> str:
     return _first(list(reversed(values)))
 
 
+def _is_bare_reply_to(message: str) -> bool:
+    """
+    Report whether the message is nothing but the address and the words used to
+    hand it over. "I emailed prof@mit.edu already" is read as the reply-to, but
+    it also tells support something, so it is not dropped from the ticket.
+    """
+    if not _reply_to_email(message):
+        return False
+    remainder = _normalised(EMAIL_IN_MESSAGE.sub(" ", message)).split()
+    return set(remainder) <= REPLY_TO_ONLY_WORDS
+
+
 def _is_filler(message: str) -> bool:
     """Report whether the message is an answer to us, with nothing for support."""
     return _normalised(message) in FILLER_PHRASES
@@ -1309,7 +1360,9 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         if text
         and (
             position == 0
-            or not (_reply_to_email(text) or _is_filler(text) or _is_cancellation(text))
+            or not (
+                _is_bare_reply_to(text) or _is_filler(text) or _is_cancellation(text)
+            )
         )
     )
 

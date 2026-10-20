@@ -2477,6 +2477,39 @@ async def test_support_bot_accepts_an_address_offered_as_an_answer(
 
 
 @pytest.mark.asyncio
+async def test_support_bot_files_a_short_message_that_mentions_an_address(
+    mocker, mock_checkpointer
+):
+    """
+    A short message naming an address is read as the reply-to, and the learner
+    sees that in the review. What it says about the problem is theirs either
+    way, so it cannot be dropped on the way to the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+    detail = "the refund email bursar@mit.edu bounced"
+
+    review = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                detail, extra_state=_support_state()
+            )
+        ]
+    )
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert detail in review
+    assert mock_file.call_args.kwargs["description"] == f"{SUPPORT_PROBLEM}\n\n{detail}"
+
+
+@pytest.mark.asyncio
 async def test_support_bot_marks_a_session_email_as_verified(mocker, mock_checkpointer):
     """An address from the authenticated session is the one support can trust."""
     mock_file = mocker.patch(
