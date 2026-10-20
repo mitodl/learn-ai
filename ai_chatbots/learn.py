@@ -109,11 +109,16 @@ async def search_transcript(q: str, edx_module_id: str) -> SearchResult:
     )
 
 
-async def learning_resources(readable_id: str) -> list[dict]:
+async def learning_resources(
+    readable_id: str, platform: str | None = None
+) -> list[dict]:
     """Return the learning resources with this readable id (one per platform)."""
+    params = {"readable_id": readable_id, "limit": 5}
+    if platform:
+        params["platform"] = platform
     body = await _get(
         settings.AI_MIT_LEARNING_RESOURCES_URL,
-        {"readable_id": readable_id, "limit": 5},
+        params,
         # A cheap metadata lookup, not a search, and callers wait on it, so it
         # gets a tighter timeout than the default.
         timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
