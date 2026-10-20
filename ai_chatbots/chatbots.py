@@ -1348,10 +1348,12 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
     the reply-to, and a bare "send" is an answer to us, so neither belongs in
     what support reads.
 
-    The opening message is kept whatever it looks like. Nobody has been asked
-    for an address at that point, so "I cannot log in as x@y.com" is the
-    problem even though it reads like the answer to that question - and
-    dropping it filed an empty ticket.
+    The thread's opening message is kept whatever it looks like. Nobody has
+    been asked for an address at that point, so "I cannot log in as x@y.com" is
+    the problem even though it reads like the answer to that question - and
+    dropping it filed an empty ticket. Past a cancellation the learner has
+    already been asked and answered, so the exemption does not apply and a
+    stray "ok" would otherwise lead the ticket.
 
     ``since`` is where the current request starts: a cancellation withdraws
     every word before it, so those are not this request's to file.
@@ -1377,7 +1379,7 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         for position, text in enumerate(typed)
         if text
         and (
-            position == 0
+            (position == 0 and since == 0)
             or not (
                 _is_bare_reply_to(text) or _is_filler(text) or _is_cancellation(text)
             )
@@ -1641,8 +1643,8 @@ class SupportBot(TruncatingChatbot):
         if _is_cancellation(message) or _is_decline(message):
             return SUPPORT_TICKET_CANCELLED, {
                 "awaiting_send": [False],
-                # This turn's own exchange is written after the reply, so the
-                # next request starts past both of those too.
+                # This turn's own exchange is written alongside this update, so
+                # the next request starts past both of those too.
                 "cancelled_after": [len(prior_messages) + 2],
             }
 

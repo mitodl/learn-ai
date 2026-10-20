@@ -3657,3 +3657,33 @@ async def test_support_bot_clears_the_pending_send_once_it_has_filed(
 
     state = await chatbot.agent.aget_state(chatbot.config)
     assert state.values["awaiting_send"][-1] is False
+
+
+@pytest.mark.asyncio
+async def test_support_bot_leaves_a_cancelled_filler_out_of_the_next_request(
+    mocker, mock_checkpointer
+):
+    """
+    The opening message is kept whatever it looks like because nobody has been
+    asked anything yet. After a cancellation that no longer holds, and keeping
+    the first thing typed regardless puts a stray "ok" at the top of the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    for message in ("cancel", "ok", "The week 4 video is broken too.", "send"):
+        async for _ in chatbot.get_completion(
+            message, extra_state=_support_state("signedin@mit.edu")
+        ):
+            pass
+
+    description = mock_file.await_args.kwargs["description"]
+    assert description == "The week 4 video is broken too."
