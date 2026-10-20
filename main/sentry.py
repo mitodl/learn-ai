@@ -72,6 +72,45 @@ def _scrub_node(node):
     return node
 
 
+# The support intake carries a learner's reply-to address and the text of their
+# problem as plain arguments and locals right through this package, and the SDK
+# ships frame locals by default (include_local_variables).  Nothing in
+# scrub_pg_details catches that: there is no DETAIL line to truncate.
+PII_FRAME_MODULE = "ai_chatbots"
+
+
+def scrub_frame_locals(event):
+    """Drop local variables from stack frames inside the chatbot package.
+
+    Scoped to the package rather than turning include_local_variables off
+    globally, which would cost every other app the locals that make a traceback
+    readable.  Everything else about the frame -- file, line, function -- is
+    what identifies the failure, and stays.
+    """
+    _scrub_frames(event)
+    return event
+
+
+def _scrub_frames(node):
+    """Find every stacktrace in the event, wherever the SDK hung it."""
+    if isinstance(node, dict):
+        frames = node.get("frames")
+        if isinstance(frames, list):
+            for frame in frames:
+                if not isinstance(frame, dict):
+                    continue
+                module = frame.get("module") or ""
+                if module == PII_FRAME_MODULE or module.startswith(
+                    f"{PII_FRAME_MODULE}."
+                ):
+                    frame.pop("vars", None)
+        for value in node.values():
+            _scrub_frames(value)
+    elif isinstance(node, list):
+        for item in node:
+            _scrub_frames(item)
+
+
 def before_send(event, hint):
     """
     Filter or transform events before they're sent to Sentry
@@ -88,7 +127,7 @@ def before_send(event, hint):
         if isinstance(exc_value, SHUTDOWN_ERRORS):
             # so we don't want to report expected shutdown errors to sentry
             return None
-    return scrub_pg_details(event)
+    return scrub_pg_details(scrub_frame_locals(event))
 
 
 def init_sentry(  # noqa: PLR0913
