@@ -214,6 +214,17 @@ async def test_unmatched_course_lists_all(records, course):
     assert "don't see an enrollment" in result["note"]
 
 
+async def test_title_match_needs_whole_words(records):
+    """A course number inside another course's title doesn't match it."""
+    records["enrollments"].return_value = [
+        enrollment(CALCULUS, "3T2026", "18.01x: Calculus 1A")
+    ]
+
+    result = await call(get_course_progress, course="8.01x")
+
+    assert "don't see an enrollment" in result["note"]
+
+
 async def test_page_course_not_enrolled_lists_all(records):
     """On the page of a course the learner isn't in, list what they are in."""
     result = await call(
