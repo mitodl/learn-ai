@@ -2512,6 +2512,35 @@ async def test_support_bot_files_a_short_message_that_mentions_an_address(
     assert mock_file.call_args.kwargs["description"] == f"{SUPPORT_PROBLEM}\n\n{detail}"
 
 
+@pytest.mark.parametrize("detail", ["no 18.01", "ok 7.2", "yes 好"])
+@pytest.mark.asyncio
+async def test_support_bot_files_a_reply_carrying_a_number(
+    mocker, mock_checkpointer, detail
+):
+    """
+    A course number or an accented word is the only thing support can act on,
+    so a reply that opens like an answer to us still has to reach the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"]},
+    )
+    state = _support_state("signedin@mit.edu")
+
+    async for _ in chatbot.get_completion(detail, extra_state=state):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=state):
+        pass
+
+    assert mock_file.call_args.kwargs["description"] == f"{SUPPORT_PROBLEM}\n\n{detail}"
+
+
 @pytest.mark.asyncio
 async def test_support_bot_marks_a_session_email_as_verified(mocker, mock_checkpointer):
     """An address from the authenticated session is the one support can trust."""
@@ -2933,6 +2962,9 @@ async def test_support_bot_does_not_file_when_the_learner_declines(
     [
         "yes please send it to support asap",
         "yes, and the course is 18.01",
+        "yes, 18.01",
+        "ok 7.2",
+        "ok 好",
         "that's all",
         "nothing else",
         "done",

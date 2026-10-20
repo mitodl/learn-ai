@@ -1270,8 +1270,14 @@ SHORT_REPLY_MAX_WORDS = 8
 
 
 def _normalised(message: str) -> str:
-    """Reduce a message to lower-case words, so phrases can be matched."""
-    return " ".join(re.sub(r"[^a-z' ]", " ", (message or "").lower()).split())
+    """
+    Reduce a message to lower-case words, so phrases can be matched.
+
+    Digits and non-ASCII letters are kept rather than stripped: dropping them
+    leaves "yes, 18.01" as a bare "yes", which every caller here reads as
+    permission to file the draft - discarding what the learner just typed.
+    """
+    return " ".join(re.sub(r"[^\w' ]", " ", (message or "").lower()).split())
 
 
 def _is_cancellation(message: str) -> bool:
