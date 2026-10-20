@@ -3687,3 +3687,68 @@ async def test_support_bot_leaves_a_cancelled_filler_out_of_the_next_request(
 
     description = mock_file.await_args.kwargs["description"]
     assert description == "The week 4 video is broken too."
+
+
+@pytest.mark.asyncio
+async def test_support_bot_asks_rather_than_dropping_the_request_on_wait(
+    mocker, mock_checkpointer
+):
+    """
+    "wait" is a learner asking for a moment, not for their request to be thrown
+    away. Reading it as a cancellation discards everything they typed, and the
+    reply tells them it is gone.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "wait", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert SUPPORT_SEND_UNCLEAR in reply
+    assert SUPPORT_TICKET_CANCELLED not in reply
+    assert mock_file.await_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_a_pause_out_of_the_description(
+    mocker, mock_checkpointer
+):
+    """
+    "wait" is addressed to us, so it has nothing in it for support to read. It
+    reaches the description through intake, where no review has been shown yet
+    and so nothing has been asked about it.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+
+    for message in ("wait", "It started on Monday.", "send"):
+        async for _ in chatbot.get_completion(
+            message, extra_state=_support_state("signedin@mit.edu")
+        ):
+            pass
+
+    description = mock_file.await_args.kwargs["description"]
+    assert description == f"{SUPPORT_PROBLEM}\n\nIt started on Monday."

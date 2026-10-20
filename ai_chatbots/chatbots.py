@@ -1212,9 +1212,16 @@ NOTHING_MORE_PHRASES = frozenset(
     }
 )
 
+# Asking for a moment, which is not asking for the request to be thrown away.
+# Cancelling discards every word the learner typed, so these are asked about
+# rather than acted on - "wait, don't send it" still cancels on the "send".
+PAUSE_PHRASES = frozenset({"wait", "hold on", "hang on", "one sec", "one moment"})
+
 # None of these are the problem the learner wants help with, so none of them
 # belong in what support reads.
-FILLER_PHRASES = AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
+FILLER_PHRASES = (
+    AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES | PAUSE_PHRASES
+)
 
 
 # A word here on its own calls the send off.
@@ -1231,13 +1238,13 @@ CANCELLATION_TRIGGERS = frozenset(
         "nevermind",
         "scrap",
         "stop",
-        "wait",
     }
 )
 # Everything a cancellation is allowed to be made of. A message containing one
 # word from outside this set is an edit, because re-showing the review costs a
 # turn while a wrong cancellation throws the learner's request away.
 CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
+    "wait",
     "actually",
     "dont",
     "don't",
@@ -1329,16 +1336,21 @@ def _is_decline(message: str) -> bool:
 
 def _is_unclear_go_ahead(message: str) -> bool:
     """
-    Report whether a short reply to the review reads as a yes carrying
-    something else. "yes please send it to support asap" adds nothing to the
-    ticket while "yes, and the course is 18.01" does, and nothing here can tell
-    them apart - so neither is guessed at.
+    Report whether a short reply to the review is one we cannot act on.
+
+    "yes please send it to support asap" adds nothing to the ticket while "yes,
+    and the course is 18.01" does, and nothing here can tell them apart - so
+    neither is guessed at. A bare "wait" is the same problem from the other
+    side: it may be the start of an edit or the start of a cancellation.
     """
-    words = _normalised(message).split()
+    normalised = _normalised(message)
+    words = normalised.split()
     if not words or len(words) > SHORT_REPLY_MAX_WORDS:
         return False
-    return words[0] in AFFIRMATIVE_OPENERS or _normalised(message) in (
-        NOTHING_MORE_PHRASES
+    return (
+        words[0] in AFFIRMATIVE_OPENERS
+        or normalised in NOTHING_MORE_PHRASES
+        or normalised in PAUSE_PHRASES
     )
 
 
