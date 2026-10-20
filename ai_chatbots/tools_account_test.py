@@ -146,6 +146,22 @@ def test_model_sees_only_the_course_argument():
         assert list(properties) == ["course"]
 
 
+@pytest.mark.parametrize(
+    "tool",
+    [
+        get_enrollments,
+        get_course_progress,
+        get_upcoming_assignments,
+        get_certificate_status,
+    ],
+)
+async def test_course_can_be_left_out(records, tool):
+    """The model may omit course entirely, not just pass null."""
+    result = json.loads(await tool.ainvoke({"state": {"course_id": [CALCULUS]}}))
+
+    assert result["enrollments"]
+
+
 async def test_progress_defaults_to_the_page_course(records):
     """Without a course, the course of the page is used, at its current run."""
     result = await call(get_course_progress, page_course=CALCULUS)
