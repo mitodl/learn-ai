@@ -257,7 +257,12 @@ async def test_contentfiles_default_timeout(
 @pytest.mark.parametrize("base_url", [PROBLEM_SET_URL, PROBLEM_SET_URL.rstrip("/")])
 @pytest.mark.parametrize(
     ("title", "expected_path"),
-    [(None, "run-1/"), ("Problem Set 1", "run-1/Problem Set 1/")],
+    [
+        (None, "run-1/"),
+        ("Problem Set 1", "run-1/Problem%20Set%201/"),
+        # each part stays one path segment, so it can't reach other endpoints
+        ("../../v1/learning_resources", "run-1/..%2F..%2Fv1%2Flearning_resources/"),
+    ],
 )
 async def test_problem_set(  # noqa: PLR0913
     settings, mock_async_get_client, httpx_response, base_url, title, expected_path
@@ -272,3 +277,15 @@ async def test_problem_set(  # noqa: PLR0913
     assert result == body
     assert client.get.call_args.args == (f"{PROBLEM_SET_URL}{expected_path}",)
     assert client.get.call_args.kwargs["params"] == {}
+
+
+@pytest.mark.parametrize(("run_readable_id", "title"), [("..", None), ("run-1", ".")])
+async def test_problem_set_rejects_dot_segments(
+    mock_async_get_client, run_readable_id, title
+):
+    """Dot segments would be resolved by httpx, so they never reach the transport."""
+    client = mock_async_get_client()
+
+    with pytest.raises(learn.LearnError):
+        await learn.problem_set(run_readable_id, title)
+    client.get.assert_not_called()
