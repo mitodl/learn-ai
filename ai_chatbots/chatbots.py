@@ -62,7 +62,7 @@ from ai_chatbots.utils import (
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
 )
-from ai_chatbots.zendesk import file_support_ticket
+from ai_chatbots.zendesk import file_support_ticket, max_filing_seconds
 from main.opik_keycloak_auth import is_opik_configured
 
 log = logging.getLogger(__name__)
@@ -1071,9 +1071,20 @@ SUPPORT_ASK_MORE = (
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
 
 SUPPORT_FILING_LOCK_PREFIX = "support_filing:"
-# Long enough for a slow Zendesk call, short enough that a worker killed
-# mid-call frees the thread instead of stranding the learner on "still sending".
-SUPPORT_FILING_LOCK_TTL = 60
+# Covers the session read and write either side of the Zendesk call, and keeps
+# the lock short enough that a worker killed mid-call frees the thread instead
+# of stranding the learner on "still sending".
+SUPPORT_FILING_LOCK_MARGIN = 30
+
+
+def _filing_lock_ttl() -> int:
+    """
+    Hold the lock for longer than the call it guards can take. A shorter TTL
+    lapses while the first turn is still in flight, which is the one moment a
+    second turn must not get through.
+    """
+    return max_filing_seconds() + SUPPORT_FILING_LOCK_MARGIN
+
 
 ZENDESK_SUBJECT_MAX_LENGTH = 150
 # UserChatSession.support_ticket_email is an EmailField, so anything longer
@@ -1447,7 +1458,7 @@ class SupportBot(TruncatingChatbot):
         """File one ticket per thread, however many turns ask at once."""
         cache = get_django_cache()
         lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
-        if not await cache.aadd(lock_key, value=True, timeout=SUPPORT_FILING_LOCK_TTL):
+        if not await cache.aadd(lock_key, value=True, timeout=_filing_lock_ttl()):
             return SUPPORT_TICKET_SENDING, {}
         try:
             if session:

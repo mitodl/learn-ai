@@ -55,6 +55,7 @@ from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPI
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from ai_chatbots.utils import get_django_cache
+from ai_chatbots.zendesk import max_filing_seconds
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -3063,6 +3064,38 @@ async def test_support_bot_files_one_ticket_when_two_turns_land_together(
     assert mock_file.call_count == 1
     assert "4821" in first_reply
     assert SUPPORT_TICKET_SENDING in second_reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_holds_the_filing_lock_for_the_whole_zendesk_call(
+    mocker, mock_checkpointer
+):
+    """
+    The lock is the only thing between two concurrent sends and two tickets. One
+    that expires while the first call is still in flight hands the second turn a
+    free pass at exactly the moment it must not have one.
+    """
+    cache = mocker.Mock()
+    cache.aadd = AsyncMock(return_value=True)
+    cache.adelete = AsyncMock()
+    mocker.patch("ai_chatbots.chatbots.get_django_cache", return_value=cache)
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert cache.aadd.call_args.kwargs["timeout"] > max_filing_seconds()
 
 
 @pytest.mark.asyncio

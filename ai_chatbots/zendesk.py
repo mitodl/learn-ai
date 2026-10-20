@@ -33,10 +33,20 @@ ZENDESK_OAUTH_SCOPE = "tickets:write users:write"
 ZENDESK_TOKEN_EXPIRY_MARGIN = 60
 # Timeouts that mean the request never left, so no ticket can have been made.
 UNDELIVERED_TIMEOUTS = (httpx.ConnectTimeout, httpx.PoolTimeout)
+# Mint a token, POST the ticket, re-mint after a 401, POST again.
+WORST_PATH_REQUESTS = 4
 
 
 class ZendeskTokenError(Exception):
     """Minting the access token failed, so no ticket was ever posted."""
+
+
+def max_filing_seconds() -> int:
+    """
+    Longest a file_support_ticket call can run before every request has timed
+    out. Read at call time so it tracks a changed REQUESTS_TIMEOUT.
+    """
+    return settings.REQUESTS_TIMEOUT * WORST_PATH_REQUESTS
 
 
 def _outcome_is_unknown(exc: Exception) -> bool:

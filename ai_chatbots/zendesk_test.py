@@ -19,7 +19,11 @@ from ai_chatbots.constants import (
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
 )
 from ai_chatbots.utils import get_django_cache
-from ai_chatbots.zendesk import ZENDESK_TOKEN_CACHE_KEY, file_support_ticket
+from ai_chatbots.zendesk import (
+    ZENDESK_TOKEN_CACHE_KEY,
+    file_support_ticket,
+    max_filing_seconds,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -602,3 +606,27 @@ async def test_file_support_ticket_remints_on_401(zendesk_ticket_settings, mocke
     assert (
         ticket_calls[1].kwargs["headers"]["Authorization"] == f"Bearer {MINTED_TOKEN}"
     )
+
+
+async def test_max_filing_seconds_covers_every_request_on_the_worst_path(
+    zendesk_ticket_settings, mocker, token_cache
+):
+    """
+    Callers hold a lock for the length of a filing call, so the figure they
+    size it from has to cover the slowest one: a cold token cache, a 401 that
+    re-mints, and both ticket POSTs, each free to burn the full timeout.
+    """
+    token_cache.delete(ZENDESK_TOKEN_CACHE_KEY)
+    client = _mock_zendesk_client(
+        mocker,
+        ticket_responses=[
+            _response(mocker, {}, status_code=401),
+            _response(mocker, {"ticket": {"id": 9}}),
+        ],
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    spent = sum(call.kwargs["timeout"] for call in client.post.call_args_list)
+    assert spent == zendesk_ticket_settings.REQUESTS_TIMEOUT * 4
+    assert max_filing_seconds() >= spent
