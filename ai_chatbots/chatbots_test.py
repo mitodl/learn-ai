@@ -59,7 +59,13 @@ from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPI
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from ai_chatbots.utils import get_django_cache
-from ai_chatbots.zendesk import TICKET_BAD_EMAIL, TICKET_REJECTED, max_filing_seconds
+from ai_chatbots.zendesk import (
+    HTTPX_TIMEOUT_PHASES,
+    TICKET_BAD_EMAIL,
+    TICKET_REJECTED,
+    WORST_PATH_REQUESTS,
+    max_filing_seconds,
+)
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -3568,3 +3574,14 @@ async def test_support_bot_keeps_confirm_out_of_the_thread_state(
 
     state = await chatbot.agent.aget_state(chatbot.config)
     assert "confirm" not in state.values
+
+
+def test_max_filing_seconds_covers_every_phase_of_every_request(settings):
+    """
+    A scalar httpx timeout bounds connect, write, read and pool separately, so
+    one request can burn four of them. A budget that counts each request once
+    expires while the call it is sizing is still running.
+    """
+    settings.REQUESTS_TIMEOUT = 30
+
+    assert max_filing_seconds() >= 30 * HTTPX_TIMEOUT_PHASES * WORST_PATH_REQUESTS

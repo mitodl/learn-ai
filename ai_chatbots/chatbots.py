@@ -1086,9 +1086,7 @@ SUPPORT_ASK_MORE = (
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
 
 SUPPORT_FILING_LOCK_PREFIX = "support_filing:"
-# Covers the session read and write either side of the Zendesk call, and keeps
-# the lock short enough that a worker killed mid-call frees the thread instead
-# of stranding the learner on "still sending".
+# Covers the session read and write either side of the Zendesk call.
 SUPPORT_FILING_LOCK_MARGIN = 30
 
 
@@ -1567,9 +1565,9 @@ class SupportBot(TruncatingChatbot):
         """File one ticket per thread, however many turns ask at once."""
         cache = get_django_cache()
         lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
-        # A token rather than a flag, because httpx bounds each read and write
-        # and not the call as a whole: one slow enough to outlive the TTL would
-        # otherwise come back and delete the lock its successor now holds.
+        # A token rather than a flag. The TTL covers the Zendesk call, but not a
+        # worker stalled between that call returning and the release below, and
+        # one that wakes up late would delete the lock its successor now holds.
         token = uuid4().hex
         if not await cache.aadd(lock_key, value=token, timeout=_filing_lock_ttl()):
             return SUPPORT_TICKET_SENDING, {}

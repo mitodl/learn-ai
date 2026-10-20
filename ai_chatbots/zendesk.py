@@ -44,6 +44,9 @@ SENT_BUT_UNANSWERED = (
 )
 # Mint a token, POST the ticket, re-mint after a 401, POST again.
 WORST_PATH_REQUESTS = 4
+# A scalar httpx timeout is not a budget for the request: it is given to each of
+# connect, write, read and pool separately, so one request can spend four of them.
+HTTPX_TIMEOUT_PHASES = 4
 
 # Why the filing failed, for a caller deciding whether a retry is worth offering.
 # Zendesk turned the ticket down and will turn the same one down again.
@@ -72,7 +75,7 @@ def max_filing_seconds() -> int:
     Longest a file_support_ticket call can run before every request has timed
     out. Read at call time so it tracks a changed REQUESTS_TIMEOUT.
     """
-    return settings.REQUESTS_TIMEOUT * WORST_PATH_REQUESTS
+    return settings.REQUESTS_TIMEOUT * HTTPX_TIMEOUT_PHASES * WORST_PATH_REQUESTS
 
 
 def _outcome_is_unknown(exc: Exception) -> bool:
