@@ -9,8 +9,12 @@ from httpx import (
     ConnectTimeout,
     HTTPStatusError,
     PoolTimeout,
+    ReadError,
     ReadTimeout,
+    RemoteProtocolError,
     RequestError,
+    WriteError,
+    WriteTimeout,
 )
 
 from ai_chatbots.constants import (
@@ -242,6 +246,53 @@ async def test_file_support_ticket_returns_error_on_zendesk_failure(
 
     assert "error" in result
     assert "reference" not in result
+
+
+@pytest.mark.parametrize(
+    "json_body",
+    [
+        # A proxy or WAF answering 200 with its own HTML, so .json() raises.
+        ValueError("not json"),
+        # Shapes the key walk cannot survive.
+        {},
+        {"ticket": {}},
+        {"ticket": None},
+        [],
+    ],
+)
+async def test_file_support_ticket_is_unsure_when_the_id_is_unreadable(
+    zendesk_ticket_settings, mocker, json_body
+):
+    """
+    raise_for_status has already passed, so the ticket exists. Reporting that as
+    a plain failure invites the retry that files the second one.
+    """
+    response = _response(mocker, None)
+    if isinstance(json_body, Exception):
+        response.json.side_effect = json_body
+    else:
+        response.json.return_value = json_body
+    _mock_zendesk_client(mocker, ticket_responses=[response])
+
+    result = await file_support_ticket(**_ticket_args(thread_id="thread-abc"))
+
+    assert "reference" not in result
+    assert result["uncertain"] is True
+    assert result["reason"] == TICKET_UNSENT
+
+
+async def test_file_support_ticket_unreadable_id_log_points_at_the_thread(
+    zendesk_ticket_settings, mocker, caplog
+):
+    """The external_id is the only way a human finds the ticket we lost."""
+    response = _response(mocker, {})
+    _mock_zendesk_client(mocker, ticket_responses=[response])
+
+    with caplog.at_level(logging.ERROR, logger="ai_chatbots.zendesk"):
+        await file_support_ticket(**_ticket_args(thread_id="thread-abc"))
+
+    assert "thread-abc" in caplog.text
+    assert "learner@example.com" not in caplog.text
 
 
 async def test_file_support_ticket_failure_log_carries_no_learner_pii(
@@ -514,6 +565,14 @@ async def test_file_support_ticket_says_whether_sending_it_again_could_work(
     ("error", "uncertain"),
     [
         (ReadTimeout("zendesk took too long"), True),
+        # The request was written and the reply never came back whole. A
+        # timeout is not the only way that happens.
+        (ReadError("connection reset reading the reply"), True),
+        (RemoteProtocolError("zendesk hung up mid-response"), True),
+        # The connection was up and the body was going out, so Zendesk may
+        # have had all of it before the write broke.
+        (WriteTimeout("could not push the ticket out"), True),
+        (WriteError("connection reset writing the ticket"), True),
         (ConnectTimeout("never reached zendesk"), False),
         (PoolTimeout("no connection free"), False),
         (ConnectError("dns failure"), False),
@@ -524,8 +583,8 @@ async def test_file_support_ticket_says_a_lost_reply_is_not_a_refusal(
     zendesk_ticket_settings, mock_httpx_async_client, error, uncertain
 ):
     """
-    A read timeout means the request went out and we stopped waiting, so a
-    ticket may exist. A connect failure never put it on the wire.
+    A failure that needed the connection up and the request going out leaves a
+    ticket that may exist. A connect or pool failure never put it on the wire.
     """
     mock_patch = mock_httpx_async_client(
         {},

@@ -32,8 +32,16 @@ ZENDESK_OAUTH_SCOPE = "tickets:write users:write"
 # Re-mint this many seconds before the token's stated expiry, so an in-flight
 # request never files with a token that lapses mid-call.
 ZENDESK_TOKEN_EXPIRY_MARGIN = 60
-# Timeouts that mean the request never left, so no ticket can have been made.
-UNDELIVERED_TIMEOUTS = (httpx.ConnectTimeout, httpx.PoolTimeout)
+# Failures that need a connection already up and the request already going out,
+# so Zendesk may have taken the ticket before the call broke. A connect or pool
+# failure is not here: nothing was ever sent, so nothing can have been filed.
+SENT_BUT_UNANSWERED = (
+    httpx.WriteTimeout,
+    httpx.WriteError,
+    httpx.ReadTimeout,
+    httpx.ReadError,
+    httpx.RemoteProtocolError,
+)
 # Mint a token, POST the ticket, re-mint after a 401, POST again.
 WORST_PATH_REQUESTS = 4
 
@@ -81,9 +89,7 @@ def _outcome_is_unknown(exc: Exception) -> bool:
     if status is not None:
         # Zendesk can create the ticket and still fail the response.
         return status >= HTTPStatus.INTERNAL_SERVER_ERROR
-    return isinstance(exc, httpx.TimeoutException) and not isinstance(
-        exc, UNDELIVERED_TIMEOUTS
-    )
+    return isinstance(exc, SENT_BUT_UNANSWERED)
 
 
 def _is_rejection(exc: Exception) -> bool:
@@ -243,7 +249,6 @@ async def file_support_ticket(  # noqa: PLR0913
                 client, ticket_data, idempotency_key=thread_id, force_refresh=True
             )
         response.raise_for_status()
-        return {"reference": response.json()["ticket"]["id"], "stub": False}
     except Exception as exc:  # noqa: BLE001
         uncertain = _outcome_is_unknown(exc)
         # No exc_info: the traceback's frame locals hold the learner's email and
@@ -261,3 +266,23 @@ async def file_support_ticket(  # noqa: PLR0913
             "uncertain": uncertain,
             "reason": TICKET_REJECTED if _is_rejection(exc) else TICKET_UNSENT,
         }
+
+    try:
+        reference = response.json()["ticket"]["id"]
+    except (ValueError, KeyError, TypeError):
+        # raise_for_status already passed, so the ticket exists and only its id
+        # is lost. Reported as uncertain because a retry would file a second one.
+        # No exc_info, for the same reason as above: frame locals hold the
+        # learner's address and their problem description.
+        log.error(  # noqa: TRY400
+            "Zendesk accepted the ticket (status %s) but the response carried no "
+            "ticket id. Search Zendesk for external_id %s.",
+            response.status_code,
+            thread_id or "n/a",
+        )
+        return {
+            "error": "Could not file the support request. Please try again later.",
+            "uncertain": True,
+            "reason": TICKET_UNSENT,
+        }
+    return {"reference": reference, "stub": False}
