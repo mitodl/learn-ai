@@ -3371,6 +3371,40 @@ async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
 
 
 @pytest.mark.asyncio
+async def test_support_bot_records_an_unclear_outcome_before_replying(
+    mocker, mock_checkpointer
+):
+    """
+    An uncertain filing lives only in the thread state, so a learner whose
+    connection drops as the reply goes out must not come back to a thread that
+    will happily file a second ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file.", "uncertain": True}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    state = _support_state("signedin@mit.edu")
+
+    # Take the reply and walk away, the way a closed tab does.
+    stream = chatbot.get_completion("send", extra_state=state)
+    assert SUPPORT_TICKET_MAYBE_FILED in await anext(stream)
+    await stream.aclose()
+
+    retry = "".join(
+        [chunk async for chunk in chatbot.get_completion("send", extra_state=state)]
+    )
+
+    assert mock_file.call_count == 1
+    assert SUPPORT_TICKET_MAYBE_FILED in retry
+
+
+@pytest.mark.asyncio
 async def test_support_bot_stops_asking_after_zendesk_turns_the_ticket_down(
     mocker, mock_checkpointer
 ):

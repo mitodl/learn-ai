@@ -1504,8 +1504,13 @@ class SupportBot(TruncatingChatbot):
         Yield a reply the model had no part in, and leave the same trace behind
         as a normal turn: the exchange written to the thread, and the metadata
         comment the caller reads the thread_id out of.
+
+        The write comes first because yielding hands control to the consumer,
+        and a learner whose connection has gone closes this generator there.
+        Writing afterwards loses whatever the turn just learned - including
+        that a ticket may already exist - and the retry that follows is what
+        files the second one.
         """
-        yield reply
         # as_node is required: with no checkpoint to infer from, or more than one
         # candidate, LangGraph refuses the write as ambiguous.
         await self.agent.aupdate_state(
@@ -1513,6 +1518,7 @@ class SupportBot(TruncatingChatbot):
             {"messages": [HumanMessage(message), AIMessage(reply)], **extra_state},
             as_node="agent",
         )
+        yield reply
         metadata = await self.get_metadata()
         yield f"\n\n<!-- {metadata} -->\n\n"
 
