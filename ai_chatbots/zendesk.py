@@ -147,15 +147,8 @@ async def file_support_ticket(  # noqa: PLR0913
     "uncertain": ...}, where uncertain means Zendesk may have created the
     ticket regardless, so the caller must neither retry nor claim it failed.
     """
-    if settings.AI_ZENDESK_STUB_MODE:
-        # Loud on purpose: the learner is told their request was filed, and
-        # nothing was. A quiet stub left on in production looks like success.
-        log.warning(
-            "AI_ZENDESK_STUB_MODE is on - no Zendesk ticket was created, "
-            "but the learner was told one was."
-        )
-        return {"reference": f"STUB-{uuid4().hex[:8].upper()}", "stub": True}
-
+    # Validated ahead of the stub return: a stub that accepts what Zendesk
+    # rejects hides the bad address until the first deployed environment.
     try:
         validate_email((email or "").strip())
     except ValidationError:
@@ -166,6 +159,15 @@ async def file_support_ticket(  # noqa: PLR0913
             ),
             "uncertain": False,
         }
+
+    if settings.AI_ZENDESK_STUB_MODE:
+        # Loud on purpose: the learner is told their request was filed, and
+        # nothing was. A quiet stub left on in production looks like success.
+        log.warning(
+            "AI_ZENDESK_STUB_MODE is on - no Zendesk ticket was created, "
+            "but the learner was told one was."
+        )
+        return {"reference": f"STUB-{uuid4().hex[:8].upper()}", "stub": True}
 
     body = f"{description}\n\nPage: {page_url}" if page_url else description
     tags = [ZENDESK_SUPPORT_INTAKE_TAG]

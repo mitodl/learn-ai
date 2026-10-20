@@ -163,6 +163,19 @@ async def test_file_support_ticket_stub_references_differ(settings):
     assert first["reference"] != second["reference"]
 
 
+async def test_file_support_ticket_stub_still_rejects_a_bad_email(settings):
+    """
+    Stub mode is the local path, so an address it accepts and the real path
+    rejects is a bug that only shows up once deployed.
+    """
+    settings.AI_ZENDESK_STUB_MODE = True
+
+    result = await file_support_ticket(**_ticket_args(email="not-an-address"))
+
+    assert "error" in result
+    assert "reference" not in result
+
+
 async def test_file_support_ticket_posts_to_zendesk(
     zendesk_ticket_settings, mock_httpx_async_client
 ):
