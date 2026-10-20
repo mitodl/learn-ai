@@ -820,11 +820,11 @@ def _match_course(summaries: list[dict], course: str) -> list[dict]:
     ]
     if by_id:
         return by_id
-    words = " ".join(course.lower().split())
+    # Whole words only, so "8.01x" doesn't match a title starting "18.01x:"
+    phrase = r"\s+".join(map(re.escape, course.split()))
+    words = re.compile(rf"(?<!\w){phrase}(?!\w)", re.IGNORECASE)
     return [
-        summary
-        for summary in summaries
-        if words in " ".join((summary["course_title"] or "").lower().split())
+        summary for summary in summaries if words.search(summary["course_title"] or "")
     ]
 
 
