@@ -12,6 +12,7 @@ from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import OperationalError
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
 from langchain_litellm import ChatLiteLLM
@@ -3585,3 +3586,74 @@ def test_max_filing_seconds_covers_every_phase_of_every_request(settings):
     settings.REQUESTS_TIMEOUT = 30
 
     assert max_filing_seconds() >= 30 * HTTPX_TIMEOUT_PHASES * WORST_PATH_REQUESTS
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_again_when_the_session_write_fails(
+    mocker, mock_checkpointer
+):
+    """
+    Zendesk has the ticket by the time the reference is written down. Letting
+    that write's failure escape loses the only record the next turn reads, and
+    the next turn then sends the same request a second time.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    mocker.patch.object(
+        UserChatSession,
+        "asave",
+        AsyncMock(side_effect=OperationalError("connection lost")),
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+    async for _ in chatbot.get_completion(
+        "any update?", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert "4821" in reply
+    assert mock_file.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_support_bot_clears_the_pending_send_once_it_has_filed(
+    mocker, mock_checkpointer
+):
+    """
+    A send that succeeded is no longer pending. Leaving the flag set keeps the
+    thread one affirmative away from filing again, with only the session row
+    standing in the way.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    state = await chatbot.agent.aget_state(chatbot.config)
+    assert state.values["awaiting_send"][-1] is False

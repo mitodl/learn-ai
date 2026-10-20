@@ -1551,15 +1551,28 @@ class SupportBot(TruncatingChatbot):
             # awaiting_send stays set, so the learner's next message retries
             # rather than starting the review over.
             return SUPPORT_TICKET_FAILED, {}
+        reply = SUPPORT_TICKET_FILED.format(
+            reference=result["reference"], email=ticket["email"]
+        )
         if session:
             session.support_ticket_reference = str(result["reference"])
             session.support_ticket_email = ticket["email"]
-            await session.asave(
-                update_fields=["support_ticket_reference", "support_ticket_email"]
-            )
-        return SUPPORT_TICKET_FILED.format(
-            reference=result["reference"], email=ticket["email"]
-        ), {}
+            try:
+                await session.asave(
+                    update_fields=["support_ticket_reference", "support_ticket_email"]
+                )
+            except Exception:
+                # Zendesk already has the ticket, so raising here only buys a
+                # retry that files a second one. The row is the usual way a
+                # later turn learns not to send again, and it never got written,
+                # so the flag below has to do that job instead.
+                log.exception(
+                    "Filed support ticket %s but could not record it on thread %s",
+                    result["reference"],
+                    self.thread_id,
+                )
+                return reply, {"awaiting_send": [False], "filing_uncertain": [True]}
+        return reply, {"awaiting_send": [False]}
 
     async def _file_the_ticket(self, *, session, ticket: dict) -> tuple[str, dict]:
         """File one ticket per thread, however many turns ask at once."""
