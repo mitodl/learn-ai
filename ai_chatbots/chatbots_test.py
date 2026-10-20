@@ -1660,6 +1660,33 @@ async def test_support_bot_has_no_tools(mock_checkpointer):
     assert chatbot.create_tools() == []
 
 
+@pytest.mark.asyncio
+async def test_support_bot_does_not_provision_a_proxy_budget(
+    settings, mocker, mock_checkpointer
+):
+    """
+    Every reply is scripted, so the bot spends no tokens and has no budget to
+    provision. Asking for one is a blocking HTTP call that puts the intake
+    form - the thing a learner reaches when something else is broken - behind
+    the LLM proxy being up.
+    """
+    settings.AI_PROXY_CLASS = "LiteLLMProxy"
+    settings.AI_PROXY_URL = "http://proxy.url"
+    settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
+    mock_create_proxy_user = mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
+    )
+
+    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+
+    mock_create_proxy_user.assert_not_called()
+    # The proxy itself still has to be configured: get_llm needs the prefix and
+    # api kwargs to build the graph this bot reads and writes state through.
+    assert isinstance(chatbot.proxy, LiteLLMProxy)
+    assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
+    assert chatbot.agent is not None
+
+
 async def _support_bot(mocker, mock_checkpointer, prior_messages, state=None):
     """Build a SupportBot whose thread already holds prior_messages, LLM stubbed."""
     thread_id = uuid4().hex

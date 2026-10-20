@@ -82,6 +82,12 @@ class BaseChatbot(ABC):
 
     TRACE_STATE_KEYS: tuple[str, ...] = ()
 
+    # A bot that scripts every reply spends no tokens, so it has no budget to
+    # provision. Setting this False skips that call, which is a blocking
+    # request that would otherwise make the proxy a dependency of a bot that
+    # never reaches it.
+    CALLS_THE_MODEL = True
+
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
@@ -113,7 +119,8 @@ class BaseChatbot(ABC):
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
-            self.proxy.create_proxy_user(self.user_id)
+            if self.CALLS_THE_MODEL:
+                self.proxy.create_proxy_user(self.user_id)
             self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
             self.proxy = None
@@ -1345,6 +1352,8 @@ class SupportBot(TruncatingChatbot):
     JOB_ID = "SUPPORT_JOB"
     STATE_CLASS = SupportAgentState
     TRACE_STATE_KEYS = ("page_url",)
+    # Every branch of get_completion ends at _reply_without_the_model.
+    CALLS_THE_MODEL = False
 
     def __init__(  # noqa: PLR0913
         self,
