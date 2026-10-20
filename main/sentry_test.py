@@ -237,8 +237,50 @@ def test_drops_locals_from_chatbot_frames():
     # What identifies the failure stays; only the learner's data goes.
     assert frames[0]["function"] == "file_support_ticket"
     assert frames[0]["lineno"] == 193
-    # Every other app keeps the locals that make a traceback readable.
-    assert frames[1]["vars"] == {"retries": 3}
+    # The frames around it go too: the learner's data is passed through them.
+    assert "vars" not in frames[1]
+
+
+def test_drops_locals_from_library_frames_in_a_chatbot_event():
+    """
+    The serializer's repr renders the whole request body, and the frame holding
+    it belongs to rest_framework. Scoping the scrub to the chatbot package left
+    the learner's message, address and page url in the event.
+    """
+    event = _frames_event(
+        [
+            {"module": "ai_chatbots.consumers", "function": "handle", "vars": {}},
+            {
+                "module": "rest_framework.serializers",
+                "function": "is_valid",
+                "vars": {
+                    "self": (
+                        "SupportChatRequestSerializer(data={'message': 'I cannot "
+                        "log in', 'user_email': 'learner@example.invalid'}):"
+                    )
+                },
+            },
+        ]
+    )
+
+    before_send(event, {})
+
+    assert "learner@example.invalid" not in json.dumps(event)
+
+
+def test_keeps_locals_when_no_chatbot_frame_is_present():
+    """
+    Every other app keeps the locals that make a traceback readable, which is
+    why this is not just include_local_variables turned off.
+    """
+    event = _frames_event(
+        [{"module": "main.views", "function": "index", "vars": {"retries": 3}}]
+    )
+
+    before_send(event, {})
+
+    frames = event["exception"]["values"][0]["stacktrace"]["frames"]
+    assert frames[0]["vars"] == {"retries": 3}
 
 
 def test_drops_locals_from_chatbot_frames_in_thread_stacktraces():
@@ -284,8 +326,9 @@ def test_real_sdk_drops_chatbot_frame_locals(sentry_transport):
     raiser is exec'd with a chatbot __name__ because that is what the SDK reads
     the frame's module out of.
 
-    Asserted on the chatbot frame rather than the whole event: this test's own
-    frame holds the address too, and a test harness is not what ships.
+    Asserted on the frame rather than the whole event: the address is a literal
+    in this file, so the SDK's source context carries it no matter what the
+    scrub does. Real learner data never arrives as a source line.
     """
     namespace = {"__name__": "ai_chatbots.support_probe"}
     exec(  # noqa: S102

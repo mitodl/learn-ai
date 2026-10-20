@@ -80,35 +80,45 @@ PII_FRAME_MODULE = "ai_chatbots"
 
 
 def scrub_frame_locals(event):
-    """Drop local variables from stack frames inside the chatbot package.
+    """Drop local variables from every frame of an event that touches the chatbots.
 
-    Scoped to the package rather than turning include_local_variables off
+    Whole-event rather than the chatbot frames alone, because the learner's data
+    does not stay inside the package.  A DRF ValidationError is raised from
+    rest_framework's own frame, and the serializer sitting in that frame's
+    ``self`` renders the entire request body through BaseSerializer.__repr__ --
+    the learner's message, their address, the page they were on.  Which library
+    frame ends up holding a reference is not something this can enumerate.
+
+    Still scoped to the event rather than turning include_local_variables off
     globally, which would cost every other app the locals that make a traceback
     readable.  Everything else about the frame -- file, line, function -- is
     what identifies the failure, and stays.
     """
-    _scrub_frames(event)
+    frames = []
+    _collect_frames(event, frames)
+    if any(_is_chatbot_frame(frame) for frame in frames):
+        for frame in frames:
+            frame.pop("vars", None)
     return event
 
 
-def _scrub_frames(node):
+def _is_chatbot_frame(frame):
+    """Match the package and its submodules, not every name starting the same."""
+    module = frame.get("module") or ""
+    return module == PII_FRAME_MODULE or module.startswith(f"{PII_FRAME_MODULE}.")
+
+
+def _collect_frames(node, found):
     """Find every stacktrace in the event, wherever the SDK hung it."""
     if isinstance(node, dict):
         frames = node.get("frames")
         if isinstance(frames, list):
-            for frame in frames:
-                if not isinstance(frame, dict):
-                    continue
-                module = frame.get("module") or ""
-                if module == PII_FRAME_MODULE or module.startswith(
-                    f"{PII_FRAME_MODULE}."
-                ):
-                    frame.pop("vars", None)
+            found.extend(frame for frame in frames if isinstance(frame, dict))
         for value in node.values():
-            _scrub_frames(value)
+            _collect_frames(value, found)
     elif isinstance(node, list):
         for item in node:
-            _scrub_frames(item)
+            _collect_frames(item, found)
 
 
 def before_send(event, hint):
