@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query"
 import { userQueries } from "@/services/ai"
 import React, { useState } from "react"
 import { ButtonLink } from "@mitodl/smoot-design"
-import { LOGIN_URL } from "@/constants"
+import { loginLinkProps } from "@/components/loginLinkProps"
 import {
   SearchInput,
   type SearchInputProps,
@@ -157,7 +157,7 @@ const LearningMaterialsSearchContent: React.FC = () => {
           sx={{ a: { textDecoration: "none", color: "inherit" } }}
         >
           You must&nbsp;
-          <ButtonLink variant="tertiary" href={LOGIN_URL}>
+          <ButtonLink variant="tertiary" {...loginLinkProps}>
             Login
           </ButtonLink>
           &nbsp;to use this feature
