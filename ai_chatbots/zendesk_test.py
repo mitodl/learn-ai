@@ -189,7 +189,7 @@ async def test_file_support_ticket_posts_to_zendesk(
         patch_path="ai_chatbots.zendesk.get_async_http_client",
     )
 
-    result = await file_support_ticket(**_ticket_args())
+    result = await file_support_ticket(**_ticket_args(), email_verified=True)
 
     assert result == {"reference": 4821, "stub": False}
 
@@ -536,6 +536,36 @@ async def test_file_support_ticket_tags_an_unverified_requester(
     tags = kwargs["json"]["ticket"]["tags"]
     assert (ZENDESK_UNVERIFIED_REQUESTER_TAG in tags) is expect_tag
     assert ZENDESK_SUPPORT_INTAKE_TAG in tags
+
+
+@pytest.mark.parametrize("email_verified", [True, False])
+async def test_file_support_ticket_withholds_unverified_text_from_the_requester(
+    zendesk_ticket_settings, mock_httpx_async_client, email_verified
+):
+    """
+    Nothing proves an unverified requester owns the address they named, and the
+    intake route takes anonymous requests. A public first comment hands whoever
+    files a way to send chosen text to a chosen address over MIT's domain, via
+    whichever received-request trigger the instance has turned on. A private
+    comment and a fixed subject leave the notification with nothing of theirs
+    to carry, whatever those triggers are set to.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(
+        **_ticket_args(subject="Click http://evil.invalid to keep your account"),
+        email_verified=email_verified,
+    )
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert ticket["comment"]["public"] is email_verified
+    assert ("evil.invalid" in ticket["subject"]) is email_verified
+    # Either way the agent reads the learner's own words in the ticket body.
+    assert "The week 3 video just spins." in ticket["comment"]["body"]
 
 
 async def test_file_support_ticket_mints_and_caches_token_when_cache_is_cold(

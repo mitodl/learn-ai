@@ -19,6 +19,7 @@ from ai_chatbots.constants import (
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_TICKET_PATH,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
+    ZENDESK_UNVERIFIED_SUBJECT,
 )
 from ai_chatbots.utils import get_async_http_client, get_django_cache
 
@@ -189,8 +190,11 @@ async def file_support_ticket(  # noqa: PLR0913
     try:
         client = get_async_http_client()
         ticket_data = {
-            "subject": subject,
-            "comment": {"body": body},
+            # Neither the subject nor the body is the requester's to put in a
+            # notification email until something has proved the address is
+            # theirs. Agents still read both on the ticket.
+            "subject": subject if email_verified else ZENDESK_UNVERIFIED_SUBJECT,
+            "comment": {"body": body, "public": email_verified},
             "requester": {"email": email.strip(), "name": name or email.strip()},
             "tags": tags,
         }

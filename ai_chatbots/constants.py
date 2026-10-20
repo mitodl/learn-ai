@@ -65,6 +65,11 @@ ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"
 # from an authenticated session, so support does not read it as confirmed.
 ZENDESK_UNVERIFIED_REQUESTER_TAG = "tim_unverified_requester"
 
+# Stands in for the learner's own words on an unverified ticket: a
+# received-request trigger puts the subject straight into an email to an address
+# nobody has proved belongs to whoever typed it.
+ZENDESK_UNVERIFIED_SUBJECT = "Support request from MIT Open Learning"
+
 # Zendesk help center category ids, as listed by the public category endpoint:
 #   curl -sL https://support.learn.mit.edu/api/v2/help_center/categories.json
 #     41249004008859  About MIT Learn
