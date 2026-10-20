@@ -62,7 +62,12 @@ from ai_chatbots.utils import (
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
 )
-from ai_chatbots.zendesk import file_support_ticket, max_filing_seconds
+from ai_chatbots.zendesk import (
+    TICKET_BAD_EMAIL,
+    TICKET_REJECTED,
+    file_support_ticket,
+    max_filing_seconds,
+)
 from main.opik_keycloak_auth import is_opik_configured
 
 log = logging.getLogger(__name__)
@@ -1015,6 +1020,7 @@ class SupportAgentState(SummaryState):
     user_username: Annotated[list[str], add]
     awaiting_send: Annotated[list[bool], add]
     filing_uncertain: Annotated[list[bool], add]
+    filing_blocked: Annotated[list[bool], add]
     cancelled_after: Annotated[list[int], add]
 
 
@@ -1034,6 +1040,15 @@ SUPPORT_TICKET_ALREADY_FILED = (
 SUPPORT_TICKET_FAILED = (
     'Sorry, I could not file your support request just now. Reply "send" to try '
     "again, or email support directly and they'll pick it up."
+)
+SUPPORT_TICKET_REJECTED = (
+    "Sorry - the support system turned this request down, and sending it again "
+    "won't change that. Please email the MIT Open Learning support team directly "
+    "and they'll pick it up. I've flagged this so our team can look into it."
+)
+SUPPORT_TICKET_BAD_EMAIL = (
+    "That address isn't one the support team can reply to. What's another email "
+    "I can give them?"
 )
 SUPPORT_TICKET_MAYBE_FILED = (
     "I didn't get an answer back from the support system, so I can't tell you "
@@ -1506,6 +1521,17 @@ class SupportBot(TruncatingChatbot):
                     "awaiting_send": [False],
                     "filing_uncertain": [True],
                 }
+            if result.get("reason") == TICKET_BAD_EMAIL:
+                # The request is fine, the address is not, so collection
+                # resumes and the next message is read as the new reply-to.
+                return SUPPORT_TICKET_BAD_EMAIL, {"awaiting_send": [False]}
+            if result.get("reason") == TICKET_REJECTED:
+                # Zendesk will answer the same way every time, so offering a
+                # retry only walks the learner around the same loop.
+                return SUPPORT_TICKET_REJECTED, {
+                    "awaiting_send": [False],
+                    "filing_blocked": [True],
+                }
             # awaiting_send stays set, so the learner's next message retries
             # rather than starting the review over.
             return SUPPORT_TICKET_FAILED, {}
@@ -1658,6 +1684,10 @@ class SupportBot(TruncatingChatbot):
         # on this thread files again - there is no way to tell from here.
         elif (prior_state.get("filing_uncertain") or [False])[-1]:
             reply, updates = SUPPORT_TICKET_MAYBE_FILED, {}
+        # Zendesk turned this thread's request down on its merits, so the same
+        # words sent again get the same answer.
+        elif (prior_state.get("filing_blocked") or [False])[-1]:
+            reply, updates = SUPPORT_TICKET_REJECTED, {}
         # Latest wins, not any(): a cancellation appends False, and reading the
         # whole list would let the send the learner called off come back.
         elif (prior_state.get("awaiting_send") or [False])[-1]:

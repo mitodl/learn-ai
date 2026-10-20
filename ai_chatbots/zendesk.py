@@ -37,6 +37,23 @@ UNDELIVERED_TIMEOUTS = (httpx.ConnectTimeout, httpx.PoolTimeout)
 # Mint a token, POST the ticket, re-mint after a 401, POST again.
 WORST_PATH_REQUESTS = 4
 
+# Why the filing failed, for a caller deciding whether a retry is worth offering.
+# Zendesk turned the ticket down and will turn the same one down again.
+TICKET_REJECTED = "rejected"
+# The ticket never landed for a reason that may not hold next time.
+TICKET_UNSENT = "unsent"
+# The address would not reach the learner, so a different one is needed.
+TICKET_BAD_EMAIL = "bad_email"
+# What Zendesk answers when the ticket, not the caller or the URL, is the
+# problem: malformed, too large, or rejected by its own validation.
+REJECTION_STATUSES = frozenset(
+    {
+        HTTPStatus.BAD_REQUEST,
+        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+        HTTPStatus.UNPROCESSABLE_ENTITY,
+    }
+)
+
 
 class ZendeskTokenError(Exception):
     """Minting the access token failed, so no ticket was ever posted."""
@@ -67,6 +84,19 @@ def _outcome_is_unknown(exc: Exception) -> bool:
     return isinstance(exc, httpx.TimeoutException) and not isinstance(
         exc, UNDELIVERED_TIMEOUTS
     )
+
+
+def _is_rejection(exc: Exception) -> bool:
+    """
+    Say whether Zendesk turned the ticket down on its own merits, so sending
+    the same one again gets the same answer.
+
+    Listed rather than taken as the whole 4xx range: a 401, 403 or 404 is our
+    credentials or our API URL, and a thread blocked on one would still refuse
+    to file after someone had fixed it.
+    """
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status in REJECTION_STATUSES
 
 
 async def _get_access_token(client, *, force_refresh: bool = False) -> str:
@@ -155,8 +185,9 @@ async def file_support_ticket(  # noqa: PLR0913
     Create a Zendesk ticket.
 
     Returns {"reference": ...} on success. On failure, {"error": ...,
-    "uncertain": ...}, where uncertain means Zendesk may have created the
-    ticket regardless, so the caller must neither retry nor claim it failed.
+    "uncertain": ..., "reason": ...}, where uncertain means Zendesk may have
+    created the ticket regardless, so the caller must neither retry nor claim
+    it failed, and reason says whether retrying could ever work.
     """
     # Validated ahead of the stub return: a stub that accepts what Zendesk
     # rejects hides the bad address until the first deployed environment.
@@ -169,6 +200,7 @@ async def file_support_ticket(  # noqa: PLR0913
                 "learner for one before filing."
             ),
             "uncertain": False,
+            "reason": TICKET_BAD_EMAIL,
         }
 
     if settings.AI_ZENDESK_STUB_MODE:
@@ -227,4 +259,5 @@ async def file_support_ticket(  # noqa: PLR0913
         return {
             "error": "Could not file the support request. Please try again later.",
             "uncertain": uncertain,
+            "reason": TICKET_REJECTED if _is_rejection(exc) else TICKET_UNSENT,
         }

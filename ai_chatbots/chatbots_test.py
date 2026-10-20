@@ -27,8 +27,11 @@ from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
     SUPPORT_SEND_UNCLEAR,
+    SUPPORT_TICKET_BAD_EMAIL,
     SUPPORT_TICKET_CANCELLED,
+    SUPPORT_TICKET_FAILED,
     SUPPORT_TICKET_MAYBE_FILED,
+    SUPPORT_TICKET_REJECTED,
     SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
     SearchSummaryBot,
@@ -55,7 +58,7 @@ from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPI
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from ai_chatbots.utils import get_django_cache
-from ai_chatbots.zendesk import max_filing_seconds
+from ai_chatbots.zendesk import TICKET_BAD_EMAIL, TICKET_REJECTED, max_filing_seconds
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -3293,6 +3296,97 @@ async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
     assert "could not" not in first.lower()
     session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
     assert session.support_ticket_reference == ""
+
+
+@pytest.mark.asyncio
+async def test_support_bot_stops_asking_after_zendesk_turns_the_ticket_down(
+    mocker, mock_checkpointer
+):
+    """
+    Zendesk answers a rejected ticket the same way every time, so inviting
+    another "send" walks the learner around a loop that cannot end.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(
+            return_value={
+                "error": "Could not file.",
+                "uncertain": False,
+                "reason": TICKET_REJECTED,
+            }
+        ),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    replies = [await say("send"), await say("send"), await say("try it again")]
+
+    assert mock_file.call_count == 1
+    assert all(SUPPORT_TICKET_REJECTED in reply for reply in replies)
+    assert SUPPORT_TICKET_FAILED not in replies[0]
+
+
+@pytest.mark.asyncio
+async def test_support_bot_asks_for_an_address_zendesk_will_accept(
+    mocker, mock_checkpointer
+):
+    """
+    An address Zendesk will not take is the one rejection the learner can fix,
+    so the thread goes back to collecting instead of stopping.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(
+            side_effect=[
+                {
+                    "error": "Bad address.",
+                    "uncertain": False,
+                    "reason": TICKET_BAD_EMAIL,
+                },
+                {"reference": 4821},
+            ]
+        ),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["typo@mit"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state={"page_url": ["https://learn.mit.edu/week-3"]}
+                )
+            ]
+        )
+
+    rejected = await say("send")
+    await say("sorry, it's me@mit.edu")
+    filed = await say("send")
+
+    assert SUPPORT_TICKET_BAD_EMAIL in rejected
+    assert mock_file.call_count == 2
+    assert mock_file.call_args.kwargs["email"] == "me@mit.edu"
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+    assert "4821" in filed
 
 
 @pytest.mark.asyncio

@@ -20,6 +20,9 @@ from ai_chatbots.constants import (
 )
 from ai_chatbots.utils import get_django_cache
 from ai_chatbots.zendesk import (
+    TICKET_BAD_EMAIL,
+    TICKET_REJECTED,
+    TICKET_UNSENT,
     ZENDESK_TOKEN_CACHE_KEY,
     file_support_ticket,
     max_filing_seconds,
@@ -221,6 +224,7 @@ async def test_file_support_ticket_refuses_bad_email(
 
     assert "error" in result
     assert "reference" not in result
+    assert result["reason"] == TICKET_BAD_EMAIL
     mock_patch.return_value.post.assert_not_called()
 
 
@@ -467,6 +471,43 @@ async def test_file_support_ticket_says_whether_zendesk_may_have_filed_it(
 
     assert "reference" not in result
     assert result["uncertain"] is uncertain
+
+
+@pytest.mark.parametrize(
+    ("status_code", "reason"),
+    [
+        (400, TICKET_REJECTED),
+        (413, TICKET_REJECTED),
+        (422, TICKET_REJECTED),
+        # Our credentials and our API URL. Blocking the thread on one of these
+        # would keep refusing to file after someone had fixed it.
+        (401, TICKET_UNSENT),
+        (403, TICKET_UNSENT),
+        (404, TICKET_UNSENT),
+        # About when we asked, not what we asked for.
+        (429, TICKET_UNSENT),
+        (500, TICKET_UNSENT),
+        (503, TICKET_UNSENT),
+    ],
+)
+async def test_file_support_ticket_says_whether_sending_it_again_could_work(
+    zendesk_ticket_settings, mocker, status_code, reason
+):
+    """
+    A caller offering a retry needs to know the difference between a ticket
+    Zendesk will never take and one it could not take just now.
+    """
+    _mock_zendesk_client(
+        mocker,
+        ticket_responses=[
+            _failing_response(mocker, status_code),
+            _failing_response(mocker, status_code),
+        ],
+    )
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert result["reason"] == reason
 
 
 @pytest.mark.parametrize(
