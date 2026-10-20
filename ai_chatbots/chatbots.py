@@ -1417,10 +1417,16 @@ def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
     # On the opening message an address is part of the problem ("can't log in
     # as x@y.com"), not a reply-to, so it only counts once we have asked.
     parsed_reply_to = _reply_to_email(message) if prior_state.get("messages") else ""
+    known = _accumulated(prior_state, extra_state, "user_email")
+    if known and not _is_bare_reply_to(message):
+        # Replacing an address we already have takes a message that is nothing
+        # but the new one. "The page says contact admin@example.org" describes
+        # the problem, and reading it as a correction files against a stranger.
+        parsed_reply_to = ""
     return (
         _accumulated(prior_state, extra_state, "verified_email")
         or parsed_reply_to
-        or _accumulated(prior_state, extra_state, "user_email")
+        or known
     )
 
 

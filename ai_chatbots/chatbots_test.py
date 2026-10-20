@@ -2319,6 +2319,46 @@ async def test_support_bot_prefers_the_signed_in_email(mocker, mock_checkpointer
     assert mock_file.call_args.kwargs["email_verified"] is True
 
 
+@pytest.mark.parametrize(
+    ("reply_text", "expected"),
+    [
+        ("the page says contact admin@example.org", "learner@mit.edu"),
+        ("that error names ops@example.org", "learner@mit.edu"),
+        ("sorry, it's new@mit.edu", "new@mit.edu"),
+        ("new@mit.edu", "new@mit.edu"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_only_takes_a_bare_address_as_a_correction(
+    mocker, mock_checkpointer, reply_text, expected
+):
+    """
+    An address quoted while describing the problem is not the learner asking
+    us to write back to it, and filing against one makes Zendesk raise a
+    ticket in a stranger's name. Retyping the address still has to work.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 331}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["learner@mit.edu"]},
+    )
+    # No signed-in session, so the widget sends no address of its own and the
+    # one the learner typed earlier comes back out of the thread.
+    state = _support_state()
+
+    async for _ in chatbot.get_completion(reply_text, extra_state=state):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=state):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == expected
+
+
 @pytest.mark.asyncio
 async def test_support_bot_reports_a_zendesk_failure(mocker, mock_checkpointer):
     """Claiming a ticket exists when it does not strands the learner."""
