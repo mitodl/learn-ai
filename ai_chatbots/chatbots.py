@@ -1014,7 +1014,6 @@ class SupportAgentState(SummaryState):
     user_name: Annotated[list[str], add]
     user_username: Annotated[list[str], add]
     awaiting_send: Annotated[list[bool], add]
-    confirm: Annotated[list[bool], add]
     filing_uncertain: Annotated[list[bool], add]
     cancelled_after: Annotated[list[int], add]
 
@@ -1573,7 +1572,7 @@ class SupportBot(TruncatingChatbot):
         ), {"user_email": [email], "awaiting_send": [True]}
 
     async def _send_edit_or_cancel(
-        self, message: str, *, extra_state: dict, prior_state: dict, session
+        self, message: str, *, extra_state: dict, prior_state: dict, session, confirmed
     ) -> tuple[str, dict]:
         """Act on what the learner said about the request they were shown."""
         prior_messages = prior_state.get("messages") or []
@@ -1594,7 +1593,7 @@ class SupportBot(TruncatingChatbot):
         # confirm is the widget's Send button; the phrases are for learners who
         # type instead. Anything else is an edit to the request, so it is shown
         # back rather than sent - the learner has not read this version yet.
-        if not (any(extra_state.get("confirm") or []) or _is_affirmative(message)):
+        if not (confirmed or _is_affirmative(message)):
             if _is_unclear_go_ahead(message):
                 return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
             return _support_review(
@@ -1638,7 +1637,10 @@ class SupportBot(TruncatingChatbot):
         when it feels like it, and a learner who was told their request was
         sent has no way to tell that nothing was filed.
         """
-        extra_state = extra_state or {}
+        extra_state = dict(extra_state or {})
+        # Popped, not stored: it is this turn's Send button, and a checkpointed
+        # one would approve every turn after it.
+        confirmed = any(extra_state.pop("confirm", None) or [])
         session = await UserChatSession.objects.filter(
             thread_id=self.thread_id
         ).afirst()
@@ -1664,6 +1666,7 @@ class SupportBot(TruncatingChatbot):
                 extra_state=extra_state,
                 prior_state=prior_state,
                 session=session,
+                confirmed=confirmed,
             )
         else:
             reply, updates = self._collect_the_request(

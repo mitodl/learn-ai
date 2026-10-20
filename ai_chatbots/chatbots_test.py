@@ -3293,3 +3293,32 @@ async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
     assert "could not" not in first.lower()
     session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
     assert session.support_ticket_reference == ""
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_confirm_out_of_the_thread_state(
+    mocker, mock_checkpointer
+):
+    """
+    The confirm flag is this turn's Send button, not a fact about the thread.
+    Storing it files the learner's one approval against every turn after it.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "looks right to me",
+        extra_state={**_support_state("signedin@mit.edu"), "confirm": [True]},
+    ):
+        pass
+
+    state = await chatbot.agent.aget_state(chatbot.config)
+    assert "confirm" not in state.values
