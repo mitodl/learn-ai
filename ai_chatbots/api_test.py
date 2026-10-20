@@ -12,7 +12,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from ai_chatbots import factories
+from ai_chatbots import factories, learn
 from ai_chatbots.api import (
     MessageTruncationNode,
     _should_create_checkpoint,
@@ -589,20 +589,18 @@ AIGE_MITXONLINE = {
 
 @pytest.fixture
 def mock_resource_response(mocker):
-    """Mock the sync http client used for resource facts lookups"""
+    """Mock the Learn client used for resource facts lookups"""
     # the redis cache is a dummy in tests, so point the lookup at locmem
     cache = caches["default"]
     cache.clear()
     mocker.patch("ai_chatbots.api.get_django_cache", return_value=cache)
 
     def _mock(results, status_error=None):
-        response = mocker.MagicMock()
-        response.json.return_value = {"results": results}
-        if status_error:
-            response.raise_for_status.side_effect = status_error
-        client = mocker.patch("ai_chatbots.api.get_sync_http_client").return_value
-        client.get.return_value = response
-        return client
+        return mocker.patch(
+            "ai_chatbots.learn.learning_resources",
+            side_effect=status_error,
+            return_value=results,
+        )
 
     return _mock
 
@@ -610,7 +608,7 @@ def mock_resource_response(mocker):
 @pytest.mark.django_db
 def test_get_resource_facts(mock_resource_response):
     """Facts for a single resource should cover price, format and instructors"""
-    client = mock_resource_response([AIGE_XPRO])
+    lookup = mock_resource_response([AIGE_XPRO])
     facts = get_resource_facts("course-v1:PRO+AIGE")
     assert "authoritative" in facts
     for line in (
@@ -626,7 +624,7 @@ def test_get_resource_facts(mock_resource_response):
         "- Url: https://xpro.mit.edu/courses/course-v1:PRO+AIGE/",
     ):
         assert line in facts
-    assert "platform" not in client.get.call_args.kwargs["params"]
+    lookup.assert_called_once_with("course-v1:PRO+AIGE", None)
 
 
 @pytest.mark.django_db
@@ -645,9 +643,9 @@ def test_get_resource_facts_duplicate_readable_id(mock_resource_response):
 @pytest.mark.django_db
 def test_get_resource_facts_platform_filter(mock_resource_response):
     """A requested platform should narrow the lookup"""
-    client = mock_resource_response([AIGE_XPRO])
+    lookup = mock_resource_response([AIGE_XPRO])
     get_resource_facts("course-v1:PRO+AIGE", "xpro")
-    assert client.get.call_args.kwargs["params"]["platform"] == "xpro"
+    lookup.assert_called_once_with("course-v1:PRO+AIGE", "xpro")
 
 
 @pytest.mark.django_db
@@ -684,23 +682,43 @@ def test_get_resource_facts_unknown_resource(mock_resource_response, results):
 @pytest.mark.django_db
 def test_get_resource_facts_error(mock_resource_response):
     """A failed lookup should produce no facts rather than raising"""
-    mock_resource_response([AIGE_XPRO], status_error=Exception("API is down"))
+    mock_resource_response(
+        [AIGE_XPRO], status_error=learn.LearnError("API is down", "https://mit.edu", {})
+    )
     assert get_resource_facts("course-v1:PRO+AIGE") == ""
 
 
 @pytest.mark.django_db
 def test_get_resource_facts_blank_readable_id(mock_resource_response):
     """A resource with no readable id should not be looked up at all"""
-    client = mock_resource_response([AIGE_XPRO])
+    lookup = mock_resource_response([AIGE_XPRO])
     assert get_resource_facts(None) == ""
-    client.get.assert_not_called()
+    lookup.assert_not_called()
 
 
 @pytest.mark.django_db
 def test_get_resource_facts_cached(mock_resource_response):
     """The lookup should only happen once per resource"""
-    client = mock_resource_response([AIGE_XPRO])
+    lookup = mock_resource_response([AIGE_XPRO])
     first = get_resource_facts("course-v1:PRO+AIGE")
     second = get_resource_facts("course-v1:PRO+AIGE")
     assert first == second
-    assert client.get.call_count == 1
+    assert lookup.call_count == 1
+
+
+@pytest.mark.django_db
+async def test_get_resource_facts_from_async_context(
+    mocker, mock_async_get_client, httpx_response
+):
+    """Bots are built under sync_to_async; repeated lookups from there should work."""
+    cache = caches["default"]
+    cache.clear()
+    mocker.patch("ai_chatbots.api.get_django_cache", return_value=cache)
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": [AIGE_XPRO]})
+    )
+
+    for readable_id in ("course-v1:PRO+AIGE", "course-v1:PRO+AIGE2"):
+        facts = await sync_to_async(get_resource_facts)(readable_id)
+        assert "- Title: A New Imperative for AI Governance and Ethics" in facts
+    assert client.get.call_count == 2

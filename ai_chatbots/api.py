@@ -5,6 +5,7 @@ import logging
 from typing import Any, Union
 from uuid import uuid4
 
+from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.db import transaction
@@ -18,9 +19,10 @@ from langgraph.utils.runnable import RunnableCallable
 from langsmith import Client as LangsmithClient
 from typing_extensions import TypedDict
 
+from ai_chatbots import learn
 from ai_chatbots.constants import WRITES_MAPPING
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
-from ai_chatbots.utils import get_django_cache, get_sync_http_client
+from ai_chatbots.utils import get_django_cache
 from main.utils import now_in_utc
 
 log = logging.getLogger(__name__)
@@ -479,25 +481,9 @@ def get_resource_facts(readable_id: str, platform: str | None = None) -> str:
     cached_facts = cache.get(cache_key)
     if cached_facts is not None:
         return cached_facts
-    params = {"readable_id": readable_id, "limit": 5}
-    if platform:
-        params["platform"] = platform
     try:
-        # Resources are public, so the lookup works without a token; httpx
-        # rejects an empty bearer header, so only send one when configured.
-        headers = (
-            {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
-            if settings.LEARN_ACCESS_TOKEN
-            else {}
-        )
-        response = get_sync_http_client().get(
-            settings.AI_MIT_LEARNING_RESOURCES_URL,
-            params=params,
-            headers=headers,
-            timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
-        )
-        response.raise_for_status()
-        facts = _resource_facts_block(response.json().get("results", []))
+        resources = async_to_sync(learn.learning_resources)(readable_id, platform)
+        facts = _resource_facts_block(resources)
     except Exception:
         log.exception("Error looking up the facts of resource %s", readable_id)
         # Cache the failure briefly, so an unreachable API is not retried in

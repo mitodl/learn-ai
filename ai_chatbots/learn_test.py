@@ -289,3 +289,18 @@ async def test_problem_set_rejects_dot_segments(
     with pytest.raises(learn.LearnError):
         await learn.problem_set(run_readable_id, title)
     client.get.assert_not_called()
+
+
+async def test_learning_resources_platform(mock_async_get_client, httpx_response):
+    """A platform narrows the lookup to that platform's resource."""
+    client = mock_async_get_client(
+        return_value=httpx_response(200, json_body={"results": []})
+    )
+
+    await learn.learning_resources("course-v1:PRO+AIGE", "xpro")
+
+    assert client.get.call_args.kwargs["params"] == {
+        "readable_id": "course-v1:PRO+AIGE",
+        "limit": 5,
+        "platform": "xpro",
+    }
