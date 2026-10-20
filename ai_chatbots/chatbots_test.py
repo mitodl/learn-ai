@@ -26,6 +26,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
+    SUPPORT_FILING_LOCK_PREFIX,
     SUPPORT_SEND_UNCLEAR,
     SUPPORT_TICKET_BAD_EMAIL,
     SUPPORT_TICKET_CANCELLED,
@@ -3217,6 +3218,44 @@ async def test_support_bot_files_one_ticket_when_two_turns_land_together(
 
 
 @pytest.mark.asyncio
+async def test_support_bot_leaves_a_lock_it_no_longer_owns(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    Httpx bounds each read and write, not the whole call, so the lock TTL can
+    lapse while a filing is still running. The slow caller must not come back
+    and free the lock whoever took over is relying on.
+    """
+    cache = support_filing_cache
+    lock_key = ""
+    successor = uuid4().hex
+
+    async def slow_file(**_kwargs):
+        # The TTL runs out mid-call and the next turn takes the lock.
+        await cache.adelete(lock_key)
+        await cache.aadd(lock_key, value=successor, timeout=300)
+        return {"reference": 4821}
+
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket", AsyncMock(side_effect=slow_file)
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{chatbot.thread_id}"
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert await cache.aget(lock_key) == successor
+
+
+@pytest.mark.asyncio
 async def test_support_bot_holds_the_filing_lock_for_the_whole_zendesk_call(
     mocker, mock_checkpointer
 ):
@@ -3225,9 +3264,16 @@ async def test_support_bot_holds_the_filing_lock_for_the_whole_zendesk_call(
     that expires while the first call is still in flight hands the second turn a
     free pass at exactly the moment it must not have one.
     """
+    held = {}
     cache = mocker.Mock()
-    cache.aadd = AsyncMock(return_value=True)
-    cache.adelete = AsyncMock()
+
+    async def _aadd(key, value=None, timeout=None):
+        held[key] = value
+        return True
+
+    cache.aadd = AsyncMock(side_effect=_aadd)
+    cache.aget = AsyncMock(side_effect=held.get)
+    cache.adelete = AsyncMock(side_effect=lambda key: held.pop(key, None))
     mocker.patch("ai_chatbots.chatbots.get_django_cache", return_value=cache)
     mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",

@@ -1567,7 +1567,11 @@ class SupportBot(TruncatingChatbot):
         """File one ticket per thread, however many turns ask at once."""
         cache = get_django_cache()
         lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
-        if not await cache.aadd(lock_key, value=True, timeout=_filing_lock_ttl()):
+        # A token rather than a flag, because httpx bounds each read and write
+        # and not the call as a whole: one slow enough to outlive the TTL would
+        # otherwise come back and delete the lock its successor now holds.
+        token = uuid4().hex
+        if not await cache.aadd(lock_key, value=token, timeout=_filing_lock_ttl()):
             return SUPPORT_TICKET_SENDING, {}
         try:
             if session:
@@ -1583,7 +1587,8 @@ class SupportBot(TruncatingChatbot):
                     ), {}
             return await self._send_to_zendesk(session=session, ticket=ticket)
         finally:
-            await cache.adelete(lock_key)
+            if await cache.aget(lock_key) == token:
+                await cache.adelete(lock_key)
 
     def _collect_the_request(
         self, message: str, *, extra_state: dict, prior_state: dict
