@@ -2735,6 +2735,48 @@ async def test_support_bot_does_not_file_after_a_cancellation(
 
 
 @pytest.mark.asyncio
+async def test_support_bot_leaves_a_cancelled_request_out_of_the_next_one(
+    mocker, mock_checkpointer
+):
+    """
+    Cancelling withdraws the request, not just the send. Carrying the withdrawn
+    words into the next ticket files what the learner took back - and on a
+    shared device, puts one person's problem in another person's ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    await say("cancel")
+    review = await say("My certificate name is spelled wrong.")
+    await say("send")
+
+    # The review for the new request must not show the cancelled one either -
+    # the learner approves what they are shown.
+    assert SUPPORT_PROBLEM not in review
+    description = mock_file.call_args.kwargs["description"]
+    assert "certificate name" in description
+    assert SUPPORT_PROBLEM not in description
+
+
+@pytest.mark.asyncio
 async def test_support_bot_shows_an_edit_back_before_filing(mocker, mock_checkpointer):
     """
     Late detail is an edit to the ticket, so the learner has to see the edited

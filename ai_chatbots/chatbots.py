@@ -1016,6 +1016,7 @@ class SupportAgentState(SummaryState):
     awaiting_send: Annotated[list[bool], add]
     confirm: Annotated[list[bool], add]
     filing_uncertain: Annotated[list[bool], add]
+    cancelled_after: Annotated[list[int], add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
@@ -1042,8 +1043,8 @@ SUPPORT_TICKET_MAYBE_FILED = (
     "support team in a day or two, email them directly."
 )
 SUPPORT_TICKET_CANCELLED = (
-    "No problem - I haven't sent anything. Tell me what you'd like to change, or "
-    "start again whenever you're ready."
+    "No problem - I haven't sent anything, and I've put aside what you'd written "
+    "so far. Tell me about it again whenever you're ready and we'll start fresh."
 )
 SUPPORT_SEND_UNCLEAR = (
     "I'm not sure whether that was a go-ahead or something to add, and I don't "
@@ -1272,7 +1273,7 @@ def _is_unclear_go_ahead(message: str) -> bool:
     )
 
 
-def _support_description(prior_messages: list, message: str) -> str:
+def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
     """
     Join everything the learner typed about the problem. An address they gave is
     the reply-to, and a bare "send" is an answer to us, so neither belongs in
@@ -1282,7 +1283,11 @@ def _support_description(prior_messages: list, message: str) -> str:
     for an address at that point, so "I cannot log in as x@y.com" is the
     problem even though it reads like the answer to that question - and
     dropping it filed an empty ticket.
+
+    ``since`` is where the current request starts: a cancellation withdraws
+    every word before it, so those are not this request's to file.
     """
+    prior_messages = prior_messages[since:]
     typed = [
         msg.content
         for position, msg in enumerate(prior_messages)
@@ -1307,6 +1312,14 @@ def _support_description(prior_messages: list, message: str) -> str:
             or not (_reply_to_email(text) or _is_filler(text) or _is_cancellation(text))
         )
     )
+
+
+def _cancelled_after(prior_state: dict) -> int:
+    """
+    Where the current request starts in the thread. Latest wins: each
+    cancellation moves the line forward past the one before it.
+    """
+    return (prior_state.get("cancelled_after") or [0])[-1]
 
 
 def _accumulated(prior_state: dict, extra_state: dict, key: str) -> str:
@@ -1497,7 +1510,9 @@ class SupportBot(TruncatingChatbot):
             # message; invite more detail before showing the review.
             return SUPPORT_ASK_MORE, {"user_email": [email]}
         return _support_review(
-            _support_description(prior_messages, message),
+            _support_description(
+                prior_messages, message, since=_cancelled_after(prior_state)
+            ),
             _accumulated(prior_state, extra_state, "page_url"),
             email,
             # An address parsed out of this turn reaches state no other way,
@@ -1508,14 +1523,20 @@ class SupportBot(TruncatingChatbot):
         self, message: str, *, extra_state: dict, prior_state: dict, session
     ) -> tuple[str, dict]:
         """Act on what the learner said about the request they were shown."""
+        prior_messages = prior_state.get("messages") or []
         # The question on screen here is whether to send, so a plain "no"
         # answers it. Cancelling costs a turn to undo; filing cannot be undone.
         if _is_cancellation(message) or _is_decline(message):
-            return SUPPORT_TICKET_CANCELLED, {"awaiting_send": [False]}
+            return SUPPORT_TICKET_CANCELLED, {
+                "awaiting_send": [False],
+                # This turn's own exchange is written after the reply, so the
+                # next request starts past both of those too.
+                "cancelled_after": [len(prior_messages) + 2],
+            }
 
-        prior_messages = prior_state.get("messages") or []
         email = _support_email(prior_state, extra_state, message)
         page_url = _accumulated(prior_state, extra_state, "page_url")
+        since = _cancelled_after(prior_state)
 
         # confirm is the widget's Send button; the phrases are for learners who
         # type instead. Anything else is an edit to the request, so it is shown
@@ -1524,7 +1545,9 @@ class SupportBot(TruncatingChatbot):
             if _is_unclear_go_ahead(message):
                 return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
             return _support_review(
-                _support_description(prior_messages, message), page_url, email
+                _support_description(prior_messages, message, since=since),
+                page_url,
+                email,
             ), {"user_email": [email], "awaiting_send": [True]}
 
         reply, filing_updates = await self._file_the_ticket(
@@ -1533,7 +1556,7 @@ class SupportBot(TruncatingChatbot):
                 # What files is what the learner reviewed. This turn only
                 # approved it, so it stays out of the ticket whether they typed
                 # "send" or pressed a button that carried some words along.
-                "description": _support_description(prior_messages, ""),
+                "description": _support_description(prior_messages, "", since=since),
                 "page_url": page_url,
                 "email": email,
                 "name": _accumulated(prior_state, extra_state, "user_name"),
