@@ -1636,9 +1636,14 @@ def test_support_process_extra_state_anonymous_learner(support_consumer):
 
 async def _handle_with_origin(mocker, consumer, origin, settings, allowed):
     """Run handle() with an Origin header and return the captured send mock."""
+    headers = [] if origin is None else [(b"origin", origin.encode())]
+    return await _handle_with_headers(mocker, consumer, headers, settings, allowed)
+
+
+async def _handle_with_headers(mocker, consumer, headers, settings, allowed):
+    """Run handle() with the given request headers and return the send mock."""
     settings.CORS_ALLOW_ORIGINS = allowed
-    if origin is not None:
-        consumer.scope["headers"] = [(b"origin", origin.encode())]
+    consumer.scope["headers"] = headers
     mocker.patch(
         "ai_chatbots.consumers.SyllabusBot.get_completion",
         return_value=MockAsyncIterator(["hello"]),
@@ -1747,6 +1752,88 @@ async def test_handle_rejects_everything_when_cross_site_cookies_lack_an_allow_l
     settings.AI_CHATBOTS_COOKIE_CROSS_SITE = True
     mock_send = await _handle_with_origin(
         mocker, syllabus_consumer, "https://evil.example.com", settings, allowed
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_allows_a_same_origin_request_missing_from_the_allow_list(
+    mocker, syllabus_consumer, settings
+):
+    """
+    CORS_ALLOW_ORIGINS lists the other sites allowed to embed a bot, so nobody
+    adding one would think to put learn-ai's own origin in it. Browsers send
+    Origin on a same-origin POST too, which is how frontend-demo's relative
+    fetches started arriving with one. CsrfViewMiddleware never 403s these
+    because it accepts same-origin before it consults any list.
+    """
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [(b"host", b"ai.open.odl.local"), (b"origin", b"http://ai.open.odl.local")],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_allows_a_same_origin_request_behind_a_tls_terminating_proxy(
+    mocker, syllabus_consumer, settings
+):
+    """
+    APISIX terminates TLS, so the browser's https origin reaches an ASGI scope
+    whose scheme is http. Comparing against that raw scheme would 403 every
+    deployed environment while passing locally.
+    """
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [
+            (b"host", b"api.learn.mit.edu"),
+            (b"x-forwarded-proto", b"https"),
+            (b"origin", b"https://api.learn.mit.edu"),
+        ],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_does_not_treat_a_forged_host_as_same_origin(
+    mocker, syllabus_consumer, settings
+):
+    """
+    The Host header is the caller's to set, so matching Origin against it
+    unchecked would let anyone nominate their own site as ours. ALLOWED_HOSTS
+    is the list that already says which hosts this site answers to.
+    """
+    settings.ALLOWED_HOSTS = ["ai.open.odl.local"]
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [(b"host", b"evil.example.com"), (b"origin", b"http://evil.example.com")],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_rejects_an_origin_matching_the_host_on_the_wrong_scheme(
+    mocker, syllabus_consumer, settings
+):
+    """
+    Same host over https is still a different origin, and a plain-http request
+    is not evidence the browser was on the https one.
+    """
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [(b"host", b"ai.open.odl.local"), (b"origin", b"https://ai.open.odl.local")],
+        settings,
+        ["https://learn.mit.edu"],
     )
 
     assert _response_status(mock_send) == 403

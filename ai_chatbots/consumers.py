@@ -10,6 +10,7 @@ from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.http.request import split_domain_port, validate_host
 from django.middleware.csrf import _get_new_csrf_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -81,6 +82,41 @@ def request_origin(scope: dict) -> str:
     return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
 
 
+def _request_scheme(scope: dict) -> str:
+    """
+    Return the scheme the browser used, not the one that reached the worker.
+
+    APISIX terminates TLS, so an https request arrives over plain http. Read
+    from SECURE_PROXY_SSL_HEADER the way HttpRequest.scheme does, rather than
+    naming X-Forwarded-Proto here, so both honour the same setting.
+    """
+    proxy_header = settings.SECURE_PROXY_SSL_HEADER
+    if proxy_header:
+        meta_name, secure_value = proxy_header
+        name = meta_name.removeprefix("HTTP_").replace("_", "-").lower()
+        forwarded = _header(scope, name.encode("latin-1"))
+        if forwarded:
+            first, _, _ = forwarded.partition(",")
+            return "https" if first.strip() == secure_value else "http"
+    return scope.get("scheme") or "http"
+
+
+def request_host_origin(scope: dict) -> str:
+    """
+    Return the scheme://host the request was sent to, or '' if the Host header
+    is missing or not one this site answers to.
+    """
+    host = _header(scope, b"x-forwarded-host") if settings.USE_X_FORWARDED_HOST else ""
+    host = host or _header(scope, b"host")
+    domain, _ = split_domain_port(host)
+    # ALLOWED_HOSTS is what stops a forged Host header nominating itself as the
+    # origin. get_host() rejects the same way, and the caller falls back to the
+    # allow-list from here, exactly as CsrfViewMiddleware does on DisallowedHost.
+    if not domain or not validate_host(domain, settings.ALLOWED_HOSTS):
+        return ""
+    return f"{_request_scheme(scope)}://{host}"
+
+
 def build_csrf_cookie_header():
     """Build a Set-Cookie header tuple for a new CSRF token."""
     csrf_cookie_name = settings.CSRF_COOKIE_NAME
@@ -143,6 +179,13 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         # a bot does, and it can never match an allow-list entry.
         if origin == "null":
             raise CrossOriginRequestError(origin)
+        # A page on this site posting to this site is not cross-site, whatever
+        # the allow-list says. CORS_ALLOW_ORIGINS names the other sites allowed
+        # to embed a bot, so nobody adding one would think to list our own, and
+        # CsrfViewMiddleware does not make them: it accepts same-origin before
+        # it consults any list.
+        if origin and origin == request_host_origin(self.scope):
+            return
         if not allowed or "*" in allowed:
             if settings.AI_CHATBOTS_COOKIE_CROSS_SITE:
                 raise CrossOriginRequestError(origin or "unset allow-list")
