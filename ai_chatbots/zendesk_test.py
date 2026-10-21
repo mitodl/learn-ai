@@ -28,6 +28,7 @@ from ai_chatbots.zendesk import (
     TICKET_REJECTED,
     TICKET_UNSENT,
     ZENDESK_TOKEN_CACHE_KEY,
+    ZENDESK_TOKEN_LIFETIME,
     file_support_ticket,
     max_filing_seconds,
 )
@@ -99,6 +100,11 @@ def _failing_response(mocker, status_code):
     return response
 
 
+# Zendesk documents expires_in as not mandatory, so a mint response without it
+# is a shape the real API is allowed to return.
+NO_EXPIRES_IN = object()
+
+
 def _mock_zendesk_client(mocker, *, ticket_responses, expires_in=1799):
     """
     Patch the async client so mint POSTs and ticket POSTs get separate replies.
@@ -106,15 +112,14 @@ def _mock_zendesk_client(mocker, *, ticket_responses, expires_in=1799):
     ``ticket_responses`` is consumed in order, so a test can hand back a 401
     first and a success second to exercise the re-mint path.
     """
-    mint_response = _response(
-        mocker,
-        {
-            "access_token": MINTED_TOKEN,
-            "token_type": "bearer",
-            "scope": "tickets:write users:write",
-            "expires_in": expires_in,
-        },
-    )
+    mint_body = {
+        "access_token": MINTED_TOKEN,
+        "token_type": "bearer",
+        "scope": "tickets:write users:write",
+    }
+    if expires_in is not NO_EXPIRES_IN:
+        mint_body["expires_in"] = expires_in
+    mint_response = _response(mocker, mint_body)
     ticket_iter = iter(ticket_responses)
 
     async def post(url, *_args, **_kwargs):
@@ -690,10 +695,47 @@ async def test_file_support_ticket_mints_and_caches_token_when_cache_is_cold(
         "client_id": "mit_odl_support",
         "client_secret": "zdsecret",
         "scope": "tickets:write users:write",
+        "expires_in": ZENDESK_TOKEN_LIFETIME,
     }
     # The ticket is filed with the freshly minted token, which is now cached.
     assert ticket_call.kwargs["headers"]["Authorization"] == f"Bearer {MINTED_TOKEN}"
     assert token_cache.get(ZENDESK_TOKEN_CACHE_KEY) == MINTED_TOKEN
+
+
+@pytest.mark.parametrize("expires_in", [NO_EXPIRES_IN, None])
+async def test_file_support_ticket_files_when_mint_omits_expires_in(
+    zendesk_ticket_settings, token_cache, mocker, expires_in
+):
+    """
+    Zendesk does not have to return expires_in. Reading it as a required key
+    failed every filing in the environment, and no fixture ever omitted it.
+    """
+    token_cache.delete(ZENDESK_TOKEN_CACHE_KEY)
+    _mock_zendesk_client(
+        mocker,
+        ticket_responses=[_response(mocker, {"ticket": {"id": 9}})],
+        expires_in=expires_in,
+    )
+
+    result = await file_support_ticket(**_ticket_args())
+
+    assert result == {"reference": 9, "stub": False}
+    assert token_cache.get(ZENDESK_TOKEN_CACHE_KEY) == MINTED_TOKEN
+
+
+async def test_mint_request_asks_for_a_known_token_lifetime(
+    zendesk_ticket_settings, token_cache, mocker
+):
+    """Asking for the lifetime is what makes the fallback TTL the real one."""
+    token_cache.delete(ZENDESK_TOKEN_CACHE_KEY)
+    client = _mock_zendesk_client(
+        mocker, ticket_responses=[_response(mocker, {"ticket": {"id": 9}})]
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    mint_call = client.post.call_args_list[0]
+    assert mint_call.kwargs["json"]["expires_in"] == ZENDESK_TOKEN_LIFETIME
 
 
 async def test_file_support_ticket_uses_cached_token_without_minting(

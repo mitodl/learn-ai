@@ -32,6 +32,10 @@ ZENDESK_OAUTH_SCOPE = "tickets:write users:write"
 # Re-mint this many seconds before the token's stated expiry, so an in-flight
 # request never files with a token that lapses mid-call.
 ZENDESK_TOKEN_EXPIRY_MARGIN = 60
+# Asked for on the mint request, and used as the TTL when the response leaves
+# expires_in out - Zendesk documents that field as not mandatory. Zendesk takes
+# 300 to 172800 seconds here and rejects anything outside it.
+ZENDESK_TOKEN_LIFETIME = 1800
 # Failures that need a connection already up and the request already going out,
 # so Zendesk may have taken the ticket before the call broke. A connect or pool
 # failure is not here: nothing was ever sent, so nothing can have been filed.
@@ -129,18 +133,23 @@ async def _get_access_token(client, *, force_refresh: bool = False) -> str:
                 "client_id": settings.AI_ZENDESK_OAUTH_CLIENT_ID,
                 "client_secret": settings.AI_ZENDESK_OAUTH_CLIENT_SECRET,
                 "scope": ZENDESK_OAUTH_SCOPE,
+                "expires_in": ZENDESK_TOKEN_LIFETIME,
             },
             timeout=settings.REQUESTS_TIMEOUT,
         )
         response.raise_for_status()
         data = response.json()
+        # Zendesk does not have to send expires_in back. Falling back to the
+        # lifetime we asked for keeps a filing from failing on a missing key.
+        lifetime = data.get("expires_in") or ZENDESK_TOKEN_LIFETIME
+        ttl = max(lifetime - ZENDESK_TOKEN_EXPIRY_MARGIN, 1)
+        token = data["access_token"]
     except Exception as exc:
         # Wrapped so the 5xx or timeout from here cannot be mistaken for one
         # from the ticket POST, which may have filed in spite of it.
         raise ZendeskTokenError from exc
-    ttl = max(data["expires_in"] - ZENDESK_TOKEN_EXPIRY_MARGIN, 1)
-    await cache.aset(ZENDESK_TOKEN_CACHE_KEY, data["access_token"], ttl)
-    return data["access_token"]
+    await cache.aset(ZENDESK_TOKEN_CACHE_KEY, token, ttl)
+    return token
 
 
 async def _post_ticket(
