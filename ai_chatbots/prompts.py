@@ -109,9 +109,11 @@ REMEMBER: It's better to have NO citation than WRONG citations.
 
 # The syllabus prompts differ only in where the citation instructions go, so
 # the part that routes a question between the two search tools is shared.
-PROMPT_SYLLABUS_ROUTING = """Use "search_content_files" for anything about the resource itself that the facts
-below do not answer: what it covers and requires, when it runs, how it is
-delivered, what it costs and what it offers.  It searches this resource's own
+PROMPT_SYLLABUS_ROUTING = """Use "search_content_files" for questions about the resource itself or its subject
+matter that the facts below do not answer: the concepts, terms, methods and
+examples it teaches, even when the question does not mention the resource, and
+what it covers and requires, when it runs, how it is delivered, what it costs and
+what it offers.  It searches this resource's own
 material and already has the resource identifier, so never put the course id in
 the query.
 
@@ -201,9 +203,10 @@ PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 # rules for an answer about the learner's own records.
 PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own MITx Online records with
 get_enrollments, get_course_progress, get_certificate_status and
-get_upcoming_assignments.  Use them, rather than search_content_files, for
-questions about the learner's own enrollments, grades, certificates, digital
-credentials and due dates.
+get_upcoming_assignments.  Use them only for questions about the learner's own
+enrollments, grades, certificates, digital credentials and due dates.  Questions
+about the course itself, including what it teaches, how it is graded and what
+certificate it offers, still go to the resource facts and search_content_files.
 
 If a tool says it couldn't check, tell the learner that, and never tell them they
 have no enrollment, grade, certificate or digital credential.  Say a digital
