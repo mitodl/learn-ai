@@ -56,7 +56,11 @@ from ai_chatbots.factories import (
     ToolMessageFactory,
 )
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
-from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import (
+    PROMPT_SEARCH_SUMMARY_QUERY,
+    PROMPT_SYLLABUS_ACCOUNT_TOOLS,
+    SYSTEM_PROMPT_MAPPING,
+)
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from ai_chatbots.utils import get_django_cache
@@ -692,7 +696,9 @@ async def test_syllabus_bot_account_tools(
     ]
     tool_names = [tool.name for tool in chatbot.create_tools()]
     assert (tool_names[-4:] == account_tools) is enable_account_tools
-    assert ("couldn't check" in chatbot.instructions) is enable_account_tools
+    assert (
+        PROMPT_SYLLABUS_ACCOUNT_TOOLS in chatbot.instructions
+    ) is enable_account_tools
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])

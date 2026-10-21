@@ -196,6 +196,21 @@ tool messages and any previous summaries in this new summary.
 """
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
+# Added to the syllabus prompt only when the account tools are attached. What
+# each tool returns is in its docstring, so this only covers routing and the
+# rules for an answer about the learner's own records.
+PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own MITx Online records with
+get_enrollments, get_course_progress, get_certificate_status and
+get_upcoming_assignments.  Use them, rather than search_content_files, for
+questions about the learner's own enrollments, grades, certificates, digital
+credentials and due dates.
+
+If a tool says it couldn't check, tell the learner that, and never tell them they
+have no enrollment, grade, certificate or digital credential.  Say a digital
+credential was issued only when digital_credential is "issued".  Don't guess
+details the tools don't return; link to the course's Progress or Dates tab
+instead."""
+
 
 def parse_prompt(prompt_text: str, prompt_name) -> str:
     """
@@ -224,6 +239,7 @@ CHATBOT_PROMPT_MAPPING = {
 
 SYSTEM_PROMPT_MAPPING = {
     **CHATBOT_PROMPT_MAPPING,
+    "syllabus_account_tools": PROMPT_SYLLABUS_ACCOUNT_TOOLS,
     "summary_initial": PROMPT_SUMMARY_INITIAL,
     "summary_existing": PROMPT_SUMMARY_EXISTING,
     "summary_final": PROMPT_SUMMARY_FINAL,

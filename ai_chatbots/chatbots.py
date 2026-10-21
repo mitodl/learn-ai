@@ -642,24 +642,10 @@ class SyllabusBot(TruncatingChatbot):
                 "about these courses."
             )
         if self.enable_account_tools and self.instructions:
-            self.instructions += (
-                "\n\nYou can also read the signed-in learner's own MITx Online "
-                "records with get_enrollments, get_course_progress, "
-                "get_certificate_status and get_upcoming_assignments. Use them "
-                "for questions about the learner's own enrollments, grades, "
-                "certificates and due dates, never search_content_files. "
-                "get_enrollments lists all of their courses; the others "
-                "default to the course this chat is about. Pass course when the "
-                "learner names another one by number or title. If a tool says "
-                "it couldn't check, tell the learner that, and never tell them "
-                "they have no enrollment, grade or certificate. A digital "
-                "credential is separate from the certificate: say one was "
-                'issued only when digital_credential is "issued"; when it is '
-                '"not_confirmed", say you couldn\'t confirm it and suggest '
-                "contacting support. Link to the "
-                "course's Progress or Dates tab rather than guessing details "
-                "the tools don't return."
+            account_prompt = get_system_prompt(
+                "syllabus_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
             )
+            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
