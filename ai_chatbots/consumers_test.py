@@ -1269,6 +1269,18 @@ async def test_anonymous_user_session_cookie_assignment(
     assert session.dj_session_key != ""
 
 
+async def test_session_cookie_lasts_as_long_as_the_thread_cookies(syllabus_consumer):
+    """
+    An anonymous thread only resumes while its session key still matches, so a
+    session-scoped cookie here would cut continuity to one browser session while
+    the thread cookie it is checked against lives for a week.
+    """
+    _, cookies = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    session_cookie = next(c for c in cookies if c.name == AI_SESSION_COOKIE_KEY)
+    assert session_cookie.max_age == settings.AI_CHATBOTS_COOKIE_MAX_AGE
+
+
 async def test_anonymous_user_login_session_association(  # noqa: PLR0913
     mocker,
     mock_http_consumer_send,

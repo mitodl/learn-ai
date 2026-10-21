@@ -318,6 +318,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             ChatbotCookie(
                 name=AI_SESSION_COOKIE_KEY,
                 value=self.session_key,
+                # An anonymous thread resumes only while this key still matches,
+                # so it has to outlive the browser session like the thread cookies.
+                max_age=max_age,
             ),
         ]
         return current_thread_id, cookies
