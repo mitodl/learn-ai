@@ -69,7 +69,8 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
-    "opik~=2.1.22",
+    "ol-llm>=0.0.3,<0.1",
+    "opik==2.2.94",
     "azure-identity>=1.25,<2",
 ]
 
@@ -121,6 +122,7 @@ required-version = ">=0.9.17"
 mitol-django-common = "0d"
 mitol-django-observability = "0d"
 mitol-drf-lint = "0d"
+ol-llm = "0d"
 
 [tool.uv.build-backend]
 module-root = ""

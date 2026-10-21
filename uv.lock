@@ -16,6 +16,7 @@ exclude-newer-span = "P7D"
 mitol-django-common = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-observability = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-drf-lint = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
+ol-llm = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -2704,6 +2705,7 @@ dependencies = [
     { name = "markdown2" },
     { name = "mitol-django-observability" },
     { name = "named-enum" },
+    { name = "ol-llm" },
     { name = "open-learning-ai-tutor" },
     { name = "opentelemetry-instrumentation-asgi" },
     { name = "opentelemetry-instrumentation-celery" },
@@ -2811,6 +2813,7 @@ requires-dist = [
     { name = "markdown2", specifier = ">=2.5.2,<3" },
     { name = "mitol-django-observability", specifier = ">=2026.8.19" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
+    { name = "ol-llm", specifier = ">=0.0.3,<0.1" },
     { name = "open-learning-ai-tutor", specifier = "==0.2.16" },
     { name = "opentelemetry-instrumentation-asgi", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
@@ -2819,7 +2822,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opik", specifier = "~=2.1.22" },
+    { name = "opik", specifier = "==2.2.94" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", extras = ["c"], specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },
@@ -3392,6 +3395,23 @@ wheels = [
 ]
 
 [[package]]
+name = "ol-llm"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+    { name = "opik" },
+    { name = "pydantic" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/b4/72950ac8a991c6128b21edc4cfdd7b4547befe4a7e75e3fe4bde7fc90658/ol_llm-0.0.3.tar.gz", hash = "sha256:30ac90d7e768bc9ff6643a2779ff0627a369fe0254827a0b5da798c55a81fbef", size = 180545, upload-time = "2026-10-21T16:25:24.246Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/eb/467c67e637c68389acbf006291b57cf333659e1c529179868c3307dacd45/ol_llm-0.0.3-py3-none-any.whl", hash = "sha256:cebd48cc5de59f90ccdbcbb2a92fe48c185ec059c339e8af86417077188f6fbe", size = 81564, upload-time = "2026-10-21T16:25:22.933Z" },
+]
+
+[[package]]
 name = "ollama"
 version = "0.6.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3719,7 +3739,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.1.22"
+version = "2.2.94"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -3728,6 +3748,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "litellm" },
     { name = "openai" },
+    { name = "orjson", marker = "platform_machine in 'x86_64 AMD64 aarch64 arm64 ARM64 i686 x86' and platform_python_implementation == 'CPython'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest" },
@@ -3742,9 +3763,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/bb/8007bce35fbf8f4ee81cf433b4d231a1f4447242a8149d59b95b3db38258/opik-2.1.22.tar.gz", hash = "sha256:bdd1a211117baf5e86fae278cd2291e4a3ed51d536fd5b130c3bb458df660a0f", size = 1169626, upload-time = "2026-07-10T10:51:36.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/eb/56/a433a491c46e15bf56bfd439fb18312e92eb2539345d40c869054be1e644/opik-2.2.94.tar.gz", hash = "sha256:5ad6dab275d23cc2820500ba97a65a077dd818bc592bc9bf59e22abcb5389259", size = 1397362, upload-time = "2026-10-07T14:26:53.644Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/b5/9a0552de8e39a36e8e288ba3ff0337d0abcd117ddda7d753667a02d4507f/opik-2.1.22-py3-none-any.whl", hash = "sha256:c11bc8db4bdc370dd2ab6d6962901b9d2ae8e1ac04502ed53c27e4fe37f0ab98", size = 1854322, upload-time = "2026-07-10T10:51:34.556Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/1d/15d3b9fd58e60ae789c3ae33931f679600ea4e107c2c555315ef71f22889/opik-2.2.94-py3-none-any.whl", hash = "sha256:f87cd0e890fbf684915ccd09ca102ebf9861ecb2896e3c605723cea7ffadc262", size = 2134186, upload-time = "2026-10-07T14:26:51.506Z" },
 ]
 
 [[package]]

@@ -1,7 +1,13 @@
 """Tests for the cost-aware Opik LangChain tracer."""
 
+import warnings
+
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 from opik.integrations.langchain import OpikTracer
+from pydantic.warnings import PydanticDeprecatedSince20
 
 from ai_chatbots import opik_tracing
 from ai_chatbots.opik_tracing import (
@@ -121,7 +127,7 @@ def test_tracer_attaches_cost_fields_after_super(mocker):
     span_data.as_parameters = {"id": "span-1"}
 
     tracer = _make_tracer(mocker, client)
-    tracer._span_data_map = {run.id: span_data}  # noqa: SLF001
+    mocker.patch.object(tracer, "get_current_span_data_for_run", return_value=span_data)
 
     tracer._process_end_span(run)  # noqa: SLF001
 
@@ -141,10 +147,44 @@ def test_tracer_noop_when_no_llm_info(mocker):
     span_data = mocker.Mock()
 
     tracer = _make_tracer(mocker, client)
-    tracer._span_data_map = {run.id: span_data}  # noqa: SLF001
+    mocker.patch.object(tracer, "get_current_span_data_for_run", return_value=span_data)
 
     tracer._process_end_span(run)  # noqa: SLF001
 
     super_end.assert_called_once_with(run)
     span_data.update.assert_not_called()
     client.__internal_api__span__.assert_not_called()
+
+
+def test_tracer_attaches_cost_fields_through_real_opik_tracer(mocker):
+    """Run a chain through the real OpikTracer so the Opik internals the
+    subclass reads (its span lookup after super()._process_end_span) are
+    exercised rather than mocked.
+    """
+    client = mocker.Mock()
+    client.__internal_api__trace__ = mocker.Mock()
+    client.__internal_api__span__ = mocker.Mock()
+    mocker.patch.object(
+        OpikTracer,
+        "_opik_client",
+        new_callable=mocker.PropertyMock,
+        return_value=client,
+    )
+    model = GenericFakeChatModel(
+        messages=iter([AIMessage(content="hi", usage_metadata=DEFAULT_USAGE)])
+    )
+    # A chain root with the LLM as a child mirrors the agent graph, where
+    # every LLM run has a parent.
+    chain = RunnableLambda(model.invoke)
+
+    with warnings.catch_warnings():
+        # Opik and this module read runs via the deprecated Run.dict().
+        warnings.simplefilter("ignore", category=PydanticDeprecatedSince20)
+        chain.invoke("hello", config={"callbacks": [CostTrackingOpikTracer()]})
+
+    llm_spans = [
+        call.kwargs
+        for call in client.__internal_api__span__.call_args_list
+        if call.kwargs.get("type") == "llm"
+    ]
+    assert llm_spans[-1]["usage"] == OPENAI_USAGE
