@@ -1,15 +1,18 @@
 """Tests for AI chatbots."""
 
+import asyncio
 import json
 import os
 import re
 from unittest.mock import ANY, AsyncMock
+from uuid import uuid4
 
 import pytest
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import OperationalError
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
 from langchain_litellm import ChatLiteLLM
@@ -21,8 +24,20 @@ from open_learning_ai_tutor.utils import (
 from openai import BadRequestError
 
 from ai_chatbots.chatbots import (
+    SUPPORT_ASK_EMAIL,
+    SUPPORT_ASK_EMAIL_AGAIN,
+    SUPPORT_ASK_MORE,
+    SUPPORT_FILING_LOCK_PREFIX,
+    SUPPORT_SEND_UNCLEAR,
+    SUPPORT_TICKET_BAD_EMAIL,
+    SUPPORT_TICKET_CANCELLED,
+    SUPPORT_TICKET_FAILED,
+    SUPPORT_TICKET_MAYBE_FILED,
+    SUPPORT_TICKET_REJECTED,
+    SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
     SearchSummaryBot,
+    SupportBot,
     SyllabusAgentState,
     SyllabusBot,
     TutorBot,
@@ -40,10 +55,18 @@ from ai_chatbots.factories import (
     SystemMessageFactory,
     ToolMessageFactory,
 )
-from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput
+from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPING
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
+from ai_chatbots.utils import get_django_cache
+from ai_chatbots.zendesk import (
+    HTTPX_TIMEOUT_PHASES,
+    TICKET_BAD_EMAIL,
+    TICKET_REJECTED,
+    WORST_PATH_REQUESTS,
+    max_filing_seconds,
+)
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -1635,3 +1658,2143 @@ async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid
 
     await chatbot.validate_and_clean_checkpoint()
     assert mock_truncate.call_count == (0 if is_valid else 1)
+
+
+@pytest.mark.asyncio
+async def test_support_bot_has_no_tools(mock_checkpointer):
+    """
+    The v1 support bot takes in a problem; it does not try to answer it, and it
+    does not file through the model either. Filing happens in get_completion, so
+    a second tool-driven path could only disagree with it.
+    """
+    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+
+    assert chatbot.create_tools() == []
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_provision_a_proxy_budget(
+    settings, mocker, mock_checkpointer
+):
+    """
+    Every reply is scripted, so the bot spends no tokens and has no budget to
+    provision. Asking for one is a blocking HTTP call that puts the intake
+    form - the thing a learner reaches when something else is broken - behind
+    the LLM proxy being up.
+    """
+    settings.AI_PROXY_CLASS = "LiteLLMProxy"
+    settings.AI_PROXY_URL = "http://proxy.url"
+    settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
+    mock_create_proxy_user = mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
+    )
+
+    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+
+    mock_create_proxy_user.assert_not_called()
+    # The proxy itself still has to be configured: get_llm needs the prefix and
+    # api kwargs to build the graph this bot reads and writes state through.
+    assert isinstance(chatbot.proxy, LiteLLMProxy)
+    assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
+    assert chatbot.agent is not None
+
+
+async def _support_bot(mocker, mock_checkpointer, prior_messages, state=None):
+    """Build a SupportBot whose thread already holds prior_messages, LLM stubbed."""
+    thread_id = uuid4().hex
+    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
+    chatbot = await sync_to_async(SupportBot)(
+        "anonymous", mock_checkpointer, thread_id=thread_id
+    )
+    # Write the thread's starting point through the graph rather than stubbing
+    # the read, so what one turn accumulates is what the next turn sees.
+    await chatbot.agent.aupdate_state(
+        chatbot.config,
+        {"messages": list(prior_messages), **(state or {})},
+        as_node="agent",
+    )
+    mocker.patch.object(
+        SupportBot, "send_chunks", return_value=MockAsyncIterator(["from the llm"])
+    )
+    return chatbot
+
+
+SUPPORT_PROBLEM = "The week 3 video just spins forever."
+
+
+def _support_state(email=""):
+    return {"page_url": ["https://learn.mit.edu/week-3"], "user_email": [email]}
+
+
+@pytest.mark.asyncio
+async def test_support_bot_loads_no_system_prompt(mocker, mock_checkpointer):
+    """
+    No branch of get_completion calls the model, so loading a prompt buys
+    nothing and costs a LangSmith lookup on a cache miss.
+    """
+    mock_get_prompt = mocker.patch("ai_chatbots.chatbots.get_system_prompt")
+
+    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+
+    assert chatbot.instructions is None
+    mock_get_prompt.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_support_bot_reviews_before_it_files(mocker, mock_checkpointer):
+    """
+    Nothing reaches the support team until the learner has seen what is going.
+    The review is built in code for the same reason the ticket is: a model
+    asked to repeat it back would paraphrase it into something untrue.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    # Turn 1: we already know the authenticated learner's address, so the bot
+    # invites more detail rather than filing or reviewing straight away.
+    first = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                SUPPORT_PROBLEM, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+    assert SUPPORT_ASK_MORE in first
+
+    # Turn 2: now the review is shown, still without filing.
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "that's everything", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_PROBLEM in reply
+    assert "signedin@mit.edu" in reply
+    assert "https://learn.mit.edu/week-3" in reply
+    SupportBot.send_chunks.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "confirmation",
+    ["send", "Send it.", "yes please", "ok", "go ahead", "Submit"],
+)
+@pytest.mark.asyncio
+async def test_support_bot_files_on_a_go_ahead_after_the_review(
+    mocker, mock_checkpointer, confirmation
+):
+    """
+    A learner who has read the review and said yes has to get their request
+    filed on that turn - there is no later turn that would do it for them.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                confirmation, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_called_once()
+    assert "4821" in reply
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_against_a_corrected_address(mocker, mock_checkpointer):
+    """
+    A learner who reads the review and spots a typo in their own address has no
+    way to fix it except to type it again, so the later one has to win.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM), HumanMessage("learner@exmaple.com")],
+        state={"user_email": ["learner@exmaple.com"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "learner@example.com", extra_state=_support_state()
+            )
+        ]
+    )
+    assert "learner@example.com" in reply
+
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "learner@example.com"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_a_correction_the_widget_keeps_overwriting(
+    mocker, mock_checkpointer
+):
+    """
+    A host that puts the learner's address in every request body would otherwise
+    undo the correction on the turn that files: the body value accumulates after
+    the saved one, and a bare "send" has no typed address to prefer over it.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM), HumanMessage("learner@exmaple.com")],
+        state={"user_email": ["learner@exmaple.com"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state("learner@exmaple.com")
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("learner@exmaple.com")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "learner@example.com"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_retries_a_failed_file_with_the_corrected_address(
+    mocker, mock_checkpointer
+):
+    """
+    A Zendesk failure leaves awaiting_send set so the next turn retries. The
+    retry has to read the corrected address, not the one state started with.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "boom"}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM), HumanMessage("learner@exmaple.com")],
+        state={"user_email": ["learner@exmaple.com"], "awaiting_send": [True]},
+    )
+
+    # The correction is an edit, so it is shown back; the send after it fails.
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state()
+    ):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "learner@example.com"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_under_the_learners_name(mocker, mock_checkpointer):
+    """
+    The widget sends the name with the opening message, not with the turn that
+    files, so it has to come back out of accumulated state like the URL does.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={
+            "user_email": ["signedin@mit.edu"],
+            "user_name": ["Ada Lovelace"],
+            "awaiting_send": [True],
+        },
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["name"] == "Ada Lovelace"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_under_the_learners_username(mocker, mock_checkpointer):
+    """
+    The username rides alongside user_name the same way: accumulated in graph
+    state from the opening message, read back out on the turn that files.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={
+            "user_email": ["signedin@mit.edu"],
+            "user_name": ["Ada Lovelace"],
+            "user_username": ["ada"],
+            "awaiting_send": [True],
+        },
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["username"] == "ada"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_describes_every_turn_the_learner_typed(
+    mocker, mock_checkpointer
+):
+    """
+    Filing only the opening line throws away everything the learner added while
+    TIM was asking for their address.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [
+            HumanMessage(SUPPORT_PROBLEM),
+            AIMessage("What's your email address?"),
+            HumanMessage("learner@example.com"),
+            AIMessage("Here's what I'll send..."),
+        ],
+        state={"user_email": ["learner@example.com"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "Chrome on Windows.", extra_state=_support_state()
+    ):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    description = mock_file.call_args.kwargs["description"]
+    assert SUPPORT_PROBLEM in description
+    assert "Chrome on Windows." in description
+    # The address is the reply-to, not part of the problem.
+    assert "learner@example.com" not in description
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_an_opening_message_that_quotes_an_address(
+    mocker, mock_checkpointer
+):
+    """
+    "I cannot log in as x@y.com" is the single most likely way to open a
+    support request, and it reads to _reply_to_email exactly like an answer to
+    "what's your email?". Dropping it filed an empty ticket under the subject
+    "Support request". The opening message is the problem, whatever it looks
+    like.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    opening = "I cannot log in as learner@example.com"
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [
+            HumanMessage(opening),
+            AIMessage("What's your email address?"),
+            HumanMessage("learner@example.com"),
+            AIMessage("Here's what I'll send..."),
+        ],
+        state={"user_email": ["learner@example.com"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert mock_file.call_args.kwargs["description"] == opening
+    assert mock_file.call_args.kwargs["subject"] == opening
+
+
+@pytest.mark.asyncio
+async def test_support_bot_can_retry_a_failed_send(mocker, mock_checkpointer):
+    """
+    A Zendesk outage must not cost the learner the request. Their next message
+    tries again rather than starting the review over.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file the support request."}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    mock_file.return_value = {"reference": 4821}
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "try again", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert "4821" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_ticket_when_learner_gives_email(
+    mocker, mock_checkpointer
+):
+    """
+    The whole point of v1: the learner answers TIM's email question, confirms,
+    and a ticket exists. Filing happens in code, so it does not depend on the
+    model choosing to emit a tool call.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state()
+    ):
+        pass
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state()
+            )
+        ]
+    )
+
+    assert "4821" in reply
+    mock_file.assert_called_once()
+    assert mock_file.call_args.kwargs["email"] == "learner@example.com"
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+    assert mock_file.call_args.kwargs["page_url"] == "https://learn.mit.edu/week-3"
+    SupportBot.send_chunks.assert_not_called()
+    session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
+    assert session.support_ticket_reference == "4821"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_on_the_first_message(
+    mocker, mock_checkpointer
+):
+    """
+    A learner whose problem mentions an address ("can't log in as x@y.com") has
+    not been asked for a reply-to address yet. Filing there wastes the one ticket
+    on a one-line description.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 1}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "I cannot log in as learner@example.com",
+                extra_state=_support_state(),
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_ASK_EMAIL in reply
+    SupportBot.send_chunks.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_support_bot_runs_the_whole_intake_without_the_model(
+    mocker, mock_checkpointer
+):
+    """
+    An anonymous learner is walked from problem to filed ticket entirely in
+    code: ask for an address, show the review, file on the confirmation. The
+    model is never called on any turn.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    ask = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                SUPPORT_PROBLEM, extra_state=_support_state()
+            )
+        ]
+    )
+    assert SUPPORT_ASK_EMAIL in ask
+
+    review = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "learner@example.com", extra_state=_support_state()
+            )
+        ]
+    )
+    assert SUPPORT_PROBLEM in review
+    assert "learner@example.com" in review
+
+    filed = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state()
+            )
+        ]
+    )
+    assert "4821" in filed
+
+    mock_file.assert_called_once()
+    SupportBot.send_chunks.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_support_bot_re_asks_when_no_email_is_given(mocker, mock_checkpointer):
+    """
+    A learner who answers the email question with more detail instead of an
+    address is asked again rather than dropped or filed.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 1}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    first = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                SUPPORT_PROBLEM, extra_state=_support_state()
+            )
+        ]
+    )
+    assert SUPPORT_ASK_EMAIL in first
+
+    again = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "it also happens on mobile", extra_state=_support_state()
+            )
+        ]
+    )
+    assert SUPPORT_ASK_EMAIL_AGAIN in again
+    mock_file.assert_not_called()
+    SupportBot.send_chunks.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_support_bot_confirmation_names_the_email(mocker, mock_checkpointer):
+    """
+    A learner who never typed the address cannot know which one the team will
+    reply to, so the confirmation has to say it.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert "912" in reply
+    assert "signedin@mit.edu" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_already_filed_reply_names_the_email(
+    mocker, mock_checkpointer
+):
+    """The follow-up reply is the one place a learner can re-check the address."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    # File the ticket, so the next turn reads an existing reference back.
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "any update?", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert "912" in reply
+    assert "signedin@mit.edu" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_a_known_email_across_turns(mocker, mock_checkpointer):
+    """
+    A Zendesk failure leaves the learner on a second turn. The widget sends the
+    email with the opening message, so without the accumulated state that retry
+    falls back to asking for an address the learner should never be asked for.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "any luck?", extra_state={"page_url": [""], "user_email": [""]}
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "send", extra_state={"page_url": [""], "user_email": [""]}
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "signedin@mit.edu"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_prefers_the_signed_in_email(mocker, mock_checkpointer):
+    """
+    process_extra_state reads the email from the session precisely so a caller
+    cannot name somebody else as the requester. Honouring a typed address over
+    the session would hand that back.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 77}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={
+            "user_email": ["signedin@mit.edu"],
+            "verified_email": ["signedin@mit.edu"],
+            "awaiting_send": [True],
+        },
+    )
+
+    signed_in = {
+        **_support_state("signedin@mit.edu"),
+        "verified_email": ["signedin@mit.edu"],
+    }
+    async for _ in chatbot.get_completion(
+        "use victim@example.com", extra_state=signed_in
+    ):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=signed_in):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "signedin@mit.edu"
+    assert mock_file.call_args.kwargs["email_verified"] is True
+
+
+@pytest.mark.parametrize(
+    ("reply_text", "expected"),
+    [
+        ("the page says contact admin@example.org", "learner@mit.edu"),
+        ("that error names ops@example.org", "learner@mit.edu"),
+        ("sorry, it's new@mit.edu", "new@mit.edu"),
+        ("new@mit.edu", "new@mit.edu"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_only_takes_a_bare_address_as_a_correction(
+    mocker, mock_checkpointer, reply_text, expected
+):
+    """
+    An address quoted while describing the problem is not the learner asking
+    us to write back to it, and filing against one makes Zendesk raise a
+    ticket in a stranger's name. Retyping the address still has to work.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 331}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["learner@mit.edu"]},
+    )
+    # No signed-in session, so the widget sends no address of its own and the
+    # one the learner typed earlier comes back out of the thread.
+    state = _support_state()
+
+    async for _ in chatbot.get_completion(reply_text, extra_state=state):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=state):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == expected
+
+
+@pytest.mark.asyncio
+async def test_support_bot_reports_a_zendesk_failure(mocker, mock_checkpointer):
+    """Claiming a ticket exists when it does not strands the learner."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file the support request."}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state()
+    ):
+        pass
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state()
+            )
+        ]
+    )
+
+    assert "could not" in reply.lower()
+    session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
+    assert session.support_ticket_reference == ""
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_one_ticket_per_conversation(mocker, mock_checkpointer):
+    """A learner who keeps typing must not open a second ticket on the same thread."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state()
+    ):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "also@example.com", extra_state=_support_state()
+            )
+        ]
+    )
+
+    mock_file.assert_called_once()
+    assert "4821" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_the_page_url_from_the_first_message(
+    mocker, mock_checkpointer
+):
+    """
+    The widget sends page_url with the opening message, not with the email that
+    triggers filing, so the URL has to come from accumulated graph state. Reading
+    only this turn's extra_state files the ticket without the Page: line, losing
+    the one piece of context the learner never has to type.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={
+            "page_url": ["https://learn.mit.edu/week-3"],
+            "awaiting_send": [True],
+        },
+    )
+
+    async for _ in chatbot.get_completion(
+        "learner@example.com",
+        extra_state={"page_url": [""], "user_email": [""]},
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "send", extra_state={"page_url": [""], "user_email": [""]}
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["page_url"] == "https://learn.mit.edu/week-3"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "the error page told me to contact noreply@edx.org for help",
+        "I emailed support@mit.edu and admin@mit.edu but nobody replied",
+        f"my address is {'a' * 300}@example.com",
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_does_not_treat_prose_addresses_as_the_reply_to(
+    mocker, mock_checkpointer, message
+):
+    """
+    An address quoted inside a sentence belongs to the problem, not to the
+    learner. Filing against it makes Zendesk email a stranger, and the session
+    guard then locks that in for good. An over-long address is worse: the ticket
+    is created and the save afterwards blows up on a 254-char column.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+
+    async for _ in chatbot.get_completion(message, extra_state=_support_state()):
+        pass
+
+    mock_file.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "learner@example.com",
+        "my email is learner@example.com",
+        "it's learner@example.com, thanks!",
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_accepts_an_address_offered_as_an_answer(
+    mocker, mock_checkpointer, message
+):
+    """The learner answering TIM's email question still has to work."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+
+    async for _ in chatbot.get_completion(message, extra_state=_support_state()):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "learner@example.com"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_a_short_message_that_mentions_an_address(
+    mocker, mock_checkpointer
+):
+    """
+    A short message naming an address is read as the reply-to, and the learner
+    sees that in the review. What it says about the problem is theirs either
+    way, so it cannot be dropped on the way to the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+    detail = "the refund email bursar@mit.edu bounced"
+
+    review = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                detail, extra_state=_support_state()
+            )
+        ]
+    )
+    async for _ in chatbot.get_completion("send", extra_state=_support_state()):
+        pass
+
+    assert detail in review
+    assert mock_file.call_args.kwargs["description"] == f"{SUPPORT_PROBLEM}\n\n{detail}"
+
+
+@pytest.mark.parametrize("detail", ["no 18.01", "ok 7.2", "yes 好"])
+@pytest.mark.asyncio
+async def test_support_bot_files_a_reply_carrying_a_number(
+    mocker, mock_checkpointer, detail
+):
+    """
+    A course number or an accented word is the only thing support can act on,
+    so a reply that opens like an answer to us still has to reach the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"]},
+    )
+    state = _support_state("signedin@mit.edu")
+
+    async for _ in chatbot.get_completion(detail, extra_state=state):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=state):
+        pass
+
+    assert mock_file.call_args.kwargs["description"] == f"{SUPPORT_PROBLEM}\n\n{detail}"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_marks_a_session_email_as_verified(mocker, mock_checkpointer):
+    """An address from the authenticated session is the one support can trust."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    signed_in = {
+        "page_url": ["https://learn.mit.edu/week-3"],
+        "user_email": ["signedin@mit.edu"],
+        "verified_email": ["signedin@mit.edu"],
+    }
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={**signed_in, "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion("send", extra_state=signed_in):
+        pass
+
+    assert mock_file.call_args.kwargs["email_verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_inherit_verification_from_an_earlier_turn(
+    mocker, mock_checkpointer
+):
+    """
+    Verification describes the request in hand, not the thread. A turn that
+    arrives with no session - however it reached the thread - must not borrow
+    the sign-in an earlier turn had, or the ticket tells support an address was
+    checked when nobody checked it.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={
+            "page_url": ["https://learn.mit.edu/week-3"],
+            "user_email": ["signedin@mit.edu"],
+            "verified_email": ["signedin@mit.edu"],
+            "awaiting_send": [True],
+        },
+    )
+
+    anonymous = {"page_url": [""], "user_email": [""], "verified_email": [""]}
+    async for _ in chatbot.get_completion("send", extra_state=anonymous):
+        pass
+
+    assert mock_file.call_args.kwargs["email_verified"] is False
+
+
+@pytest.mark.parametrize(
+    ("extra_state", "message"),
+    [
+        # An edX MFE learner: the host asserts the address, learn-ai has no
+        # session to check it against.
+        (
+            {
+                "page_url": ["https://learn.mit.edu/week-3"],
+                "user_email": ["asserted@example.com"],
+                "verified_email": [""],
+            },
+            SUPPORT_PROBLEM,
+        ),
+        # An anonymous learner typing an address into the chat.
+        (
+            {"page_url": ["https://learn.mit.edu/week-3"], "verified_email": [""]},
+            "learner@example.com",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_marks_an_asserted_email_as_unverified(
+    mocker, mock_checkpointer, extra_state, message
+):
+    """Anyone can name anyone; the ticket has to say so rather than imply trust."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(message, extra_state=extra_state):
+        pass
+    async for _ in chatbot.get_completion("send", extra_state=extra_state):
+        pass
+
+    assert mock_file.call_args.kwargs["email_verified"] is False
+
+
+async def _checkpointed_support_bot(mock_checkpointer, prior_messages=()):
+    """Build a SupportBot on a real checkpointer, so state can be read back."""
+    thread_id = uuid4().hex
+    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
+    chatbot = await sync_to_async(SupportBot)(
+        "anonymous", mock_checkpointer, thread_id=thread_id
+    )
+    if prior_messages:
+        await chatbot.agent.aupdate_state(
+            chatbot.config, {"messages": list(prior_messages)}
+        )
+    return chatbot
+
+
+@pytest.mark.asyncio
+async def test_support_bot_checkpoints_the_filing_turn(mocker, mock_checkpointer):
+    """
+    The deterministic path returns before super().get_completion, so without
+    this the learner's last message and the reference they were given are not in
+    the thread at all - and the trailing metadata comment every other bot ends
+    with, which is how the caller learns the thread_id, is never sent.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _checkpointed_support_bot(
+        mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state()
+    ):
+        pass
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state()
+            )
+        ]
+    )
+
+    assert f'"thread_id": "{chatbot.thread_id}"' in reply
+    state = await chatbot.agent.aget_state(chatbot.config)
+    contents = [message.content for message in state.values["messages"]]
+    assert "learner@example.com" in contents
+    assert any("4821" in content for content in contents)
+
+
+@pytest.mark.asyncio
+async def test_support_bot_checkpoints_the_already_filed_turn(
+    mocker, mock_checkpointer
+):
+    """The same holds for the turn that reads an existing reference back."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _checkpointed_support_bot(
+        mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+    await UserChatSession.objects.filter(thread_id=chatbot.thread_id).aupdate(
+        support_ticket_reference="4821", support_ticket_email="learner@example.com"
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "any update?", extra_state=_support_state()
+            )
+        ]
+    )
+
+    assert f'"thread_id": "{chatbot.thread_id}"' in reply
+    state = await chatbot.agent.aget_state(chatbot.config)
+    contents = [message.content for message in state.values["messages"]]
+    assert "any update?" in contents
+
+
+@pytest.mark.parametrize(
+    "cancellation",
+    [
+        "Cancel, don't send this",
+        "cancel",
+        "wait, don't send it",
+        "actually, never mind",
+        "stop",
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_when_the_learner_cancels(
+    mocker, mock_checkpointer, cancellation
+):
+    """
+    A learner who reads the review and changes their mind must be able to stop
+    it. Filing anyway sends the support team a request the learner withdrew.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                cancellation, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_TICKET_CANCELLED in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_after_a_cancellation(
+    mocker, mock_checkpointer
+):
+    """
+    Cancelling has to clear the pending send, not just skip one turn. Otherwise
+    the learner's next message - whatever it is - files the request they just
+    withdrew.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "cancel", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "The week 4 video is broken too.",
+        extra_state=_support_state("signedin@mit.edu"),
+    ):
+        pass
+
+    mock_file.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_support_bot_leaves_a_cancelled_request_out_of_the_next_one(
+    mocker, mock_checkpointer
+):
+    """
+    Cancelling withdraws the request, not just the send. Carrying the withdrawn
+    words into the next ticket files what the learner took back - and on a
+    shared device, puts one person's problem in another person's ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    await say("cancel")
+    review = await say("My certificate name is spelled wrong.")
+    await say("send")
+
+    # The review for the new request must not show the cancelled one either -
+    # the learner approves what they are shown.
+    assert SUPPORT_PROBLEM not in review
+    description = mock_file.call_args.kwargs["description"]
+    assert "certificate name" in description
+    assert SUPPORT_PROBLEM not in description
+
+
+@pytest.mark.asyncio
+async def test_support_bot_shows_an_edit_back_before_filing(mocker, mock_checkpointer):
+    """
+    Late detail is an edit to the ticket, so the learner has to see the edited
+    version before it goes. Filing on it sends something they never read.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "It happens on my phone too.",
+                extra_state=_support_state("signedin@mit.edu"),
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert "It happens on my phone too." in reply
+    assert SUPPORT_PROBLEM in reply
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert (
+        mock_file.call_args.kwargs["description"]
+        == f"{SUPPORT_PROBLEM}\n\nIt happens on my phone too."
+    )
+
+
+@pytest.mark.asyncio
+async def test_support_bot_treats_no_as_nothing_more_to_add(mocker, mock_checkpointer):
+    """
+    Before the review, "no" answers "anything else to add?", so it moves on to
+    the review. Reading it as a cancellation there would strand every learner
+    who answers the question we asked.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "no", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_PROBLEM in reply
+    assert SUPPORT_TICKET_CANCELLED not in reply
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    mock_file.assert_called_once()
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.parametrize("decline", ["no", "No.", "nope", "no thanks"])
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_when_the_learner_declines(
+    mocker, mock_checkpointer, decline
+):
+    """
+    Under the review the question on screen is whether to send, so "no" there
+    means do not send. Filing on it was the reported bug: the learner says no
+    and the support team gets the request anyway.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                decline, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_TICKET_CANCELLED in reply
+
+
+@pytest.mark.parametrize(
+    "reply_text",
+    [
+        "yes please send it to support asap",
+        "yes, and the course is 18.01",
+        "yes, 18.01",
+        "ok 7.2",
+        "ok 好",
+        "that's all",
+        "nothing else",
+        "done",
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_asks_when_the_go_ahead_is_unclear(
+    mocker, mock_checkpointer, reply_text
+):
+    """
+    "yes please send it to support asap" adds nothing to the ticket while
+    "yes, and the course is 18.01" does, and nothing here can tell them apart.
+    Guessing either way is wrong: one pastes chatter into the ticket, the other
+    files without the detail the learner just gave.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                reply_text, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_SEND_UNCLEAR in reply
+    assert reply_text not in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_the_send_pending_after_an_unclear_reply(
+    mocker, mock_checkpointer
+):
+    """
+    Asking must not drop the learner back into intake, and the words we could
+    not read must not reach the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "yes please send it to support asap",
+        extra_state=_support_state("signedin@mit.edu"),
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    mock_file.assert_called_once()
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.asyncio
+async def test_support_bot_treats_a_long_reply_as_an_edit(mocker, mock_checkpointer):
+    """
+    A reply long enough to carry real detail is an edit even when it opens with
+    "yes" - short chatter is what we cannot read, not a sentence.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    detail = "yes and the week 4 video spins on Firefox and Chrome as well"
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                detail, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert detail in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_on_an_explicit_confirm_flag(mocker, mock_checkpointer):
+    """
+    A widget with a Send button sends confirm=True rather than a word we have
+    to recognise, so the flag alone has to be enough to file.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "looks right to me",
+        extra_state={**_support_state("signedin@mit.edu"), "confirm": [True]},
+    ):
+        pass
+
+    mock_file.assert_called_once()
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.fixture
+def support_filing_cache(settings):
+    """
+    Give the filing lock a cache that remembers, so the test exercises it.
+
+    get_django_cache returns the redis cache whenever a broker is configured,
+    and conftest makes that one a DummyCache: aadd there always succeeds, so the
+    lock would be a no-op and the test would pass without it.
+    """
+    settings.CELERY_BROKER_URL = ""
+    settings.CACHES = {
+        **settings.CACHES,
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "support-filing-test",
+        },
+    }
+    cache = get_django_cache()
+    cache.clear()
+    return cache
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_one_ticket_when_two_turns_land_together(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    Two sends on one thread must produce one ticket. The already-filed check
+    reads the reference the first turn has not written yet, so without a lock
+    around the call both turns get past it.
+    """
+    in_flight = asyncio.Event()
+    finish = asyncio.Event()
+    calls = 0
+
+    async def slow_file(**_kwargs):
+        # Only the first call hangs around. A second one getting this far is the
+        # bug, and it has to return so the assertion below reports it.
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            in_flight.set()
+            await finish.wait()
+        return {"reference": 4821}
+
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket", AsyncMock(side_effect=slow_file)
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    # A second request on the same thread is a second bot, not this one again.
+    other = await sync_to_async(SupportBot)(
+        "anonymous", mock_checkpointer, thread_id=chatbot.thread_id
+    )
+
+    async def drain(bot):
+        return "".join(
+            [
+                chunk
+                async for chunk in bot.get_completion(
+                    "send", extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    first = asyncio.create_task(drain(chatbot))
+    await in_flight.wait()
+    second_reply = await drain(other)
+    finish.set()
+    first_reply = await first
+
+    assert mock_file.call_count == 1
+    assert "4821" in first_reply
+    assert SUPPORT_TICKET_SENDING in second_reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_leaves_a_lock_it_no_longer_owns(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    Httpx bounds each read and write, not the whole call, so the lock TTL can
+    lapse while a filing is still running. The slow caller must not come back
+    and free the lock whoever took over is relying on.
+    """
+    cache = support_filing_cache
+    lock_key = ""
+    successor = uuid4().hex
+
+    async def slow_file(**_kwargs):
+        # The TTL runs out mid-call and the next turn takes the lock.
+        await cache.adelete(lock_key)
+        await cache.aadd(lock_key, value=successor, timeout=300)
+        return {"reference": 4821}
+
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket", AsyncMock(side_effect=slow_file)
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{chatbot.thread_id}"
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert await cache.aget(lock_key) == successor
+
+
+@pytest.mark.asyncio
+async def test_support_bot_holds_the_filing_lock_for_the_whole_zendesk_call(
+    mocker, mock_checkpointer
+):
+    """
+    The lock is the only thing between two concurrent sends and two tickets. One
+    that expires while the first call is still in flight hands the second turn a
+    free pass at exactly the moment it must not have one.
+    """
+    held = {}
+    cache = mocker.Mock()
+
+    async def _aadd(key, value=None, timeout=None):
+        held[key] = value
+        return True
+
+    cache.aadd = AsyncMock(side_effect=_aadd)
+    cache.aget = AsyncMock(side_effect=held.get)
+    cache.adelete = AsyncMock(side_effect=lambda key: held.pop(key, None))
+    mocker.patch("ai_chatbots.chatbots.get_django_cache", return_value=cache)
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert cache.aadd.call_args.kwargs["timeout"] > max_filing_seconds()
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_when_the_reference_lands_mid_turn(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    The already-filed check runs at the top of the turn, so an overlapping turn
+    can file after it and before this one calls Zendesk. Re-reading the row
+    before the call is what closes that window.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 9999}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    read_state = SupportBot._prior_state  # noqa: SLF001
+
+    async def file_in_another_turn(self):
+        await UserChatSession.objects.filter(thread_id=self.thread_id).aupdate(
+            support_ticket_reference="4821",
+            support_ticket_email="signedin@mit.edu",
+        )
+        return await read_state(self)
+
+    mocker.patch.object(SupportBot, "_prior_state", file_in_another_turn)
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert "4821" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_releases_the_filing_lock_after_a_failure(
+    mocker, mock_checkpointer, support_filing_cache
+):
+    """
+    A failed send has to leave the thread free to retry. A lock held until its
+    TTL expires would answer the retry with "still sending" instead.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(side_effect=[{"error": "nope"}, {"reference": 4821}]),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "try again", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert mock_file.call_count == 2
+    assert "4821" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
+    mocker, mock_checkpointer
+):
+    """
+    Zendesk can create the ticket and still fail to answer. Calling that a
+    failure invites the retry that duplicates it, so the thread stops instead
+    and every later message gets the same answer.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file.", "uncertain": True}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    first = await say("send")
+    # Three turns, because only clearing awaiting_send would drop the learner
+    # back into intake, re-show the review, and file on the send after that.
+    replies = [first, await say("still nothing"), await say("send")]
+
+    assert mock_file.call_count == 1
+    assert all(SUPPORT_TICKET_MAYBE_FILED in reply for reply in replies)
+    # The wording has to stop short of the claim the failure reply makes.
+    assert "could not" not in first.lower()
+    session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
+    assert session.support_ticket_reference == ""
+
+
+@pytest.mark.asyncio
+async def test_support_bot_records_an_unclear_outcome_before_replying(
+    mocker, mock_checkpointer
+):
+    """
+    An uncertain filing lives only in the thread state, so a learner whose
+    connection drops as the reply goes out must not come back to a thread that
+    will happily file a second ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file.", "uncertain": True}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    state = _support_state("signedin@mit.edu")
+
+    # Take the reply and walk away, the way a closed tab does.
+    stream = chatbot.get_completion("send", extra_state=state)
+    assert SUPPORT_TICKET_MAYBE_FILED in await anext(stream)
+    await stream.aclose()
+
+    retry = "".join(
+        [chunk async for chunk in chatbot.get_completion("send", extra_state=state)]
+    )
+
+    assert mock_file.call_count == 1
+    assert SUPPORT_TICKET_MAYBE_FILED in retry
+
+
+@pytest.mark.asyncio
+async def test_support_bot_stops_asking_after_zendesk_turns_the_ticket_down(
+    mocker, mock_checkpointer
+):
+    """
+    Zendesk answers a rejected ticket the same way every time, so inviting
+    another "send" walks the learner around a loop that cannot end.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(
+            return_value={
+                "error": "Could not file.",
+                "uncertain": False,
+                "reason": TICKET_REJECTED,
+            }
+        ),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("signedin@mit.edu")
+                )
+            ]
+        )
+
+    replies = [await say("send"), await say("send"), await say("try it again")]
+
+    assert mock_file.call_count == 1
+    assert all(SUPPORT_TICKET_REJECTED in reply for reply in replies)
+    assert SUPPORT_TICKET_FAILED not in replies[0]
+
+
+@pytest.mark.asyncio
+async def test_support_bot_asks_for_an_address_zendesk_will_accept(
+    mocker, mock_checkpointer
+):
+    """
+    An address Zendesk will not take is the one rejection the learner can fix,
+    so the thread goes back to collecting instead of stopping.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(
+            side_effect=[
+                {
+                    "error": "Bad address.",
+                    "uncertain": False,
+                    "reason": TICKET_BAD_EMAIL,
+                },
+                {"reference": 4821},
+            ]
+        ),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["typo@mit"], "awaiting_send": [True]},
+    )
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state={"page_url": ["https://learn.mit.edu/week-3"]}
+                )
+            ]
+        )
+
+    rejected = await say("send")
+    await say("sorry, it's me@mit.edu")
+    filed = await say("send")
+
+    assert SUPPORT_TICKET_BAD_EMAIL in rejected
+    assert mock_file.call_count == 2
+    assert mock_file.call_args.kwargs["email"] == "me@mit.edu"
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+    assert "4821" in filed
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_confirm_out_of_the_thread_state(
+    mocker, mock_checkpointer
+):
+    """
+    The confirm flag is this turn's Send button, not a fact about the thread.
+    Storing it files the learner's one approval against every turn after it.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "looks right to me",
+        extra_state={**_support_state("signedin@mit.edu"), "confirm": [True]},
+    ):
+        pass
+
+    state = await chatbot.agent.aget_state(chatbot.config)
+    assert "confirm" not in state.values
+
+
+def test_max_filing_seconds_covers_every_phase_of_every_request(settings):
+    """
+    A scalar httpx timeout bounds connect, write, read and pool separately, so
+    one request can burn four of them. A budget that counts each request once
+    expires while the call it is sizing is still running.
+    """
+    settings.REQUESTS_TIMEOUT = 30
+
+    assert max_filing_seconds() >= 30 * HTTPX_TIMEOUT_PHASES * WORST_PATH_REQUESTS
+
+
+@pytest.mark.asyncio
+async def test_support_bot_does_not_file_again_when_the_session_write_fails(
+    mocker, mock_checkpointer
+):
+    """
+    Zendesk has the ticket by the time the reference is written down. Letting
+    that write's failure escape loses the only record the next turn reads, and
+    the next turn then sends the same request a second time.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    mocker.patch.object(
+        UserChatSession,
+        "asave",
+        AsyncMock(side_effect=OperationalError("connection lost")),
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+    async for _ in chatbot.get_completion(
+        "any update?", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert "4821" in reply
+    assert mock_file.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_support_bot_clears_the_pending_send_once_it_has_filed(
+    mocker, mock_checkpointer
+):
+    """
+    A send that succeeded is no longer pending. Leaving the flag set keeps the
+    thread one affirmative away from filing again, with only the session row
+    standing in the way.
+    """
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    state = await chatbot.agent.aget_state(chatbot.config)
+    assert state.values["awaiting_send"][-1] is False
+
+
+@pytest.mark.asyncio
+async def test_support_bot_leaves_a_cancelled_filler_out_of_the_next_request(
+    mocker, mock_checkpointer
+):
+    """
+    The opening message is kept whatever it looks like because nobody has been
+    asked anything yet. After a cancellation that no longer holds, and keeping
+    the first thing typed regardless puts a stray "ok" at the top of the ticket.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    for message in ("cancel", "ok", "The week 4 video is broken too.", "send"):
+        async for _ in chatbot.get_completion(
+            message, extra_state=_support_state("signedin@mit.edu")
+        ):
+            pass
+
+    description = mock_file.await_args.kwargs["description"]
+    assert description == "The week 4 video is broken too."
+
+
+@pytest.mark.asyncio
+async def test_support_bot_asks_rather_than_dropping_the_request_on_wait(
+    mocker, mock_checkpointer
+):
+    """
+    "wait" is a learner asking for a moment, not for their request to be thrown
+    away. Reading it as a cancellation discards everything they typed, and the
+    reply tells them it is gone.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "wait", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert SUPPORT_SEND_UNCLEAR in reply
+    assert SUPPORT_TICKET_CANCELLED not in reply
+    assert mock_file.await_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
+@pytest.mark.asyncio
+async def test_support_bot_keeps_a_pause_out_of_the_description(
+    mocker, mock_checkpointer
+):
+    """
+    "wait" is addressed to us, so it has nothing in it for support to read. It
+    reaches the description through intake, where no review has been shown yet
+    and so nothing has been asked about it.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    )
+
+    for message in ("wait", "It started on Monday.", "send"):
+        async for _ in chatbot.get_completion(
+            message, extra_state=_support_state("signedin@mit.edu")
+        ):
+            pass
+
+    description = mock_file.await_args.kwargs["description"]
+    assert description == f"{SUPPORT_PROBLEM}\n\nIt started on Monday."

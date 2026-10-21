@@ -596,6 +596,12 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
     name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
+# Sends the thread cookies as SameSite=None;Secure, which a widget embedded
+# outside mit.edu needs. Off by default: this covers every bot, other mit.edu
+# hosts are already same-site with the API, and switching it on gives up the
+# browser's own cross-site protection. Turning it on requires a populated
+# CORS_ALLOW_ORIGINS - BaseBotHttpConsumer.check_origin refuses the pair.
+AI_CHATBOTS_COOKIE_CROSS_SITE = get_bool("AI_CHATBOTS_COOKIE_CROSS_SITE", False)  # noqa: FBT003
 AI_CITED_PROMPTS = get_list_of_str("AI_CITED_PROMPTS", default=[])
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o-mini")
@@ -612,6 +618,7 @@ AI_DEFAULT_SYLLABUS_MAX_TOKENS = get_int("AI_DEFAULT_SYLLABUS_MAX_TOKENS", 16384
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "openai/gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
+AI_DEFAULT_SUPPORT_MODEL = get_string("AI_DEFAULT_SUPPORT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(
     name="AI_MAX_MESSAGE_LENGTH", default=6000
@@ -723,6 +730,28 @@ AI_ZENDESK_SEARCH_LIMIT = get_int(name="AI_ZENDESK_SEARCH_LIMIT", default=5)
 AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
     name="AI_ZENDESK_ARTICLE_MAX_CHARS", default=1500
 )
+
+# Zendesk support ticket creation (hq#13712). Kept separate from AI_ZENDESK_URL:
+# that one is the branded help center used for article search, while API calls
+# have to go to the canonical {subdomain}.zendesk.com host.
+AI_ZENDESK_API_URL = get_string(name="AI_ZENDESK_API_URL", default="")
+# OAuth client_credentials, not an API token: Zendesk stops honouring API tokens
+# on 2027-04-30 and new accounts can no longer create them. The backend mints a
+# short-lived access token from these and caches it (hq#13712).
+AI_ZENDESK_OAUTH_CLIENT_ID = get_string(name="AI_ZENDESK_OAUTH_CLIENT_ID", default="")
+AI_ZENDESK_OAUTH_CLIENT_SECRET = get_string(
+    name="AI_ZENDESK_OAUTH_CLIENT_SECRET", default=""
+)
+# Defaults off: an environment that forgets this setting should fail to file
+# loudly, not tell every learner their request was filed and then drop it.
+AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
+# Custom ticket field ids, from Admin Center > Objects and rules > Tickets >
+# Fields. Minted per Zendesk instance, so they are configured rather than
+# hardcoded. 0 means unconfigured and the value is left off the ticket: Zendesk
+# rejects a whole ticket for a field id it does not recognise.
+AI_ZENDESK_URL_FIELD_ID = get_int(name="AI_ZENDESK_URL_FIELD_ID", default=0)
+AI_ZENDESK_NAME_FIELD_ID = get_int(name="AI_ZENDESK_NAME_FIELD_ID", default=0)
+AI_ZENDESK_USERNAME_FIELD_ID = get_int(name="AI_ZENDESK_USERNAME_FIELD_ID", default=0)
 # How long the platform of a course is cached for, in seconds.  A course does
 # not change platforms, so this only needs to expire often enough to pick up
 # resources that were not yet published at the time of the first lookup.

@@ -94,6 +94,28 @@ class VideoGPTRequestSerializer(ChatRequestSerializer):
     transcript_asset_id = serializers.CharField(required=True, allow_blank=False)
 
 
+class SupportChatRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the support chatbot.
+    """
+
+    page_url = serializers.URLField(required=False, allow_blank=True, max_length=2048)
+    # Only used when learn-ai has no session of its own for the learner; the
+    # consumer prefers the authenticated session over this.
+    # max_length matches UserChatSession.support_ticket_email's column, so an
+    # address that validates here can always be recorded against the session.
+    user_email = serializers.EmailField(
+        required=False, allow_blank=True, max_length=254
+    )
+    # Display name and account handle for hosts with no learn-ai session; the
+    # consumer prefers the authenticated session over these, same as user_email.
+    user_name = TruncatedCharField(required=False, allow_blank=True, max_length=255)
+    user_username = TruncatedCharField(required=False, allow_blank=True, max_length=255)
+    # Set by a widget that offers a Send button, so the learner's approval does
+    # not depend on the bot recognising the word they typed.
+    confirm = serializers.BooleanField(required=False, default=False)
+
+
 class UserChatSessionSerializer(serializers.ModelSerializer):
     """Serializer for user chat sessions"""
 

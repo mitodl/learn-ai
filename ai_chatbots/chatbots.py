@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
@@ -45,6 +46,7 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.constants import AZURE_MODEL_PREFIX
+from ai_chatbots.models import UserChatSession
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
     CONTEXT_LOST_PROMPT,
@@ -59,6 +61,12 @@ from ai_chatbots.utils import (
     get_run_readable_id_from_block_id,
     save_truncated_checkpoint,
     truncate_to_latest_human_message,
+)
+from ai_chatbots.zendesk import (
+    TICKET_BAD_EMAIL,
+    TICKET_REJECTED,
+    file_support_ticket,
+    max_filing_seconds,
 )
 from main.opik_keycloak_auth import is_opik_configured
 
@@ -78,6 +86,12 @@ class BaseChatbot(ABC):
     STATE_CLASS = AgentState
 
     TRACE_STATE_KEYS: tuple[str, ...] = ()
+
+    # A bot that scripts every reply spends no tokens, so it has no budget to
+    # provision. Setting this False skips that call, which is a blocking
+    # request that would otherwise make the proxy a dependency of a bot that
+    # never reaches it.
+    CALLS_THE_MODEL = True
 
     def __init__(  # noqa: PLR0913
         self,
@@ -110,7 +124,8 @@ class BaseChatbot(ABC):
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
-            self.proxy.create_proxy_user(self.user_id)
+            if self.CALLS_THE_MODEL:
+                self.proxy.create_proxy_user(self.user_id)
             self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
             self.proxy = None
@@ -989,3 +1004,761 @@ class VideoGPTBot(TruncatingChatbot):
         thread_id = self.config["configurable"]["thread_id"]
         latest_state = await self.get_latest_history()
         return get_search_tool_metadata(thread_id, latest_state)
+
+
+class SupportAgentState(SummaryState):
+    """
+    State for the support bot: the page the learner was on, who to reach them at
+    and under what name, and the subset of those addresses an authenticated
+    session vouched for.
+    """
+
+    page_url: Annotated[list[str], add]
+    user_email: Annotated[list[str], add]
+    verified_email: Annotated[list[str], add]
+    user_name: Annotated[list[str], add]
+    user_username: Annotated[list[str], add]
+    awaiting_send: Annotated[list[bool], add]
+    filing_uncertain: Annotated[list[bool], add]
+    filing_blocked: Annotated[list[bool], add]
+    cancelled_after: Annotated[list[int], add]
+
+
+SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
+SUPPORT_TICKET_REVIEW_FOOTER = (
+    'Reply "send" and I\'ll pass this on, or "cancel" to drop it. Anything else '
+    "you type I'll add to the request and show you again."
+)
+SUPPORT_TICKET_FILED = (
+    "Thanks - I've passed that on to the MIT Open Learning support team. Your "
+    "reference number is {reference}, and they'll follow up at {email}."
+)
+SUPPORT_TICKET_ALREADY_FILED = (
+    "I've already filed this one for you - your reference number is {reference}, "
+    "and the support team will follow up at {email}."
+)
+SUPPORT_TICKET_FAILED = (
+    'Sorry, I could not file your support request just now. Reply "send" to try '
+    "again, or email support directly and they'll pick it up."
+)
+SUPPORT_TICKET_REJECTED = (
+    "Sorry - the support system turned this request down, and sending it again "
+    "won't change that. Please email the MIT Open Learning support team directly "
+    "and they'll pick it up. I've flagged this so our team can look into it."
+)
+SUPPORT_TICKET_BAD_EMAIL = (
+    "That address isn't one the support team can reply to. What's another email "
+    "I can give them?"
+)
+SUPPORT_TICKET_MAYBE_FILED = (
+    "I didn't get an answer back from the support system, so I can't tell you "
+    "whether that went through. It may well have, so I won't send it a second "
+    "time and risk a duplicate. If you haven't heard from the MIT Open Learning "
+    "support team in a day or two, email them directly."
+)
+SUPPORT_TICKET_CANCELLED = (
+    "No problem - I haven't sent anything, and I've put aside what you'd written "
+    "so far. Tell me about it again whenever you're ready and we'll start fresh."
+)
+SUPPORT_SEND_UNCLEAR = (
+    "I'm not sure whether that was a go-ahead or something to add, and I don't "
+    'want to guess. Reply "send" on its own to pass on the request exactly as '
+    'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
+    "updated version."
+)
+SUPPORT_TICKET_SENDING = (
+    "I'm still sending that one over - give me a moment and I'll come back with "
+    "the reference number."
+)
+SUPPORT_ASK_EMAIL = (
+    "Thanks for letting us know. What's the best email address for the support "
+    "team to reply to?"
+)
+SUPPORT_ASK_EMAIL_AGAIN = (
+    "I still need an email address so the support team can reply. What's the best "
+    "one to reach you at?"
+)
+SUPPORT_ASK_MORE = (
+    "Thanks for letting us know. Is there anything else you'd like to add before I "
+    "pass this on to the MIT Open Learning support team?"
+)
+
+EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
+
+SUPPORT_FILING_LOCK_PREFIX = "support_filing:"
+# Covers the session read and write either side of the Zendesk call.
+SUPPORT_FILING_LOCK_MARGIN = 30
+
+
+def _filing_lock_ttl() -> int:
+    """
+    Hold the lock for longer than the call it guards can take. A shorter TTL
+    lapses while the first turn is still in flight, which is the one moment a
+    second turn must not get through.
+    """
+    return max_filing_seconds() + SUPPORT_FILING_LOCK_MARGIN
+
+
+ZENDESK_SUBJECT_MAX_LENGTH = 150
+# UserChatSession.support_ticket_email is an EmailField, so anything longer
+# would file the ticket and then blow up on save.
+EMAIL_MAX_LENGTH = 254
+REPLY_TO_MAX_OTHER_WORDS = 6
+# Everything a message can be made of and still be only an address being handed
+# over. A word from outside this set means the message also says something, and
+# what it says is support's to read.
+REPLY_TO_ONLY_WORDS = frozenset(
+    {
+        "a",
+        "actually",
+        "address",
+        "an",
+        "and",
+        "at",
+        "best",
+        "can",
+        "contact",
+        "email",
+        "here",
+        "here's",
+        "i",
+        "is",
+        "it",
+        "it's",
+        "its",
+        "me",
+        "my",
+        "no",
+        "ok",
+        "okay",
+        "please",
+        "reach",
+        "sorry",
+        "sure",
+        "thanks",
+        "the",
+        "to",
+        "use",
+        "yes",
+        "you",
+    }
+)
+
+
+def _reply_to_email(message: str) -> str:
+    """
+    Return the address only when the message reads as an answer to "what's your
+    email?". Addresses quoted inside prose belong to the problem, and filing
+    against one makes Zendesk email a stranger.
+    """
+    matches = EMAIL_IN_MESSAGE.findall(message or "")
+    if len(matches) != 1:
+        return ""
+    address = matches[0].rstrip(".")
+    if len(address) > EMAIL_MAX_LENGTH:
+        return ""
+    if len(EMAIL_IN_MESSAGE.sub(" ", message).split()) > REPLY_TO_MAX_OTHER_WORDS:
+        return ""
+    return address
+
+
+# A whole message from this set is the learner saying "go ahead".
+AFFIRMATIVE_PHRASES = frozenset(
+    {
+        "send",
+        "send it",
+        "send it please",
+        "send again",
+        "yes",
+        "yes please",
+        "y",
+        "yep",
+        "yeah",
+        "ok",
+        "okay",
+        "sure",
+        "go",
+        "go ahead",
+        "do it",
+        "confirm",
+        "confirmed",
+        "submit",
+        "file it",
+        "try again",
+        "retry",
+        "resend",
+    }
+)
+# The word an affirmative can open with. Derived so the two cannot drift.
+AFFIRMATIVE_OPENERS = frozenset(phrase.split()[0] for phrase in AFFIRMATIVE_PHRASES)
+
+# A plain no. Under the review, where the question is whether to send, these
+# mean do not send.
+DECLINE_PHRASES = frozenset({"no", "nope", "no thanks", "no thank you"})
+
+# Answers to "anything else to add?" that add nothing. Before the review they
+# move things along; under it they are ambiguous - "that's all" may mean "go
+# ahead" or "I have nothing more" - so they are asked about, not acted on.
+NOTHING_MORE_PHRASES = frozenset(
+    {
+        "nothing",
+        "nothing else",
+        "no that's everything",
+        "no that's all",
+        "that's everything",
+        "that's all",
+        "that's it",
+        "done",
+    }
+)
+
+# Asking for a moment, which is not asking for the request to be thrown away.
+# Cancelling discards every word the learner typed, so these are asked about
+# rather than acted on - "wait, don't send it" still cancels on the "send".
+PAUSE_PHRASES = frozenset({"wait", "hold on", "hang on", "one sec", "one moment"})
+
+# None of these are the problem the learner wants help with, so none of them
+# belong in what support reads.
+FILLER_PHRASES = (
+    AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES | PAUSE_PHRASES
+)
+
+
+# A word here on its own calls the send off.
+CANCELLATION_TRIGGERS = frozenset(
+    {
+        "abort",
+        "cancel",
+        "canceled",
+        "cancelled",
+        "canceling",
+        "cancelling",
+        "discard",
+        "forget",
+        "nevermind",
+        "scrap",
+        "stop",
+    }
+)
+# Everything a cancellation is allowed to be made of. A message containing one
+# word from outside this set is an edit, because re-showing the review costs a
+# turn while a wrong cancellation throws the learner's request away.
+CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
+    "wait",
+    "actually",
+    "dont",
+    "don't",
+    "do",
+    "i",
+    "it",
+    "mind",
+    "my",
+    "never",
+    "no",
+    "not",
+    "please",
+    "request",
+    "send",
+    "sending",
+    "sorry",
+    "that",
+    "the",
+    "this",
+    "ticket",
+    "to",
+    "want",
+}
+NEGATIONS = frozenset({"dont", "don't", "no", "not"})
+# Past this a reply is carrying real detail, not answering the question we
+# asked, so it is read as an edit rather than a yes or a no.
+SHORT_REPLY_MAX_WORDS = 8
+
+
+def _normalised(message: str) -> str:
+    """
+    Reduce a message to lower-case words, so phrases can be matched.
+
+    Digits and non-ASCII letters are kept rather than stripped: dropping them
+    leaves "yes, 18.01" as a bare "yes", which every caller here reads as
+    permission to file the draft - discarding what the learner just typed.
+    """
+    return " ".join(re.sub(r"[^\w' ]", " ", (message or "").lower()).split())
+
+
+def _is_cancellation(message: str) -> bool:
+    """Report whether the learner is calling the send off."""
+    words = _normalised(message).replace("never mind", "nevermind").split()
+    if not words or len(words) > SHORT_REPLY_MAX_WORDS:
+        return False
+    if not set(words) <= CANCELLATION_WORDS:
+        return False
+    if set(words) & CANCELLATION_TRIGGERS:
+        return True
+    return "send" in words and bool(set(words) & NEGATIONS)
+
+
+def _first(values: list[str]) -> str:
+    """Return the first non-empty value, or an empty string."""
+    return next((value for value in values if value), "")
+
+
+def _latest(values: list[str]) -> str:
+    """Return the last non-empty value, or an empty string."""
+    return _first(list(reversed(values)))
+
+
+def _is_bare_reply_to(message: str) -> bool:
+    """
+    Report whether the message is nothing but the address and the words used to
+    hand it over. "I emailed prof@mit.edu already" is read as the reply-to, but
+    it also tells support something, so it is not dropped from the ticket.
+    """
+    if not _reply_to_email(message):
+        return False
+    remainder = _normalised(EMAIL_IN_MESSAGE.sub(" ", message)).split()
+    return set(remainder) <= REPLY_TO_ONLY_WORDS
+
+
+def _is_filler(message: str) -> bool:
+    """Report whether the message is an answer to us, with nothing for support."""
+    return _normalised(message) in FILLER_PHRASES
+
+
+def _is_affirmative(message: str) -> bool:
+    """Report whether the learner said, and said only, to go ahead."""
+    return _normalised(message) in AFFIRMATIVE_PHRASES
+
+
+def _is_decline(message: str) -> bool:
+    """Report whether the learner said no, plainly and nothing else."""
+    return _normalised(message) in DECLINE_PHRASES
+
+
+def _is_unclear_go_ahead(message: str) -> bool:
+    """
+    Report whether a short reply to the review is one we cannot act on.
+
+    "yes please send it to support asap" adds nothing to the ticket while "yes,
+    and the course is 18.01" does, and nothing here can tell them apart - so
+    neither is guessed at. A bare "wait" is the same problem from the other
+    side: it may be the start of an edit or the start of a cancellation.
+    """
+    normalised = _normalised(message)
+    words = normalised.split()
+    if not words or len(words) > SHORT_REPLY_MAX_WORDS:
+        return False
+    return (
+        words[0] in AFFIRMATIVE_OPENERS
+        or normalised in NOTHING_MORE_PHRASES
+        or normalised in PAUSE_PHRASES
+    )
+
+
+def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
+    """
+    Join everything the learner typed about the problem. An address they gave is
+    the reply-to, and a bare "send" is an answer to us, so neither belongs in
+    what support reads.
+
+    The thread's opening message is kept whatever it looks like. Nobody has
+    been asked for an address at that point, so "I cannot log in as x@y.com" is
+    the problem even though it reads like the answer to that question - and
+    dropping it filed an empty ticket. Past a cancellation the learner has
+    already been asked and answered, so the exemption does not apply and a
+    stray "ok" would otherwise lead the ticket.
+
+    ``since`` is where the current request starts: a cancellation withdraws
+    every word before it, so those are not this request's to file.
+    """
+    prior_messages = prior_messages[since:]
+    typed = [
+        msg.content
+        for position, msg in enumerate(prior_messages)
+        if isinstance(msg, HumanMessage)
+        and msg.content
+        # Dropped only where we came back and asked what it meant, so the
+        # chatter we could not read stays out while the same words typed
+        # anywhere else are still the learner's problem.
+        and SUPPORT_SEND_UNCLEAR
+        not in [
+            getattr(reply, "content", "")
+            for reply in prior_messages[position + 1 : position + 2]
+        ]
+    ]
+    typed.append(message)
+    return "\n\n".join(
+        text
+        for position, text in enumerate(typed)
+        if text
+        and (
+            (position == 0 and since == 0)
+            or not (
+                _is_bare_reply_to(text) or _is_filler(text) or _is_cancellation(text)
+            )
+        )
+    )
+
+
+def _cancelled_after(prior_state: dict) -> int:
+    """
+    Where the current request starts in the thread. Latest wins: each
+    cancellation moves the line forward past the one before it.
+    """
+    return (prior_state.get("cancelled_after") or [0])[-1]
+
+
+def _accumulated(prior_state: dict, extra_state: dict, key: str) -> str:
+    """
+    Latest non-empty value for a key, across the thread and this request.
+
+    The widget sends the page URL and the email with the opening message, not
+    with the turn that files, so both have to come back out of accumulated
+    state. Latest wins, because the earliest may be the one being corrected.
+    """
+    return _latest((prior_state.get(key) or []) + (extra_state.get(key) or []))
+
+
+def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
+    """
+    Decide who the support team should reply to.
+
+    A learner who mistyped their address can only fix it by typing it again.
+    One an authenticated session vouched for is not theirs to change: that
+    would let the chat name a stranger as the requester.
+    """
+    # On the opening message an address is part of the problem ("can't log in
+    # as x@y.com"), not a reply-to, so it only counts once we have asked.
+    parsed_reply_to = _reply_to_email(message) if prior_state.get("messages") else ""
+    # The body address is a fallback, not the latest word: a host that resends
+    # it every request would otherwise undo a correction on the turn that files.
+    known = _accumulated(prior_state, {}, "user_email") or _latest(
+        extra_state.get("user_email") or []
+    )
+    if known and not _is_bare_reply_to(message):
+        # Replacing an address we already have takes a message that is nothing
+        # but the new one. "The page says contact admin@example.org" describes
+        # the problem, and reading it as a correction files against a stranger.
+        parsed_reply_to = ""
+    return (
+        _accumulated(prior_state, extra_state, "verified_email")
+        or parsed_reply_to
+        or known
+    )
+
+
+def _support_review(description: str, page_url: str, email: str) -> str:
+    """Show the learner the ticket before it exists, in their own words."""
+    lines = [SUPPORT_TICKET_REVIEW_HEADER, "", f"**Your message:** {description}"]
+    if page_url:
+        lines += ["", f"**Where you were:** {page_url}"]
+    lines += ["", f"**Reply to:** {email}", "", SUPPORT_TICKET_REVIEW_FOOTER]
+    return "\n".join(lines)
+
+
+def _ticket_subject(description: str) -> str:
+    """Build a subject from the learner's own words, no model involved."""
+    subject = " ".join((description or "").split())
+    if len(subject) > ZENDESK_SUBJECT_MAX_LENGTH:
+        subject = f"{subject[: ZENDESK_SUBJECT_MAX_LENGTH - 1].rstrip()}…"
+    return subject or "Support request"
+
+
+class SupportBot(TruncatingChatbot):
+    """Service class for the support intake agent"""
+
+    # No prompt, because nothing here calls the model.
+    PROMPT_TEMPLATE = None
+    TASK_NAME = "SUPPORT_TASK"
+    JOB_ID = "SUPPORT_JOB"
+    STATE_CLASS = SupportAgentState
+    TRACE_STATE_KEYS = ("page_url",)
+    # Every branch of get_completion ends at _reply_without_the_model.
+    CALLS_THE_MODEL = False
+
+    def __init__(  # noqa: PLR0913
+        self,
+        user_id: str,
+        checkpointer: BaseCheckpointSaver,
+        *,
+        name: str = "MIT Open Learning Support Chatbot",
+        model: str | None = None,
+        temperature: float | None = None,
+        instructions: str | None = None,
+        thread_id: str | None = None,
+    ):
+        super().__init__(
+            user_id,
+            name=name,
+            checkpointer=checkpointer,
+            model=model or settings.AI_DEFAULT_SUPPORT_MODEL,
+            temperature=temperature,
+            instructions=instructions,
+            thread_id=thread_id,
+        )
+        self.agent = self.create_agent_graph()
+
+    def create_tools(self):
+        """
+        No tools: the bot takes the problem in, it does not answer it, and the
+        ticket is filed deterministically in get_completion. A second,
+        model-driven filing path could only disagree with that one.
+        """
+        return []
+
+    async def get_tool_metadata(self) -> str:
+        """Return no metadata - this agent has no tools"""
+        return ""
+
+    async def _prior_state(self) -> dict:
+        """Return the graph state already accumulated on this thread."""
+        state = await self.agent.aget_state(self.config)
+        return (state.values if state else None) or {}
+
+    async def _reply_without_the_model(
+        self, message: str, reply: str, extra_state: dict
+    ) -> AsyncGenerator[str, None]:
+        """
+        Yield a reply the model had no part in, and leave the same trace behind
+        as a normal turn: the exchange written to the thread, and the metadata
+        comment the caller reads the thread_id out of.
+
+        The write comes first because yielding hands control to the consumer,
+        and a learner whose connection has gone closes this generator there.
+        Writing afterwards loses whatever the turn just learned - including
+        that a ticket may already exist - and the retry that follows is what
+        files the second one.
+        """
+        # as_node is required: with no checkpoint to infer from, or more than one
+        # candidate, LangGraph refuses the write as ambiguous.
+        await self.agent.aupdate_state(
+            self.config,
+            {"messages": [HumanMessage(message), AIMessage(reply)], **extra_state},
+            as_node="agent",
+        )
+        yield reply
+        metadata = await self.get_metadata()
+        yield f"\n\n<!-- {metadata} -->\n\n"
+
+    async def _send_to_zendesk(self, *, session, ticket: dict) -> tuple[str, dict]:
+        """Call Zendesk and return the reply that reports how it went."""
+        result = await file_support_ticket(
+            subject=_ticket_subject(ticket["description"]),
+            # Zendesk de-duplicates on this, which is the only thing that can
+            # tell a retry after a lost response from a second request.
+            thread_id=self.thread_id,
+            **ticket,
+        )
+        if result.get("reference") is None:
+            if result.get("uncertain"):
+                # A ticket may exist that we never learned the id of, so the
+                # thread stops here rather than risk filing a second one.
+                return SUPPORT_TICKET_MAYBE_FILED, {
+                    "awaiting_send": [False],
+                    "filing_uncertain": [True],
+                }
+            if result.get("reason") == TICKET_BAD_EMAIL:
+                # The request is fine, the address is not, so collection
+                # resumes and the next message is read as the new reply-to.
+                return SUPPORT_TICKET_BAD_EMAIL, {"awaiting_send": [False]}
+            if result.get("reason") == TICKET_REJECTED:
+                # Zendesk will answer the same way every time, so offering a
+                # retry only walks the learner around the same loop.
+                return SUPPORT_TICKET_REJECTED, {
+                    "awaiting_send": [False],
+                    "filing_blocked": [True],
+                }
+            # awaiting_send stays set, so the learner's next message retries
+            # rather than starting the review over.
+            return SUPPORT_TICKET_FAILED, {}
+        reply = SUPPORT_TICKET_FILED.format(
+            reference=result["reference"], email=ticket["email"]
+        )
+        if session:
+            session.support_ticket_reference = str(result["reference"])
+            session.support_ticket_email = ticket["email"]
+            try:
+                await session.asave(
+                    update_fields=["support_ticket_reference", "support_ticket_email"]
+                )
+            except Exception:
+                # Zendesk already has the ticket, so raising here only buys a
+                # retry that files a second one. The row is the usual way a
+                # later turn learns not to send again, and it never got written,
+                # so the flag below has to do that job instead.
+                log.exception(
+                    "Filed support ticket %s but could not record it on thread %s",
+                    result["reference"],
+                    self.thread_id,
+                )
+                return reply, {"awaiting_send": [False], "filing_uncertain": [True]}
+        return reply, {"awaiting_send": [False]}
+
+    async def _file_the_ticket(self, *, session, ticket: dict) -> tuple[str, dict]:
+        """File one ticket per thread, however many turns ask at once."""
+        cache = get_django_cache()
+        lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
+        # A token rather than a flag, so a worker stalled past the TTL is less
+        # likely to delete the lock a successor now holds. Read-then-delete is
+        # not atomic, so this narrows that window without closing it: what
+        # actually stops a second ticket is the already-filed check below and
+        # Zendesk's Idempotency-Key.
+        token = uuid4().hex
+        if not await cache.aadd(lock_key, value=token, timeout=_filing_lock_ttl()):
+            return SUPPORT_TICKET_SENDING, {}
+        try:
+            if session:
+                # The already-filed check ran before this turn did its work, so
+                # an overlapping turn may have filed since.
+                await session.arefresh_from_db(
+                    fields=["support_ticket_reference", "support_ticket_email"]
+                )
+                if session.support_ticket_reference:
+                    return SUPPORT_TICKET_ALREADY_FILED.format(
+                        reference=session.support_ticket_reference,
+                        email=session.support_ticket_email,
+                    ), {}
+            return await self._send_to_zendesk(session=session, ticket=ticket)
+        finally:
+            if await cache.aget(lock_key) == token:
+                await cache.adelete(lock_key)
+
+    def _collect_the_request(
+        self, message: str, *, extra_state: dict, prior_state: dict
+    ) -> tuple[str, dict]:
+        """
+        Ask for what is still missing, then show the request back.
+
+        The intake conversation is scripted, not model-driven: it is a fixed
+        form (collect the problem and a reply-to, show it back, file), so a
+        model only adds a dependency and a way for every intake to fail.
+        """
+        prior_messages = prior_state.get("messages") or []
+        email = _support_email(prior_state, extra_state, message)
+        if not email:
+            return (
+                SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
+            ), {}
+        if not prior_messages:
+            # An authenticated learner's address arrives with the opening
+            # message; invite more detail before showing the review.
+            return SUPPORT_ASK_MORE, {"user_email": [email]}
+        return _support_review(
+            _support_description(
+                prior_messages, message, since=_cancelled_after(prior_state)
+            ),
+            _accumulated(prior_state, extra_state, "page_url"),
+            email,
+            # An address parsed out of this turn reaches state no other way,
+            # and the turn that files has to still know it.
+        ), {"user_email": [email], "awaiting_send": [True]}
+
+    async def _send_edit_or_cancel(
+        self, message: str, *, extra_state: dict, prior_state: dict, session, confirmed
+    ) -> tuple[str, dict]:
+        """Act on what the learner said about the request they were shown."""
+        prior_messages = prior_state.get("messages") or []
+        # The question on screen here is whether to send, so a plain "no"
+        # answers it. Cancelling costs a turn to undo; filing cannot be undone.
+        if _is_cancellation(message) or _is_decline(message):
+            return SUPPORT_TICKET_CANCELLED, {
+                "awaiting_send": [False],
+                # This turn's own exchange is written alongside this update, so
+                # the next request starts past both of those too.
+                "cancelled_after": [len(prior_messages) + 2],
+            }
+
+        email = _support_email(prior_state, extra_state, message)
+        page_url = _accumulated(prior_state, extra_state, "page_url")
+        since = _cancelled_after(prior_state)
+
+        # confirm is the widget's Send button; the phrases are for learners who
+        # type instead. Anything else is an edit to the request, so it is shown
+        # back rather than sent - the learner has not read this version yet.
+        if not (confirmed or _is_affirmative(message)):
+            if _is_unclear_go_ahead(message):
+                return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
+            return _support_review(
+                _support_description(prior_messages, message, since=since),
+                page_url,
+                email,
+            ), {"user_email": [email], "awaiting_send": [True]}
+
+        reply, filing_updates = await self._file_the_ticket(
+            session=session,
+            ticket={
+                # What files is what the learner reviewed. This turn only
+                # approved it, so it stays out of the ticket whether they typed
+                # "send" or pressed a button that carried some words along.
+                "description": _support_description(prior_messages, "", since=since),
+                "page_url": page_url,
+                "email": email,
+                "name": _accumulated(prior_state, extra_state, "user_name"),
+                "username": _accumulated(prior_state, extra_state, "user_username"),
+                # Only this request's session can vouch for the address. Reading
+                # the thread's accumulated verifications would let any later turn
+                # inherit a sign-in it never presented.
+                "email_verified": bool(email)
+                and email in (extra_state.get("verified_email") or []),
+            },
+        )
+        # A retry after a Zendesk failure reads the address back out of state,
+        # so a correction made on this turn has to land there.
+        return reply, {"user_email": [email], **filing_updates}
+
+    async def get_completion(
+        self,
+        message: str,
+        *,
+        extra_state: dict[str, Any] | None = None,
+        **kwargs,  # noqa: ARG002
+    ) -> AsyncGenerator[str, None]:
+        """
+        Show the learner what will be sent, then file it on the turn after.
+        Both steps happen in code: a model asked to call a tool does it only
+        when it feels like it, and a learner who was told their request was
+        sent has no way to tell that nothing was filed.
+        """
+        extra_state = dict(extra_state or {})
+        # Popped, not stored: it is this turn's Send button, and a checkpointed
+        # one would approve every turn after it.
+        confirmed = any(extra_state.pop("confirm", None) or [])
+        session = await UserChatSession.objects.filter(
+            thread_id=self.thread_id
+        ).afirst()
+        prior_state = await self._prior_state()
+
+        if session and session.support_ticket_reference:
+            reply, updates = (
+                SUPPORT_TICKET_ALREADY_FILED.format(
+                    reference=session.support_ticket_reference,
+                    email=session.support_ticket_email,
+                ),
+                {},
+            )
+        # Zendesk may hold a ticket from a call it never answered, so nothing
+        # on this thread files again - there is no way to tell from here.
+        elif (prior_state.get("filing_uncertain") or [False])[-1]:
+            reply, updates = SUPPORT_TICKET_MAYBE_FILED, {}
+        # Zendesk turned this thread's request down on its merits, so the same
+        # words sent again get the same answer.
+        elif (prior_state.get("filing_blocked") or [False])[-1]:
+            reply, updates = SUPPORT_TICKET_REJECTED, {}
+        # Latest wins, not any(): a cancellation appends False, and reading the
+        # whole list would let the send the learner called off come back.
+        elif (prior_state.get("awaiting_send") or [False])[-1]:
+            reply, updates = await self._send_edit_or_cancel(
+                message,
+                extra_state=extra_state,
+                prior_state=prior_state,
+                session=session,
+                confirmed=confirmed,
+            )
+        else:
+            reply, updates = self._collect_the_request(
+                message, extra_state=extra_state, prior_state=prior_state
+            )
+
+        async for chunk in self._reply_without_the_model(
+            message, reply, {**extra_state, **updates}
+        ):
+            yield chunk

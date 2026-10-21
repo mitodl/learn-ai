@@ -196,3 +196,156 @@ def test_real_sdk_scrubs_params_and_local_variables(sentry_transport):
     assert len(sentry_transport.events) == 2
     for event in sentry_transport.events:
         assert "learner@example.invalid" not in json.dumps(event)
+
+
+# A support intake frame: the reply-to address and the learner's own words are
+# arguments to the call that files the ticket.
+CHATBOT_FRAME_VARS = {
+    "email": "'learner@example.invalid'",
+    "description": "'I cannot log in to the week 3 video'",
+}
+
+
+def _frames_event(frames):
+    return {
+        "exception": {"values": [{"value": "boom", "stacktrace": {"frames": frames}}]}
+    }
+
+
+def test_drops_locals_from_chatbot_frames():
+    """
+    No DETAIL line to truncate here: the learner's address is a plain argument,
+    and the SDK ships frame locals by default.
+    """
+    event = _frames_event(
+        [
+            {
+                "module": "ai_chatbots.zendesk",
+                "function": "file_support_ticket",
+                "filename": "ai_chatbots/zendesk.py",
+                "lineno": 193,
+                "vars": dict(CHATBOT_FRAME_VARS),
+            },
+            {"module": "main.views", "function": "index", "vars": {"retries": 3}},
+        ]
+    )
+
+    before_send(event, {})
+
+    frames = event["exception"]["values"][0]["stacktrace"]["frames"]
+    assert "learner@example.invalid" not in json.dumps(event)
+    # What identifies the failure stays; only the learner's data goes.
+    assert frames[0]["function"] == "file_support_ticket"
+    assert frames[0]["lineno"] == 193
+    # The frames around it go too: the learner's data is passed through them.
+    assert "vars" not in frames[1]
+
+
+def test_drops_locals_from_library_frames_in_a_chatbot_event():
+    """
+    The serializer's repr renders the whole request body, and the frame holding
+    it belongs to rest_framework. Scoping the scrub to the chatbot package left
+    the learner's message, address and page url in the event.
+    """
+    event = _frames_event(
+        [
+            {"module": "ai_chatbots.consumers", "function": "handle", "vars": {}},
+            {
+                "module": "rest_framework.serializers",
+                "function": "is_valid",
+                "vars": {
+                    "self": (
+                        "SupportChatRequestSerializer(data={'message': 'I cannot "
+                        "log in', 'user_email': 'learner@example.invalid'}):"
+                    )
+                },
+            },
+        ]
+    )
+
+    before_send(event, {})
+
+    assert "learner@example.invalid" not in json.dumps(event)
+
+
+def test_keeps_locals_when_no_chatbot_frame_is_present():
+    """
+    Every other app keeps the locals that make a traceback readable, which is
+    why this is not just include_local_variables turned off.
+    """
+    event = _frames_event(
+        [{"module": "main.views", "function": "index", "vars": {"retries": 3}}]
+    )
+
+    before_send(event, {})
+
+    frames = event["exception"]["values"][0]["stacktrace"]["frames"]
+    assert frames[0]["vars"] == {"retries": 3}
+
+
+def test_drops_locals_from_chatbot_frames_in_thread_stacktraces():
+    """Stacktraces reach Sentry under threads as well as exception."""
+    event = {
+        "threads": {
+            "values": [
+                {
+                    "stacktrace": {
+                        "frames": [
+                            {
+                                "module": "ai_chatbots.consumers",
+                                "function": "handle",
+                                "vars": dict(CHATBOT_FRAME_VARS),
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+
+    before_send(event, {})
+
+    assert "learner@example.invalid" not in json.dumps(event)
+
+
+def test_keeps_locals_from_a_module_that_merely_starts_the_same():
+    """Prefix matching on the package name, not on the string."""
+    event = _frames_event(
+        [{"module": "ai_chatbots_extra.thing", "vars": {"email": "a@b.invalid"}}]
+    )
+
+    before_send(event, {})
+
+    frames = event["exception"]["values"][0]["stacktrace"]["frames"]
+    assert frames[0]["vars"] == {"email": "a@b.invalid"}
+
+
+def test_real_sdk_drops_chatbot_frame_locals(sentry_transport):
+    """
+    Go through the real SDK, which fills frame vars from the live frames. The
+    raiser is exec'd with a chatbot __name__ because that is what the SDK reads
+    the frame's module out of.
+
+    Asserted on the frame rather than the whole event: the address is a literal
+    in this file, so the SDK's source context carries it no matter what the
+    scrub does. Real learner data never arrives as a source line.
+    """
+    namespace = {"__name__": "ai_chatbots.support_probe"}
+    exec(  # noqa: S102
+        "def raiser(email):\n    raise RuntimeError('kaboom')", namespace
+    )
+
+    try:
+        namespace["raiser"]("learner@example.invalid")
+    except Exception as e:  # noqa: BLE001
+        sentry_sdk.capture_exception(e)
+    sentry_sdk.flush()
+
+    frames = sentry_transport.events[0]["exception"]["values"][0]["stacktrace"][
+        "frames"
+    ]
+    chatbot_frames = [
+        frame for frame in frames if frame.get("module") == "ai_chatbots.support_probe"
+    ]
+    assert chatbot_frames, [frame.get("module") for frame in frames]
+    assert "vars" not in chatbot_frames[0]
