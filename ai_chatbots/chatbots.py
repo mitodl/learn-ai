@@ -1592,9 +1592,11 @@ class SupportBot(TruncatingChatbot):
         """File one ticket per thread, however many turns ask at once."""
         cache = get_django_cache()
         lock_key = f"{SUPPORT_FILING_LOCK_PREFIX}{self.thread_id}"
-        # A token rather than a flag. The TTL covers the Zendesk call, but not a
-        # worker stalled between that call returning and the release below, and
-        # one that wakes up late would delete the lock its successor now holds.
+        # A token rather than a flag, so a worker stalled past the TTL is less
+        # likely to delete the lock a successor now holds. Read-then-delete is
+        # not atomic, so this narrows that window without closing it: what
+        # actually stops a second ticket is the already-filed check below and
+        # Zendesk's Idempotency-Key.
         token = uuid4().hex
         if not await cache.aadd(lock_key, value=token, timeout=_filing_lock_ttl()):
             return SUPPORT_TICKET_SENDING, {}
