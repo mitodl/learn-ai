@@ -156,10 +156,36 @@ def test_tracer_noop_when_no_llm_info(mocker):
     client.__internal_api__span__.assert_not_called()
 
 
-def test_tracer_attaches_cost_fields_through_real_opik_tracer(mocker):
-    """Run a chain through the real OpikTracer so the Opik internals the
-    subclass reads (its span lookup after super()._process_end_span) are
-    exercised rather than mocked.
+def _invoke_with_config_callbacks(model, tracer):
+    """Pass callbacks in config with the LLM as a child, as the agent bots do."""
+    RunnableLambda(model.invoke).invoke("hello", config={"callbacks": [tracer]})
+
+
+def _invoke_with_model_callbacks_in_chain(model, tracer):
+    """TutorBot: callbacks set on the LLM, which runs inside a graph the tracer
+    never sees, so LangChain hands the tracer the LLM run as a root.
+    """
+    model.callbacks = [tracer]
+    RunnableLambda(model.invoke).invoke("hello")
+
+
+def _invoke_as_root_run(model, tracer):
+    """Call the LLM bare, with no surrounding chain."""
+    model.invoke("hello", config={"callbacks": [tracer]})
+
+
+@pytest.mark.parametrize(
+    "invoke",
+    [
+        _invoke_with_config_callbacks,
+        _invoke_with_model_callbacks_in_chain,
+        _invoke_as_root_run,
+    ],
+)
+def test_tracer_attaches_cost_fields_through_real_opik_tracer(mocker, invoke):
+    """Run the LLM through the real OpikTracer so the Opik internals the
+    subclass depends on (span lookup and run-state release) are exercised
+    rather than mocked.
     """
     client = mocker.Mock()
     client.__internal_api__trace__ = mocker.Mock()
@@ -171,20 +197,21 @@ def test_tracer_attaches_cost_fields_through_real_opik_tracer(mocker):
         return_value=client,
     )
     model = GenericFakeChatModel(
-        messages=iter([AIMessage(content="hi", usage_metadata=DEFAULT_USAGE)])
+        messages=iter([AIMessage(content="hi", usage_metadata=DEFAULT_USAGE)]),
+        metadata={"ls_model_name": "litellm_proxy/openai/gpt-4o-mini"},
     )
-    # A chain root with the LLM as a child mirrors the agent graph, where
-    # every LLM run has a parent.
-    chain = RunnableLambda(model.invoke)
 
     with warnings.catch_warnings():
         # Opik and this module read runs via the deprecated Run.dict().
         warnings.simplefilter("ignore", category=PydanticDeprecatedSince20)
-        chain.invoke("hello", config={"callbacks": [CostTrackingOpikTracer()]})
+        invoke(model, CostTrackingOpikTracer())
 
     llm_spans = [
         call.kwargs
         for call in client.__internal_api__span__.call_args_list
         if call.kwargs.get("type") == "llm"
     ]
+    assert llm_spans
     assert llm_spans[-1]["usage"] == OPENAI_USAGE
+    assert llm_spans[-1]["model"] == "gpt-4o-mini"
+    assert llm_spans[-1]["provider"] == "openai"

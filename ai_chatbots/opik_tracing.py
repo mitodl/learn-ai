@@ -112,13 +112,15 @@ class CostTrackingOpikTracer(OpikTracer):
     """
 
     def _process_end_span(self, run: Run) -> None:
-        # super() pops the span from _opik_context_storage but keeps it in the
-        # tracer's run state until the root run of its tree ends, so looking it
-        # up afterwards still finds an LLM span (always a child of the agent
-        # graph run). Skipped LangGraph root runs have no span and return None.
+        # Look the span up before super(): when the tracer sees this run as a
+        # root (a bare LLM call, or TutorBot's LLM-level callbacks, where the
+        # graph run is invisible to the tracer), super() releases the run's
+        # state and the lookup would return None. super() finalizes this same
+        # SpanData object in place, so updating it afterwards is safe. Skipped
+        # LangGraph root runs have no span and return None.
+        span_data = self.get_current_span_data_for_run(run.id)
         super()._process_end_span(run)
-        info = _extract_llm_span_info(run)
-        self._attach_cost_fields(self.get_current_span_data_for_run(run.id), info)
+        self._attach_cost_fields(span_data, _extract_llm_span_info(run))
 
     def _attach_cost_fields(self, span_data: Any, info: dict[str, Any] | None) -> None:
         if not info or span_data is None:
