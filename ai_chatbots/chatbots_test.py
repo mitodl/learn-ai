@@ -1727,6 +1727,20 @@ def _support_state(email=""):
 
 
 @pytest.mark.asyncio
+async def test_support_bot_loads_no_system_prompt(mocker, mock_checkpointer):
+    """
+    No branch of get_completion calls the model, so loading a prompt buys
+    nothing and costs a LangSmith lookup on a cache miss.
+    """
+    mock_get_prompt = mocker.patch("ai_chatbots.chatbots.get_system_prompt")
+
+    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+
+    assert chatbot.instructions is None
+    mock_get_prompt.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_support_bot_reviews_before_it_files(mocker, mock_checkpointer):
     """
     Nothing reaches the support team until the learner has seen what is going.

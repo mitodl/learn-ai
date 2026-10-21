@@ -1466,7 +1466,8 @@ def _ticket_subject(description: str) -> str:
 class SupportBot(TruncatingChatbot):
     """Service class for the support intake agent"""
 
-    PROMPT_TEMPLATE = "support"
+    # No prompt, because nothing here calls the model.
+    PROMPT_TEMPLATE = None
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     STATE_CLASS = SupportAgentState
