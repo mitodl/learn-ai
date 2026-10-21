@@ -53,3 +53,14 @@ def test_is_thread_owner_anon_malformed_cookie(caplog):
     )
     assert _has_permission(request, session.thread_id) is False
     assert f"Invalid cookie value for anon user and {session.thread_id}" in caplog.text
+
+
+def test_is_thread_owner_anon_cookie_for_user_thread():
+    """An anonymous user is denied a signed-in user's thread, even with its id in the cookie"""
+    session = UserChatSessionFactory.create()
+    assert session.user is not None
+    cookie = urlsafe_base64_encode(force_bytes(session.thread_id))
+    request = _anon_request(
+        {f"{session.agent}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}": cookie}
+    )
+    assert _has_permission(request, session.thread_id) is False

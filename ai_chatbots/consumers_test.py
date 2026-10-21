@@ -654,7 +654,11 @@ async def test_assign_thread_cookie(  # noqa: PLR0913
                 str(cookies[1])
                 == f"{anon_cookie_name}={encoded_thread_id};Path=/;{cookie_attrs}"
             )
-            assert str(cookies[0]) == f"{user_cookie_name}=;Path=/;{cookie_attrs}"
+            # The user cookie is kept, to resume when the user logs back in
+            assert (
+                str(cookies[0])
+                == f"{user_cookie_name}={encoded_user_cookie};Path=/;{cookie_attrs}"
+            )
 
 
 async def test_assign_thread_cookie_changed_account(syllabus_consumer, async_user):
@@ -717,9 +721,12 @@ async def test_assign_thread_cookie_ignores_a_signed_in_users_thread(
         dj_session_key="the_owners_session_key",
     )
 
-    thread_id, _ = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
 
     assert thread_id != owned_thread_id
+    assert cookies[1].value == urlsafe_base64_encode(force_bytes(thread_id))
+    # Kept for when the user logs back in
+    assert cookies[0].value == urlsafe_base64_encode(force_bytes(owned_thread_id))
 
 
 async def test_assign_thread_cookie_ignores_another_sessions_anon_thread(
@@ -750,6 +757,109 @@ async def test_assign_thread_cookie_ignores_another_sessions_anon_thread(
     thread_id, _ = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
 
     assert thread_id != other_thread_id
+
+
+async def test_assign_thread_cookie_logged_back_in(syllabus_consumer, async_user):
+    """Logging back in resumes the user's thread, and keeps the anonymous one."""
+    user_thread_id, anon_thread_id = uuid4().hex, uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: urlsafe_base64_encode(force_bytes(user_thread_id)),
+        anon_cookie_name: urlsafe_base64_encode(force_bytes(anon_thread_id)),
+        AI_SESSION_COOKIE_KEY: "test_session_key",
+    }
+    syllabus_consumer.scope["user"] = async_user
+    for thread, owner in ((user_thread_id, async_user), (anon_thread_id, None)):
+        await UserChatSession.objects.acreate(
+            thread_id=thread,
+            user=owner,
+            agent=SyllabusBot.__name__,
+            dj_session_key="test_session_key",
+        )
+
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(async_user)
+
+    assert thread_id == user_thread_id
+    assert cookies[1].value == ""
+    anon_session = await UserChatSession.objects.aget(thread_id=anon_thread_id)
+    assert anon_session.user_id == async_user.id
+
+
+@pytest.mark.parametrize("cookie_user", ["other_user", "other_object"])
+async def test_assign_thread_cookie_falls_back_to_anon(
+    syllabus_consumer, async_user, cookie_user
+):
+    """An unusable user cookie falls back to the anonymous thread."""
+    user_thread_id, anon_thread_id = uuid4().hex, uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    user_cookie = (
+        f"{user_thread_id}|other_course"
+        if cookie_user == "other_object"
+        else user_thread_id
+    )
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: urlsafe_base64_encode(force_bytes(user_cookie)),
+        anon_cookie_name: urlsafe_base64_encode(
+            force_bytes(f"{anon_thread_id}|this_course")
+        ),
+        AI_SESSION_COOKIE_KEY: "test_session_key",
+    }
+    syllabus_consumer.scope["user"] = async_user
+    await UserChatSession.objects.acreate(
+        thread_id=user_thread_id,
+        user=(
+            await sync_to_async(UserFactory.create)()
+            if cookie_user == "other_user"
+            else async_user
+        ),
+        agent=SyllabusBot.__name__,
+    )
+    await UserChatSession.objects.acreate(
+        thread_id=anon_thread_id,
+        agent=SyllabusBot.__name__,
+        dj_session_key="test_session_key",
+    )
+
+    thread_id, _ = await syllabus_consumer.assign_thread_cookies(
+        async_user, object_id="this_course"
+    )
+
+    assert thread_id == anon_thread_id
+
+
+@pytest.mark.parametrize("same_session", [True, False])
+async def test_assign_thread_cookie_anon_thread_needs_its_session(
+    syllabus_consumer, same_session
+):
+    """An anonymous thread in the cookie is only resumed by the session that started it."""
+    anon_thread_id = uuid4().hex
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    syllabus_consumer.scope["cookies"] = {
+        anon_cookie_name: urlsafe_base64_encode(force_bytes(anon_thread_id)),
+        AI_SESSION_COOKIE_KEY: (
+            "test_session_key" if same_session else "other_session_key"
+        ),
+    }
+    syllabus_consumer.scope["user"] = AnonymousUser()
+    await UserChatSession.objects.acreate(
+        thread_id=anon_thread_id,
+        agent=SyllabusBot.__name__,
+        dj_session_key="test_session_key",
+    )
+
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    assert (thread_id == anon_thread_id) is same_session
+    # Lasts as long as the thread cookie, so the thread survives a browser restart
+    assert cookies[2].max_age == settings.AI_CHATBOTS_COOKIE_MAX_AGE
 
 
 @pytest.mark.parametrize(

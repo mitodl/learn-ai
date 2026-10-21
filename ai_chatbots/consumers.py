@@ -228,6 +228,23 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             and session.dj_session_key == self.session_key
         )
 
+    async def cookie_thread_id(
+        self, user: User, cookie_keys: list[str], object_id: str
+    ) -> str | None:
+        """Return the first thread id in the cookies that this user may continue."""
+        for key in cookie_keys:
+            thread_id = decode_value(self.scope["cookies"].get(key) or "")
+            if "|" in thread_id:
+                # Object-specific thread, ensure it's the same object
+                thread_id, cookie_object_id = thread_id.split("|")
+                if object_id and object_id != cookie_object_id:
+                    continue
+            if not thread_id:
+                continue
+            if await self.may_continue_thread(thread_id, user):
+                return thread_id
+        return None
+
     async def assign_thread_cookies(
         self,
         user: User,
@@ -255,8 +272,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             or self.ident
             or uuid4().hex
         )
-        from_cookie = False
-        anon_cookie = False
         if clear_history:
             # Create a new random thread id
             current_thread_id = uuid4().hex
@@ -264,38 +279,21 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             # An explicit thread_id in the serializer wins over the cookies
             current_thread_id = thread_id
         else:
-            # Use cookie thread id if any, check anon cookie first
-            from_cookie = True
-            anon_cookie = True
-            current_thread_id = decode_value(
-                self.scope["cookies"].get(anon_cookie_key) or ""
-            )
-            if not current_thread_id:
-                # no anon cookie thread id, check authenticated cookie
-                anon_cookie = False
-                current_thread_id = decode_value(
-                    self.scope["cookies"].get(latest_cookie_key) or ""
+            if not user.is_anonymous and self.scope["cookies"].get(anon_cookie_key):
+                # Anon user has logged in, so associate any existing anon threads
+                # with the same session key
+                await (
+                    UserChatSession.objects.exclude(dj_session_key="")
+                    .filter(user_id=None, dj_session_key=self.session_key)
+                    .aupdate(user=user)
                 )
-            if current_thread_id and "|" in current_thread_id:
-                # Object-specific thread, ensure it's the same object
-                current_thread_id, cookie_object_id = current_thread_id.split("|")
-                if object_id and object_id != cookie_object_id:
-                    current_thread_id = None
-        if anon_cookie and user and not user.is_anonymous:
-            # Anon user has logged in, so associate any existing anon threads
-            # with the same session key. This runs before the check below, so a
-            # thread the learner started before signing in is now theirs.
-            await (
-                UserChatSession.objects.exclude(dj_session_key="")
-                .filter(user_id=None, dj_session_key=self.session_key)
-                .aupdate(user=user)
+            # Signed-in users resume their own thread before any anonymous one
+            cookie_keys = [anon_cookie_key, latest_cookie_key]
+            if not user.is_anonymous:
+                cookie_keys.reverse()
+            current_thread_id = await self.cookie_thread_id(
+                user, cookie_keys, object_id
             )
-        if (
-            from_cookie
-            and current_thread_id
-            and not await self.may_continue_thread(current_thread_id, user)
-        ):
-            current_thread_id = None
         current_thread_id = current_thread_id or uuid4().hex
 
         # Incorporate object id into cookie value if present
@@ -307,7 +305,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         cookies = [
             ChatbotCookie(
                 name=latest_cookie_key,
-                value=("" if user.is_anonymous else cookie_value),
+                # Kept while anonymous, so logging back in resumes that thread
+                value=(
+                    self.scope["cookies"].get(latest_cookie_key, "")
+                    if user.is_anonymous
+                    else cookie_value
+                ),
                 max_age=max_age,
             ),
             ChatbotCookie(

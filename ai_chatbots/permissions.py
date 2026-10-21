@@ -42,4 +42,5 @@ class IsThreadOwner(BasePermission):
             msg = f"Invalid cookie value for anon user and {thread_id}."
             log.warning(msg)
             return False
-        return thread_id == cookie_value
+        # A thread that belongs to a user is never open to anonymous requests
+        return chat_session.user_id is None and thread_id == cookie_value
