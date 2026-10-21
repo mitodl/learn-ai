@@ -14,7 +14,6 @@ from ai_chatbots.learner_api import (
     LearnerSession,
     forwarded_learner_session,
     get_course_certificate,
-    get_course_dates,
     get_enrollments,
     get_program_certificate,
     get_program_certificates,
@@ -24,7 +23,6 @@ from ai_chatbots.learner_api import (
 
 LEARN_COOKIE = "learn_session"
 EDX_COOKIE = "edx-lms-sessionid"
-COURSE_KEY = "course-v1:MITxT+18.01x+3T2026"
 CERTIFICATE_UUID = "6f1c3f9e-3b8a-4d6e-9f2a-1c2b3d4e5f60"
 
 
@@ -33,8 +31,6 @@ def learner_api_settings(settings):
     """Point the client at fixed hosts and cookie names."""
     settings.LEARNER_API_LEARN_BASE_URL = "https://api.learn.test/"
     settings.LEARNER_API_LEARN_COOKIE_NAME = LEARN_COOKIE
-    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
-    settings.LEARNER_API_OPENEDX_COOKIE_NAME = EDX_COOKIE
 
 
 class _Sent(list):
@@ -99,17 +95,6 @@ async def test_learn_calls_send_only_the_learn_session(
     )
 
 
-async def test_course_dates_send_only_the_edx_session(requests_sent, signed_in_scope):
-    """Open edX calls carry only the edX session, to the course host."""
-    with forwarded_learner_session(signed_in_scope):
-        await get_course_dates(COURSE_KEY)
-
-    (request,) = requests_sent
-    assert request.url.host == "courses.learn.test"
-    assert request.url.path == f"/api/course_home/v1/dates/{COURSE_KEY}"
-    assert request.headers["Cookie"] == f"{EDX_COOKIE}=edx-1"
-
-
 async def test_returned_cookies_are_not_sent_back(requests_sent, signed_in_scope):
     """Cookies an API sets are not added to the learner's next call."""
     with forwarded_learner_session(signed_in_scope):
@@ -141,20 +126,6 @@ async def test_no_session_makes_no_request(mocker, requests_sent, user, cookies)
             await get_enrollments()
 
     assert requests_sent == []
-
-
-async def test_edx_session_alone_does_not_reach_learn(
-    mocker, requests_sent, signed_in_scope
-):
-    """A learner with only an edX session can't call MIT Learn APIs."""
-    signed_in_scope["cookies"] = {EDX_COOKIE: "edx-1"}
-    with forwarded_learner_session(signed_in_scope):
-        assert has_learner_session() is False
-        with pytest.raises(LearnerAPIError):
-            await get_enrollments()
-        await get_course_dates(COURSE_KEY)
-
-    assert [request.url.host for request in requests_sent] == ["courses.learn.test"]
 
 
 async def test_session_ends_with_the_request(requests_sent, signed_in_scope):
@@ -214,26 +185,6 @@ async def test_invalid_json_raises(requests_sent, signed_in_scope):
 
 
 @pytest.mark.parametrize(
-    "course_key",
-    [
-        "../../api/user/v1/accounts",
-        f"{COURSE_KEY}/../../admin",
-        f"{COURSE_KEY}?x=1",
-        "course-v1:MITxT+18.01x",
-        "https://evil.test/",
-    ],
-)
-async def test_invalid_course_key_makes_no_request(
-    requests_sent, signed_in_scope, course_key
-):
-    """Only well-formed course keys reach the course host."""
-    with forwarded_learner_session(signed_in_scope), pytest.raises(LearnerAPIError):
-        await get_course_dates(course_key)
-
-    assert requests_sent == []
-
-
-@pytest.mark.parametrize(
     "base_url",
     ["", "http://api.learn.test/", "https://api.learn.test:443x/", "/relative/"],
 )
@@ -274,7 +225,7 @@ async def test_concurrent_requests_keep_their_own_session(mocker, requests_sent)
 
 def test_learner_session_hides_cookie_values():
     """The session never shows or saves its cookie values."""
-    session = LearnerSession({"learn": {"name": "secret-value"}, "openedx": {}})
+    session = LearnerSession({"learn": {"name": "secret-value"}})
 
     assert "secret-value" not in repr(session)
     assert "secret-value" not in str(session)

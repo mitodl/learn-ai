@@ -1,8 +1,8 @@
 """
-Read a signed-in learner's own records from MIT Learn, MITx Online and Open edX.
+Read a signed-in learner's own records from MIT Learn and MITx Online.
 
-These APIs already return the signed-in learner's own enrollments, grades,
-certificates and dates. learn-ai calls them with the learner's own session
+These APIs already return the signed-in learner's own enrollments, grades
+and certificates. learn-ai calls them with the learner's own session
 cookies, taken from the chat request, so it never holds a credential that can
 read anyone else's records.
 
@@ -31,16 +31,11 @@ from django.conf import settings
 log = logging.getLogger(__name__)
 
 LEARN = "learn"
-OPENEDX = "openedx"
 
 # Host -> (base URL setting, session cookie name setting)
 _HOST_SETTINGS = {
     LEARN: ("LEARNER_API_LEARN_BASE_URL", "LEARNER_API_LEARN_COOKIE_NAME"),
-    OPENEDX: ("LEARNER_API_OPENEDX_BASE_URL", "LEARNER_API_OPENEDX_COOKIE_NAME"),
 }
-
-# Open edX course keys: course-v1:<org>+<course>+<run>
-COURSE_KEY_RE = re.compile(r"course-v1:[\w~.:-]+\+[\w~.:-]+\+[\w~.:-]+", re.ASCII)
 
 # RFC 6265 cookie-octet: anything else can't go in a Cookie header as-is
 COOKIE_VALUE_RE = re.compile(r"[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+")
@@ -237,11 +232,3 @@ async def get_program_certificate(certificate_uuid: str) -> dict:
     return await _get_certificate(
         "get_program_certificate", "program_certificates", certificate_uuid
     )
-
-
-async def get_course_dates(course_key: str) -> dict:
-    """Get the learner's dates for one Open edX course run, from its Dates tab."""
-    operation = "get_course_dates"
-    if not COURSE_KEY_RE.fullmatch(course_key):
-        raise LearnerAPIError(operation)
-    return await _get(operation, OPENEDX, f"api/course_home/v1/dates/{course_key}")
