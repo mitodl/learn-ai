@@ -296,6 +296,17 @@ async def test_enrollments_list_all_courses_on_a_course_page(records):
     assert "grade" not in result["enrollments"][0]
 
 
+async def test_enrollments_accept_dates_without_a_timezone(records):
+    """A run date with no UTC offset still gets a status."""
+    records["enrollments"].return_value = [
+        enrollment(CALCULUS, "3T2026", "Calculus 1A", start="2099-01-01")
+    ]
+
+    result = await call(get_enrollments)
+
+    assert result["enrollments"][0]["status"] == "upcoming"
+
+
 async def test_enrollments_keep_only_answer_fields(records):
     """Payment and email settings never reach the model."""
     result = await call(get_enrollments)

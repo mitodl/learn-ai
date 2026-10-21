@@ -729,11 +729,15 @@ def _normalize(text: str | None) -> str:
 
 
 def _parse_date(value: str | None) -> datetime | None:
-    """Parse an ISO date from the APIs, or None."""
+    """Parse an ISO date from the APIs as aware UTC, or None."""
     try:
-        return datetime.fromisoformat(value) if value else None
+        parsed = datetime.fromisoformat(value) if value else None
     except ValueError:
         return None
+    # A date with no offset can't be compared with an aware "now"
+    if parsed and parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 def _run_status(run: dict, now: datetime) -> str:
