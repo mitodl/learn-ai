@@ -1429,7 +1429,11 @@ def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
     # On the opening message an address is part of the problem ("can't log in
     # as x@y.com"), not a reply-to, so it only counts once we have asked.
     parsed_reply_to = _reply_to_email(message) if prior_state.get("messages") else ""
-    known = _accumulated(prior_state, extra_state, "user_email")
+    # The body address is a fallback, not the latest word: a host that resends
+    # it every request would otherwise undo a correction on the turn that files.
+    known = _accumulated(prior_state, {}, "user_email") or _latest(
+        extra_state.get("user_email") or []
+    )
     if known and not _is_bare_reply_to(message):
         # Replacing an address we already have takes a message that is nothing
         # but the new one. "The page says contact admin@example.org" describes

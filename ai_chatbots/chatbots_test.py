@@ -1839,6 +1839,38 @@ async def test_support_bot_files_against_a_corrected_address(mocker, mock_checkp
 
 
 @pytest.mark.asyncio
+async def test_support_bot_keeps_a_correction_the_widget_keeps_overwriting(
+    mocker, mock_checkpointer
+):
+    """
+    A host that puts the learner's address in every request body would otherwise
+    undo the correction on the turn that files: the body value accumulates after
+    the saved one, and a bare "send" has no typed address to prefer over it.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM), HumanMessage("learner@exmaple.com")],
+        state={"user_email": ["learner@exmaple.com"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "learner@example.com", extra_state=_support_state("learner@exmaple.com")
+    ):
+        pass
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("learner@exmaple.com")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["email"] == "learner@example.com"
+
+
+@pytest.mark.asyncio
 async def test_support_bot_retries_a_failed_file_with_the_corrected_address(
     mocker, mock_checkpointer
 ):
