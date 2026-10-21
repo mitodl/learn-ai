@@ -18,6 +18,7 @@ certifi = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-common = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-observability = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-drf-lint = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
+ol-llm = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 
 [manifest]
 constraints = [{ name = "certifi", specifier = ">=2026.10.19" }]
@@ -2841,6 +2842,7 @@ dependencies = [
     { name = "markdown2" },
     { name = "mitol-django-observability" },
     { name = "named-enum" },
+    { name = "ol-llm" },
     { name = "open-learning-ai-tutor" },
     { name = "opentelemetry-instrumentation-asgi" },
     { name = "opentelemetry-instrumentation-celery" },
@@ -2948,6 +2950,7 @@ requires-dist = [
     { name = "markdown2", specifier = ">=2.5.2,<3" },
     { name = "mitol-django-observability", specifier = ">=2026.8.19" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
+    { name = "ol-llm", specifier = ">=0.0.3,<0.1" },
     { name = "open-learning-ai-tutor", specifier = "==0.2.16" },
     { name = "opentelemetry-instrumentation-asgi", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
@@ -2956,7 +2959,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opik", specifier = "~=2.1.22" },
+    { name = "opik", specifier = "==2.2.94" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", extras = ["c"], specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },
@@ -3557,6 +3560,23 @@ wheels = [
 ]
 
 [[package]]
+name = "ol-llm"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+    { name = "opik" },
+    { name = "pydantic" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/b4/72950ac8a991c6128b21edc4cfdd7b4547befe4a7e75e3fe4bde7fc90658/ol_llm-0.0.3.tar.gz", hash = "sha256:30ac90d7e768bc9ff6643a2779ff0627a369fe0254827a0b5da798c55a81fbef", size = 180545, upload-time = "2026-10-21T16:25:24.246Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/eb/467c67e637c68389acbf006291b57cf333659e1c529179868c3307dacd45/ol_llm-0.0.3-py3-none-any.whl", hash = "sha256:cebd48cc5de59f90ccdbcbb2a92fe48c185ec059c339e8af86417077188f6fbe", size = 81564, upload-time = "2026-10-21T16:25:22.933Z" },
+]
+
+[[package]]
 name = "ollama"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3916,7 +3936,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.1.32"
+version = "2.2.94"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -3925,6 +3945,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "litellm" },
     { name = "openai" },
+    { name = "orjson", marker = "platform_machine in 'x86_64 AMD64 aarch64 arm64 ARM64 i686 x86' and platform_python_implementation == 'CPython'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest" },
@@ -3939,9 +3960,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/0a/2e3106bcca674f6a096848035999e9421f3a558b46f06310e25108336891/opik-2.1.32.tar.gz", hash = "sha256:0272c734608c03710b3f3dce2c5727dcfb97ee517ef8c690946db13d26b3ada4", size = 1176998, upload-time = "2026-07-17T08:07:13.383Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/eb/56/a433a491c46e15bf56bfd439fb18312e92eb2539345d40c869054be1e644/opik-2.2.94.tar.gz", hash = "sha256:5ad6dab275d23cc2820500ba97a65a077dd818bc592bc9bf59e22abcb5389259", size = 1397362, upload-time = "2026-10-07T14:26:53.644Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/52/3a4996eb91df6291e4c0cc575816d5e984e474eb7b87ca22a8063bcf5322/opik-2.1.32-py3-none-any.whl", hash = "sha256:ef2867d5d343884e30aa16b0005db3088472c49313c1d0506907a0a1c366b252", size = 1865089, upload-time = "2026-07-17T08:07:10.878Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/1d/15d3b9fd58e60ae789c3ae33931f679600ea4e107c2c555315ef71f22889/opik-2.2.94-py3-none-any.whl", hash = "sha256:f87cd0e890fbf684915ccd09ca102ebf9861ecb2896e3c605723cea7ffadc262", size = 2134186, upload-time = "2026-10-07T14:26:51.506Z" },
 ]
 
 [[package]]
