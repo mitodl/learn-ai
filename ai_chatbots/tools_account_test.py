@@ -93,6 +93,15 @@ ENROLLMENTS = [
 ]
 
 
+# Shaped like MITx Online's /api/v2/course_certificates/<uuid>/
+ISSUED_CERTIFICATE = {
+    "uuid": "abc",
+    "is_revoked": False,
+    "user": {"name": "Jane Learner"},
+    "verifiable_credential_json": {"credentialSubject": {"name": "Jane Learner"}},
+}
+
+
 @pytest.fixture
 def records(mocker):
     """Return the learner's records, as learner_api returns them."""
@@ -122,6 +131,12 @@ def records(mocker):
                     "user_email": "learner@example.com",
                 }
             ],
+        ),
+        "course_certificate": mocker.patch(
+            f"{api}.get_course_certificate", return_value=ISSUED_CERTIFICATE
+        ),
+        "program_certificate": mocker.patch(
+            f"{api}.get_program_certificate", return_value=ISSUED_CERTIFICATE
         ),
     }
 
@@ -355,3 +370,64 @@ async def test_failed_lookup_says_could_not_check(records, tool, failing):
     result = await call(tool, page_course=CALCULUS)
 
     assert result == {"error": COULD_NOT_CHECK}
+
+
+@pytest.mark.parametrize(
+    ("certificate", "expected"),
+    [
+        (ISSUED_CERTIFICATE, "issued"),
+        ({**ISSUED_CERTIFICATE, "verifiable_credential_json": None}, "not_confirmed"),
+        ({**ISSUED_CERTIFICATE, "is_revoked": True}, "not_confirmed"),
+        (LearnerAPIError("get_course_certificate", 404), "not_confirmed"),
+    ],
+)
+async def test_digital_credential_issued_only_when_present(
+    records, certificate, expected
+):
+    """A credential counts as issued only when MITx Online returns it."""
+    if isinstance(certificate, Exception):
+        records["course_certificate"].side_effect = certificate
+    else:
+        records["course_certificate"].return_value = certificate
+
+    result = await call(get_certificate_status, course="14.750x")
+
+    (course,) = result["enrollments"]
+    assert course["certificate_earned"] is True
+    assert course["digital_credential"] == expected
+    records["course_certificate"].assert_called_once_with("abc")
+    assert "Jane Learner" not in json.dumps(result)
+
+
+async def test_no_certificate_means_no_credential_lookup(records):
+    """Without a certificate there is nothing to look up or report."""
+    result = await call(get_certificate_status, course="18.01x")
+
+    assert result["enrollments"][0]["certificate_earned"] is False
+    assert "digital_credential" not in result["enrollments"][0]
+    assert "digital_credential" not in result["programs"][0]
+    records["course_certificate"].assert_not_called()
+    records["program_certificate"].assert_not_called()
+
+
+async def test_program_digital_credential(records):
+    """Program certificates report their credential, without the uuid."""
+    records["programs"].return_value = [
+        {
+            "program": {"title": "Data, Economics", "readable_id": "DEDP"},
+            "certificate": {"link": "/certificate/program/def/", "uuid": "def"},
+        }
+    ]
+    records["program_certificate"].return_value = {
+        **ISSUED_CERTIFICATE,
+        "verifiable_credential_json": None,
+    }
+
+    result = await call(get_certificate_status, course="14.750x")
+
+    (program,) = result["programs"]
+    assert program["certificate_earned"] is True
+    assert program["digital_credential"] == "not_confirmed"
+    assert "certificate_uuid" not in program
+    assert "certificate_uuid" not in result["enrollments"][0]
+    records["program_certificate"].assert_called_once_with("def")

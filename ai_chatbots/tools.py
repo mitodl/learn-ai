@@ -705,6 +705,8 @@ COULD_NOT_CHECK = (
     "couldn't check, and never conclude they have no enrollment, grade or "
     "certificate."
 )
+DIGITAL_CREDENTIAL_ISSUED = "issued"
+DIGITAL_CREDENTIAL_NOT_CONFIRMED = "not_confirmed"
 
 
 class AccountToolSchema(pydantic.BaseModel):
@@ -763,6 +765,11 @@ def _certificate_url(certificate) -> str | None:
     return urljoin(settings.LEARNER_API_MITXONLINE_BASE_URL, link) if link else None
 
 
+def _certificate_uuid(certificate) -> str | None:
+    """Return a MITx Online certificate's uuid, used to look up its credential."""
+    return certificate.get("uuid") if isinstance(certificate, dict) else None
+
+
 def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
     """Keep the parts of a MITx Online enrollment that an answer needs."""
     run = enrollment.get("run") or {}
@@ -792,6 +799,7 @@ def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
         else None,
         "certificate_earned": bool(certificate),
         "certificate_url": _certificate_url(certificate),
+        "certificate_uuid": _certificate_uuid(certificate),
         "course_url": run.get("courseware_url"),
         "progress_url": _course_tab_url(run, "progress"),
         "dates_url": _course_tab_url(run, "dates"),
@@ -1020,7 +1028,30 @@ def _program_enrollment_summary(enrollment: dict) -> dict:
         "program_id": program.get("readable_id"),
         "certificate_earned": bool(certificate),
         "certificate_url": _certificate_url(certificate),
+        "certificate_uuid": _certificate_uuid(certificate),
     }
+
+
+async def _digital_credential(get_certificate, summary: dict) -> str | None:
+    """
+    Return "issued" only when MITx Online returns the signed credential, and
+    None when there is no certificate. A missing credential can mean the course
+    doesn't issue one or that issuing it failed (hq#13746), so anything else is
+    "not_confirmed", never "none".
+    """
+    if not summary["certificate_earned"]:
+        return None
+    try:
+        certificate = await get_certificate(summary["certificate_uuid"])
+    except learner_api.LearnerAPIError:
+        return DIGITAL_CREDENTIAL_NOT_CONFIRMED
+    if (
+        isinstance(certificate, dict)
+        and certificate.get("verifiable_credential_json")
+        and not certificate.get("is_revoked")
+    ):
+        return DIGITAL_CREDENTIAL_ISSUED
+    return DIGITAL_CREDENTIAL_NOT_CONFIRMED
 
 
 @tool(args_schema=AccountToolSchema)
@@ -1030,9 +1061,13 @@ async def get_certificate_status(
     """
     Get whether the signed-in learner has earned a certificate in a course,
     with its link, plus their program enrollments and program certificates.
-    Use it for "did I get a certificate", "where is my certificate" or "have I
-    finished the program". Without a course it uses the course of the page
-    they are chatting from.
+    Use it for "did I get a certificate", "where is my certificate", "where is
+    my digital credential" or "have I finished the program". Without a course
+    it uses the course of the page they are chatting from.
+
+    Each earned MITx Online certificate also has digital_credential, for the
+    separate digital credential: "issued" when one exists, "not_confirmed" when
+    it couldn't be confirmed (send the learner to support for that one).
     """
     try:
         results = await asyncio.gather(
@@ -1046,14 +1081,33 @@ async def get_certificate_status(
     if any(isinstance(item, BaseException) for item in results):
         return _could_not_check("get_certificate_status")
     result, programs, program_certificates = results
+    enrollments = result["enrollments"]
+    programs = [_program_enrollment_summary(p) for p in programs]
+    credentials = await asyncio.gather(
+        *(
+            _digital_credential(learner_api.get_course_certificate, summary)
+            for summary in enrollments
+        ),
+        *(
+            _digital_credential(learner_api.get_program_certificate, summary)
+            for summary in programs
+        ),
+    )
     result["enrollments"] = _only(
-        result["enrollments"],
+        enrollments,
         "status",
         "enrollment_mode",
         "certificate_earned",
         "certificate_url",
     )
-    result["programs"] = [_program_enrollment_summary(p) for p in programs]
+    for summary in programs:
+        del summary["certificate_uuid"]
+    result["programs"] = programs
+    for summary, credential in zip(
+        [*result["enrollments"], *programs], credentials, strict=True
+    ):
+        if credential:
+            summary["digital_credential"] = credential
     result["program_certificates"] = [
         _program_certificate_summary(c) for c in program_certificates
     ]
