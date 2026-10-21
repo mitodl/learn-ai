@@ -47,6 +47,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # anywhere in the process, so it's set here, ahead of every other import that
 # could reach opik transitively.
 os.environ.setdefault("OPIK_SENTRY_ENABLE", "false")
+# opik >= 2.2 also reports SDK usage events (one per OpikTracer we build, i.e.
+# per chat request) to stats.comet.com unless this is false. It is read on the
+# first tracked event, so setting it here is early enough.
+os.environ.setdefault("OPIK_ANALYTICS_ENABLE", "false")
 
 # initialize Sentry before doing anything else so we capture any config errors
 SENTRY_DSN = get_string("SENTRY_DSN", "")
