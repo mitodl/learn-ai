@@ -13,8 +13,10 @@ from ai_chatbots.learner_api import (
     LearnerAPIError,
     LearnerSession,
     forwarded_learner_session,
+    get_course_certificate,
     get_course_dates,
     get_enrollments,
+    get_program_certificate,
     get_program_certificates,
     get_program_enrollments,
     has_learner_session,
@@ -23,6 +25,7 @@ from ai_chatbots.learner_api import (
 LEARN_COOKIE = "learn_session"
 EDX_COOKIE = "edx-lms-sessionid"
 COURSE_KEY = "course-v1:MITxT+18.01x+3T2026"
+CERTIFICATE_UUID = "6f1c3f9e-3b8a-4d6e-9f2a-1c2b3d4e5f60"
 
 
 @pytest.fixture(autouse=True)
@@ -279,3 +282,35 @@ def test_learner_session_hides_cookie_values():
     for save in (pickle.dumps, copy.copy, copy.deepcopy):
         with pytest.raises(TypeError):
             save(session)
+
+
+@pytest.mark.parametrize(
+    ("operation", "path"),
+    [
+        (get_course_certificate, "course_certificates"),
+        (get_program_certificate, "program_certificates"),
+    ],
+)
+async def test_certificate_calls_use_a_fixed_path(
+    requests_sent, signed_in_scope, operation, path
+):
+    """Certificates are read from MITx Online's v2 API, via MIT Learn."""
+    with forwarded_learner_session(signed_in_scope):
+        await operation(CERTIFICATE_UUID)
+
+    (request,) = requests_sent
+    assert request.url.host == "api.learn.test"
+    assert request.url.path == f"/mitxonline/api/v2/{path}/{CERTIFICATE_UUID}/"
+
+
+@pytest.mark.parametrize(
+    "certificate_uuid", [None, "abc", f"{CERTIFICATE_UUID}/../../users/me"]
+)
+async def test_invalid_certificate_uuid_makes_no_request(
+    requests_sent, signed_in_scope, certificate_uuid
+):
+    """Only a real uuid reaches the certificate API."""
+    with forwarded_learner_session(signed_in_scope), pytest.raises(LearnerAPIError):
+        await get_course_certificate(certificate_uuid)
+
+    assert requests_sent == []

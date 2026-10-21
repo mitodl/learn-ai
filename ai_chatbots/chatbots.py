@@ -652,7 +652,11 @@ class SyllabusBot(TruncatingChatbot):
                 "default to the course this chat is about. Pass course when the "
                 "learner names another one by number or title. If a tool says "
                 "it couldn't check, tell the learner that, and never tell them "
-                "they have no enrollment, grade or certificate. Link to the "
+                "they have no enrollment, grade or certificate. A digital "
+                "credential is separate from the certificate: say one was "
+                'issued only when digital_credential is "issued"; when it is '
+                '"not_confirmed", say you couldn\'t confirm it and suggest '
+                "contacting support. Link to the "
                 "course's Progress or Dates tab rather than guessing details "
                 "the tools don't return."
             )

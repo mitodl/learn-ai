@@ -23,6 +23,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from uuid import UUID
 
 import httpx
 from django.conf import settings
@@ -213,6 +214,29 @@ async def get_program_enrollments() -> list[dict]:
 async def get_program_certificates() -> list[dict]:
     """Get the learner's MIT Learn program certificates."""
     return await _get("get_program_certificates", LEARN, "api/v0/program_certificates/")
+
+
+async def _get_certificate(operation: str, kind: str, certificate_uuid) -> dict:
+    """GET one MITx Online certificate by its uuid, with its digital credential."""
+    try:
+        certificate_uuid = UUID(str(certificate_uuid))
+    except ValueError:
+        raise LearnerAPIError(operation) from None
+    return await _get(operation, LEARN, f"mitxonline/api/v2/{kind}/{certificate_uuid}/")
+
+
+async def get_course_certificate(certificate_uuid: str) -> dict:
+    """Get one of the learner's MITx Online course certificates."""
+    return await _get_certificate(
+        "get_course_certificate", "course_certificates", certificate_uuid
+    )
+
+
+async def get_program_certificate(certificate_uuid: str) -> dict:
+    """Get one of the learner's MITx Online program certificates."""
+    return await _get_certificate(
+        "get_program_certificate", "program_certificates", certificate_uuid
+    )
 
 
 async def get_course_dates(course_key: str) -> dict:
