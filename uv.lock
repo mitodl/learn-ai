@@ -2819,7 +2819,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-psycopg", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-requests", specifier = ">=0.52b0" },
-    { name = "opik", specifier = "~=2.1.22" },
+    { name = "opik", specifier = "~=2.2.94" },
     { name = "posthog", specifier = ">=7.0.1,<8" },
     { name = "psycopg", extras = ["c"], specifier = ">=3.2.4,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.4,<4" },
@@ -3719,7 +3719,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.1.22"
+version = "2.2.100"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -3728,6 +3728,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "litellm" },
     { name = "openai" },
+    { name = "orjson", marker = "platform_machine in 'x86_64 AMD64 aarch64 arm64 ARM64 i686 x86' and platform_python_implementation == 'CPython'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pytest" },
@@ -3742,9 +3743,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/bb/8007bce35fbf8f4ee81cf433b4d231a1f4447242a8149d59b95b3db38258/opik-2.1.22.tar.gz", hash = "sha256:bdd1a211117baf5e86fae278cd2291e4a3ed51d536fd5b130c3bb458df660a0f", size = 1169626, upload-time = "2026-07-10T10:51:36.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/7b/a52941863785a0e988cd8fc55db6886905bf9622caebb60f8c72546dc265/opik-2.2.100.tar.gz", hash = "sha256:1b258411fb4d39f4092a6c9a68c71b6793bfc54a251470d9762dc1a871420265", size = 1402381, upload-time = "2026-10-14T08:44:02.42Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/b5/9a0552de8e39a36e8e288ba3ff0337d0abcd117ddda7d753667a02d4507f/opik-2.1.22-py3-none-any.whl", hash = "sha256:c11bc8db4bdc370dd2ab6d6962901b9d2ae8e1ac04502ed53c27e4fe37f0ab98", size = 1854322, upload-time = "2026-07-10T10:51:34.556Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/aa/d341fe6d1f10264da5097de251376b7cbe9a51353182960c282f7baa0618/opik-2.2.100-py3-none-any.whl", hash = "sha256:8b9a6cd63399eb49adf1f71cabf242350968c6e0f2f3a7fb4347e73aebd6f865", size = 2143018, upload-time = "2026-10-14T08:44:00.54Z" },
 ]
 
 [[package]]
