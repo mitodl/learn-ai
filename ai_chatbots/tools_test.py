@@ -129,6 +129,36 @@ async def test_search_courses_override_url(settings, mock_get_resources, search_
 
 
 @pytest.mark.parametrize(
+    "agent_params",
+    [
+        {},
+        {"offered_by": ["mitx"], "free": True},
+    ],
+)
+async def test_search_courses_pinned_filters(
+    settings, mock_get_resources, agent_params
+):
+    """Filters pinned in the state are always applied, over the agent's choices"""
+    settings.AI_MIT_SEARCH_LIMIT = 10
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    search_url = "https://mit.edu/vector"
+    pinned = {"topic": ["Biology"], "offered_by": ["ocw"]}
+    await search_courses.ainvoke(
+        {
+            "q": "japan",
+            **agent_params,
+            "state": {"search_url": [search_url], "search_filters": [pinned]},
+        }
+    )
+    mock_get_resources.return_value.get.assert_called_once_with(
+        search_url,
+        params={"q": "japan", "limit": 10, **agent_params, **pinned},
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize(
     "params",
     [
         {"foo": "bar"},
