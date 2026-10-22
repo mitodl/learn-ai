@@ -160,6 +160,11 @@ async def search_courses(
         valid_params["hybrid_search"] = True
 
     params.update({k: v for k, v in valid_params.items() if v is not None})
+    # Filters pinned by the client (e.g. a channel page) replace any the agent
+    # chose for the same field, so results can't fall outside them.
+    search_filters = (state or {}).get("search_filters") or []
+    if search_filters:
+        params.update(search_filters[-1])
     search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:

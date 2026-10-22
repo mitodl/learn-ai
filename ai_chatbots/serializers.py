@@ -4,6 +4,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from ai_chatbots.constants import RECOMMENDATION_SEARCH_FILTERS
 from ai_chatbots.models import (
     ChatResponseRating,
     ChatResponseScore,
@@ -68,6 +69,23 @@ class RecommendationChatRequestSerializer(ChatRequestSerializer):
     search_url = serializers.CharField(
         required=False, allow_blank=False, default=settings.AI_MIT_SEARCH_URL
     )
+    search_filters = serializers.DictField(
+        child=serializers.ListField(
+            child=serializers.CharField(allow_blank=False), allow_empty=False
+        ),
+        required=False,
+        help_text=(
+            "MIT Learn search filters to always apply, e.g. {'topic': ['Biology']}"
+        ),
+    )
+
+    def validate_search_filters(self, value):
+        """Only allow filters the MIT Learn search API supports"""
+        invalid = sorted(set(value) - set(RECOMMENDATION_SEARCH_FILTERS))
+        if invalid:
+            err_msg = f"Invalid search filters: {', '.join(invalid)}"
+            raise serializers.ValidationError(err_msg)
+        return value
 
 
 class SyllabusChatRequestSerializer(ChatRequestSerializer):
