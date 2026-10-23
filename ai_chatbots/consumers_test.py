@@ -544,6 +544,34 @@ async def test_syllabus_create_chatbot_account_tools(  # noqa: PLR0913
     assert flag.called is signed_in
 
 
+async def test_canvas_syllabus_create_chatbot_no_account_tools(
+    mocker,
+    settings,
+    mock_http_consumer_send,
+    canvas_syllabus_consumer,
+    async_user,
+):
+    """The Canvas syllabus bot never gets account tools, even with a session."""
+    mocker.patch("ai_chatbots.consumers.feature_is_enabled", return_value=True)
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={"message": "hello", "course_id": "MITx+6.00.1x"}
+    )
+    serializer.is_valid(raise_exception=True)
+    await canvas_syllabus_consumer.prepare_response(serializer)
+    settings.LEARNER_API_LEARN_COOKIE_NAME = "learn-session"
+    scope = {
+        "user": async_user,
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with forwarded_learner_session(scope):
+        chatbot = await sync_to_async(canvas_syllabus_consumer.create_chatbot)(
+            serializer, InMemorySaver()
+        )
+
+    assert chatbot.enable_account_tools is False
+    assert "get_enrollments" not in [tool.name for tool in chatbot.create_tools()]
+
+
 @pytest.mark.parametrize(
     "request_params",
     [

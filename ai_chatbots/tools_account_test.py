@@ -285,6 +285,31 @@ async def test_earlier_certificate_isnt_hidden_by_a_newer_run(records):
     assert progress["enrollments"][0]["run_id"] == f"{ECONOMICS}+1T2099"
 
 
+async def test_latest_run_compares_dates_not_text(records):
+    """The latest of two ended runs is picked by time, not by the date's text."""
+    records["enrollments"].return_value = [
+        # 10:00+05:00 is 05:00 UTC, earlier than the other run's 06:00 UTC
+        enrollment(
+            CALCULUS,
+            "earlier",
+            "Calculus 1A",
+            start="2020-03-01T10:00:00+05:00",
+            end="2020-06-01T00:00:00Z",
+        ),
+        enrollment(
+            CALCULUS,
+            "later",
+            "Calculus 1A",
+            start="2020-03-01T06:00:00Z",
+            end="2020-06-01T00:00:00Z",
+        ),
+    ]
+
+    result = await call(get_course_progress, course="18.01x")
+
+    assert result["enrollments"][0]["run_id"] == f"{CALCULUS}+later"
+
+
 async def test_enrollments_list_all_courses_on_a_course_page(records):
     """Asking what the learner is enrolled in lists every course, not the page's."""
     result = await call(get_enrollments, page_course=CALCULUS)
