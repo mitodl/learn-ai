@@ -985,6 +985,11 @@ async def get_course_progress(
     result["enrollments"] = _only(
         result["enrollments"], "status", "grade", "progress_url"
     )
+    # Small models read a 0% grade as "nothing completed"; say it isn't.
+    result["completion"] = (
+        "Not available. The grade doesn't show how much of the course or how "
+        "many assignments the learner has completed; link progress_url for that."
+    )
     return json.dumps(result)
 
 
@@ -1060,6 +1065,8 @@ async def get_certificate_status(
     """
     Get whether the signed-in learner has earned a certificate in a course,
     with its link, plus their program enrollments and program certificates.
+    A program certificate can show up in either place: as certificate_earned
+    on a program, or in program_certificates (MIT Learn's program records).
     Use it for "did I get a certificate", "where is my certificate", "where is
     my digital credential" or "have I finished the program". Without a course
     it uses the course of the page they are chatting from.
