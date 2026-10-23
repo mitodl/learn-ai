@@ -689,10 +689,6 @@ AI_MIT_SEARCH_VECTOR_URL = get_string(
     name="AI_MIT_SEARCH_VECTOR_URL",
     default="https://api.learn.mit.edu/api/v0/vector_learning_resources_search/",
 )
-AI_MIT_SEARCH_URL = get_string(
-    name="AI_MIT_SEARCH_URL",
-    default=AI_MIT_SEARCH_VECTOR_URL,
-)
 AI_MIT_SEARCH_LIMIT = get_int(name="AI_MIT_SEARCH_LIMIT", default=10)
 AI_MIT_CONTENT_SEARCH_LIMIT = get_int(name="AI_MIT_CONTENT_SEARCH_LIMIT", default=10)
 AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(

@@ -14,7 +14,7 @@ const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
 const RecommendationContent: React.FC = () => {
   const [settings, setSettings] = useSearchParamSettings({
     rec_model: "",
-    search_url: "",
+    search_backend: "",
     rec_prompt: "",
   })
 
@@ -30,15 +30,15 @@ const RecommendationContent: React.FC = () => {
       isReady={true}
       extraBody={{
         model: settings.rec_model,
-        search_url: settings.search_url,
+        search_backend: settings.search_backend,
         instructions: settings.rec_prompt,
       }}
       settings={settings}
       setSettings={setSettings}
       sidebarContent={
         <SelectSearchURL
-          value={settings.search_url}
-          onChange={(e) => setSettings({ search_url: e.target.value })}
+          value={settings.search_backend}
+          onChange={(e) => setSettings({ search_backend: e.target.value })}
         />
       }
     />

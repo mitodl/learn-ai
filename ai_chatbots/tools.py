@@ -5,15 +5,14 @@ import logging
 from typing import Annotated
 
 import pydantic
-from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
 from django.conf import settings
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
+from ai_chatbots import learn
 from ai_chatbots.constants import (
-    HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
     ZENDESK_PLATFORM_CATEGORY_IDS,
@@ -22,18 +21,45 @@ from ai_chatbots.constants import (
     OfferedBy,
 )
 from ai_chatbots.utils import async_request, enum_zip, get_django_cache
-from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
 
 # Cache key prefix for the platform a course is offered on
 COURSE_PLATFORM_CACHE_PREFIX = "course_platform_"
 
+# What the LLM sees when a Learn-backed tool fails
+LEARN_ERROR_ENVELOPE = json.dumps(
+    {"error": "An error occurred while querying MIT Learn"}
+)
 
-async def _is_hybrid_search_enabled() -> bool:
-    """Check if the hybrid search feature flag is enabled."""
-    return await sync_to_async(feature_is_enabled)(
-        HYBRID_SEARCH_FEATURE_FLAG, default=False
+
+def _search_error_envelope(error: Exception, **extra) -> str:
+    """
+    Serialize a failed search.  It keeps the url and parameters when the Learn
+    client raised, so a failed search is distinguishable from one that ran and
+    found nothing.
+    """
+    return json.dumps(
+        {
+            "error": "An error occurred while searching",
+            "results": [],
+            **extra,
+            "metadata": {
+                "search_url": getattr(error, "url", None),
+                "parameters": getattr(error, "params", None),
+            },
+        }
+    )
+
+
+def _envelope(result: learn.SearchResult, shaped: list[dict], **extra) -> str:
+    """Serialize shaped search results plus what was searched, for the LLM."""
+    return json.dumps(
+        {
+            "results": shaped,
+            "metadata": {"search_url": result.url, "parameters": result.params},
+            **extra,
+        }
     )
 
 
@@ -147,33 +173,17 @@ async def search_courses(
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
     """
-    params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
-
-    valid_params = {
+    filters = {
         "resource_type": [rt.name for rt in (kwargs.get("resource_type") or [])]
         or None,
         "free": kwargs.get("free"),
         "offered_by": [o.name for o in (kwargs.get("offered_by") or [])] or None,
         "certification": kwargs.get("certification"),
     }
-    if await _is_hybrid_search_enabled():
-        valid_params["hybrid_search"] = True
-
-    params.update({k: v for k, v in valid_params.items() if v is not None})
-    search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
-    log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
+    filters = {k: v for k, v in filters.items() if v is not None}
+    backend = ((state or {}).get("search_backend") or ["vector"])[-1]
     try:
-        response = await async_request(
-            search_url,
-            params,
-            timeout=settings.REQUESTS_TIMEOUT,
-            include_learn_token=True,
-        )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Ignore any results over the maximum limit
-        raw_results = raw_results[: settings.AI_MIT_SEARCH_LIMIT]
-        # Simplify the response to only include the main properties
+        result = await learn.search_learning_resources(q, filters, backend=backend)
         main_properties = [
             "title",
             "id",
@@ -184,42 +194,28 @@ async def search_courses(
             "certification",
             "resource_type",
         ]
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {k: result.get(k) for k in main_properties}
-            simplified_result["url"] = (
-                f"{settings.AI_MIT_SEARCH_DETAIL_URL}{result.pop('id')}"
-            )
+        shaped = []
+        for row in result.results:
+            simplified = {k: row.get(k) for k in main_properties}
+            simplified["url"] = f"{settings.AI_MIT_SEARCH_DETAIL_URL}{row.get('id')}"
             # Instructors and level will be in the runs data if present
-            next_date = result.get("next_start_date", None)
-            raw_runs = result.get("runs", [])
+            next_date = row.get("next_start_date")
+            raw_runs = row.get("runs", [])
             best_run = None
             if next_date:
-                runs = [run for run in raw_runs if run["start_date"] == next_date]
+                runs = [run for run in raw_runs if run.get("start_date") == next_date]
                 if runs:
                     best_run = runs[0]
             elif raw_runs:
                 best_run = raw_runs[-1]
             if best_run:
                 for attribute in ("level", "instructors"):
-                    simplified_result[attribute] = best_run.get(attribute, [])
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"search_url": search_url, "parameters": params},
-        }
-        return json.dumps(full_output)
-    except Exception:
+                    simplified[attribute] = best_run.get(attribute, [])
+            shaped.append(simplified)
+        return _envelope(result, shaped)
+    except Exception as error:
         log.exception("Error querying MIT API")
-        # keep the url and parameters, so a failed search is distinguishable
-        # from one that ran and found nothing
-        return json.dumps(
-            {
-                "error": "An error occurred while searching",
-                "results": [],
-                "metadata": {"search_url": search_url, "parameters": params},
-            }
-        )
+        return _search_error_envelope(error)
 
 
 class SearchContentFilesToolSchema(pydantic.BaseModel):
@@ -278,62 +274,49 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     )
 
 
-async def _content_file_search(url, params, *, exclude_canvas=True):
+async def _content_file_search(
+    q: str,
+    readable_ids: str | list[str],
+    *,
+    collection_name: str | None,
+    exclude_canvas: str = "True",
+    platform: str | None = None,
+) -> str:
+    """Search content files and shape chunks + citations for the LLM."""
     try:
-        # Convert the exclude_canvas parameter to a boolean if it is a string
-        if exclude_canvas and exclude_canvas == "False":
-            exclude_canvas = False
-        if await _is_hybrid_search_enabled():
-            params["hybrid_search"] = True
-
-        response = await async_request(
-            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
+        result = await learn.search_content_files(
+            q, readable_ids, collection_name=collection_name, platform=platform
         )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
+        # Consumers store the flag as a string, evaluation sets as a bool
+        exclude = str(exclude_canvas) != "False"
+        shaped = []
         citations = {}
-        for result in raw_results:
-            platform = result.get("platform", {}).get("code")
+        for chunk in result.results:
+            platform = chunk.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
             # those from other sources do not.
-            if exclude_canvas and (not platform or platform == "canvas"):
+            if exclude and (not platform or platform == "canvas"):
                 continue
             # the citation url is what identifies a citation; resource_point_id
             # is shared by every chunk of every file in a course, so keying on
             # it collapsed every citation onto whichever result came back first
-            citation_key = result.get("url")
-            simplified_result = {
-                "id": citation_key,
-                "chunk_content": result.get("chunk_content"),
-                "run_title": result.get("run_title"),
-            }
-            simplified_results.append(simplified_result)
+            citation_key = chunk.get("url")
+            shaped.append(
+                {
+                    "id": citation_key,
+                    "chunk_content": chunk.get("chunk_content"),
+                    "run_title": chunk.get("run_title"),
+                }
+            )
             if citation_key and not citations.get(citation_key):
                 citations[citation_key] = {
-                    "citation_url": result.get("url"),
-                    "citation_title": result.get("title")
-                    or result.get("content_title"),
+                    "citation_url": chunk.get("url"),
+                    "citation_title": chunk.get("title") or chunk.get("content_title"),
                 }
-        full_output = {
-            "results": simplified_results,
-            "citation_sources": citations,
-            "metadata": {"search_url": url, "parameters": params},
-        }
-        return json.dumps(full_output)
-    except Exception:
+        return _envelope(result, shaped, citation_sources=citations)
+    except Exception as error:
         log.exception("Error querying MIT API")
-        # keep the url and parameters, so a failed search is distinguishable
-        # from one that ran and found nothing
-        return json.dumps(
-            {
-                "error": "An error occurred while searching",
-                "results": [],
-                "citation_sources": {},
-                "metadata": {"search_url": url, "parameters": params},
-            }
-        )
+        return _search_error_envelope(error, citation_sources={})
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
@@ -348,24 +331,15 @@ async def search_content_files(
     its enrollment and payment deadlines.  Use this first for any question that
     could be specific to this resource.
     """
-
-    url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state.get("course_id", [None])[-1] or readable_id
-    collection_name = state.get("collection_name", [None])[-1]
-    exclude_canvas = state.get("exclude_canvas", ["True"])[-1]
-    platform = (state.get("platform") or [None])[-1]
-    params = {
-        "q": q,
-        "resource_readable_id": course_id,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
-    }
-    if collection_name:
-        params["collection_name"] = collection_name
-    if platform:
+    return await _content_file_search(
+        q,
+        state.get("course_id", [None])[-1] or readable_id,
+        collection_name=state.get("collection_name", [None])[-1],
+        exclude_canvas=state.get("exclude_canvas", ["True"])[-1],
         # A readable id can match resources on two platforms; scope the search
         # to the one the request named so the other one's content can't answer.
-        params["platform"] = [platform]
-    return await _content_file_search(url, params, exclude_canvas=exclude_canvas)
+        platform=(state.get("platform") or [None])[-1],
+    )
 
 
 @tool(args_schema=SearchRelatedCourseContentFilesToolSchema)
@@ -378,18 +352,11 @@ async def search_related_course_content_files(
     other courses in the program, or when the current course search does not
     return sufficient results.
     """
-    url = settings.AI_MIT_SYLLABUS_URL
-    collection_name = state.get("collection_name", [None])[-1]
-    related_courses = state["related_courses"]
-    params = {
-        "q": q,
-        "resource_readable_id": related_courses,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
-    }
-    if collection_name:
-        params["collection_name"] = collection_name
     return await _content_file_search(
-        url, params, exclude_canvas=state.get("exclude_canvas", ["True"])[-1]
+        q,
+        state["related_courses"],
+        collection_name=state.get("collection_name", [None])[-1],
+        exclude_canvas=state.get("exclude_canvas", ["True"])[-1],
     )
 
 
@@ -400,39 +367,13 @@ async def get_video_transcript_chunk(
     """
     Query the MIT video transcript API, and return results as a JSON string.
     """
-
-    url = settings.AI_MIT_VIDEO_TRANSCRIPT_URL
-
-    transcript_asset_id = state["transcript_asset_id"][-1]
-    params = {
-        "q": q,
-        "edx_module_id": transcript_asset_id,
-        "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
-    }
-
-    log.debug("Searching MIT API with params: %s", params)
     try:
-        response = await async_request(
-            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
-        )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {
-                "chunk_content": result.get("chunk_content"),
-            }
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"search_url": url, "parameters": params},
-        }
-
-        return json.dumps(full_output)
+        result = await learn.search_transcript(q, state["transcript_asset_id"][-1])
+        shaped = [{"chunk_content": r.get("chunk_content")} for r in result.results]
+        return _envelope(result, shaped)
     except Exception:
         log.exception("Error querying MIT API for transcripts")
-        return json.dumps({"error": "An error occurred while getting the transcript"})
+        return LEARN_ERROR_ENVELOPE
 
 
 class SearchSupportArticlesToolSchema(pydantic.BaseModel):
@@ -524,19 +465,7 @@ async def _get_course_platform(readable_id: str) -> str | None:
         # Failed and empty lookups are cached as an empty string
         return cached_platform or None
     try:
-        response = await async_request(
-            settings.AI_MIT_LEARNING_RESOURCES_URL,
-            {"readable_id": readable_id, "limit": 5},
-            # A cheap metadata lookup, not a search, and every support search
-            # waits on it, so it gets a tighter timeout than the default.
-            timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
-            # Courses are public, so the lookup still works without a token.
-            # httpx rejects an empty bearer header outright, so only send one
-            # when a token is actually configured.
-            include_learn_token=bool(settings.LEARN_ACCESS_TOKEN),
-        )
-        response.raise_for_status()
-        results = response.json().get("results", [])
+        results = await learn.learning_resources(readable_id)
         codes = {(r.get("platform") or {}).get("code") for r in results} - {None}
         # A readable id can match resources on two platforms.  Picking one of
         # them scopes the support search to the wrong help center section, so

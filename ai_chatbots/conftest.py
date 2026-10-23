@@ -29,6 +29,12 @@ def _reset_http_clients():
     utils.http_client_manager.reset()
 
 
+@pytest.fixture(autouse=True)
+def _no_resource_facts_lookup(mocker):
+    """Stub the resource facts lookup that building a SyllabusBot makes."""
+    mocker.patch("ai_chatbots.chatbots.get_resource_facts", return_value="")
+
+
 @pytest.fixture
 def mock_stdout(mocker):
     """Create mock stdout for testing."""

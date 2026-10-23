@@ -3,7 +3,7 @@
     {
       "question": "What are some free basic courses about data science?",
       "extra_state": {
-        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+        "search_backend": ["vector"]
       },
       "expected_output": "Here are some free courses related to data science that you might find interesting:\n1. Collaborative Data Science for Healthcare\n - Description of course.\nData Analysis for Social Scientists: Description of course.",
       "expected_tools": ["search_courses"]

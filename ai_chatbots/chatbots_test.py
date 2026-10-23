@@ -245,16 +245,16 @@ async def test_recommendation_bot_tool(
         "certification": True,
         "offered_by": ["xpro"],
         "limit": 5,
-        "state": {"search_url": [settings.AI_MIT_SEARCH_URL]},
+        "state": {"search_backend": ["vector"]},
     }
     tool = chatbot.create_tools()[0]
     results = await tool.ainvoke(search_parameters)
     search_parameters.pop("state")
     expected_results["metadata"]["parameters"] = search_parameters
-    expected_results["metadata"]["search_url"] = settings.AI_MIT_SEARCH_URL
+    expected_results["metadata"]["search_url"] = settings.AI_MIT_SEARCH_VECTOR_URL
     mock_client_instance = mock_client_patch.return_value
     mock_client_instance.get.assert_called_once_with(
-        settings.AI_MIT_SEARCH_URL,
+        settings.AI_MIT_SEARCH_VECTOR_URL,
         params={"q": "physics", **search_parameters},
         headers={"Authorization": f"Bearer {settings.AI_PROXY_AUTH_TOKEN}"},
         timeout=30,
@@ -804,10 +804,7 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
                                 content=json.dumps(mock_tool_content),
                             ),
                         ],
-                        "search_url": [
-                            "https://test.mit.edu/search0",
-                            "https://test.mit.edu/search1",
-                        ],
+                        "search_backend": ["vector", "elastic"],
                     }
                 )
             ]
