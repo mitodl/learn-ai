@@ -599,6 +599,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     ROOM_NAME = SyllabusBot.__name__
     throttle_scope = "syllabus_bot"
     bot_class = SyllabusBot
+    account_tools_allowed = True
 
     def create_chatbot(
         self,
@@ -612,8 +613,12 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         enable_related_courses = bool(serializer.validated_data.get("related_courses"))
         # Account tools need the learner's own session from this request, so
         # anonymous users and requests without the session never get them.
-        enable_account_tools = has_learner_session() and feature_is_enabled(
-            ACCOUNT_TOOLS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
+        enable_account_tools = (
+            self.account_tools_allowed
+            and has_learner_session()
+            and feature_is_enabled(
+                ACCOUNT_TOOLS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
+            )
         )
 
         return self.bot_class(
@@ -678,6 +683,8 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
     ROOM_NAME = "CanvasSyllabusBot"
     throttle_scope = "canvas_syllabus_bot"
     bot_class = CanvasSyllabusBot
+    # Canvas requests don't come from a learner's MIT Learn session
+    account_tools_allowed = False
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""

@@ -854,7 +854,7 @@ def _current_runs(
         return (
             prefer_certificate and summary["certificate_earned"],
             order[summary["status"]],
-            summary["start_date"] or "",
+            _parse_date(summary["start_date"]) or datetime.min.replace(tzinfo=UTC),
         )
 
     best: dict[str, dict] = {}
