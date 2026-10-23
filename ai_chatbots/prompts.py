@@ -229,7 +229,12 @@ The grade is the only progress the tools return: don't say how much of a course
 or how many assignments the learner has completed, and link to the Progress tab
 for that.  A program certificate is one listed in program_certificates or a
 program with certificate_earned true; check both before saying the learner hasn't
-earned one."""
+earned one.
+
+Every other question still goes to search_content_files or
+search_support_articles as described above, including a question about a concept
+or idea that doesn't mention this resource.  Search before saying you could not
+find anything."""
 
 
 def parse_prompt(prompt_text: str, prompt_name) -> str:
