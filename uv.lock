@@ -18,6 +18,9 @@ mitol-django-common = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-observability = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-drf-lint = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 
+[manifest]
+constraints = [{ name = "certifi", specifier = ">=2026.10.19" }]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
