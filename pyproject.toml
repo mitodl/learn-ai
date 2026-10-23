@@ -69,7 +69,7 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
-    "ol-llm>=0.0.4,<0.1",
+    "ol-llm>=0.0.5,<0.1",
     "opik==2.2.94",
     "azure-identity>=1.25,<2",
 ]
@@ -121,6 +121,8 @@ required-version = ">=0.9.17"
 [tool.uv.exclude-newer-package]
 mitol-django-common = "0d"
 mitol-django-observability = "0d"
+# ol-llm 0.0.5 requires certifi>=2026.10.19, the fix for GHSA-6q48-6c7w-9gw2.
+certifi = "0d"
 mitol-drf-lint = "0d"
 ol-llm = "0d"
 
