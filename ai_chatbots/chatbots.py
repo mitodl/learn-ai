@@ -606,10 +606,14 @@ class SyllabusBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         enable_related_courses: bool | None = False,
+        enable_account_tools: bool = False,
         course_id: str | None = None,
         platform: str | None = None,
     ):
         self.enable_related_courses = enable_related_courses
+        # Only for a signed-in learner whose request carries their session;
+        # see SyllabusBotHttpConsumer.create_chatbot.
+        self.enable_account_tools = enable_account_tools
         super().__init__(
             user_id,
             name=name,
@@ -637,6 +641,11 @@ class SyllabusBot(TruncatingChatbot):
                 "tool for questions about how MIT platforms work rather than "
                 "about these courses."
             )
+        if self.enable_account_tools and self.instructions:
+            account_prompt = get_system_prompt(
+                "syllabus_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
+            )
+            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -645,6 +654,8 @@ class SyllabusBot(TruncatingChatbot):
         if self.enable_related_courses:
             bot_tools.append(tools.search_related_course_content_files)
         bot_tools.append(tools.search_support_articles)
+        if self.enable_account_tools:
+            bot_tools.extend(tools.ACCOUNT_TOOLS)
         return bot_tools
 
     async def get_tool_metadata(self) -> str:

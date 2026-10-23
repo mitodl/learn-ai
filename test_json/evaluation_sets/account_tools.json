@@ -1,0 +1,295 @@
+{
+  "learner_records": {
+    "enrollments": [
+      {
+        "enrollment_mode": "verified",
+        "certificate": null,
+        "grades": [
+          {
+            "grade": 0.0,
+            "grade_percent": 0,
+            "letter_grade": null,
+            "passed": false
+          }
+        ],
+        "run": {
+          "courseware_id": "course-v1:MITxT+11.405x+3T2026",
+          "courseware_url": "https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/home",
+          "title": "Just Money: Banking as if Society Mattered",
+          "start_date": "2026-09-01T00:00:00Z",
+          "end_date": "2099-12-31T00:00:00Z",
+          "is_self_paced": false,
+          "course": {
+            "readable_id": "course-v1:MITxT+11.405x",
+            "title": "Just Money: Banking as if Society Mattered"
+          }
+        }
+      },
+      {
+        "enrollment_mode": "verified",
+        "certificate": {
+          "uuid": "8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01",
+          "link": "/certificate/8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01/"
+        },
+        "grades": [
+          {
+            "grade": 0.88,
+            "grade_percent": 88,
+            "letter_grade": "B",
+            "passed": true
+          }
+        ],
+        "run": {
+          "courseware_id": "course-v1:MITxT+18.01x+1T2025",
+          "courseware_url": "https://courses.learn.mit.edu/learn/course/course-v1:MITxT+18.01x+1T2025/home",
+          "title": "Calculus 1A: Differentiation",
+          "start_date": "2025-02-01T00:00:00Z",
+          "end_date": "2025-05-30T00:00:00Z",
+          "is_self_paced": false,
+          "course": {
+            "readable_id": "course-v1:MITxT+18.01x",
+            "title": "Calculus 1A: Differentiation"
+          }
+        }
+      },
+      {
+        "enrollment_mode": "audit",
+        "certificate": null,
+        "grades": [],
+        "run": {
+          "courseware_id": "course-v1:MITxT+14.750x+1T2099",
+          "courseware_url": "https://courses.learn.mit.edu/learn/course/course-v1:MITxT+14.750x+1T2099/home",
+          "title": "Political Economy and Economic Development",
+          "start_date": "2099-02-01T00:00:00Z",
+          "end_date": "2099-05-30T00:00:00Z",
+          "is_self_paced": false,
+          "course": {
+            "readable_id": "course-v1:MITxT+14.750x",
+            "title": "Political Economy and Economic Development"
+          }
+        }
+      }
+    ],
+    "program_enrollments": [
+      {
+        "enrollment_mode": "verified",
+        "program": {
+          "title": "Data, Economics, and Design of Policy",
+          "readable_id": "program-v1:MITx+DEDP"
+        },
+        "certificate": {
+          "uuid": "2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f",
+          "link": "/certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/"
+        }
+      }
+    ],
+    "program_certificates": [
+      {
+        "program_title": "Statistics and Data Science",
+        "program_completion_timestamp": "2024-06-15T00:00:00Z",
+        "program_letter_share_url": "https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view"
+      }
+    ],
+    "program_certificate_details": {
+      "2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f": {
+        "uuid": "2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f",
+        "is_revoked": false,
+        "verifiable_credential_json": {
+          "type": ["VerifiableCredential", "OpenBadgeCredential"]
+        }
+      }
+    }
+  },
+  "syllabus": [
+    {
+      "question": "What courses am I enrolled in?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Three MITx Online courses: Just Money: Banking as if Society Mattered (in progress, verified), Calculus 1A: Differentiation (ended, verified) and Political Economy and Economic Development (upcoming, starts February 1, 2099, audit)."
+    },
+    {
+      "question": "Am I enrolled in 18.01x?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. It ended on May 30, 2025."
+    },
+    {
+      "question": "Am I enrolled in Political Economy and Economic Development?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, as an audit learner. It is upcoming and starts on February 1, 2099."
+    },
+    {
+      "question": "Am I enrolled in 8.01x?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "8.01x isn't among the learner's MITx Online enrollments."
+    },
+    {
+      "question": "When does my Political Economy and Economic Development course start?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "February 1, 2099."
+    },
+    {
+      "question": "What's my grade in this course?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "0%, not passing yet. The course's Progress tab has the details: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/progress"
+    },
+    {
+      "question": "How much of this course have I completed?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It can't tell how much of the course or how many assignments are complete, and doesn't infer it from the 0% grade. It links the Progress tab: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/progress"
+    },
+    {
+      "question": "When is my next assignment due?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It doesn't have the due dates, and links the course's Dates tab: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/dates"
+    },
+    {
+      "question": "Did I get a certificate in 18.01x, and where is it?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, a certificate for Calculus 1A: Differentiation, at {{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01/"
+    },
+    {
+      "question": "Do I have a digital credential for Calculus 1A?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It couldn't confirm a digital credential for Calculus 1A, and points the learner to support. It doesn't say they have none."
+    },
+    {
+      "question": "So do I have a digital credential for it or not?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It couldn't confirm a digital credential for Calculus 1A, and points the learner to support. It doesn't say they have none.",
+      "history": [
+        {
+          "role": "user",
+          "content": "Did I get a certificate in 18.01x?"
+        },
+        {
+          "role": "assistant",
+          "content": "Yes, you earned a certificate for Calculus 1A: Differentiation. Your digital credential status is \"not confirmed.\""
+        }
+      ]
+    },
+    {
+      "question": "Did I earn the certificate for my program?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes: a program certificate for Data, Economics, and Design of Policy, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/), and a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view)."
+    },
+    {
+      "question": "Do I get a certificate if I audit?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Answers from the course, not the learner's records: the AI governance workshop carries a certificate, but there is no free or audit option; it costs $250.00."
+    },
+    {
+      "question": "What courses am I enrolled in?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It couldn't check the learner's records right now, and doesn't say they have no enrollments.",
+      "learner_records": {
+        "error": true
+      }
+    },
+    {
+      "question": "What's my grade in this course?",
+      "extra_state": {
+        "course_id": ["course-v1:PRO+AIGE"],
+        "collection_name": [null],
+        "platform": ["xpro"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "This course isn't on MITx Online, so it can't check the learner's records for it here, and points them to support."
+    },
+    {
+      "question": "Did I get a certificate in my edX.org course 6.00.1x?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It can't check edX.org records, and points the learner to support. It doesn't say they have no certificate."
+    }
+  ]
+}

@@ -674,6 +674,20 @@ LOGIN_REDIRECT_ALLOWED_HOSTS = get_list_of_str(
 LOGIN_REDIRECT_REQUIRE_HTTPS = get_bool(
     name="LOGIN_REDIRECT_REQUIRE_HTTPS", default=True
 )
+# Learner records, read with the learner's own forwarded session cookies.
+# See ai_chatbots/learner_api.py. Each cookie is only ever sent to its own host.
+# The cookie names default to none, so no session is read until a deployment
+# names its own: production's .learn.mit.edu cookie also reaches RC and CI hosts.
+LEARNER_API_LEARN_BASE_URL = get_string(
+    name="LEARNER_API_LEARN_BASE_URL", default="https://api.learn.mit.edu/"
+)
+LEARNER_API_LEARN_COOKIE_NAME = get_string(
+    name="LEARNER_API_LEARN_COOKIE_NAME", default=""
+)
+# Where MITx Online's own pages (certificates) are, to make their links absolute
+LEARNER_API_MITXONLINE_BASE_URL = get_string(
+    name="LEARNER_API_MITXONLINE_BASE_URL", default="https://mitxonline.mit.edu/"
+)
 # Search summary threads that never got a follow-up are deleted after this many days
 AI_SEARCH_SUMMARY_EXPIRY_DAYS = get_int(name="AI_SEARCH_SUMMARY_EXPIRY_DAYS", default=7)
 # AI search settings
