@@ -1,10 +1,12 @@
 """Unit tests for bot-specific evaluators."""
 
+import asyncio
 import inspect
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
+from ai_chatbots import learner_api
 from ai_chatbots.evaluation.base import TestCaseSpec
 from ai_chatbots.evaluation.evaluators import (
     BOT_EVALUATORS,
@@ -169,6 +171,92 @@ class TestSyllabusBotEvaluator:
         )
 
         assert evaluator.validate_test_case(test_case) is False
+
+    @pytest.mark.parametrize(
+        ("shared", "expected"),
+        [
+            # no shared records: a case without its own reads the live API
+            (None, ["live", [{"id": "own"}], "error", []]),
+            (
+                {"enrollments": [{"id": "shared"}]},
+                [[{"id": "shared"}], [{"id": "own"}], "error", []],
+            ),
+        ],
+    )
+    async def test_learner_records_stay_with_their_case(
+        self, evaluator, mocker, shared, expected
+    ):
+        """Cases run concurrently each read their own records, or their error."""
+        for name in (
+            "get_program_enrollments",
+            "get_program_certificates",
+            "get_course_certificate",
+            "get_program_certificate",
+        ):
+            mocker.patch.object(learner_api, name, getattr(learner_api, name))
+        mocker.patch.object(
+            learner_api, "get_enrollments", mocker.AsyncMock(return_value="live")
+        )
+        own = [
+            {"enrollments": [{"id": "own"}]},
+            {"error": True},
+            {},
+        ]
+        mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings",
+            return_value={
+                "learner_records": shared,
+                "syllabus": [
+                    {"question": "a", "extra_state": {"course_id": ["c"]}},
+                    *(
+                        {
+                            "question": "b",
+                            "extra_state": {"course_id": ["c"]},
+                            "learner_records": records,
+                        }
+                        for records in own
+                    ),
+                ],
+            },
+        )
+        cases = evaluator.load_test_cases()
+        evaluator.load_test_cases()  # loading again doesn't wrap the API twice
+
+        async def ainvoke(state, config):
+            await asyncio.sleep(0)  # let the other cases set their records
+            try:
+                return await learner_api.get_enrollments()
+            except learner_api.LearnerAPIError:
+                return "error"
+
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot.agent.ainvoke = ainvoke
+        results = await asyncio.gather(
+            *(evaluator.collect_response(chatbot, case) for case in cases)
+        )
+
+        assert results == expected
+
+    async def test_history_comes_before_the_question(self, evaluator, mocker):
+        """A follow-up case sends the earlier turns, then the question."""
+        history = [
+            {"role": "user", "content": "Did I earn a certificate?"},
+            {"role": "assistant", "content": "Yes."},
+        ]
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot.agent.ainvoke = mocker.AsyncMock()
+        case = TestCaseSpec(
+            question="And a digital credential?",
+            metadata={"extra_state": {"course_id": ["c"]}, "history": history},
+        )
+
+        await evaluator.collect_response(chatbot, case)
+
+        sent = chatbot.agent.ainvoke.call_args.args[0]
+        assert sent["messages"] == [
+            *history,
+            {"role": "user", "content": "And a digital credential?"},
+        ]
 
 
 class TestVideoGPTBotEvaluator:

@@ -1,12 +1,59 @@
 """Bot-specific evaluators for RAG evaluation."""
 
+from contextvars import ContextVar
 from typing import Any
 
 from langchain_core.messages import AIMessage
 
-from ai_chatbots import chatbots
+from ai_chatbots import chatbots, learner_api
 from ai_chatbots.evaluation.base import BaseBotEvaluator, TestCaseSpec
 from main.test_utils import load_json_with_settings
+
+# The learner records of the case being evaluated. A context variable, so cases
+# run concurrently each see their own.
+_learner_records: ContextVar[dict | None] = ContextVar("learner_records", default=None)
+
+
+# learner_api function: the key of a case's learner_records that replaces it
+_RECORD_KEYS = {
+    "get_enrollments": "enrollments",
+    "get_program_enrollments": "program_enrollments",
+    "get_program_certificates": "program_certificates",
+    "get_course_certificate": "course_certificates",
+    "get_program_certificate": "program_certificate_details",
+}
+
+
+def _serve_learner_records():
+    """
+    Make the account tools read the learner_records of the case being
+    evaluated instead of the MIT Learn and MITx Online APIs. A case without
+    records still reads the live APIs. Lists default to empty, a certificate
+    not in the records has no digital credential, and {"error": true} makes
+    every lookup fail.
+    """
+    for name, key in _RECORD_KEYS.items():
+        live = getattr(learner_api, name)
+        if getattr(live, "serves_learner_records", False) is True:
+            continue
+
+        def serve(*args, _live=live, _key=key):
+            records = _learner_records.get()
+            if records is None:
+                return _live(*args)
+            return _from_records(records, _key, *args)
+
+        serve.serves_learner_records = True
+        setattr(learner_api, name, serve)
+
+
+async def _from_records(records: dict, key: str, certificate_uuid=None):
+    """Look up one learner_api result in a case's learner_records."""
+    if records.get("error"):
+        raise learner_api.LearnerAPIError(key)
+    if certificate_uuid is None:
+        return records.get(key, [])
+    return records.get(key, {}).get(certificate_uuid, {})
 
 
 class RecommendationBotEvaluator(BaseBotEvaluator):
@@ -69,7 +116,9 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load syllabus bot test cases."""
         test_data = load_json_with_settings(self.data_file)
-        return [
+        # Records shared by the file's cases; a case can bring its own
+        default_records = test_data.get("learner_records")
+        cases = [
             TestCaseSpec(
                 question=case_data["question"],
                 expected_output=case_data.get("expected_output"),
@@ -77,10 +126,17 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
                 metadata={
                     "extra_state": case_data.get("extra_state", {}),
                     "extra_init": case_data.get("extra_init", {}),
+                    "history": case_data.get("history", []),
+                    "learner_records": case_data.get(
+                        "learner_records", default_records
+                    ),
                 },
             )
             for case_data in test_data.get("syllabus", [])
         ]
+        if any(case.metadata["learner_records"] is not None for case in cases):
+            _serve_learner_records()
+        return cases
 
     def validate_test_case(self, test_case: TestCaseSpec) -> bool:
         """Validate syllabus bot test case."""
@@ -116,14 +172,21 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         """Collect response from syllabus bot."""
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
-
-        return await chatbot.agent.ainvoke(
-            {
-                "messages": [{"content": test_case.question, "role": "user"}],
-                **extra_state,
-            },
-            config=chatbot.config["configurable"],
-        )
+        token = _learner_records.set(metadata.get("learner_records"))
+        try:
+            return await chatbot.agent.ainvoke(
+                {
+                    # Earlier turns of the conversation, for follow-up questions
+                    "messages": [
+                        *metadata.get("history", []),
+                        {"content": test_case.question, "role": "user"},
+                    ],
+                    **extra_state,
+                },
+                config=chatbot.config["configurable"],
+            )
+        finally:
+            _learner_records.reset(token)
 
 
 class VideoGPTBotEvaluator(BaseBotEvaluator):
