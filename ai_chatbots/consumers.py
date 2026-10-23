@@ -547,9 +547,12 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
-        return {
+        state = {
             "search_url": [data.get("search_url") or settings.AI_MIT_SEARCH_URL],
         }
+        if data.get("search_filters"):
+            state["search_filters"] = [data["search_filters"]]
+        return state
 
     def create_chatbot(
         self,

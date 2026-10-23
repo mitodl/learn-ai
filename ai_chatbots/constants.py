@@ -8,6 +8,25 @@ from django.conf import settings
 from named_enum import ExtendedEnum
 
 HYBRID_SEARCH_FEATURE_FLAG = "bot_hybrid_search_enabled"
+# MIT Learn search filters a client can pin for a recommendation thread,
+# e.g. a channel page's topic. The search tool always applies them.
+RECOMMENDATION_SEARCH_FILTERS = (
+    "certification",
+    "certification_type",
+    "course_feature",
+    "delivery",
+    "department",
+    "free",
+    "level",
+    "ocw_topic",
+    "offered_by",
+    "platform",
+    "professional",
+    "resource_category",
+    "resource_type",
+    "resource_type_group",
+    "topic",
+)
 GROUP_STAFF_AI_SYTEM_PROMPT_EDITORS = "ai_system_prompt_editors"
 AI_ANONYMOUS_USER = "anonymous"
 AI_THREAD_COOKIE_KEY = "ai_thread_auth"

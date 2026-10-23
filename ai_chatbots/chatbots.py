@@ -492,11 +492,12 @@ class TruncatingChatbot(BaseChatbot):
 
 class RecommendationAgentState(SummaryState):
     """
-    State for the recommendation bot. Passes search url
-    to the associated tool function.
+    State for the recommendation bot. Passes search url and
+    pinned search filters to the associated tool function.
     """
 
     search_url: Annotated[list[str], add]
+    search_filters: Annotated[list[dict[str, list[str]]] | None, add]
 
 
 class ResourceRecommendationBot(TruncatingChatbot):
