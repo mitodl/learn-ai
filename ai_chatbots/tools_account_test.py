@@ -182,6 +182,7 @@ async def test_progress_defaults_to_the_page_course(records):
     result = await call(get_course_progress, page_course=CALCULUS)
 
     assert result["course_on_page"] == CALCULUS
+    assert result["completion"].startswith("Not available")
     assert result["enrollments"] == [
         {
             "course_title": "Calculus 1A",
