@@ -79,6 +79,37 @@ class TimeoutMetricWrapper(BaseMetric):
         """
         return copy_metrics([self.base_metric])[0]
 
+    def prepare(self) -> None:
+        """Generate a GEval metric's evaluation steps once, before any scoring.
+
+        GEval generates its steps on first use and keeps them on the instance.
+        Every attempt scores a fresh copy, so without this each test case (and
+        each model's answer to the same question) would get steps of its own.
+        Call it off the event loop; it blocks for up to timeout_seconds.
+        """
+        base = self.base_metric
+        if not hasattr(base, "_generate_evaluation_steps") or base.evaluation_steps:
+            return
+        result = {}
+
+        def target():
+            try:
+                result["steps"] = base._generate_evaluation_steps(multimodal=False)  # noqa: SLF001
+            except Exception:
+                logger.exception("Failed to generate evaluation steps")
+
+        thread = threading.Thread(target=target, daemon=True)
+        thread.start()
+        thread.join(timeout=self.timeout_seconds)
+        # Read only from this thread, so a late finish can't change the metric
+        if steps := result.get("steps"):
+            base.evaluation_steps = steps
+        else:
+            logger.warning(
+                "No shared evaluation steps for %s; each case generates its own",
+                self.__name__,
+            )
+
     def _execute_with_timeout(self, method_name: str, test_case: LLMTestCase) -> float:
         """Execute a method with timeout using threading, with retries."""
         last_error = None

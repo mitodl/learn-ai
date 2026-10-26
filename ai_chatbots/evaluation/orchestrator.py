@@ -27,7 +27,10 @@ from ai_chatbots.api import get_langsmith_prompt
 from ai_chatbots.evaluation.base import EvaluationConfig
 from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS
 from ai_chatbots.evaluation.reporting import EvaluationReporter
-from ai_chatbots.evaluation.timeout_wrapper import wrap_metrics_with_timeout
+from ai_chatbots.evaluation.timeout_wrapper import (
+    TimeoutMetricWrapper,
+    wrap_metrics_with_timeout,
+)
 from main.test_utils import load_json_with_settings
 
 # Constants
@@ -405,6 +408,9 @@ class EvaluationOrchestrator:
                 f"{max_concurrent} concurrent executions"
             )
 
+        for metric in config.metrics:
+            if isinstance(metric, TimeoutMetricWrapper):
+                metric.prepare()
         result = deepeval.evaluate(
             test_cases=test_cases,
             metrics=config.metrics,
@@ -423,23 +429,19 @@ class EvaluationOrchestrator:
     ) -> None:
         """Ask the judge which model answered each question best.
 
-        No expected answer is involved.  deepeval shuffles the contestants and
-        hides their names from the judge, so position and name bias are reduced.
+        No expected answer is involved.  deepeval shows the judge the answers in
+        random order and under fake names, which reduces position and name bias.
         """
-        tutor_criteria = (
-            "The input is a student's latest message to a tutor; the retrieval "
-            "context holds the problem, its solution if available, and the "
-            "conversation so far.  Choose the tutor response that best helps the "
-            "student learn: correct for this problem, responsive to what the "
-            "student said, moving them forward with a concrete hint or guiding "
-            "question, and not giving away the final answer or doing the "
-            "remaining work for them.  Prefer clear, chat-length responses."
-        )
+        if bot_name == "tutor":
+            # Its test cases carry no problem or solution for the judge to check
+            self.stdout.write("Skipping pairwise for tutor: no problem context")
+            return
+        if len(config.models) < 2:  # noqa: PLR2004
+            self.stdout.write("⚠️  --pairwise needs two or more models; skipping")
+            return
         metric = ArenaGEval(
             name="PairwisePreference",
-            criteria=tutor_criteria
-            if bot_name == "tutor"
-            else (
+            criteria=(
                 "Choose the response that best serves the learner who asked the "
                 "input question.  Prefer responses that are accurate and fully "
                 "supported by the retrieval context (penalize any claim the "
