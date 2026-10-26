@@ -159,7 +159,9 @@ To enable this functionality, you need to perform the following steps:
 ## Opik Integration
 
 [Opik](https://github.com/comet-ml/opik) can be used for tracing agent runs against MIT OL's self-hosted
-Opik installations, which sit behind a Keycloak-fronted APISIX gateway. SDK requests authenticate with a
+Production Opik, which sits behind a Keycloak-fronted APISIX gateway. Every environment traces to that one
+instance and project. The Opik SDK reads `OPIK_ENVIRONMENT` and records it as each trace's environment, which
+is how the environments are told apart; the deployed stacks set it. SDK requests authenticate with a
 Keycloak JWT obtained via the client-credentials grant; the token is fetched, cached, and refreshed
 automatically by `main/opik_keycloak_auth.py` (see the
 [OPIK_SDK_KEYCLOAK_AUTH doc](https://github.com/mitodl/ol-infrastructure/blob/main/src/ol_infrastructure/applications/opik/OPIK_SDK_KEYCLOAK_AUTH.md)
@@ -168,16 +170,18 @@ for the gateway architecture).
 To enable it, add the following to your backend environment variables:
 
 ```
-OPIK_URL_OVERRIDE=https://opik-ci.ol.mit.edu/api/
+OPIK_URL_OVERRIDE=https://opik.ol.mit.edu/api/
 OPIK_WORKSPACE=default
 OPIK_PROJECT_NAME=learn-ai
-OPIK_KEYCLOAK_TOKEN_URL=https://sso-ci.ol.mit.edu/realms/ol-platform-engineering/protocol/openid-connect/token
-OPIK_KEYCLOAK_CLIENT_ID=ol-opik-client
+OPIK_ENVIRONMENT=dev
+OPIK_KEYCLOAK_TOKEN_URL=https://sso.ol.mit.edu/realms/ol-platform-engineering/protocol/openid-connect/token
+OPIK_KEYCLOAK_CLIENT_ID=ol-opik-sdk
 OPIK_KEYCLOAK_CLIENT_SECRET=<from Vault>
 ```
 
-The client secret comes from Vault (published by the keycloak substructure); in Kubernetes it is synced
-via the Vault Secrets Operator, and for local development you can obtain it from the RC learn-ai-app pod.
+The client secret comes from Vault at `secret-opik/sdk-client` (written by the Production keycloak
+substructure to every environment's Vault); in Kubernetes it is synced via the Vault Secrets Operator, and
+for local development you can obtain it from the RC learn-ai-app pod.
 Do **not** set `OPIK_API_KEY` — the auth hook owns the `Authorization` header, and a static key would
 conflict with it. When all of the variables above are present, chatbot runs emit LangGraph traces to Opik
 (grouped by conversation thread) alongside any Langsmith/PostHog integrations.

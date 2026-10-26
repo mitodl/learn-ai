@@ -562,7 +562,7 @@ OPIK_WORKSPACE = get_string(name="OPIK_WORKSPACE", default="default")
 OPIK_PROJECT_NAME = get_string(name="OPIK_PROJECT_NAME", default="learn-ai")
 OPIK_KEYCLOAK_TOKEN_URL = get_string(name="OPIK_KEYCLOAK_TOKEN_URL", default=None)
 OPIK_KEYCLOAK_CLIENT_ID = get_string(
-    name="OPIK_KEYCLOAK_CLIENT_ID", default="ol-opik-client"
+    name="OPIK_KEYCLOAK_CLIENT_ID", default="ol-opik-sdk"
 )
 OPIK_KEYCLOAK_CLIENT_SECRET = get_string(
     name="OPIK_KEYCLOAK_CLIENT_SECRET", default=None
