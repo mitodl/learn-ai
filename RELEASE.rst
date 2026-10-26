@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+.. note::
+
+   This file is no longer updated. Releases after 0.37.3 use calendar versions
+   and are cut by the Concourse release workflow. Release notes from
+   2026.10.22.1 onward are in `CHANGELOG.md <CHANGELOG.md>`_. The first two
+   calendar-versioned releases, 2026.10.15.1 and 2026.10.20.1, predate it; see
+   their tags.
+
 Version 0.37.3
 --------------
 
