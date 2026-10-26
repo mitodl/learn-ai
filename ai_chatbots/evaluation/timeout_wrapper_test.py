@@ -321,6 +321,67 @@ class TestConcurrentCases:
         assert [c.reason for c in copies] == ["0", "1", "2", "3", "4"]
 
 
+class StepsMetric(EchoMetric):
+    """Stands in for GEval, which generates its evaluation steps on first use."""
+
+    def __init__(self, threshold=0.5, evaluation_steps=None, delay=0, calls=None):
+        super().__init__(threshold=threshold)
+        self.evaluation_steps = evaluation_steps
+        self.delay = delay
+        self.calls = [] if calls is None else calls
+
+    def _generate_evaluation_steps(self, *, multimodal):
+        self.calls.append(multimodal)
+        time.sleep(self.delay)
+        return [f"step {len(self.calls)}"]
+
+
+class TestPrepare:
+    """prepare() generates GEval steps once, so every copy shares them."""
+
+    def test_generates_steps_once_for_all_copies(self):
+        """Copies made after prepare() reuse its steps."""
+        metric = StepsMetric()
+        wrapper = TimeoutMetricWrapper(metric, timeout_seconds=5)
+
+        wrapper.prepare()
+        wrapper.prepare()
+
+        assert metric.calls == [False]
+        assert metric.evaluation_steps == ["step 1"]
+        copies = [wrapper._fresh_metric() for _ in range(3)]  # noqa: SLF001
+        assert all(c.evaluation_steps == ["step 1"] for c in copies)
+
+    def test_keeps_given_steps(self):
+        """A metric that already has steps is left alone."""
+        metric = StepsMetric(evaluation_steps=["mine"])
+
+        TimeoutMetricWrapper(metric).prepare()
+
+        assert metric.calls == []
+        assert metric.evaluation_steps == ["mine"]
+
+    def test_times_out(self):
+        """A hanging step generator can't block past the timeout or set steps late."""
+        metric = StepsMetric(delay=1)
+        wrapper = TimeoutMetricWrapper(metric, timeout_seconds=0.1)
+
+        start = time.monotonic()
+        wrapper.prepare()
+
+        assert time.monotonic() - start < 0.9
+        time.sleep(1.1)
+        assert metric.evaluation_steps is None
+
+    def test_ignores_metrics_without_steps(self):
+        """Non-GEval metrics are untouched."""
+        metric = MockMetric()
+
+        TimeoutMetricWrapper(metric).prepare()
+
+        assert metric.call_count == 0
+
+
 class TestWrapMetricsWithTimeout:
     """Test cases for wrap_metrics_with_timeout function."""
 

@@ -14,6 +14,12 @@ from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 NUM_METRICS = 5
 
 
+@pytest.fixture(autouse=True)
+def mock_prepare(mocker):
+    """Keep TimeoutMetricWrapper.prepare from asking the judge for GEval steps."""
+    return mocker.patch.object(TimeoutMetricWrapper, "prepare")
+
+
 @pytest.fixture
 def mock_evaluator(mocker):
     """Create a mock evaluator with standard behavior."""
@@ -766,14 +772,29 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "judge error: judge down" in output
 
-    def test_run_pairwise_tutor_criteria(self, orchestrator, config, arena):
-        """The tutor bot is judged on tutoring, not on answering."""
-        arena_class, _ = arena
+    @pytest.mark.parametrize(
+        ("bot_name", "models", "message"),
+        [
+            ("tutor", ["model-a", "model-b"], "Skipping pairwise for tutor"),
+            ("syllabus", ["model-a"], "--pairwise needs two or more models"),
+        ],
+    )
+    def test_run_pairwise_skipped(  # noqa: PLR0913
+        self, orchestrator, arena, mock_stdout, bot_name, models, message
+    ):
+        """Tutor answers (no problem context) and single-model runs are skipped."""
+        _, metric = arena
+        config = orchestrator.create_evaluation_config(
+            models=models, evaluation_model="judge"
+        )
+        cases = [_case("Q1", m) for m in models]
 
-        orchestrator._run_pairwise("tutor", [], config)  # noqa: SLF001
+        orchestrator._run_pairwise(bot_name, cases, config)  # noqa: SLF001
 
-        assert "tutor" in arena_class.call_args.kwargs["criteria"]
-        assert orchestrator.pairwise_wins == {"tutor": {"model-a": 0, "model-b": 0}}
+        metric.measure.assert_not_called()
+        assert orchestrator.pairwise_wins == {}
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert message in output
 
     @pytest.mark.parametrize("pairwise", [True, False])
     @pytest.mark.asyncio
@@ -821,6 +842,19 @@ class TestPairwise:
         else:
             run_pairwise.assert_not_called()
             assert "PAIRWISE WINS" not in output
+
+    def test_evaluate_prepares_metrics(
+        self, orchestrator, config, mock_prepare, mocker
+    ):
+        """Every metric is prepared (GEval steps generated) before scoring."""
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        mock_deepeval.evaluate.return_value = mocker.Mock(test_results=[1])
+
+        orchestrator._run_deepeval_evaluation(  # noqa: SLF001
+            [_case("Q1", "model-a")], config, 2
+        )
+
+        assert mock_prepare.call_count == len(config.metrics)
 
     def test_evaluate_warns_when_deepeval_drops_cases(
         self, orchestrator, config, mock_stdout, mocker
