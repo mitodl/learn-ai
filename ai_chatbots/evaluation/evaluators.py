@@ -3,9 +3,11 @@
 from contextvars import ContextVar
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from langchain_core.messages import AIMessage
 
 from ai_chatbots import chatbots, learner_api
+from ai_chatbots.api import get_resource_facts
 from ai_chatbots.evaluation.base import BaseBotEvaluator, TestCaseSpec
 from main.test_utils import load_json_with_settings
 
@@ -178,7 +180,7 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         extra_state = metadata.get("extra_state", {})
         token = _learner_records.set(metadata.get("learner_records"))
         try:
-            return await chatbot.agent.ainvoke(
+            response = await chatbot.agent.ainvoke(
                 {
                     # Earlier turns of the conversation, for follow-up questions
                     "messages": [
@@ -191,6 +193,13 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
             )
         finally:
             _learner_records.reset(token)
+        # The resource facts reach the bot through its system prompt, not a tool
+        facts = await sync_to_async(get_resource_facts)(
+            (extra_state.get("course_id") or [None])[-1],
+            (extra_state.get("platform") or [None])[-1],
+        )
+        response["extra_context"] = [facts] if facts else []
+        return response
 
 
 class VideoGPTBotEvaluator(BaseBotEvaluator):
