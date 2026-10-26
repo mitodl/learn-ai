@@ -18,6 +18,7 @@ from ai_chatbots.constants import (
     ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_TICKET_PATH,
+    ZENDESK_UNVERIFIED_REQUESTER_NOTE,
     ZENDESK_UNVERIFIED_REQUESTER_TAG,
     ZENDESK_UNVERIFIED_SUBJECT,
 )
@@ -234,6 +235,7 @@ async def file_support_ticket(  # noqa: PLR0913
     tags = [ZENDESK_SUPPORT_INTAKE_TAG]
     if not email_verified:
         tags.append(ZENDESK_UNVERIFIED_REQUESTER_TAG)
+        body = f"{body}\n\n{ZENDESK_UNVERIFIED_REQUESTER_NOTE}"
 
     custom_fields = _custom_fields(page_url, name, username)
 
