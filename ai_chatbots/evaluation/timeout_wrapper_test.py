@@ -1,10 +1,12 @@
 """Unit tests for timeout wrapper functionality."""
 
 import asyncio
+import threading
 import time
 
 import pytest
 from deepeval.metrics import BaseMetric
+from deepeval.metrics.utils import copy_metrics
 from deepeval.test_case import LLMTestCase
 
 from ai_chatbots.evaluation.timeout_wrapper import (
@@ -16,7 +18,7 @@ from ai_chatbots.evaluation.timeout_wrapper import (
 class MockMetric(BaseMetric):
     """Mock metric for testing purposes."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         name="MockMetric",
         delay=0,
@@ -24,6 +26,7 @@ class MockMetric(BaseMetric):
         should_raise=False,
         async_support=False,
         fail_count=0,
+        calls=None,
     ):
         super().__init__()
         self._name = name  # Store name privately since __name__ is a property
@@ -31,7 +34,8 @@ class MockMetric(BaseMetric):
         self.should_raise = should_raise
         self.async_support = async_support
         self.fail_count = fail_count
-        self.call_count = 0
+        # Shared by reference with the copies the wrapper makes for each attempt
+        self.calls = [] if calls is None else calls
         self.threshold = 0.5
         self.include_reason = True
 
@@ -46,10 +50,15 @@ class MockMetric(BaseMetric):
         """Override __name__ property."""
         return self._name
 
+    @property
+    def call_count(self):
+        """Number of measure calls across this metric and its copies."""
+        return len(self.calls)
+
     def measure(self, test_case: LLMTestCase) -> float:
         """Mock measure method with configurable behavior."""
         _ = test_case  # Mark as used
-        self.call_count += 1
+        self.calls.append(test_case)
 
         if self.delay > 0:
             time.sleep(self.delay)
@@ -72,7 +81,7 @@ class MockMetric(BaseMetric):
     async def a_measure(self, test_case: LLMTestCase) -> float:
         """Mock async measure method."""
         _ = test_case  # Mark as used
-        self.call_count += 1
+        self.calls.append(test_case)
 
         if not self.async_support:
             msg = "Mock metric doesn't support async"
@@ -237,6 +246,79 @@ class TestTimeoutMetricWrapper:
         # Test error for non-existent attribute
         with pytest.raises(AttributeError):
             _ = wrapper.non_existent_attr
+
+
+class EchoMetric(BaseMetric):
+    """Scores a case by its input, yielding between setting and returning it."""
+
+    def __init__(self, threshold=0.5):
+        super().__init__()
+        self.threshold = threshold
+        self.include_reason = True
+
+    @property
+    def __name__(self):
+        """Metric name."""
+        return "EchoMetric"
+
+    def measure(self, test_case: LLMTestCase) -> float:
+        """Set the score, give other threads a chance to run, then return it."""
+        self.score = float(test_case.input)
+        self.reason = test_case.input
+        time.sleep(0.05)
+        self.success = True
+        return self.score
+
+    async def a_measure(self, test_case: LLMTestCase) -> float:
+        """Set the score, give other tasks a chance to run, then return it."""
+        self.score = float(test_case.input)
+        self.reason = test_case.input
+        await asyncio.sleep(0.05)
+        self.success = True
+        return self.score
+
+    def is_successful(self) -> bool:
+        """Return success."""
+        return bool(self.success)
+
+
+class TestConcurrentCases:
+    """deepeval copies the wrapper per test case, but the copies share base_metric."""
+
+    @pytest.mark.asyncio
+    async def test_async_cases_keep_their_own_scores(self):
+        """Concurrent a_measure calls do not overwrite each other's results."""
+        wrapper = TimeoutMetricWrapper(EchoMetric(), timeout_seconds=5)
+        copies = copy_metrics([wrapper] * 5)
+        assert all(c.base_metric is wrapper.base_metric for c in copies)
+
+        scores = await asyncio.gather(
+            *(
+                c.a_measure(LLMTestCase(input=str(i), actual_output="x"))
+                for i, c in enumerate(copies)
+            )
+        )
+
+        assert scores == [0.0, 1.0, 2.0, 3.0, 4.0]
+        assert [c.reason for c in copies] == ["0", "1", "2", "3", "4"]
+
+    def test_sync_cases_keep_their_own_scores(self):
+        """Concurrent measure calls in threads do not overwrite each other."""
+        wrapper = TimeoutMetricWrapper(EchoMetric(), timeout_seconds=5)
+        copies = copy_metrics([wrapper] * 5)
+        results = [None] * 5
+
+        def run(i):
+            results[i] = copies[i].measure(LLMTestCase(input=str(i), actual_output="x"))
+
+        threads = [threading.Thread(target=run, args=(i,)) for i in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert results == [0.0, 1.0, 2.0, 3.0, 4.0]
+        assert [c.reason for c in copies] == ["0", "1", "2", "3", "4"]
 
 
 class TestWrapMetricsWithTimeout:

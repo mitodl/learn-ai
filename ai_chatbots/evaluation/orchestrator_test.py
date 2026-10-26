@@ -670,3 +670,168 @@ class TestEvaluationConfigIntegration:
         mock_stdout.write.assert_called()
         # Note: With the new implementation, empty test cases don't trigger "No test cases available"
         # since the bot itself returns empty results
+
+
+def _case(question, model, course="c1"):
+    """Build an LLMTestCase shaped like the ones evaluate_model returns."""
+    from deepeval.test_case import LLMTestCase
+
+    return LLMTestCase(
+        input=question,
+        actual_output=f"{model} answer",
+        retrieval_context=["evidence"],
+        metadata={
+            "model": model,
+            "prompt_label": "default",
+            "metadata": {"extra_state": {"course_id": [course]}},
+        },
+    )
+
+
+class TestPairwise:
+    """Test cases for the --pairwise judge."""
+
+    @pytest.fixture
+    def orchestrator(self, mock_stdout):
+        """Create orchestrator for testing."""
+        return EvaluationOrchestrator(mock_stdout)
+
+    @pytest.fixture
+    def config(self, orchestrator):
+        """Config comparing two models."""
+        return orchestrator.create_evaluation_config(
+            models=["model-a", "model-b"], evaluation_model="judge"
+        )
+
+    @pytest.fixture
+    def arena(self, mocker):
+        """Patch ArenaGEval; the judge picks whichever winner the test sets."""
+        metric = mocker.Mock(reason="because")
+        arena_class = mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.ArenaGEval", return_value=metric
+        )
+        return arena_class, metric
+
+    def test_run_pairwise_counts_wins(self, orchestrator, config, arena, mock_stdout):
+        """Answers to the same question are grouped, and wins are tallied."""
+        arena_class, metric = arena
+        metric.measure.side_effect = ["model-b", "model-a", "model-b"]
+        cases = [
+            _case("Q1", "model-a"),
+            _case("Q1", "model-b"),
+            _case("Q2", "model-a"),
+            _case("Q2", "model-b"),
+            # Same question for a different course is judged separately
+            _case("Q1", "model-a", course="c2"),
+            _case("Q1", "model-b", course="c2"),
+        ]
+
+        orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
+
+        assert metric.measure.call_count == 3
+        arenas = [call.args[0] for call in metric.measure.call_args_list]
+        assert [sorted(c.name for c in arena.contestants) for arena in arenas] == [
+            ["model-a", "model-b"]
+        ] * 3
+        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 2}}
+        assert arena_class.call_args.kwargs["model"] == "judge"
+        assert arena_class.call_args.kwargs["evaluation_params"] == [
+            LLMTestCaseParams.INPUT,
+            LLMTestCaseParams.ACTUAL_OUTPUT,
+            LLMTestCaseParams.RETRIEVAL_CONTEXT,
+        ]
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert "Pairwise wins for syllabus: {'model-a': 1, 'model-b': 2}" in output
+
+    def test_run_pairwise_skips_unmatched_and_judge_errors(
+        self, orchestrator, config, arena, mock_stdout
+    ):
+        """A question only one model answered is skipped; judge errors don't stop
+        the run.
+        """
+        _, metric = arena
+        metric.measure.side_effect = [RuntimeError("judge down"), "model-a"]
+        cases = [
+            _case("Q1", "model-a"),
+            _case("Q1", "model-b"),
+            _case("Q2", "model-a"),
+            _case("Q2", "model-b"),
+            _case("Only one", "model-a"),
+        ]
+
+        orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
+
+        assert metric.measure.call_count == 2
+        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 0}}
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert "judge error: judge down" in output
+
+    def test_run_pairwise_tutor_criteria(self, orchestrator, config, arena):
+        """The tutor bot is judged on tutoring, not on answering."""
+        arena_class, _ = arena
+
+        orchestrator._run_pairwise("tutor", [], config)  # noqa: SLF001
+
+        assert "tutor" in arena_class.call_args.kwargs["criteria"]
+        assert orchestrator.pairwise_wins == {"tutor": {"model-a": 0, "model-b": 0}}
+
+    @pytest.mark.parametrize("pairwise", [True, False])
+    @pytest.mark.asyncio
+    async def test_run_evaluation_pairwise_flag(
+        self, orchestrator, config, mock_stdout, mocker, pairwise
+    ):
+        """run_evaluation passes every model's cases to the judge only when
+        asked.
+        """
+        cases = {m: _case("Q1", m) for m in config.models}
+        evaluator = mocker.Mock()
+        evaluator.load_test_cases.return_value = [mocker.Mock()]
+        evaluator.evaluate_model = AsyncMock(
+            side_effect=lambda model, *_args, **_kwargs: [cases[model]]
+        )
+        mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"test_bot": (mocker.Mock(), mocker.Mock(return_value=evaluator))},
+        )
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        from deepeval.evaluate.types import EvaluationResult
+
+        mock_deepeval.evaluate.return_value = EvaluationResult(
+            test_results=[], confident_link=None, test_run_id=None
+        )
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        def fake_pairwise(bot_name, _test_cases, _config):
+            orchestrator.pairwise_wins[bot_name] = {"model-a": 1, "model-b": 0}
+
+        run_pairwise = mocker.patch.object(
+            orchestrator, "_run_pairwise", side_effect=fake_pairwise
+        )
+
+        await orchestrator.run_evaluation(
+            config, bot_names=["test_bot"], use_prompts=False, pairwise=pairwise
+        )
+
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        if pairwise:
+            run_pairwise.assert_called_once_with(
+                "test_bot", list(cases.values()), config
+            )
+            assert "PAIRWISE WINS" in output
+        else:
+            run_pairwise.assert_not_called()
+            assert "PAIRWISE WINS" not in output
+
+    def test_evaluate_warns_when_deepeval_drops_cases(
+        self, orchestrator, config, mock_stdout, mocker
+    ):
+        """A warning is printed when deepeval returns fewer results than cases."""
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        mock_deepeval.evaluate.return_value = mocker.Mock(test_results=[1])
+
+        orchestrator._run_deepeval_evaluation(  # noqa: SLF001
+            [_case("Q1", "model-a"), _case("Q2", "model-a")], config, 2
+        )
+
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert "deepeval returned 1 of 2 test cases" in output

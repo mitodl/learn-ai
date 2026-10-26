@@ -1,6 +1,7 @@
 """Orchestrator for running RAG evaluations across multiple bots and models."""
 
 import asyncio
+import json
 import os
 from datetime import UTC, datetime
 from json import JSONDecodeError
@@ -11,6 +12,7 @@ from deepeval.evaluate import AsyncConfig, ErrorConfig
 from deepeval.evaluate.types import EvaluationResult
 from deepeval.metrics import (
     AnswerRelevancyMetric,
+    ArenaGEval,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
@@ -18,7 +20,7 @@ from deepeval.metrics import (
     GEval,
     HallucinationMetric,
 )
-from deepeval.test_case import LLMTestCaseParams
+from deepeval.test_case import ArenaTestCase, Contestant, LLMTestCaseParams
 from django.core.management.base import OutputWrapper
 
 from ai_chatbots.api import get_langsmith_prompt
@@ -41,6 +43,7 @@ class EvaluationOrchestrator:
     def __init__(self, stdout: OutputWrapper):
         self.stdout = stdout
         self.reporter = EvaluationReporter(stdout)
+        self.pairwise_wins: dict[str, dict[str, int]] = {}
 
     def create_evaluation_config(  # noqa: PLR0913
         self,
@@ -220,6 +223,7 @@ class EvaluationOrchestrator:
         max_concurrent: int,
         batch_size: int,
         error_log_file: str,
+        pairwise: bool = False,
     ) -> EvaluationResult:
         """Collect test cases for a bot and evaluate them immediately.
 
@@ -251,6 +255,7 @@ class EvaluationOrchestrator:
             bot_prompts.extend(prompts_data[bot_name])
 
         all_llm_test_cases = []
+        pairwise_cases = []
         batch_results = []
 
         # Evaluate each model with each prompt
@@ -293,6 +298,8 @@ class EvaluationOrchestrator:
                         max_concurrent=max_concurrent,
                     )
                     all_llm_test_cases.extend(model_test_cases)
+                    if pairwise:
+                        pairwise_cases.extend(model_test_cases)
 
                     # Process batches (loop until remaining < batch_size)
                     while batch_size > 0 and len(all_llm_test_cases) >= batch_size:
@@ -346,6 +353,11 @@ class EvaluationOrchestrator:
             )
             batch_results.append(final_result)
 
+        if pairwise:
+            await asyncio.to_thread(
+                self._run_pairwise, bot_name, pairwise_cases, config
+            )
+
         # Merge all batch results for this bot
         bot_result = self._merge_evaluation_results(batch_results)
         self.stdout.write(
@@ -393,12 +405,98 @@ class EvaluationOrchestrator:
                 f"{max_concurrent} concurrent executions"
             )
 
-        return deepeval.evaluate(
+        result = deepeval.evaluate(
             test_cases=test_cases,
             metrics=config.metrics,
             error_config=ErrorConfig(ignore_errors=True),
             async_config=async_config,
         )
+        if len(result.test_results) < len(test_cases):
+            self.stdout.write(
+                f"⚠️  deepeval returned {len(result.test_results)} of "
+                f"{len(test_cases)} test cases"
+            )
+        return result
+
+    def _run_pairwise(
+        self, bot_name: str, test_cases: list, config: EvaluationConfig
+    ) -> None:
+        """Ask the judge which model answered each question best.
+
+        No expected answer is involved.  deepeval shuffles the contestants and
+        hides their names from the judge, so position and name bias are reduced.
+        """
+        tutor_criteria = (
+            "The input is a student's latest message to a tutor; the retrieval "
+            "context holds the problem, its solution if available, and the "
+            "conversation so far.  Choose the tutor response that best helps the "
+            "student learn: correct for this problem, responsive to what the "
+            "student said, moving them forward with a concrete hint or guiding "
+            "question, and not giving away the final answer or doing the "
+            "remaining work for them.  Prefer clear, chat-length responses."
+        )
+        metric = ArenaGEval(
+            name="PairwisePreference",
+            criteria=tutor_criteria
+            if bot_name == "tutor"
+            else (
+                "Choose the response that best serves the learner who asked the "
+                "input question.  Prefer responses that are accurate and fully "
+                "supported by the retrieval context (penalize any claim the "
+                "context does not support), that directly address what was "
+                "asked including qualifiers such as 'basic' or 'free', and that "
+                "are clear and appropriately concise.  For tutoring requests, "
+                "prefer responses that guide the learner toward the solution "
+                "with hints or questions over ones that give the method or "
+                "answer away."
+            ),
+            evaluation_params=[
+                LLMTestCaseParams.INPUT,
+                LLMTestCaseParams.ACTUAL_OUTPUT,
+                LLMTestCaseParams.RETRIEVAL_CONTEXT,
+            ],
+            model=config.evaluation_model,
+            async_mode=False,
+        )
+        groups: dict[tuple, dict] = {}
+        for case in test_cases:
+            # The same question can be asked of different courses
+            key = (
+                case.input,
+                json.dumps(case.metadata.get("metadata"), sort_keys=True, default=str),
+                case.metadata.get("prompt_label"),
+            )
+            groups.setdefault(key, {})[case.metadata["model"]] = case
+        wins = dict.fromkeys(config.models, 0)
+        self.stdout.write(f"\n===== Pairwise preference for {bot_name} =====")
+        for (question, case_key, _), by_model in groups.items():
+            if len(by_model) < 2:  # noqa: PLR2004
+                continue
+            arena = ArenaTestCase(
+                contestants=[
+                    Contestant(name=model, test_case=case)
+                    for model, case in by_model.items()
+                ]
+            )
+            try:
+                winner = metric.measure(arena)
+            except Exception as e:  # noqa: BLE001
+                self.stdout.write(f"  ❓ {question[:70]}\n     ⚠️ judge error: {e}")
+                continue
+            wins[winner] = wins.get(winner, 0) + 1
+            self.stdout.write(
+                f"  ❓ {question[:70]}\n     🏆 {winner}: {metric.reason}"
+            )
+            record = {
+                "bot": bot_name,
+                "question": question,
+                "case_key": case_key,
+                "winner": winner,
+                "reason": metric.reason,
+            }
+            self.stdout.write(f"PAIRWISE_JSON {json.dumps(record)}")
+        self.stdout.write(f"Pairwise wins for {bot_name}: {wins}")
+        self.pairwise_wins[bot_name] = wins
 
     def _merge_evaluation_results(
         self, results_list: list[EvaluationResult]
@@ -449,7 +547,7 @@ Started: {timestamp}
         except Exception as e:  # noqa: BLE001
             self.stdout.write(f"Warning: Failed to initialize error log: {e}")
 
-    async def run_evaluation(  # noqa: PLR0913
+    async def run_evaluation(  # noqa: C901, PLR0913
         self,
         config: EvaluationConfig,
         *,
@@ -460,6 +558,7 @@ Started: {timestamp}
         max_concurrent: int | None = 10,
         batch_size: int | None = 0,
         error_log_file: str | None = None,
+        pairwise: bool = False,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models.
 
@@ -507,6 +606,7 @@ Started: {timestamp}
                 max_concurrent=max_concurrent,
                 batch_size=batch_size,
                 error_log_file=error_log_file,
+                pairwise=pairwise,
             )
             all_bot_results.append(bot_result)
 
@@ -565,6 +665,10 @@ Started: {timestamp}
             evaluation_model=config.evaluation_model,
             metric_names=metric_names,
         )
+        if self.pairwise_wins:
+            self.stdout.write("\n🥊 PAIRWISE WINS (judge, no expected answer)")
+            for bot, wins in self.pairwise_wins.items():
+                self.stdout.write(f"  {bot}: {wins}")
 
         return results
 
