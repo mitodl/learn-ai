@@ -8,6 +8,7 @@ from ai_chatbots.learner_api import LearnerAPIError
 from ai_chatbots.tools import (
     COULD_NOT_CHECK,
     MAX_DUE_DATES,
+    MITXONLINE_PLATFORM,
     get_certificate_status,
     get_course_progress,
     get_enrollments,
@@ -109,6 +110,9 @@ def records(mocker, settings):
     settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
     settings.LEARNER_API_OPENEDX_COOKIE_NAME = "edx-session"
     api = "ai_chatbots.tools.learner_api"
+    mocker.patch(
+        "ai_chatbots.tools._get_course_platform", return_value=MITXONLINE_PLATFORM
+    )
     return {
         "enrollments": mocker.patch(f"{api}.get_enrollments", return_value=ENROLLMENTS),
         "programs": mocker.patch(
@@ -434,6 +438,33 @@ async def test_upcoming_assignments_without_openedx_settings(
         "dates_url": f"{COURSES_URL}/{CALCULUS}+3T2026/dates",
     }
     records["course_dates"].assert_not_called()
+
+
+@pytest.mark.parametrize("found", ["xpro", None])
+async def test_page_course_without_platform(mocker, records, found):
+    """
+    Without a platform, the course's own is looked up, and records are only
+    read for a MITx Online course: a shared id could be another platform's.
+    """
+    lookup = mocker.patch("ai_chatbots.tools._get_course_platform", return_value=found)
+
+    result = await call(get_course_progress, page_course=CALCULUS)
+
+    lookup.assert_called_once_with(CALCULUS)
+    assert result["enrollments"] == []
+    assert "note" in result
+
+
+async def test_page_course_with_platform_skips_lookup(mocker, records):
+    """A platform sent with the request is used as is."""
+    lookup = mocker.patch("ai_chatbots.tools._get_course_platform")
+
+    result = await call(
+        get_course_progress, page_course=CALCULUS, platform=MITXONLINE_PLATFORM
+    )
+
+    lookup.assert_not_called()
+    assert result["enrollments"][0]["course_id"] == CALCULUS
 
 
 async def test_upcoming_assignments_skip_other_courses(records):

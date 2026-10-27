@@ -852,7 +852,20 @@ async def _page_course_enrollments(
             "enrollments": [],
             "note": "There is no course on this page to check the records of.",
         }
-    if platform and platform != MITXONLINE_PLATFORM:
+    if not platform:
+        # A readable id can be shared by courses on two platforms, so without
+        # one the MITx Online records could be another platform's course.
+        platform = await _get_course_platform(page_course)
+        if platform is None:
+            return {
+                "enrollments": [],
+                "note": (
+                    "It isn't clear which platform the course on this page is "
+                    "on, so the learner's records for it can't be checked "
+                    "here."
+                ),
+            }
+    if platform != MITXONLINE_PLATFORM:
         return {
             "enrollments": [],
             "note": (
