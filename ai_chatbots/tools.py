@@ -79,7 +79,7 @@ class SearchToolSchema(pydantic.BaseModel):
     )
 
     state: Annotated[dict, InjectedState] = Field(
-        description="The agent state, including the search url to use"
+        description="The agent state, including any pinned search filters"
     )
 
     resource_type: list[enum_zip("resource_type", LearningResourceType)] | None = Field(
