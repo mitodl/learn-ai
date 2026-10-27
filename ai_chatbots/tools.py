@@ -852,10 +852,36 @@ async def _page_course_enrollments(
             "enrollments": [],
             "note": "There is no course on this page to check the records of.",
         }
+    not_on_mitxonline = {
+        "enrollments": [],
+        "note": (
+            "The course on this page isn't on MITx Online, so the "
+            "learner's records for it can't be checked here."
+        ),
+    }
+    if platform and platform != MITXONLINE_PLATFORM:
+        return not_on_mitxonline
+    matches = _current_runs(
+        [
+            summary
+            for summary in await _summaries()
+            if page_course in (summary["course_id"], summary["run_id"])
+        ],
+        prefer_certificate=prefer_certificate,
+    )
+    if not matches:
+        return {
+            "enrollments": [],
+            "note": (
+                "The learner has no MITx Online enrollment in the course on this "
+                "page. Don't answer from their other courses."
+            ),
+        }
     if not platform:
         # A readable id can be shared by courses on two platforms, so without
-        # one the MITx Online records could be another platform's course.
-        platform = await _get_course_platform(page_course)
+        # one the MITx Online records could be another platform's course. The
+        # catalog only knows courses, so look up the course, not the run.
+        platform = await _get_course_platform(matches[0]["course_id"])
         if platform is None:
             return {
                 "enrollments": [],
@@ -865,31 +891,9 @@ async def _page_course_enrollments(
                     "here."
                 ),
             }
-    if platform != MITXONLINE_PLATFORM:
-        return {
-            "enrollments": [],
-            "note": (
-                "The course on this page isn't on MITx Online, so the "
-                "learner's records for it can't be checked here."
-            ),
-        }
-    matches = _current_runs(
-        [
-            summary
-            for summary in await _summaries()
-            if page_course in (summary["course_id"], summary["run_id"])
-        ],
-        prefer_certificate=prefer_certificate,
-    )
-    if matches:
-        return {"enrollments": matches, "course_on_page": page_course}
-    return {
-        "enrollments": [],
-        "note": (
-            "The learner has no MITx Online enrollment in the course on this "
-            "page. Don't answer from their other courses."
-        ),
-    }
+        if platform != MITXONLINE_PLATFORM:
+            return not_on_mitxonline
+    return {"enrollments": matches, "course_on_page": page_course}
 
 
 def _could_not_check(operation: str) -> str:

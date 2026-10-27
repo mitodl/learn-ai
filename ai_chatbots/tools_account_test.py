@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from django.core.cache import caches
 
 from ai_chatbots.learner_api import LearnerAPIError
 from ai_chatbots.tools import (
@@ -464,6 +465,39 @@ async def test_page_course_with_platform_skips_lookup(mocker, records):
     )
 
     lookup.assert_not_called()
+    assert result["enrollments"][0]["course_id"] == CALCULUS
+
+
+async def test_page_course_not_enrolled_skips_lookup(mocker, records):
+    """No platform is looked up for a course the learner isn't enrolled in."""
+    lookup = mocker.patch("ai_chatbots.tools._get_course_platform")
+
+    result = await call(get_course_progress, page_course="course-v1:MITx+X")
+
+    lookup.assert_not_called()
+    assert result["enrollments"] == []
+
+
+@pytest.mark.parametrize("page_course", [CALCULUS, f"{CALCULUS}+1T2020"])
+async def test_page_run_platform_is_its_course(mocker, settings, page_course):
+    """
+    A run id on the page looks up its course's platform, since the catalog only
+    has courses. The real lookup runs; only its HTTP request is mocked.
+    """
+    settings.AI_MIT_LEARNING_RESOURCES_URL = "https://learn.test/resources/"
+    cache = caches["default"]
+    cache.clear()
+    mocker.patch("ai_chatbots.tools.get_django_cache", return_value=cache)
+    mocker.patch(
+        "ai_chatbots.tools.learner_api.get_enrollments", return_value=ENROLLMENTS
+    )
+    response = mocker.Mock()
+    response.json.return_value = {"results": [{"platform": {"code": "mitxonline"}}]}
+    request = mocker.patch("ai_chatbots.tools.async_request", return_value=response)
+
+    result = await call(get_course_progress, page_course=page_course)
+
+    assert request.call_args.args[1]["readable_id"] == CALCULUS
     assert result["enrollments"][0]["course_id"] == CALCULUS
 
 
