@@ -62,6 +62,24 @@ FROM runtime AS development
 RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
     uv sync --frozen --no-install-project
 
+# ─── Local-dev target (ol-infrastructure local-dev k8s/Tilt stack) ────────────
+FROM development AS local-dev
+
+# runtime copies the source in as root, and Tilt's live update writes synced
+# files as mitodl.
+USER root
+RUN chown -R mitodl:mitodl /src
+USER mitodl
+
+# Reload is set here rather than in the k8s manifest, which also runs the
+# published image when there is no checkout to build. A short kill timeout stops
+# a worker that won't exit from stalling a reload. Without
+# RELOAD_IGNORE_WORKER_FAILURE, a save that breaks the import exits granian, and
+# the restarted container comes back without the synced edits.
+ENV GRANIAN_RELOAD=true \
+    GRANIAN_RELOAD_IGNORE_WORKER_FAILURE=true \
+    GRANIAN_WORKERS_KILL_TIMEOUT=1
+
 # ─── Production target ───────────────────────────────────────────────────────
 # MUST BE THE LAST STAGE. A build without --target produces the last stage, and
 # that has to be the production image, not the development target above. Add

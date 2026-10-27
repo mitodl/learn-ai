@@ -82,6 +82,7 @@ dev = [
     "django-debug-toolbar>=6.0.0,<7",
     "factory_boy>=3.3.0,<4",
     "faker>=40.0.0,<41",
+    "granian[reload]>=2.5.4,<3",
     "ipdb>=0.13.13,<0.14",
     "nplusone>=1.0.0,<2",
     "pdbpp>=0.12.1,<0.13",
