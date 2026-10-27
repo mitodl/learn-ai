@@ -692,7 +692,7 @@ async def test_syllabus_bot_account_tools(
         "get_enrollments",
         "get_course_progress",
         "get_certificate_status",
-        "get_upcoming_assignments",
+        "get_course_dates",
     ]
     tool_names = [tool.name for tool in chatbot.create_tools()]
     assert (tool_names[-4:] == account_tools) is enable_account_tools

@@ -203,8 +203,11 @@ PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 # rules for an answer about the learner's own records.
 PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own MITx Online records with
 get_enrollments, get_course_progress, get_certificate_status and
-get_upcoming_assignments.  Use them only for questions about the learner's own
-enrollments, grades, certificates, digital credentials and due dates.  Questions
+get_course_dates.  Use them only for questions about the learner's own
+enrollments, grades, certificates, digital credentials and due dates.
+get_enrollments lists all of the learner's courses; the others only read the
+course on this page.  For the grade, certificate or dates of another course,
+tell the learner to ask from that course's page.  Questions
 about the course itself, including what it teaches, how it is graded and what
 certificate it offers, still go to the resource facts and search_content_files.
 A question like "Do I get a certificate for this?" or "Will I get a certificate?"

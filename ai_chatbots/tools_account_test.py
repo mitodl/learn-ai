@@ -8,9 +8,9 @@ from ai_chatbots.learner_api import LearnerAPIError
 from ai_chatbots.tools import (
     COULD_NOT_CHECK,
     get_certificate_status,
+    get_course_dates,
     get_course_progress,
     get_enrollments,
-    get_upcoming_assignments,
 )
 
 COURSES_URL = "https://courses.learn.test/learn/course"
@@ -141,44 +141,28 @@ def records(mocker):
     }
 
 
-async def call(tool, course=None, page_course=None, platform=None):
+async def call(tool, page_course=None, platform=None):
     """Invoke a tool the way the agent does, and decode its JSON."""
     state = {"course_id": [page_course]} if page_course else {}
     if platform:
         state["platform"] = [platform]
-    return json.loads(await tool.ainvoke({"course": course, "state": state}))
+    return json.loads(await tool.ainvoke({"state": state}))
 
 
-def test_model_sees_only_the_course_argument():
+def test_model_fills_in_no_arguments():
     """The agent state is injected, never part of what the model can fill in."""
     for tool in (
         get_enrollments,
         get_course_progress,
         get_certificate_status,
-        get_upcoming_assignments,
+        get_course_dates,
     ):
-        properties = tool.tool_call_schema.model_json_schema()["properties"]
-        assert list(properties) == ["course"]
+        schema = tool.tool_call_schema.model_json_schema()
+        assert not schema.get("properties")
 
 
-@pytest.mark.parametrize(
-    "tool",
-    [
-        get_enrollments,
-        get_course_progress,
-        get_upcoming_assignments,
-        get_certificate_status,
-    ],
-)
-async def test_course_can_be_left_out(records, tool):
-    """The model may omit course entirely, not just pass null."""
-    result = json.loads(await tool.ainvoke({"state": {"course_id": [CALCULUS]}}))
-
-    assert result["enrollments"]
-
-
-async def test_progress_defaults_to_the_page_course(records):
-    """Without a course, the course of the page is used, at its current run."""
+async def test_progress_is_for_the_page_course(records):
+    """The course of the page is used, at its current run."""
     result = await call(get_course_progress, page_course=CALCULUS)
 
     assert result["course_on_page"] == CALCULUS
@@ -195,60 +179,37 @@ async def test_progress_defaults_to_the_page_course(records):
     ]
 
 
+async def test_page_run_id_matches_that_run(records):
+    """A page with a run id gets that run, not the course's current one."""
+    result = await call(get_course_progress, page_course=f"{CALCULUS}+1T2020")
+
+    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+1T2020"]
+
+
 @pytest.mark.parametrize(
-    ("course", "run_id"),
+    "page_course",
     [
-        ("14.750x", f"{ECONOMICS}+3T2023"),
-        ("political economy", f"{ECONOMICS}+3T2023"),
-        ("18.01", f"{CALCULUS}+3T2026"),
-        (f"{ECONOMICS}+3T2023", f"{ECONOMICS}+3T2023"),
-        ("18.01x", f"{CALCULUS}+3T2026"),
+        "course-v1:MITxT+8.01x",
+        # Same characters as 18.01x without the dots
+        "course-v1:MITxT+1.801x",
+        "abc.123x",
+        "MITxT",
     ],
 )
-async def test_named_course_overrides_the_page(records, course, run_id):
-    """A course named by number, title or id is used instead of the page's."""
-    result = await call(get_course_progress, course=course, page_course=CALCULUS)
+async def test_page_course_not_enrolled_lists_nothing(records, page_course):
+    """On a course the learner isn't in, no other course is offered instead."""
+    result = await call(get_course_progress, page_course=page_course)
 
-    assert [e["run_id"] for e in result["enrollments"]] == [run_id]
-
-
-async def test_ambiguous_course_asks_which(records):
-    """A name matching several courses returns them all, to ask which."""
-    result = await call(get_course_progress, course="Development")
-
-    assert {e["course_id"] for e in result["enrollments"]} == {ECONOMICS, ECONOMICS_2}
-    assert "ask which" in result["note"]
-
-
-@pytest.mark.parametrize("course", ["8.01x", "MITx 18.01x"])
-async def test_unmatched_course_lists_all(records, course):
-    """An unmatched course lists the learner's courses for the model to pick from."""
-    result = await call(get_course_progress, course=course)
-
-    assert CALCULUS in {e["course_id"] for e in result["enrollments"]}
-    assert "matched" in result["note"]
-    assert "don't see an enrollment" in result["note"]
-
-
-async def test_title_match_needs_whole_words(records):
-    """A course number inside another course's title doesn't match it."""
-    records["enrollments"].return_value = [
-        enrollment(CALCULUS, "3T2026", "18.01x: Calculus 1A")
-    ]
-
-    result = await call(get_course_progress, course="8.01x")
-
-    assert "don't see an enrollment" in result["note"]
-
-
-async def test_page_course_not_enrolled_lists_all(records):
-    """On the page of a course the learner isn't in, list what they are in."""
-    result = await call(
-        get_course_progress, page_course="course-v1:MITxT+8.01x", platform="mitxonline"
-    )
-
+    assert result["enrollments"] == []
     assert "no MITx Online enrollment in the course on this page" in result["note"]
-    assert len(result["enrollments"]) == 3
+
+
+async def test_no_page_course_lists_nothing(records):
+    """Without a course on the page there is nothing to check."""
+    result = await call(get_course_progress)
+
+    assert result["enrollments"] == []
+    records["enrollments"].assert_not_called()
 
 
 async def test_page_on_another_platform_lists_nothing(records):
@@ -278,8 +239,8 @@ async def test_earlier_certificate_isnt_hidden_by_a_newer_run(records):
         ),
     ]
 
-    certificate = await call(get_certificate_status, course="14.750x")
-    progress = await call(get_course_progress, course="14.750x")
+    certificate = await call(get_certificate_status, page_course=ECONOMICS)
+    progress = await call(get_course_progress, page_course=ECONOMICS)
 
     assert certificate["enrollments"][0]["certificate_earned"] is True
     assert progress["enrollments"][0]["run_id"] == f"{ECONOMICS}+1T2099"
@@ -305,7 +266,7 @@ async def test_latest_run_compares_dates_not_text(records):
         ),
     ]
 
-    result = await call(get_course_progress, course="18.01x")
+    result = await call(get_course_progress, page_course=CALCULUS)
 
     assert result["enrollments"][0]["run_id"] == f"{CALCULUS}+later"
 
@@ -360,7 +321,7 @@ async def test_unrecorded_grade_is_not_zero(records):
 
 async def test_upcoming_assignments_link_the_dates_tab(records):
     """Due dates are a link to the course's Dates tab."""
-    result = await call(get_upcoming_assignments, page_course=CALCULUS)
+    result = await call(get_course_dates, page_course=CALCULUS)
 
     assert result["enrollments"][0]["dates_url"] == (
         f"{COURSES_URL}/{CALCULUS}+3T2026/dates"
@@ -370,7 +331,7 @@ async def test_upcoming_assignments_link_the_dates_tab(records):
 async def test_certificate_status_drops_personal_data(settings, records):
     """Program certificates keep their title, date and link, nothing personal."""
     settings.LEARNER_API_MITXONLINE_BASE_URL = "https://mitxonline.test/"
-    result = await call(get_certificate_status, course="14.750x")
+    result = await call(get_certificate_status, page_course=ECONOMICS)
 
     assert result["enrollments"][0]["certificate_earned"] is True
     assert result["enrollments"][0]["certificate_url"] == (
@@ -394,7 +355,7 @@ async def test_certificate_status_drops_personal_data(settings, records):
     [
         (get_enrollments, "enrollments"),
         (get_course_progress, "enrollments"),
-        (get_upcoming_assignments, "enrollments"),
+        (get_course_dates, "enrollments"),
         (get_certificate_status, "enrollments"),
         (get_certificate_status, "programs"),
         (get_certificate_status, "program_certificates"),
@@ -427,7 +388,7 @@ async def test_digital_credential_issued_only_when_present(
     else:
         records["course_certificate"].return_value = certificate
 
-    result = await call(get_certificate_status, course="14.750x")
+    result = await call(get_certificate_status, page_course=ECONOMICS)
 
     (course,) = result["enrollments"]
     assert course["certificate_earned"] is True
@@ -437,8 +398,11 @@ async def test_digital_credential_issued_only_when_present(
 
 
 async def test_no_certificate_means_no_credential_lookup(records):
-    """Without a certificate there is nothing to look up or report."""
-    result = await call(get_certificate_status, course="18.01x")
+    """
+    Without a certificate in the page's course there is nothing to look up or
+    report, even when another course (14.750x) has one.
+    """
+    result = await call(get_certificate_status, page_course=CALCULUS)
 
     assert result["enrollments"][0]["certificate_earned"] is False
     assert "digital_credential" not in result["enrollments"][0]
@@ -460,7 +424,7 @@ async def test_program_digital_credential(records):
         "verifiable_credential_json": None,
     }
 
-    result = await call(get_certificate_status, course="14.750x")
+    result = await call(get_certificate_status, page_course=ECONOMICS)
 
     (program,) = result["programs"]
     assert program["certificate_earned"] is True

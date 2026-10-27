@@ -168,6 +168,17 @@
       "expected_output": "0%, not passing yet. The course's Progress tab has the details: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/progress"
     },
     {
+      "question": "What's my grade in this course?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+8.01x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It doesn't see an enrollment in this course in the learner's MITx Online records, and doesn't give a grade from any of their other courses."
+    },
+    {
       "question": "How much of this course have I completed?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+11.405x"],
@@ -190,9 +201,9 @@
       "expected_output": "It doesn't have the due dates, and links the course's Dates tab: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/dates"
     },
     {
-      "question": "Did I get a certificate in 18.01x, and where is it?",
+      "question": "Did I get a certificate in this course, and where is it?",
       "extra_state": {
-        "course_id": ["course-v1:MITxT+11.405x"],
+        "course_id": ["course-v1:MITxT+18.01x"],
         "collection_name": [null]
       },
       "extra_init": {
@@ -201,9 +212,9 @@
       "expected_output": "Yes, a certificate for Calculus 1A: Differentiation, at {{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01/"
     },
     {
-      "question": "Do I have a digital credential for Calculus 1A?",
+      "question": "Do I have a digital credential for this course?",
       "extra_state": {
-        "course_id": ["course-v1:MITxT+11.405x"],
+        "course_id": ["course-v1:MITxT+18.01x"],
         "collection_name": [null]
       },
       "extra_init": {
@@ -214,7 +225,7 @@
     {
       "question": "So do I have a digital credential for it or not?",
       "extra_state": {
-        "course_id": ["course-v1:MITxT+11.405x"],
+        "course_id": ["course-v1:MITxT+18.01x"],
         "collection_name": [null]
       },
       "extra_init": {
@@ -224,7 +235,7 @@
       "history": [
         {
           "role": "user",
-          "content": "Did I get a certificate in 18.01x?"
+          "content": "Did I get a certificate in this course?"
         },
         {
           "role": "assistant",
