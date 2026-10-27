@@ -175,13 +175,14 @@ OPIK_WORKSPACE=default
 OPIK_PROJECT_NAME=learn-ai
 OPIK_ENVIRONMENT=dev
 OPIK_KEYCLOAK_TOKEN_URL=https://sso.ol.mit.edu/realms/ol-platform-engineering/protocol/openid-connect/token
-OPIK_KEYCLOAK_CLIENT_ID=ol-opik-sdk
+OPIK_KEYCLOAK_CLIENT_ID=opik-learn-ai-qa
 OPIK_KEYCLOAK_CLIENT_SECRET=<from Vault>
 ```
 
-The client secret comes from Vault at `secret-opik/sdk-client` (written by the Production keycloak
-substructure to every environment's Vault); in Kubernetes it is synced via the Vault Secrets Operator, and
-for local development you can obtain it from the RC learn-ai-app pod.
+learn-ai has a client of its own in each environment, `opik-learn-ai-<env>`, in the Production Keycloak
+realm. Its id and secret come from Vault at `secret-opik/sdk-learn-ai` in that environment's Vault (written
+by the Production keycloak substructure); in Kubernetes they are synced via the Vault Secrets Operator, and
+for local development you can use the QA client's, from the RC learn-ai-app pod.
 Do **not** set `OPIK_API_KEY` — the auth hook owns the `Authorization` header, and a static key would
 conflict with it. When all of the variables above are present, chatbot runs emit LangGraph traces to Opik
 (grouped by conversation thread) alongside any Langsmith/PostHog integrations.

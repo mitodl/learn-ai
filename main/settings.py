@@ -561,9 +561,8 @@ OPIK_URL_OVERRIDE = get_string(name="OPIK_URL_OVERRIDE", default=None)
 OPIK_WORKSPACE = get_string(name="OPIK_WORKSPACE", default="default")
 OPIK_PROJECT_NAME = get_string(name="OPIK_PROJECT_NAME", default="learn-ai")
 OPIK_KEYCLOAK_TOKEN_URL = get_string(name="OPIK_KEYCLOAK_TOKEN_URL", default=None)
-OPIK_KEYCLOAK_CLIENT_ID = get_string(
-    name="OPIK_KEYCLOAK_CLIENT_ID", default="ol-opik-sdk"
-)
+# One client per environment (opik-learn-ai-<env>), so there is no default.
+OPIK_KEYCLOAK_CLIENT_ID = get_string(name="OPIK_KEYCLOAK_CLIENT_ID", default=None)
 OPIK_KEYCLOAK_CLIENT_SECRET = get_string(
     name="OPIK_KEYCLOAK_CLIENT_SECRET", default=None
 )
