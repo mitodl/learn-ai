@@ -1485,6 +1485,7 @@ class SupportBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        user_agent: str = "",
     ):
         super().__init__(
             user_id,
@@ -1495,6 +1496,9 @@ class SupportBot(TruncatingChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
+        # Not graph state: the turn that files is itself a request, so this is
+        # the live header rather than something accumulated over the thread.
+        self.user_agent = user_agent
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -1694,6 +1698,7 @@ class SupportBot(TruncatingChatbot):
                 "email": email,
                 "name": _accumulated(prior_state, extra_state, "user_name"),
                 "username": _accumulated(prior_state, extra_state, "user_username"),
+                "user_agent": self.user_agent,
                 # Only this request's session can vouch for the address. Reading
                 # the thread's accumulated verifications would let any later turn
                 # inherit a sign-in it never presented.

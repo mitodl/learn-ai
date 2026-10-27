@@ -1,6 +1,7 @@
 """Tests for AI chatbots."""
 
 import asyncio
+import inspect
 import json
 import os
 import re
@@ -65,6 +66,7 @@ from ai_chatbots.zendesk import (
     TICKET_BAD_EMAIL,
     TICKET_REJECTED,
     WORST_PATH_REQUESTS,
+    file_support_ticket,
     max_filing_seconds,
 )
 from main.test_utils import assert_json_equal
@@ -1695,12 +1697,14 @@ async def test_support_bot_does_not_provision_a_proxy_budget(
     assert chatbot.agent is not None
 
 
-async def _support_bot(mocker, mock_checkpointer, prior_messages, state=None):
+async def _support_bot(
+    mocker, mock_checkpointer, prior_messages, state=None, user_agent=""
+):
     """Build a SupportBot whose thread already holds prior_messages, LLM stubbed."""
     thread_id = uuid4().hex
     await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
     chatbot = await sync_to_async(SupportBot)(
-        "anonymous", mock_checkpointer, thread_id=thread_id
+        "anonymous", mock_checkpointer, thread_id=thread_id, user_agent=user_agent
     )
     # Write the thread's starting point through the graph rather than stubbing
     # the read, so what one turn accumulates is what the next turn sees.
@@ -1974,6 +1978,84 @@ async def test_support_bot_files_under_the_learners_username(mocker, mock_checkp
         pass
 
     assert mock_file.call_args.kwargs["username"] == "ada"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_with_the_requests_browser(mocker, mock_checkpointer):
+    """
+    The browser comes from the request that files, not from the thread: the
+    approval turn is itself an HTTP request carrying its own User-Agent, so
+    there is nothing to accumulate and nothing to write into every checkpoint.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+        user_agent="Mozilla/5.0 (iPhone)",
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["user_agent"] == "Mozilla/5.0 (iPhone)"
+
+
+@pytest.mark.asyncio
+async def test_support_bot_files_without_a_browser(mocker, mock_checkpointer):
+    """A caller that sends no User-Agent still files."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["user_agent"] == ""
+
+
+@pytest.mark.asyncio
+async def test_support_bot_ticket_matches_the_filing_signature(
+    mocker, mock_checkpointer
+):
+    """
+    Every other test here mocks file_support_ticket, so a ticket key the real
+    function does not take would pass the suite and blow up on the ** splat in
+    production. Bind what was built against the real signature.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+        user_agent="Mozilla/5.0 (iPhone)",
+    )
+
+    async for _ in chatbot.get_completion(
+        "send", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    inspect.signature(file_support_ticket).bind(**mock_file.call_args.kwargs)
 
 
 @pytest.mark.asyncio

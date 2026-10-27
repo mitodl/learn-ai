@@ -84,6 +84,14 @@ ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"
 # from an authenticated session, so support does not read it as confirmed.
 ZENDESK_UNVERIFIED_REQUESTER_TAG = "tim_unverified_requester"
 
+# What the requester was on, derived from the User-Agent. A controlled
+# vocabulary, because tags are what agents filter views on; the verbatim user
+# agent goes in the ticket body for anything finer. Nothing is tagged when the
+# header is missing or ambiguous - a wrong device is worse than no device.
+ZENDESK_DEVICE_MOBILE_TAG = "tim_device_mobile"
+ZENDESK_DEVICE_TABLET_TAG = "tim_device_tablet"
+ZENDESK_DEVICE_DESKTOP_TAG = "tim_device_desktop"
+
 # Stands in for the learner's own words on an unverified ticket: a
 # received-request trigger puts the subject straight into an email to an address
 # nobody has proved belongs to whoever typed it.

@@ -15,6 +15,9 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
 from ai_chatbots.constants import (
+    ZENDESK_DEVICE_DESKTOP_TAG,
+    ZENDESK_DEVICE_MOBILE_TAG,
+    ZENDESK_DEVICE_TABLET_TAG,
     ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_TICKET_PATH,
@@ -51,6 +54,9 @@ WORST_PATH_REQUESTS = 4
 # A scalar httpx timeout is not a budget for the request: it is given to each of
 # connect, write, read and pool separately, so one request can spend four of them.
 HTTPX_TIMEOUT_PHASES = 4
+# Real user agents run under 200 characters; this only bounds a caller that
+# decides to send something else.
+MAX_USER_AGENT_LENGTH = 512
 
 # Why the filing failed, for a caller deciding whether a retry is worth offering.
 # Zendesk turned the ticket down and will turn the same one down again.
@@ -188,6 +194,51 @@ def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
     ]
 
 
+def _clean_user_agent(user_agent: str) -> str:
+    """
+    Fold the header onto one bounded line.
+
+    It is caller-controlled and lands in a body that also carries the ticket's
+    trust signals, so left alone it could write lines of its own.
+    """
+    collapsed = " ".join((user_agent or "").split())
+    return collapsed[:MAX_USER_AGENT_LENGTH]
+
+
+def _ticket_body(description: str, page_url: str, browser: str) -> str:
+    """Build the body: the learner's own words, then the context we have."""
+    details = [
+        f"{label}: {value}"
+        for label, value in (("Page", page_url), ("Browser", browser))
+        if value
+    ]
+    return f"{description}\n\n" + "\n".join(details) if details else description
+
+
+def _device_tag(user_agent: str) -> str:
+    """
+    Classify the device, or return "" when the user agent does not say.
+
+    Order matters, because the tokens overlap: an Android tablet is an Android
+    that does not say Mobile. "Macintosh" is deliberately not desktop - from
+    iPadOS 13 on, Safari's default desktop mode sends a user agent identical to
+    macOS Safari's, so it cannot be told apart from an iPad.
+    """
+    if "iPad" in user_agent or "Tablet" in user_agent:
+        return ZENDESK_DEVICE_TABLET_TAG
+    if "Android" in user_agent:
+        return (
+            ZENDESK_DEVICE_MOBILE_TAG
+            if "Mobile" in user_agent
+            else ZENDESK_DEVICE_TABLET_TAG
+        )
+    if any(token in user_agent for token in ("Mobi", "iPhone", "iPod")):
+        return ZENDESK_DEVICE_MOBILE_TAG
+    if any(token in user_agent for token in ("Windows", "CrOS", "X11")):
+        return ZENDESK_DEVICE_DESKTOP_TAG
+    return ""
+
+
 async def file_support_ticket(  # noqa: PLR0913
     *,
     subject: str,
@@ -196,6 +247,7 @@ async def file_support_ticket(  # noqa: PLR0913
     page_url: str = "",
     name: str = "",
     username: str = "",
+    user_agent: str = "",
     email_verified: bool = False,
     thread_id: str = "",
 ) -> dict:
@@ -230,10 +282,14 @@ async def file_support_ticket(  # noqa: PLR0913
         )
         return {"reference": f"STUB-{uuid4().hex[:8].upper()}", "stub": True}
 
-    body = f"{description}\n\nPage: {page_url}" if page_url else description
+    browser = _clean_user_agent(user_agent)
+    body = _ticket_body(description, page_url, browser)
     tags = [ZENDESK_SUPPORT_INTAKE_TAG]
     if not email_verified:
         tags.append(ZENDESK_UNVERIFIED_REQUESTER_TAG)
+    device_tag = _device_tag(browser)
+    if device_tag:
+        tags.append(device_tag)
 
     custom_fields = _custom_fields(page_url, name, username)
 

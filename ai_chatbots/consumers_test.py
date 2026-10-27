@@ -1753,6 +1753,34 @@ def test_support_process_extra_state_anonymous_learner(support_consumer):
     }
 
 
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        ([(b"user-agent", b"Mozilla/5.0 (Macintosh)")], "Mozilla/5.0 (Macintosh)"),
+        ([(b"accept", b"*/*")], ""),
+        ([], ""),
+    ],
+)
+async def test_support_create_chatbot_carries_the_user_agent(
+    mock_http_consumer_send, support_consumer, headers, expected
+):
+    """
+    The browser comes off the request, never the body, so no caller can name a
+    device that is not theirs. It is a constructor argument rather than graph
+    state because the turn that files the ticket is itself a live request.
+    """
+    support_consumer.scope["headers"] = headers
+    serializer = consumers.SupportChatRequestSerializer(data={"message": "help"})
+    serializer.is_valid(raise_exception=True)
+    await support_consumer.prepare_response(serializer)
+
+    chatbot = await sync_to_async(support_consumer.create_chatbot)(
+        serializer, InMemorySaver()
+    )
+
+    assert chatbot.user_agent == expected
+
+
 async def _handle_with_origin(mocker, consumer, origin, settings, allowed):
     """Run handle() with an Origin header and return the captured send mock."""
     headers = [] if origin is None else [(b"origin", origin.encode())]

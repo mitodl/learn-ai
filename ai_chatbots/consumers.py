@@ -910,6 +910,9 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            # Taken off the request, never the body, so no caller can claim a
+            # device that is not theirs.
+            user_agent=_header(self.scope, b"user-agent"),
         )
 
     def process_extra_state(self, data: dict) -> dict:
