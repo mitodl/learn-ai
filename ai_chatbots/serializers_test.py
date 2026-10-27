@@ -263,3 +263,13 @@ def test_recommendation_serializer_invalid_search_filters(search_filters):
 
     assert not serializer.is_valid()
     assert "search_filters" in serializer.errors
+
+
+def test_recommendation_serializer_drops_search_url():
+    """search_url is no longer accepted, so it never reaches the bot state."""
+    serializer = RecommendationChatRequestSerializer(
+        data={"message": "physics", "search_url": "https://attacker.example/x"}
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert "search_url" not in serializer.validated_data

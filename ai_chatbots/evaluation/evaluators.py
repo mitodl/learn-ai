@@ -28,13 +28,9 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
             for case_data in test_data.get("recommendation", [])
         ]
 
-    def validate_test_case(self, test_case: TestCaseSpec) -> bool:
-        """Validate recommendation bot test case."""
-        metadata = test_case.metadata or {}
-        extra_state = metadata.get("extra_state", {})
-
-        # Recommendation bot requires search_url in extra_state
-        return "search_url" in extra_state
+    def validate_test_case(self, test_case: TestCaseSpec) -> bool:  # noqa: ARG002
+        """Recommendation bot test cases need no extra state."""
+        return True
 
     def create_bot_instance(
         self, model: str, test_case: TestCaseSpec, instructions: str | None = None

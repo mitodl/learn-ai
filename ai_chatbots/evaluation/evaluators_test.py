@@ -35,7 +35,7 @@ class TestRecommendationBotEvaluator:
                     "question": "What courses are available?",
                     "expected_output": "Here are the courses...",
                     "expected_tools": ["search_courses"],
-                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_state": {"search_filters": [{"topic": ["Physics"]}]},
                     "extra_init": {"param": "value"},
                 }
             ]
@@ -48,36 +48,24 @@ class TestRecommendationBotEvaluator:
         assert test_cases[0].question == "What courses are available?"
         assert test_cases[0].expected_output == "Here are the courses..."
         assert test_cases[0].expected_tools == ["search_courses"]
-        assert test_cases[0].metadata["extra_state"]["search_url"] == [
-            "http://test.com"
+        assert test_cases[0].metadata["extra_state"]["search_filters"] == [
+            {"topic": ["Physics"]}
         ]
         assert test_cases[0].metadata["extra_init"]["param"] == "value"
 
-    def test_validate_test_case_valid(self, evaluator):
-        """Test validation of valid recommendation bot test case."""
-        test_case = TestCaseSpec(
-            question="Test question",
-            metadata={
-                "extra_state": {"search_url": ["http://test.com"]},
-                "extra_init": {},
-            },
-        )
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            {"extra_state": {"search_filters": [{"topic": ["Physics"]}]}},
+            {"extra_state": {}, "extra_init": {}},
+            None,
+        ],
+    )
+    def test_validate_test_case(self, evaluator, metadata):
+        """Recommendation bot test cases need no extra state."""
+        test_case = TestCaseSpec(question="Test question", metadata=metadata)
 
         assert evaluator.validate_test_case(test_case) is True
-
-    def test_validate_test_case_invalid(self, evaluator):
-        """Test validation of invalid recommendation bot test case."""
-        test_case = TestCaseSpec(
-            question="Test question", metadata={"extra_state": {}, "extra_init": {}}
-        )
-
-        assert evaluator.validate_test_case(test_case) is False
-
-    def test_validate_test_case_missing_metadata(self, evaluator):
-        """Test validation with missing metadata."""
-        test_case = TestCaseSpec(question="Test question")
-
-        assert evaluator.validate_test_case(test_case) is False
 
     def test_create_bot_instance(self, evaluator):
         """Test bot instance creation."""
@@ -106,7 +94,7 @@ class TestRecommendationBotEvaluator:
         test_case = TestCaseSpec(
             question="Test question",
             metadata={
-                "extra_state": {"search_url": ["http://test.com"]},
+                "extra_state": {"search_filters": [{"topic": ["Physics"]}]},
                 "extra_init": {},
             },
         )
@@ -116,7 +104,7 @@ class TestRecommendationBotEvaluator:
         mock_bot.agent.ainvoke.assert_called_once_with(
             {
                 "messages": [{"content": "Test question", "role": "user"}],
-                "search_url": ["http://test.com"],
+                "search_filters": [{"topic": ["Physics"]}],
             },
             config={"test": "config"},
         )
@@ -361,7 +349,7 @@ class TestEvaluatorIntegration:
                     "question": "Test question",
                     "expected_output": "Test output",
                     "expected_tools": ["search_courses"],
-                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_state": {"search_filters": [{"topic": ["Physics"]}]},
                     "extra_init": {},
                 }
             ]

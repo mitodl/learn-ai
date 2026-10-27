@@ -79,7 +79,7 @@ class SearchToolSchema(pydantic.BaseModel):
     )
 
     state: Annotated[dict, InjectedState] = Field(
-        description="The agent state, including the search url to use"
+        description="The agent state, including any pinned search filters"
     )
 
     resource_type: list[enum_zip("resource_type", LearningResourceType)] | None = Field(
@@ -165,7 +165,7 @@ async def search_courses(
     search_filters = (state or {}).get("search_filters") or []
     if search_filters:
         params.update(search_filters[-1])
-    search_url = state["search_url"][-1] if state else settings.AI_MIT_SEARCH_URL
+    search_url = settings.AI_MIT_SEARCH_URL
     log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
     try:
         response = await async_request(

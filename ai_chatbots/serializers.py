@@ -66,9 +66,6 @@ class RecommendationChatRequestSerializer(ChatRequestSerializer):
     Serializer for requests sent to the syllabus chatbot.
     """
 
-    search_url = serializers.CharField(
-        required=False, allow_blank=False, default=settings.AI_MIT_SEARCH_URL
-    )
     search_filters = serializers.DictField(
         child=serializers.ListField(
             child=serializers.CharField(allow_blank=False, max_length=256),
