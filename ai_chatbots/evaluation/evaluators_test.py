@@ -192,6 +192,7 @@ class TestSyllabusBotEvaluator:
             "get_program_certificates",
             "get_course_certificate",
             "get_program_certificate",
+            "get_course_dates",
         ):
             mocker.patch.object(learner_api, name, getattr(learner_api, name))
         mocker.patch.object(
