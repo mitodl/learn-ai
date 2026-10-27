@@ -245,7 +245,7 @@ async def test_recommendation_bot_tool(
         "certification": True,
         "offered_by": ["xpro"],
         "limit": 5,
-        "state": {"search_url": [settings.AI_MIT_SEARCH_URL]},
+        "state": {},
     }
     tool = chatbot.create_tools()[0]
     results = await tool.ainvoke(search_parameters)
@@ -344,7 +344,7 @@ async def test_search_summary_bot_get_completion(
             values={"messages": [HumanMessageFactory.create()] if has_history else []}
         ),
     )
-    extra_state = {"search_url": ["https://test.mit.edu/search"]}
+    extra_state = {"search_filters": [{"topic": ["Physics"]}]}
 
     results = [
         chunk
@@ -461,7 +461,7 @@ async def test_base_bot_trace_properties_default(mock_checkpointer):
     chatbot = await sync_to_async(ResourceRecommendationBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
-    assert chatbot.get_trace_properties({"search_url": ["https://example.com"]}) == {}
+    assert chatbot.get_trace_properties({"search_filters": [{}]}) == {}
 
 
 @pytest.mark.asyncio
@@ -803,10 +803,6 @@ async def test_get_tool_metadata(mocker, mock_checkpointer):
                                 tool_args={"q": "main topics"},
                                 content=json.dumps(mock_tool_content),
                             ),
-                        ],
-                        "search_url": [
-                            "https://test.mit.edu/search0",
-                            "https://test.mit.edu/search1",
                         ],
                     }
                 )

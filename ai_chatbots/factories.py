@@ -199,7 +199,6 @@ class RecommendationAgentStateFactory(factory.Factory):
     """Factory for generating RecommendationAgent instances."""
 
     messages = [factory.SubFactory(HumanMessageFactory)]
-    search_url = [factory.Faker("url")]
 
     class Meta:
         model = RecommendationAgentState

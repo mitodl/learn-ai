@@ -223,8 +223,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
     assert recommendation_consumer.bot.instructions == (
         instructions if instructions else prompts.PROMPT_RECOMMENDATION
     )
-    default_state = {"search_url": [settings.AI_MIT_SEARCH_URL]}
-    mock_completion.assert_called_once_with(message, extra_state=default_state)
+    mock_completion.assert_called_once_with(message, extra_state={})
     assert (
         mock_http_consumer_send.send_body.call_count
         == len(response.content.split(" ")) + 2
@@ -331,9 +330,7 @@ async def test_search_summary_agent_handle(
 
     assert isinstance(consumer.bot, SearchSummaryBot)
     assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
-    mock_completion.assert_called_once_with(
-        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
-    )
+    mock_completion.assert_called_once_with("hello", extra_state={})
     headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
     cookie_names = [
         value.decode().split("=")[0] for name, value in headers if name == b"Set-Cookie"
@@ -1988,10 +1985,8 @@ def test_recommendation_process_extra_state(
     recommendation_consumer, search_filters, expected
 ):
     """Pinned search filters are added to the state whenever sent, {} included."""
-    data = {"search_url": "https://mit.edu/vector"}
+    # search_url is no longer supported and must never reach the state
+    data = {"search_url": "https://attacker.example/x"}
     if search_filters is not None:
         data["search_filters"] = search_filters
-    assert recommendation_consumer.process_extra_state(data) == {
-        "search_url": ["https://mit.edu/vector"],
-        **expected,
-    }
+    assert recommendation_consumer.process_extra_state(data) == expected

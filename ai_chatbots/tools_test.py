@@ -87,7 +87,7 @@ async def test_search_courses(  # noqa: PLR0913
     settings.AI_MIT_SEARCH_URL = search_url
     settings.AI_MIT_SEARCH_LIMIT = limit
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    params["state"] = {"search_url": [search_url]}
+    params["state"] = {}
     results = json.loads(await search_courses.ainvoke(params))
     params.pop("state")
     expected_params = {"limit": limit, **params}
@@ -103,25 +103,23 @@ async def test_search_courses(  # noqa: PLR0913
     assert len(results["results"]) == min(limit, len(search_results["results"]))
 
 
-@pytest.mark.parametrize(
-    "search_url",
-    ["https://mit.edu/search", "https://mit.edu/vector"],
-)
-async def test_search_courses_override_url(settings, mock_get_resources, search_url):
-    """Test that the search_courses tool returns expected results w/expected params."""
-    settings.AI_MIT_SEARCH_URL = "http://default_url.edu"
+async def test_search_courses_ignores_state_search_url(settings, mock_get_resources):
+    """
+    A search_url left in an old checkpoint's state is ignored, so the Learn
+    token only ever goes to AI_MIT_SEARCH_URL.
+    """
+    settings.AI_MIT_SEARCH_URL = "https://mit.edu/vector"
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     params = {
         "q": "physics",
         "limit": 10,
         "resource_type": ["course"],
-        "state": {"search_url": [search_url]},
+        "state": {"search_url": ["https://attacker.example/x"]},
     }
     await search_courses.ainvoke(params)
     params.pop("state")
-    # The mock client's get method should be called
     mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
+        settings.AI_MIT_SEARCH_URL,
         params=params,
         headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
         timeout=30,
@@ -142,12 +140,13 @@ async def test_search_courses_pinned_filters(
     settings.AI_MIT_SEARCH_LIMIT = 10
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     search_url = "https://mit.edu/vector"
+    settings.AI_MIT_SEARCH_URL = search_url
     pinned = {"topic": ["Biology"], "offered_by": ["ocw"]}
     await search_courses.ainvoke(
         {
             "q": "japan",
             **agent_params,
-            "state": {"search_url": [search_url], "search_filters": [pinned]},
+            "state": {"search_filters": [pinned]},
         }
     )
     mock_get_resources.return_value.get.assert_called_once_with(
@@ -172,11 +171,12 @@ async def test_search_courses_latest_pinned_filters(
     settings.AI_MIT_SEARCH_LIMIT = 10
     settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
     search_url = "https://mit.edu/vector"
+    settings.AI_MIT_SEARCH_URL = search_url
     old = {"topic": ["Biology"], "offered_by": ["ocw"]}
     await search_courses.ainvoke(
         {
             "q": "japan",
-            "state": {"search_url": [search_url], "search_filters": [old, latest]},
+            "state": {"search_filters": [old, latest]},
         }
     )
     mock_get_resources.return_value.get.assert_called_once_with(
@@ -212,16 +212,14 @@ async def test_httpx_exception(mocker):
 
     mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
+    result = await search_courses.ainvoke({"q": "physics", "state": {}})
     # a failed search still reports what it tried, so the metadata shows a
     # failure rather than an empty result set
     assert json.loads(result) == {
         "error": "An error occurred while searching",
         "results": [],
         "metadata": {
-            "search_url": "https://test.edu/search",
+            "search_url": settings.AI_MIT_SEARCH_URL,
             "parameters": {"q": "physics", "limit": 10},
         },
     }
@@ -236,9 +234,7 @@ async def test_search_courses_handles_http_status_error(
         return_value=httpx_response(502, url="https://test.edu/search")
     )
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
+    result = await search_courses.ainvoke({"q": "physics", "state": {}})
 
     # a failed search still reports what it tried, so the metadata shows a
     # failure rather than an empty result set
@@ -246,7 +242,7 @@ async def test_search_courses_handles_http_status_error(
         "error": "An error occurred while searching",
         "results": [],
         "metadata": {
-            "search_url": "https://test.edu/search",
+            "search_url": settings.AI_MIT_SEARCH_URL,
             "parameters": {"q": "physics", "limit": 10},
         },
     }
@@ -453,7 +449,7 @@ async def test_search_courses_handles_none_kwargs(
 
     params = {
         "q": "physics",
-        "state": {"search_url": ["https://mit.edu/search"]},
+        "state": {},
         "resource_type": resource_type,
         "offered_by": offered_by,
     }
@@ -577,9 +573,7 @@ async def test_search_courses_hybrid_flag(
     if is_hybrid_enabled:
         expected_params["hybrid_search"] = True
 
-    await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": [search_url]}}
-    )
+    await search_courses.ainvoke({"q": "physics", "state": {}})
 
     mock_get_resources.return_value.get.assert_called_once_with(
         search_url,
@@ -1042,9 +1036,7 @@ async def test_search_courses_handles_invalid_json(mock_httpx_async_client):
         "Expecting value", "<html>", 0
     )
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
+    result = await search_courses.ainvoke({"q": "physics", "state": {}})
 
     # a failed search still reports what it tried, so the metadata shows a
     # failure rather than an empty result set
@@ -1052,7 +1044,7 @@ async def test_search_courses_handles_invalid_json(mock_httpx_async_client):
         "error": "An error occurred while searching",
         "results": [],
         "metadata": {
-            "search_url": "https://test.edu/search",
+            "search_url": settings.AI_MIT_SEARCH_URL,
             "parameters": {"q": "physics", "limit": 10},
         },
     }
