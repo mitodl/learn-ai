@@ -159,6 +159,35 @@ async def test_search_courses_pinned_filters(
 
 
 @pytest.mark.parametrize(
+    ("latest", "expected"),
+    [
+        ({"topic": ["Physics"]}, {"topic": ["Physics"]}),
+        ({}, {}),
+    ],
+)
+async def test_search_courses_latest_pinned_filters(
+    settings, mock_get_resources, latest, expected
+):
+    """Only the most recently pinned filters apply; {} clears earlier ones"""
+    settings.AI_MIT_SEARCH_LIMIT = 10
+    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    search_url = "https://mit.edu/vector"
+    old = {"topic": ["Biology"], "offered_by": ["ocw"]}
+    await search_courses.ainvoke(
+        {
+            "q": "japan",
+            "state": {"search_url": [search_url], "search_filters": [old, latest]},
+        }
+    )
+    mock_get_resources.return_value.get.assert_called_once_with(
+        search_url,
+        params={"q": "japan", "limit": 10, **expected},
+        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize(
     "params",
     [
         {"foo": "bar"},

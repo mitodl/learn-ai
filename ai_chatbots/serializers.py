@@ -77,7 +77,10 @@ class RecommendationChatRequestSerializer(ChatRequestSerializer):
         ),
         required=False,
         help_text=(
-            "MIT Learn search filters to always apply, e.g. {'topic': ['Biology']}"
+            "MIT Learn search filters to always apply, e.g. {'topic': ['Biology']}. "
+            "They stay in effect for later messages in the thread until replaced; "
+            "send {} to clear them. Filter values are not validated, and the "
+            "search API ignores values it does not recognize."
         ),
     )
 

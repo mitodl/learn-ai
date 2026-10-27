@@ -1980,14 +1980,14 @@ async def test_handle_rejects_null_origin_even_with_no_allow_list(
     ("search_filters", "expected"),
     [
         (None, {}),
-        ({}, {}),
+        ({}, {"search_filters": [{}]}),
         ({"topic": ["Biology"]}, {"search_filters": [{"topic": ["Biology"]}]}),
     ],
 )
 def test_recommendation_process_extra_state(
     recommendation_consumer, search_filters, expected
 ):
-    """Pinned search filters are added to the state only when provided."""
+    """Pinned search filters are added to the state whenever sent, {} included."""
     data = {"search_url": "https://mit.edu/vector"}
     if search_filters is not None:
         data["search_filters"] = search_filters

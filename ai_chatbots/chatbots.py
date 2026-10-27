@@ -497,7 +497,7 @@ class RecommendationAgentState(SummaryState):
     """
 
     search_url: Annotated[list[str], add]
-    search_filters: Annotated[list[dict[str, list[str]]] | None, add]
+    search_filters: Annotated[list[dict[str, list[str]]], add]
 
 
 class ResourceRecommendationBot(TruncatingChatbot):

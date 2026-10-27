@@ -251,6 +251,8 @@ def test_recommendation_serializer_search_filters():
         {"topic": "Biology"},
         {"topic": []},
         {"topic": [""]},
+        {"topic": ["a" * 257]},
+        {"topic": [str(i) for i in range(51)]},
     ],
 )
 def test_recommendation_serializer_invalid_search_filters(search_filters):
