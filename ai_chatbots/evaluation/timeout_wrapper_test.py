@@ -382,6 +382,42 @@ class TestPrepare:
         assert metric.call_count == 0
 
 
+class ArenaLikeMetric:
+    """Stands in for ArenaGEval: measure returns a winner and sets no score."""
+
+    def __init__(self, delay=0):
+        self.delay = delay
+        self.reason = None
+        self.error = None
+
+    def measure(self, arena):
+        """Pick the first contestant."""
+        time.sleep(self.delay)
+        self.reason = "first is best"
+        return arena[0]
+
+
+class TestArenaMetric:
+    """The wrapper also runs arena metrics, which have no score or success."""
+
+    def test_returns_winner(self):
+        """The winner and reason come back through the wrapper."""
+        wrapper = TimeoutMetricWrapper(ArenaLikeMetric(), timeout_seconds=5)
+
+        assert wrapper.measure(["model-a", "model-b"]) == "model-a"
+        assert wrapper.reason == "first is best"
+        assert wrapper.error is None
+
+    def test_times_out(self):
+        """A stalled judge is cut off and reported as an error."""
+        wrapper = TimeoutMetricWrapper(
+            ArenaLikeMetric(delay=1), timeout_seconds=0.1, max_retries=0
+        )
+
+        assert wrapper.measure(["model-a", "model-b"]) == 0.0
+        assert "Timeout" in wrapper.error
+
+
 class TestWrapMetricsWithTimeout:
     """Test cases for wrap_metrics_with_timeout function."""
 

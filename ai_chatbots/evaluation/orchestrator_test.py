@@ -706,21 +706,27 @@ class TestPairwise:
     def config(self, orchestrator):
         """Config comparing two models."""
         return orchestrator.create_evaluation_config(
-            models=["model-a", "model-b"], evaluation_model="judge"
+            models=["model-a", "model-b"],
+            evaluation_model="judge",
+            timeout_seconds=30,
+            max_retries=1,
+            retry_delay=0.5,
         )
 
     @pytest.fixture
     def arena(self, mocker):
-        """Patch ArenaGEval; the judge picks whichever winner the test sets."""
-        metric = mocker.Mock(reason="because")
-        arena_class = mocker.patch(
-            "ai_chatbots.evaluation.orchestrator.ArenaGEval", return_value=metric
+        """Patch the judge; it picks whichever winner the test sets."""
+        arena_class = mocker.patch("ai_chatbots.evaluation.orchestrator.ArenaGEval")
+        metric = mocker.Mock(reason="because", error=None)
+        wrapper_class = mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.TimeoutMetricWrapper",
+            return_value=metric,
         )
-        return arena_class, metric
+        return arena_class, metric, wrapper_class
 
     def test_run_pairwise_counts_wins(self, orchestrator, config, arena, mock_stdout):
         """Answers to the same question are grouped, and wins are tallied."""
-        arena_class, metric = arena
+        arena_class, metric, wrapper_class = arena
         metric.measure.side_effect = ["model-b", "model-a", "model-b"]
         cases = [
             _case("Q1", "model-a"),
@@ -741,6 +747,19 @@ class TestPairwise:
         ] * 3
         assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 2}}
         assert arena_class.call_args.kwargs["model"] == "judge"
+        # The judge gets the run's timeout and retries, and its steps once
+        assert (config.timeout_seconds, config.max_retries, config.retry_delay) == (
+            30,
+            1,
+            0.5,
+        )
+        wrapper_class.assert_called_once_with(
+            arena_class.return_value,
+            timeout_seconds=config.timeout_seconds,
+            max_retries=config.max_retries,
+            retry_base_delay=config.retry_delay,
+        )
+        metric.prepare.assert_called_once_with()
         assert arena_class.call_args.kwargs["evaluation_params"] == [
             LLMTestCaseParams.INPUT,
             LLMTestCaseParams.ACTUAL_OUTPUT,
@@ -755,8 +774,16 @@ class TestPairwise:
         """A question only one model answered is skipped; judge errors don't stop
         the run.
         """
-        _, metric = arena
-        metric.measure.side_effect = [RuntimeError("judge down"), "model-a"]
+        _, metric, _ = arena
+        outcomes = iter([None, "model-a"])
+
+        def measure(_arena):
+            # The wrapper returns 0.0 and sets error once its retries run out
+            winner = next(outcomes)
+            metric.error = None if winner else "judge down"
+            return winner or 0.0
+
+        metric.measure.side_effect = measure
         cases = [
             _case("Q1", "model-a"),
             _case("Q1", "model-b"),
@@ -783,7 +810,7 @@ class TestPairwise:
         self, orchestrator, arena, mock_stdout, bot_name, models, message
     ):
         """Tutor answers (no problem context) and single-model runs are skipped."""
-        _, metric = arena
+        _, metric, _ = arena
         config = orchestrator.create_evaluation_config(
             models=models, evaluation_model="judge"
         )

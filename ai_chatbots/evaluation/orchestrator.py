@@ -201,6 +201,9 @@ class EvaluationOrchestrator:
             metrics=timeout_wrapped_metrics,
             metric_thresholds=metric_thresholds,
             confident_api_key=os.environ.get("CONFIDENT_AI_API_KEY"),
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
         )
 
     def _load_prompts_data(self, prompts_file: str) -> dict:
@@ -439,7 +442,7 @@ class EvaluationOrchestrator:
         if len(config.models) < 2:  # noqa: PLR2004
             self.stdout.write("⚠️  --pairwise needs two or more models; skipping")
             return
-        metric = ArenaGEval(
+        arena_metric = ArenaGEval(
             name="PairwisePreference",
             criteria=(
                 "Choose the response that best serves the learner who asked the "
@@ -460,6 +463,13 @@ class EvaluationOrchestrator:
             model=config.evaluation_model,
             async_mode=False,
         )
+        metric = TimeoutMetricWrapper(
+            arena_metric,
+            timeout_seconds=config.timeout_seconds,
+            max_retries=config.max_retries,
+            retry_base_delay=config.retry_delay,
+        )
+        metric.prepare()
         groups: dict[tuple, dict] = {}
         for case in test_cases:
             # The same question can be asked of different courses
@@ -480,10 +490,11 @@ class EvaluationOrchestrator:
                     for model, case in by_model.items()
                 ]
             )
-            try:
-                winner = metric.measure(arena)
-            except Exception as e:  # noqa: BLE001
-                self.stdout.write(f"  ❓ {question[:70]}\n     ⚠️ judge error: {e}")
+            winner = metric.measure(arena)
+            if metric.error:
+                self.stdout.write(
+                    f"  ❓ {question[:70]}\n     ⚠️ judge error: {metric.error}"
+                )
                 continue
             wins[winner] = wins.get(winner, 0) + 1
             self.stdout.write(

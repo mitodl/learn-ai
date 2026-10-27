@@ -136,8 +136,9 @@ class TimeoutMetricWrapper(BaseMetric):
                 try:
                     score = getattr(metric, method_name)(test_case)
                     result["score"] = score
-                    result["base_score"] = metric.score
-                    result["base_success"] = metric.success
+                    # Arena metrics (ArenaGEval) set a winner, not score/success
+                    result["base_score"] = getattr(metric, "score", None)
+                    result["base_success"] = getattr(metric, "success", None)
                     result["base_reason"] = getattr(metric, "reason", None)
                     result["base_error"] = getattr(metric, "error", None)
                     result["completed"] = True
@@ -205,8 +206,8 @@ class TimeoutMetricWrapper(BaseMetric):
                     getattr(metric, method_name)(test_case),
                     timeout=self.timeout_seconds,
                 )
-                self.score = metric.score
-                self.success = metric.success
+                self.score = getattr(metric, "score", None)
+                self.success = getattr(metric, "success", None)
                 self.reason = getattr(metric, "reason", None)
                 self.error = getattr(metric, "error", None)
             except TimeoutError:
