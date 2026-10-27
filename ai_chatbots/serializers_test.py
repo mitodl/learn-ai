@@ -9,6 +9,7 @@ from ai_chatbots.serializers import (
     ChatMessageSerializer,
     ChatRatingSerializer,
     ChatRequestSerializer,
+    RecommendationChatRequestSerializer,
     SupportChatRequestSerializer,
 )
 from main.factories import UserFactory
@@ -229,3 +230,36 @@ def test_support_serializer_rejects_a_user_email_too_long_to_store():
 
     assert not serializer.is_valid()
     assert "user_email" in serializer.errors
+
+
+def test_recommendation_serializer_search_filters():
+    """Supported search filters are passed through to the bot state."""
+    filters = {"topic": ["Biology", "Genetics"], "free": ["true"]}
+    serializer = RecommendationChatRequestSerializer(
+        data={"message": "japan", "search_filters": filters}
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["search_filters"] == filters
+
+
+@pytest.mark.parametrize(
+    "search_filters",
+    [
+        {"q": ["biology"]},
+        {"limit": ["100"]},
+        {"topic": "Biology"},
+        {"topic": []},
+        {"topic": [""]},
+        {"topic": ["a" * 257]},
+        {"topic": [str(i) for i in range(51)]},
+    ],
+)
+def test_recommendation_serializer_invalid_search_filters(search_filters):
+    """Unsupported or malformed search filters are rejected."""
+    serializer = RecommendationChatRequestSerializer(
+        data={"message": "japan", "search_filters": search_filters}
+    )
+
+    assert not serializer.is_valid()
+    assert "search_filters" in serializer.errors
