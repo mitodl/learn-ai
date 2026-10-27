@@ -7,10 +7,11 @@ import pytest
 from ai_chatbots.learner_api import LearnerAPIError
 from ai_chatbots.tools import (
     COULD_NOT_CHECK,
+    MAX_DUE_DATES,
     get_certificate_status,
-    get_course_dates,
     get_course_progress,
     get_enrollments,
+    get_upcoming_assignments,
 )
 
 COURSES_URL = "https://courses.learn.test/learn/course"
@@ -103,8 +104,10 @@ ISSUED_CERTIFICATE = {
 
 
 @pytest.fixture
-def records(mocker):
+def records(mocker, settings):
     """Return the learner's records, as learner_api returns them."""
+    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
+    settings.LEARNER_API_OPENEDX_COOKIE_NAME = "edx-session"
     api = "ai_chatbots.tools.learner_api"
     return {
         "enrollments": mocker.patch(f"{api}.get_enrollments", return_value=ENROLLMENTS),
@@ -138,6 +141,9 @@ def records(mocker):
         "program_certificate": mocker.patch(
             f"{api}.get_program_certificate", return_value=ISSUED_CERTIFICATE
         ),
+        "course_dates": mocker.patch(
+            f"{api}.get_course_dates", return_value={"course_date_blocks": []}
+        ),
     }
 
 
@@ -155,7 +161,7 @@ def test_model_fills_in_no_arguments():
         get_enrollments,
         get_course_progress,
         get_certificate_status,
-        get_course_dates,
+        get_upcoming_assignments,
     ):
         schema = tool.tool_call_schema.model_json_schema()
         assert not schema.get("properties")
@@ -319,13 +325,123 @@ async def test_unrecorded_grade_is_not_zero(records):
     assert result["enrollments"][0]["grade"] is None
 
 
+def due_date(title, date, date_type="assignment-due-date"):
+    """Build a date block shaped like Open edX's /api/course_home/v1/dates/."""
+    return {
+        "assignment_type": "Homework",
+        "complete": False,
+        "date": date,
+        "date_type": date_type,
+        "description": "",
+        "learner_has_access": True,
+        "link": f"https://courses.learn.test/jump_to/{title}",
+        "link_text": "",
+        "title": title,
+        "extra_info": None,
+        "first_component_block_id": "block",
+    }
+
+
 async def test_upcoming_assignments_link_the_dates_tab(records):
-    """Due dates are a link to the course's Dates tab."""
-    result = await call(get_course_dates, page_course=CALCULUS)
+    """The run's Dates tab is linked, with or without due dates."""
+    result = await call(get_upcoming_assignments, page_course=CALCULUS)
 
     assert result["enrollments"][0]["dates_url"] == (
         f"{COURSES_URL}/{CALCULUS}+3T2026/dates"
     )
+    assert result["enrollments"][0]["upcoming_due_dates"] == []
+
+
+async def test_upcoming_assignments_list_future_due_dates(records):
+    """Only future assignment due dates are listed, soonest first."""
+    records["course_dates"].return_value = {
+        "course_date_blocks": [
+            due_date("Course starts", "2020-01-01T00:00:00Z", "course-start-date"),
+            due_date("Homework 1", "2020-02-01T00:00:00Z"),
+            due_date("Homework 3", "2098-03-01T00:00:00Z"),
+            due_date("Homework 2", "2098-02-01T00:00:00Z"),
+            due_date("Course ends", "2099-01-01T00:00:00Z", "course-end-date"),
+            due_date("No date", None),
+        ]
+    }
+
+    result = await call(get_upcoming_assignments, page_course=CALCULUS)
+
+    records["course_dates"].assert_called_once_with(f"{CALCULUS}+3T2026")
+    (summary,) = result["enrollments"]
+    assert [due["title"] for due in summary["upcoming_due_dates"]] == [
+        "Homework 2",
+        "Homework 3",
+    ]
+    assert summary["upcoming_due_dates"][0] == {
+        "title": "Homework 2",
+        "assignment_type": "Homework",
+        "due": "2098-02-01T00:00:00+00:00",
+        "complete": False,
+        "learner_has_access": True,
+        "link": "https://courses.learn.test/jump_to/Homework 2",
+    }
+    assert summary["more_due_dates"] == 0
+
+
+async def test_upcoming_assignments_are_capped(records):
+    """Only the next MAX_DUE_DATES are listed; the rest are counted."""
+    records["course_dates"].return_value = {
+        "course_date_blocks": [
+            due_date(f"Homework {day}", f"2098-01-{day:02d}T00:00:00Z")
+            for day in range(1, MAX_DUE_DATES + 4)
+        ]
+    }
+
+    result = await call(get_upcoming_assignments, page_course=CALCULUS)
+
+    (summary,) = result["enrollments"]
+    assert len(summary["upcoming_due_dates"]) == MAX_DUE_DATES
+    assert summary["upcoming_due_dates"][0]["title"] == "Homework 1"
+    assert summary["more_due_dates"] == 3
+
+
+async def test_upcoming_assignments_without_due_dates(records):
+    """A failed due dates lookup still returns the run's dates and Dates tab."""
+    records["course_dates"].side_effect = LearnerAPIError("get_course_dates")
+
+    result = await call(get_upcoming_assignments, page_course=CALCULUS)
+
+    (summary,) = result["enrollments"]
+    assert summary["dates_url"] == f"{COURSES_URL}/{CALCULUS}+3T2026/dates"
+    assert summary["due_dates_note"] == "The due dates couldn't be checked."
+    assert "upcoming_due_dates" not in summary
+
+
+@pytest.mark.parametrize(
+    "setting", ["LEARNER_API_OPENEDX_BASE_URL", "LEARNER_API_OPENEDX_COOKIE_NAME"]
+)
+async def test_upcoming_assignments_without_openedx_settings(
+    settings, records, setting
+):
+    """Without the Open edX settings, only the Dates tab is linked, as before."""
+    setattr(settings, setting, "")
+
+    result = await call(get_upcoming_assignments, page_course=CALCULUS)
+
+    assert result["enrollments"][0] == {
+        "course_title": "Calculus 1A",
+        "course_id": CALCULUS,
+        "run_id": f"{CALCULUS}+3T2026",
+        "start_date": "2020-01-01T00:00:00Z",
+        "end_date": "2099-01-01T00:00:00Z",
+        "status": "in progress",
+        "dates_url": f"{COURSES_URL}/{CALCULUS}+3T2026/dates",
+    }
+    records["course_dates"].assert_not_called()
+
+
+async def test_upcoming_assignments_skip_other_courses(records):
+    """No due dates are read when the learner isn't enrolled in the page course."""
+    result = await call(get_upcoming_assignments, page_course="course-v1:MITx+X")
+
+    assert result["enrollments"] == []
+    records["course_dates"].assert_not_called()
 
 
 async def test_certificate_status_drops_personal_data(settings, records):
@@ -355,7 +471,7 @@ async def test_certificate_status_drops_personal_data(settings, records):
     [
         (get_enrollments, "enrollments"),
         (get_course_progress, "enrollments"),
-        (get_course_dates, "enrollments"),
+        (get_upcoming_assignments, "enrollments"),
         (get_certificate_status, "enrollments"),
         (get_certificate_status, "programs"),
         (get_certificate_status, "program_certificates"),

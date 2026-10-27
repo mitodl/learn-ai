@@ -98,6 +98,57 @@
           "type": ["VerifiableCredential", "OpenBadgeCredential"]
         }
       }
+    },
+    "course_dates": {
+      "course-v1:MITxT+11.405x+3T2026": {
+        "course_date_blocks": [
+          {
+            "assignment_type": null,
+            "complete": false,
+            "date": "2026-09-01T00:00:00Z",
+            "date_type": "course-start-date",
+            "learner_has_access": true,
+            "link": "https://courses.learn.mit.edu/courses/course-v1:MITxT+11.405x+3T2026/jump_to/block-v1:MITxT+11.405x+3T2026+type@sequential+block@coursestarts",
+            "title": "Course starts"
+          },
+          {
+            "assignment_type": "Homework",
+            "complete": false,
+            "date": "2026-09-15T23:59:00Z",
+            "date_type": "assignment-due-date",
+            "learner_has_access": true,
+            "link": "https://courses.learn.mit.edu/courses/course-v1:MITxT+11.405x+3T2026/jump_to/block-v1:MITxT+11.405x+3T2026+type@sequential+block@problemset1",
+            "title": "Problem Set 1"
+          },
+          {
+            "assignment_type": "Homework",
+            "complete": false,
+            "date": "2099-01-15T23:59:00Z",
+            "date_type": "assignment-due-date",
+            "learner_has_access": true,
+            "link": "https://courses.learn.mit.edu/courses/course-v1:MITxT+11.405x+3T2026/jump_to/block-v1:MITxT+11.405x+3T2026+type@sequential+block@problemset2",
+            "title": "Problem Set 2"
+          },
+          {
+            "assignment_type": "Exam",
+            "complete": false,
+            "date": "2099-02-01T23:59:00Z",
+            "date_type": "assignment-due-date",
+            "learner_has_access": true,
+            "link": "https://courses.learn.mit.edu/courses/course-v1:MITxT+11.405x+3T2026/jump_to/block-v1:MITxT+11.405x+3T2026+type@sequential+block@midtermexam",
+            "title": "Midterm Exam"
+          },
+          {
+            "assignment_type": null,
+            "complete": false,
+            "date": "2099-12-31T00:00:00Z",
+            "date_type": "course-end-date",
+            "learner_has_access": true,
+            "link": "https://courses.learn.mit.edu/courses/course-v1:MITxT+11.405x+3T2026/jump_to/block-v1:MITxT+11.405x+3T2026+type@sequential+block@courseends",
+            "title": "Course ends"
+          }
+        ]
+      }
     }
   },
   "syllabus": [
@@ -198,7 +249,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "It doesn't have the due dates, and links the course's Dates tab: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/dates"
+      "expected_output": "Problem Set 2 is due January 15, 2099, then the Midterm Exam on February 1, 2099. It links the course's Dates tab: https://courses.learn.mit.edu/learn/course/course-v1:MITxT+11.405x+3T2026/dates"
     },
     {
       "question": "Did I get a certificate in this course, and where is it?",

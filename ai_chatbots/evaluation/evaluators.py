@@ -21,6 +21,7 @@ _RECORD_KEYS = {
     "get_program_certificates": "program_certificates",
     "get_course_certificate": "course_certificates",
     "get_program_certificate": "program_certificate_details",
+    "get_course_dates": "course_dates",
 }
 
 
@@ -47,13 +48,16 @@ def _serve_learner_records():
         setattr(learner_api, name, serve)
 
 
-async def _from_records(records: dict, key: str, certificate_uuid=None):
-    """Look up one learner_api result in a case's learner_records."""
+async def _from_records(records: dict, key: str, lookup_id=None):
+    """
+    Look up one learner_api result in a case's learner_records. lookup_id is a
+    certificate's uuid or a course run's key.
+    """
     if records.get("error"):
         raise learner_api.LearnerAPIError(key)
-    if certificate_uuid is None:
+    if lookup_id is None:
         return records.get(key, [])
-    return records.get(key, {}).get(certificate_uuid, {})
+    return records.get(key, {}).get(lookup_id, {})
 
 
 class RecommendationBotEvaluator(BaseBotEvaluator):

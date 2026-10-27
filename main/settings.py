@@ -687,6 +687,12 @@ LEARNER_API_LEARN_BASE_URL = get_string(
 LEARNER_API_LEARN_COOKIE_NAME = get_string(
     name="LEARNER_API_LEARN_COOKIE_NAME", default=""
 )
+LEARNER_API_OPENEDX_BASE_URL = get_string(
+    name="LEARNER_API_OPENEDX_BASE_URL", default="https://courses.learn.mit.edu/"
+)
+LEARNER_API_OPENEDX_COOKIE_NAME = get_string(
+    name="LEARNER_API_OPENEDX_COOKIE_NAME", default=""
+)
 # Where MITx Online's own pages (certificates) are, to make their links absolute
 LEARNER_API_MITXONLINE_BASE_URL = get_string(
     name="LEARNER_API_MITXONLINE_BASE_URL", default="https://mitxonline.mit.edu/"

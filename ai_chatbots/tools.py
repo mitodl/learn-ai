@@ -941,20 +941,79 @@ async def get_course_progress(state: Annotated[dict, InjectedState]):
     return json.dumps(result)
 
 
-@tool(args_schema=AccountToolSchema)
-async def get_course_dates(state: Annotated[dict, InjectedState]):
+# Enough for "what's due next"; the Dates tab lists the rest
+MAX_DUE_DATES = 10
+
+
+async def _upcoming_due_dates(run_id: str, now: datetime) -> dict:
     """
-    Get the start and end dates of the signed-in learner's run of the course
-    on this page, and a link to its Dates tab. The tool has no assignments or
-    due dates; the Dates tab lists them, so send the learner there.
+    Get the learner's next due dates in a run from its Open edX Dates tab, or
+    say they couldn't be checked. Without the Open edX settings there is no
+    lookup, and the Dates tab link is all the learner gets.
+    """
+    if not (
+        settings.LEARNER_API_OPENEDX_BASE_URL
+        and settings.LEARNER_API_OPENEDX_COOKIE_NAME
+    ):
+        return {}
+    try:
+        dates = await learner_api.get_course_dates(run_id)
+    except Exception:  # noqa: BLE001
+        log.warning("Account tool get_upcoming_assignments couldn't read due dates")
+        return {"due_dates_note": "The due dates couldn't be checked."}
+    upcoming = sorted(
+        (
+            (due, block)
+            for block in dates.get("course_date_blocks") or []
+            if block.get("date_type") == "assignment-due-date"
+            and (due := _parse_date(block.get("date")))
+            and due > now
+        ),
+        key=lambda item: item[0],
+    )
+    return {
+        "upcoming_due_dates": [
+            {
+                "title": block.get("title"),
+                "assignment_type": block.get("assignment_type"),
+                "due": due.isoformat(),
+                "complete": block.get("complete"),
+                "learner_has_access": block.get("learner_has_access"),
+                "link": block.get("link"),
+            }
+            for due, block in upcoming[:MAX_DUE_DATES]
+        ],
+        "more_due_dates": max(len(upcoming) - MAX_DUE_DATES, 0),
+    }
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_upcoming_assignments(state: Annotated[dict, InjectedState]):
+    """
+    Get the signed-in learner's upcoming assignment due dates in their run of
+    the course on this page, soonest first, with the run's start and end dates
+    and a link to its Dates tab. Only the next few due dates are listed;
+    more_due_dates counts the rest, which the Dates tab shows. With no
+    upcoming_due_dates, or a due_dates_note saying they couldn't be checked,
+    send the learner to the Dates tab.
     """
     try:
         result = await _page_course_enrollments(state)
     except Exception:  # noqa: BLE001
-        return _could_not_check("get_course_dates")
-    result["enrollments"] = _only(
-        result["enrollments"], "start_date", "end_date", "status", "dates_url"
+        return _could_not_check("get_upcoming_assignments")
+    now = datetime.now(UTC)
+    due_dates = await asyncio.gather(
+        *(_upcoming_due_dates(e["run_id"], now) for e in result["enrollments"])
     )
+    result["enrollments"] = [
+        {**summary, **dates}
+        for summary, dates in zip(
+            _only(
+                result["enrollments"], "start_date", "end_date", "status", "dates_url"
+            ),
+            due_dates,
+        )
+    ]
     return json.dumps(result)
 
 
@@ -1066,5 +1125,5 @@ ACCOUNT_TOOLS = [
     get_enrollments,
     get_course_progress,
     get_certificate_status,
-    get_course_dates,
+    get_upcoming_assignments,
 ]
