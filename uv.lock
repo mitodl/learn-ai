@@ -1702,6 +1702,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1c/ab/922185fd354eb531fc78cf2205f3523e25452efc2faf4e0ba47f4649a5de/granian-2.8.4-cp314-cp314t-musllinux_1_1_x86_64.whl", hash = "sha256:663bdf86c3afbb16c2f4b390de78dbd4ce8ad5ba41264ae4ac52a79b58bcddd7", size = 5099484, upload-time = "2026-09-30T15:11:47.379Z" },
 ]
 
+[package.optional-dependencies]
+reload = [
+    { name = "watchfiles" },
+]
+
 [[package]]
 name = "greenlet"
 version = "3.5.6"
@@ -2879,6 +2884,7 @@ dev = [
     { name = "faker" },
     { name = "freezegun" },
     { name = "google-genai" },
+    { name = "granian", extra = ["reload"] },
     { name = "ipdb" },
     { name = "jupyter" },
     { name = "locust" },
@@ -2987,6 +2993,7 @@ dev = [
     { name = "faker", specifier = ">=40.0.0,<41" },
     { name = "freezegun", specifier = ">=1.4.0,<2" },
     { name = "google-genai", specifier = ">=1.9.0" },
+    { name = "granian", extras = ["reload"], specifier = ">=2.5.4,<3" },
     { name = "ipdb", specifier = ">=0.13.13,<0.14" },
     { name = "jupyter", specifier = ">=1.1.1,<2" },
     { name = "locust", specifier = ">=2.31.2,<3" },
