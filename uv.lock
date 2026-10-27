@@ -2950,7 +2950,7 @@ requires-dist = [
     { name = "markdown2", specifier = ">=2.5.2,<3" },
     { name = "mitol-django-observability", specifier = ">=2026.8.19" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
-    { name = "ol-llm", specifier = ">=0.0.4,<0.1" },
+    { name = "ol-llm", specifier = ">=0.0.5,<0.1" },
     { name = "open-learning-ai-tutor", specifier = "==0.2.16" },
     { name = "opentelemetry-instrumentation-asgi", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
@@ -3561,9 +3561,10 @@ wheels = [
 
 [[package]]
 name = "ol-llm"
-version = "0.0.4"
+version = "0.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "certifi" },
     { name = "httpx" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
@@ -3571,9 +3572,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/02/31/5879693a99ca5e30c065e28add83658d5a3dd09959717e7113908306607c/ol_llm-0.0.4.tar.gz", hash = "sha256:02d594f2bdf90e314c729187e58270a0deba21505cece5b9165d237d4024dcb7", size = 186980, upload-time = "2026-10-22T02:07:19.684Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/f5/9dd3860b1e3534b93ee6d92a14993450251b968cefbfbfc75e550a18dc55/ol_llm-0.0.5.tar.gz", hash = "sha256:90727b46b2065e316c1886947bdab4473e11cbbf0c0bf986872b2b44d9c95696", size = 225997, upload-time = "2026-10-23T18:24:00.75Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/73/1c/b35a805176600d6b26610d8b449c4a6c5d7803ba63438f1a4068748fd802/ol_llm-0.0.4-py3-none-any.whl", hash = "sha256:0635e512a6ec2225569945011c0aa42e956ff611f19f6577450da0f35a2773ad", size = 81965, upload-time = "2026-10-22T02:07:17.919Z" },
+    { url = "https://files.pythonhosted.org/packages/16/8f/b6d16ab5452433d5ff4156949d23d9a697cc29589850328a2519ef12c4d8/ol_llm-0.0.5-py3-none-any.whl", hash = "sha256:71f9c4457364909d0b18450621f5e91bb18fc71e2d3991c7e1f8b86a9a9b8784", size = 98872, upload-time = "2026-10-23T18:23:59.223Z" },
 ]
 
 [[package]]
