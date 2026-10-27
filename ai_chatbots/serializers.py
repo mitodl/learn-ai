@@ -71,7 +71,9 @@ class RecommendationChatRequestSerializer(ChatRequestSerializer):
     )
     search_filters = serializers.DictField(
         child=serializers.ListField(
-            child=serializers.CharField(allow_blank=False), allow_empty=False
+            child=serializers.CharField(allow_blank=False, max_length=256),
+            allow_empty=False,
+            max_length=50,
         ),
         required=False,
         help_text=(
