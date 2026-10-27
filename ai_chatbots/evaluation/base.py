@@ -44,6 +44,10 @@ class EvaluationConfig:
     metrics: list[Any]
     metric_thresholds: dict[str, float]
     confident_api_key: str | None = None
+    # Applied to every judge call, including --pairwise
+    timeout_seconds: int = 360
+    max_retries: int = 3
+    retry_delay: float = 5.0
 
 
 class BaseBotEvaluator(ABC):

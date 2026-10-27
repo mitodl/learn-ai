@@ -193,12 +193,15 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
             )
         finally:
             _learner_records.reset(token)
-        # The resource facts reach the bot through its system prompt, not a tool
+        # The resource facts reach the bot through its system prompt, not a tool.
+        # The lookup is cached, but a failure only briefly, so use the facts only
+        # if they made it into the prompt this bot was built with.
         facts = await sync_to_async(get_resource_facts)(
             (extra_state.get("course_id") or [None])[-1],
             (extra_state.get("platform") or [None])[-1],
         )
-        response["extra_context"] = [facts] if facts else []
+        in_prompt = facts and facts in (chatbot.instructions or "")
+        response["extra_context"] = [facts] if in_prompt else []
         return response
 
 

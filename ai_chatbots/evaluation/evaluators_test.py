@@ -266,12 +266,20 @@ class TestSyllabusBotEvaluator:
             {"role": "user", "content": "And a digital credential?"},
         ]
 
-    @pytest.mark.parametrize(("facts", "expected"), [("Facts", ["Facts"]), ("", [])])
+    @pytest.mark.parametrize(
+        ("facts", "instructions", "expected"),
+        [
+            ("Facts", "Prompt\n\nFacts", ["Facts"]),
+            ("", "Prompt", []),
+            # Lookup failed when the bot was built, then succeeded here
+            ("Facts", "Prompt", []),
+        ],
+    )
     @pytest.mark.asyncio
     async def test_collect_response_adds_resource_facts(
-        self, evaluator, mocker, facts, expected
+        self, evaluator, mocker, facts, instructions, expected
     ):
-        """The resource facts from the system prompt are returned as extra context."""
+        """The resource facts in the system prompt are returned as extra context."""
         mock_facts = mocker.patch(
             "ai_chatbots.evaluation.evaluators.get_resource_facts",
             return_value=facts,
@@ -281,6 +289,7 @@ class TestSyllabusBotEvaluator:
             return_value={"messages": [AIMessage(content="Response")]}
         )
         mock_bot.config = {"configurable": {}}
+        mock_bot.instructions = instructions
         test_case = TestCaseSpec(
             question="Test question",
             metadata={
