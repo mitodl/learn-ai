@@ -70,7 +70,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
     "ol-llm>=0.0.5,<0.1",
-    "opik==2.2.94",
+    "opik==2.2.100",
     "azure-identity>=1.25,<2",
 ]
 
