@@ -15,7 +15,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
-from ai_chatbots import learn, learner_api
+from ai_chatbots import learn_api, learner_api
 from ai_chatbots.constants import (
     UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
@@ -59,7 +59,7 @@ def _search_error_envelope(error: Exception, **extra) -> str:
     )
 
 
-def _envelope(result: learn.SearchResult, shaped: list[dict], **extra) -> str:
+def _envelope(result: learn_api.SearchResult, shaped: list[dict], **extra) -> str:
     """Serialize shaped search results plus what was searched, for the LLM."""
     return json.dumps(
         {
@@ -194,7 +194,7 @@ async def search_courses(
     if search_filters:
         filters.update(search_filters[-1])
     try:
-        result = await learn.search_learning_resources(q, filters)
+        result = await learn_api.search_learning_resources(q, filters)
         main_properties = [
             "title",
             "id",
@@ -295,7 +295,7 @@ async def _content_file_search(
 ) -> str:
     """Search content files and shape chunks + citations for the LLM."""
     try:
-        result = await learn.search_content_files(
+        result = await learn_api.search_content_files(
             q, readable_ids, collection_name=collection_name, platform=platform
         )
         # Consumers store the flag as a string, evaluation sets as a bool
@@ -379,7 +379,7 @@ async def get_video_transcript_chunk(
     Query the MIT video transcript API, and return results as a JSON string.
     """
     try:
-        result = await learn.search_transcript(q, state["transcript_asset_id"][-1])
+        result = await learn_api.search_transcript(q, state["transcript_asset_id"][-1])
         shaped = [{"chunk_content": r.get("chunk_content")} for r in result.results]
         return _envelope(result, shaped)
     except Exception:
@@ -476,7 +476,7 @@ async def _get_course_platform(readable_id: str) -> str | None:
         # Failed and empty lookups are cached as an empty string
         return cached_platform or None
     try:
-        results = await learn.learning_resources(readable_id)
+        results = await learn_api.learning_resources(readable_id)
         codes = {(r.get("platform") or {}).get("code") for r in results} - {None}
         # A readable id can match resources on two platforms.  Picking one of
         # them scopes the support search to the wrong help center section, so

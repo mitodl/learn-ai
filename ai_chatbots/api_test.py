@@ -12,7 +12,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from ai_chatbots import factories, learn
+from ai_chatbots import factories, learn_api
 from ai_chatbots.api import (
     MessageTruncationNode,
     _should_create_checkpoint,
@@ -597,7 +597,7 @@ def mock_resource_response(mocker):
 
     def _mock(results, status_error=None):
         return mocker.patch(
-            "ai_chatbots.learn.learning_resources",
+            "ai_chatbots.learn_api.learning_resources",
             side_effect=status_error,
             return_value=results,
         )
@@ -683,7 +683,8 @@ def test_get_resource_facts_unknown_resource(mock_resource_response, results):
 def test_get_resource_facts_error(mock_resource_response):
     """A failed lookup should produce no facts rather than raising"""
     mock_resource_response(
-        [AIGE_XPRO], status_error=learn.LearnError("API is down", "https://mit.edu", {})
+        [AIGE_XPRO],
+        status_error=learn_api.LearnError("API is down", "https://mit.edu", {}),
     )
     assert get_resource_facts("course-v1:PRO+AIGE") == ""
 

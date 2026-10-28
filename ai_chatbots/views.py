@@ -21,8 +21,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
 from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
 
-from ai_chatbots import learn
-from ai_chatbots.learn import LearnError
+from ai_chatbots import learn_api
+from ai_chatbots.learn_api import LearnError
 from ai_chatbots.models import (
     DjangoCheckpoint,
     LLMModel,
@@ -213,7 +213,7 @@ class ProblemSetList(ApiView):
 
         try:
             return Response(
-                async_to_sync(learn.problem_set)(run_readable_id), status=200
+                async_to_sync(learn_api.problem_set)(run_readable_id), status=200
             )
         except LearnError:
             return Response({"error": "Something went wrong"}, status=500)
@@ -250,7 +250,7 @@ class GetTranscriptBlockId(ApiView):
             )
 
         try:
-            results = async_to_sync(learn.contentfiles)([edx_module_id])
+            results = async_to_sync(learn_api.contentfiles)([edx_module_id])
             contentfile = results[0] if results else None
             if contentfile is None:
                 log.error("No contentfile found for edx_module_id %s", edx_module_id)
