@@ -8,7 +8,7 @@ from django.core.cache import caches
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
-from ai_chatbots import learn
+from ai_chatbots import learn_api
 from ai_chatbots.constants import (
     ZENDESK_PLATFORM_CATEGORY_IDS,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
@@ -35,7 +35,7 @@ COURSE_ID = "8.20+january-iap_2021"
 @pytest.fixture(autouse=True)
 def _mock_feature_flag(mocker):
     """Default feature flags to disabled so tests don't touch the durable cache."""
-    return mocker.patch("ai_chatbots.learn.is_enabled", return_value=False)
+    return mocker.patch("ai_chatbots.learn_api.is_enabled", return_value=False)
 
 
 @pytest.fixture
@@ -43,8 +43,8 @@ def mock_search_content_files(mocker, content_chunk_results):
     """Fake the Learn content file search with the fixture chunks."""
     params = {"q": "main topics", "resource_readable_id": "x", "limit": 5}
     return mocker.patch(
-        "ai_chatbots.learn.search_content_files",
-        return_value=learn.SearchResult(
+        "ai_chatbots.learn_api.search_content_files",
+        return_value=learn_api.SearchResult(
             content_chunk_results["results"], "https://mit.edu/search", params
         ),
     )
@@ -490,8 +490,10 @@ async def test_get_video_transcript_chunk(
     chunks = video_transcript_content_chunk_results["results"]
     params = {"q": "eigenvalues", "edx_module_id": "asset-1", "limit": 4}
     search = mocker.patch(
-        "ai_chatbots.learn.search_transcript",
-        return_value=learn.SearchResult(chunks, "https://mit.edu/transcripts", params),
+        "ai_chatbots.learn_api.search_transcript",
+        return_value=learn_api.SearchResult(
+            chunks, "https://mit.edu/transcripts", params
+        ),
     )
 
     results = json.loads(
@@ -510,8 +512,8 @@ async def test_get_video_transcript_chunk(
 async def test_get_video_transcript_chunk_error(mocker):
     """A Learn failure is reported to the LLM as the shared error envelope."""
     mocker.patch(
-        "ai_chatbots.learn.search_transcript",
-        side_effect=learn.LearnError("502", "https://mit.edu/transcripts", {}),
+        "ai_chatbots.learn_api.search_transcript",
+        side_effect=learn_api.LearnError("502", "https://mit.edu/transcripts", {}),
     )
 
     result = await get_video_transcript_chunk.ainvoke(
@@ -714,8 +716,8 @@ async def test_search_content_files_error(mocker, syllabus_agent_state):
     """A failed search still reports what it tried, so it isn't mistaken for no results."""
     params = {"q": "main topics", "resource_readable_id": "x", "limit": 5}
     mocker.patch(
-        "ai_chatbots.learn.search_content_files",
-        side_effect=learn.LearnError("502", "https://mit.edu/search", params),
+        "ai_chatbots.learn_api.search_content_files",
+        side_effect=learn_api.LearnError("502", "https://mit.edu/search", params),
     )
 
     result = await search_content_files.ainvoke(
@@ -751,8 +753,8 @@ RESOURCE_ROWS = [
 def mock_search_learning_resources(mocker):
     """Fake the Learn resource search with three rows exercising run selection."""
     return mocker.patch(
-        "ai_chatbots.learn.search_learning_resources",
-        return_value=learn.SearchResult(
+        "ai_chatbots.learn_api.search_learning_resources",
+        return_value=learn_api.SearchResult(
             [dict(r) for r in RESOURCE_ROWS],
             "https://mit.edu/search",
             {"q": "physics", "limit": 10},
@@ -885,8 +887,8 @@ async def test_search_courses_error(mocker):
     """A failed search still reports what it tried, so it isn't mistaken for no results."""
     params = {"q": "physics", "limit": 10}
     mocker.patch(
-        "ai_chatbots.learn.search_learning_resources",
-        side_effect=learn.LearnError("502", "https://mit.edu/search", params),
+        "ai_chatbots.learn_api.search_learning_resources",
+        side_effect=learn_api.LearnError("502", "https://mit.edu/search", params),
     )
 
     result = await search_courses.ainvoke({"q": "physics", "state": {}})

@@ -19,7 +19,7 @@ from langgraph.utils.runnable import RunnableCallable
 from langsmith import Client as LangsmithClient
 from typing_extensions import TypedDict
 
-from ai_chatbots import learn
+from ai_chatbots import learn_api
 from ai_chatbots.constants import WRITES_MAPPING
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 from ai_chatbots.utils import get_django_cache
@@ -482,7 +482,7 @@ def get_resource_facts(readable_id: str, platform: str | None = None) -> str:
     if cached_facts is not None:
         return cached_facts
     try:
-        resources = async_to_sync(learn.learning_resources)(readable_id, platform)
+        resources = async_to_sync(learn_api.learning_resources)(readable_id, platform)
         facts = _resource_facts_block(resources)
     except Exception:
         log.exception("Error looking up the facts of resource %s", readable_id)

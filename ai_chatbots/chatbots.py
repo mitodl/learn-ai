@@ -35,7 +35,7 @@ from open_learning_ai_tutor.utils import (
 )
 from openai import BadRequestError
 
-from ai_chatbots import learn, tools
+from ai_chatbots import learn_api, tools
 from ai_chatbots.admin import LLMModel
 from ai_chatbots.api import (
     DjangoCheckpoint,
@@ -886,7 +886,7 @@ async def get_problem_from_edx_block(
         problem_set: The problem set xml
     """
 
-    response = {"results": await learn.contentfiles(block_siblings, timeout=10)}
+    response = {"results": await learn_api.contentfiles(block_siblings, timeout=10)}
 
     problem = get_matching_content(response, edx_module_id)
 
@@ -912,7 +912,9 @@ async def get_canvas_problem_set(
         problem_set: The problem set xml
     """
 
-    response = await learn.problem_set(run_readable_id, problem_set_title, timeout=10)
+    response = await learn_api.problem_set(
+        run_readable_id, problem_set_title, timeout=10
+    )
 
     return {
         key: value

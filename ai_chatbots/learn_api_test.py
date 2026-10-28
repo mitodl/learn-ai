@@ -3,7 +3,7 @@
 import httpx
 import pytest
 
-from ai_chatbots import learn
+from ai_chatbots import learn_api
 
 RESOURCES_URL = "https://api.learn.mit.edu/api/v1/learning_resources/"
 
@@ -23,7 +23,7 @@ async def test_learning_resources_sends_bearer_token(
         return_value=httpx_response(200, json_body={"results": [{"id": 1}]})
     )
 
-    result = await learn.learning_resources("MITx+6.00.1x")
+    result = await learn_api.learning_resources("MITx+6.00.1x")
 
     assert result == [{"id": 1}]
     client.get.assert_called_once_with(
@@ -43,7 +43,7 @@ async def test_no_authorization_header_without_token(
         return_value=httpx_response(200, json_body={"results": []})
     )
 
-    assert await learn.learning_resources("MITx+6.00.1x") == []
+    assert await learn_api.learning_resources("MITx+6.00.1x") == []
     assert client.get.call_args.kwargs["headers"] == {}
 
 
@@ -52,8 +52,8 @@ async def test_http_error_raises_learn_error(mock_async_get_client, httpx_respon
     """A persistent upstream error becomes LearnError after the retry budget."""
     client = mock_async_get_client(return_value=httpx_response(502))
 
-    with pytest.raises(learn.LearnError) as excinfo:
-        await learn.learning_resources("MITx+6.00.1x")
+    with pytest.raises(learn_api.LearnError) as excinfo:
+        await learn_api.learning_resources("MITx+6.00.1x")
     assert client.get.call_count == 3
     # tools report what was tried, so a failure isn't mistaken for no results
     assert excinfo.value.url == RESOURCES_URL
@@ -65,8 +65,8 @@ async def test_transport_error_raises_learn_error(mock_async_get_client):
     """A connection failure becomes LearnError."""
     mock_async_get_client(side_effect=httpx.ConnectError("refused"))
 
-    with pytest.raises(learn.LearnError):
-        await learn.learning_resources("MITx+6.00.1x")
+    with pytest.raises(learn_api.LearnError):
+        await learn_api.learning_resources("MITx+6.00.1x")
 
 
 async def test_non_json_body_raises_learn_error(mock_async_get_client):
@@ -77,8 +77,8 @@ async def test_non_json_body_raises_learn_error(mock_async_get_client):
         )
     )
 
-    with pytest.raises(learn.LearnError) as excinfo:
-        await learn.learning_resources("MITx+6.00.1x")
+    with pytest.raises(learn_api.LearnError) as excinfo:
+        await learn_api.learning_resources("MITx+6.00.1x")
     assert not isinstance(excinfo.value, ValueError)
 
 
@@ -88,7 +88,7 @@ TRANSCRIPT_URL = "https://api.learn.mit.edu/api/v0/vector_content_files_search/"
 @pytest.fixture
 def mock_hybrid_flag(mocker):
     """Control the hybrid search feature flag as seen by the client."""
-    return mocker.patch("ai_chatbots.learn.is_enabled", return_value=False)
+    return mocker.patch("ai_chatbots.learn_api.is_enabled", return_value=False)
 
 
 @pytest.mark.parametrize("hybrid", [True, False])
@@ -105,7 +105,7 @@ async def test_search_transcript(
         return_value=httpx_response(200, json_body={"results": chunks})
     )
 
-    result = await learn.search_transcript("eigenvalues", "asset-1")
+    result = await learn_api.search_transcript("eigenvalues", "asset-1")
 
     expected_params = {"q": "eigenvalues", "edx_module_id": "asset-1", "limit": 4}
     if hybrid:
@@ -116,7 +116,7 @@ async def test_search_transcript(
         headers={"Authorization": "Bearer learn-token"},
         timeout=30,
     )
-    assert result == learn.SearchResult(chunks, TRANSCRIPT_URL, expected_params)
+    assert result == learn_api.SearchResult(chunks, TRANSCRIPT_URL, expected_params)
 
 
 SYLLABUS_URL = "https://api.learn.mit.edu/api/v0/vector_content_files_search/"
@@ -148,7 +148,7 @@ async def test_search_content_files(  # noqa: PLR0913
         return_value=httpx_response(200, json_body={"results": chunks})
     )
 
-    result = await learn.search_content_files(
+    result = await learn_api.search_content_files(
         "main topics", readable_id, collection_name=collection_name
     )
 
@@ -163,7 +163,7 @@ async def test_search_content_files(  # noqa: PLR0913
         expected_params["hybrid_search"] = True
     assert client.get.call_args.args == (SYLLABUS_URL,)
     assert client.get.call_args.kwargs["params"] == expected_params
-    assert result == learn.SearchResult(chunks, SYLLABUS_URL, expected_params)
+    assert result == learn_api.SearchResult(chunks, SYLLABUS_URL, expected_params)
 
 
 SEARCH_URL = "https://api.learn.mit.edu/api/v0/vector_learning_resources_search/"
@@ -187,7 +187,7 @@ async def test_search_learning_resources(
     )
     filters = {"resource_type": ["course"], "free": True}
 
-    result = await learn.search_learning_resources("physics", filters)
+    result = await learn_api.search_learning_resources("physics", filters)
 
     expected_url = SEARCH_URL
     expected_params = {"q": "physics", "limit": 2, **filters}
@@ -196,7 +196,7 @@ async def test_search_learning_resources(
     assert client.get.call_args.args == (expected_url,)
     assert client.get.call_args.kwargs["params"] == expected_params
     # The vector endpoint can ignore `limit`; results are capped regardless.
-    assert result == learn.SearchResult(rows[:2], expected_url, expected_params)
+    assert result == learn_api.SearchResult(rows[:2], expected_url, expected_params)
 
 
 CONTENTFILE_URL = "https://api.learn.mit.edu/api/v1/contentfiles/"
@@ -211,7 +211,7 @@ async def test_contentfiles(settings, mock_async_get_client, httpx_response):
         return_value=httpx_response(200, json_body={"results": rows})
     )
 
-    result = await learn.contentfiles(["block1", "block2"], timeout=10)
+    result = await learn_api.contentfiles(["block1", "block2"], timeout=10)
 
     assert result == rows
     client.get.assert_called_once_with(
@@ -232,7 +232,7 @@ async def test_contentfiles_default_timeout(
         return_value=httpx_response(200, json_body={"results": []})
     )
 
-    assert await learn.contentfiles(["block1"]) == []
+    assert await learn_api.contentfiles(["block1"]) == []
     assert client.get.call_args.kwargs["timeout"] == 17
 
 
@@ -254,7 +254,7 @@ async def test_problem_set(  # noqa: PLR0913
     body = {"problem_set_files": [], "solution_set_files": []}
     client = mock_async_get_client(return_value=httpx_response(200, json_body=body))
 
-    result = await learn.problem_set("run-1", title, timeout=10)
+    result = await learn_api.problem_set("run-1", title, timeout=10)
 
     assert result == body
     assert client.get.call_args.args == (f"{PROBLEM_SET_URL}{expected_path}",)
@@ -268,8 +268,8 @@ async def test_problem_set_rejects_dot_segments(
     """Dot segments would be resolved by httpx, so they never reach the transport."""
     client = mock_async_get_client()
 
-    with pytest.raises(learn.LearnError):
-        await learn.problem_set(run_readable_id, title)
+    with pytest.raises(learn_api.LearnError):
+        await learn_api.problem_set(run_readable_id, title)
     client.get.assert_not_called()
 
 
@@ -279,7 +279,7 @@ async def test_learning_resources_platform(mock_async_get_client, httpx_response
         return_value=httpx_response(200, json_body={"results": []})
     )
 
-    await learn.learning_resources("course-v1:PRO+AIGE", "xpro")
+    await learn_api.learning_resources("course-v1:PRO+AIGE", "xpro")
 
     assert client.get.call_args.kwargs["params"] == {
         "readable_id": "course-v1:PRO+AIGE",
