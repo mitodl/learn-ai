@@ -1,6 +1,6 @@
 [project]
 name = "learn-ai"
-version = "2026.10.22.1"
+version = "2026.10.27.1"
 description = "AI applications for MIT Open Learning."
 authors = [{ name = "MIT ODL" }]
 requires-python = ">=3.14,<3.15"
@@ -232,7 +232,7 @@ inline-quotes = "double"
 "**/migrations/**" = ["ARG001"]
 
 [tool.bumpversion]
-current_version = "2026.10.22.1"
+current_version = "2026.10.27.1"
 commit = false
 tag = false
 parse = "(?P<release>(?:[1-9][0-9]{3})\\.(?:1[0-2]|[1-9])\\.(?:3[0-1]|[12][0-9]|[1-9]))\\.(?P<build>\\d+)"

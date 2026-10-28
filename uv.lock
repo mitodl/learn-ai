@@ -2800,7 +2800,7 @@ wheels = [
 
 [[package]]
 name = "learn-ai"
-version = "2026.10.22.1"
+version = "2026.10.27.1"
 source = { virtual = "." }
 default-groups = "all"
 dependencies = [
