@@ -180,8 +180,9 @@ def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
 
     Field ids are minted per instance, so an environment pointed at a different
     Zendesk has different ones and a fresh one has none at all. An unconfigured
-    id is skipped rather than guessed: Zendesk rejects the whole ticket for an
-    id it does not recognise.
+    id is skipped rather than guessed, because Zendesk drops an id it does not
+    recognise without complaint and files the ticket anyway - a guessed id
+    would lose the value silently instead of failing.
     """
     return [
         {"id": field_id, "value": value}

@@ -466,8 +466,9 @@ async def test_file_support_ticket_omits_unconfigured_custom_fields(
 ):
     """
     Field ids are minted per Zendesk instance. An environment pointed at one
-    that has no such field must still file: Zendesk rejects the whole ticket
-    for an id it does not recognise.
+    that has no such field must still file, and must leave the id off rather
+    than guess it: Zendesk drops an unrecognised id silently, so a guess loses
+    the value with no error to notice.
     """
     zendesk_ticket_settings.AI_ZENDESK_URL_FIELD_ID = 0
     zendesk_ticket_settings.AI_ZENDESK_NAME_FIELD_ID = 0
