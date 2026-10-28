@@ -722,7 +722,7 @@ async def test_file_support_ticket_without_a_user_agent(
     assert not [tag for tag in ticket["tags"] if tag.startswith("tim_device_")]
 
 
-async def test_file_support_ticket_puts_the_browser_before_the_page_is_absent(
+async def test_file_support_ticket_adds_the_browser_line_with_no_page_url(
     zendesk_ticket_settings, mock_httpx_async_client
 ):
     """A surface that sends no page URL still gets the browser line."""
@@ -766,6 +766,35 @@ async def test_file_support_ticket_tags_the_device_type(
     tags = kwargs["json"]["ticket"]["tags"]
     assert expected_tag in tags
     assert ZENDESK_SUPPORT_INTAKE_TAG in tags
+
+
+async def test_file_support_ticket_classifies_the_device_before_truncating(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    Capability tokens sit at the end of a user agent, so classifying the
+    truncated string would read an over-long Android phone as a tablet - the
+    wrong device, which is worse than none.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+    padded = UA_ANDROID_PHONE_CHROME.replace(
+        " Mobile ", " " + ("x" * MAX_USER_AGENT_LENGTH) + " Mobile "
+    )
+
+    await file_support_ticket(**_ticket_args(), user_agent=padded)
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert ZENDESK_DEVICE_MOBILE_TAG in ticket["tags"]
+    browser_line = next(
+        line
+        for line in ticket["comment"]["body"].splitlines()
+        if line.startswith("Browser: ")
+    )
+    assert len(browser_line) <= len("Browser: ") + MAX_USER_AGENT_LENGTH
 
 
 @pytest.mark.parametrize(

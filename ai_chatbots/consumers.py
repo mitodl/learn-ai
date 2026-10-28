@@ -910,8 +910,9 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
-            # Taken off the request, never the body, so no caller can claim a
-            # device that is not theirs.
+            # Read off the request header rather than the chat payload, so the
+            # body has no say in it. The header is still whatever the caller
+            # sent, so the device is claimed, not proven.
             user_agent=_header(self.scope, b"user-agent"),
         )
 

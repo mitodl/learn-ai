@@ -220,11 +220,16 @@ def _device_tag(user_agent: str) -> str:
     """
     Classify the device, or return "" when the user agent does not say.
 
+    Takes the raw header, not the shortened one that goes in the body: the
+    tokens this reads sit at the end, so a truncated Android phone would lose
+    "Mobile" and come out as a tablet.
+
     Order matters, because the tokens overlap: an Android tablet is an Android
     that does not say Mobile. "Macintosh" is deliberately not desktop - from
     iPadOS 13 on, Safari's default desktop mode sends a user agent identical to
     macOS Safari's, so it cannot be told apart from an iPad.
     """
+    user_agent = user_agent or ""
     if "iPad" in user_agent or "Tablet" in user_agent:
         return ZENDESK_DEVICE_TABLET_TAG
     if "Android" in user_agent:
@@ -288,7 +293,7 @@ async def file_support_ticket(  # noqa: PLR0913
     tags = [ZENDESK_SUPPORT_INTAKE_TAG]
     if not email_verified:
         tags.append(ZENDESK_UNVERIFIED_REQUESTER_TAG)
-    device_tag = _device_tag(browser)
+    device_tag = _device_tag(user_agent)
     if device_tag:
         tags.append(device_tag)
 

@@ -1765,9 +1765,11 @@ async def test_support_create_chatbot_carries_the_user_agent(
     mock_http_consumer_send, support_consumer, headers, expected
 ):
     """
-    The browser comes off the request, never the body, so no caller can name a
-    device that is not theirs. It is a constructor argument rather than graph
-    state because the turn that files the ticket is itself a live request.
+    The browser comes off the request header, never the chat payload, so the
+    body cannot name a device. The header is still caller-supplied, so this is
+    about where the value comes from, not about trusting it. It is a
+    constructor argument rather than graph state because the turn that files
+    the ticket is itself a live request.
     """
     support_consumer.scope["headers"] = headers
     serializer = consumers.SupportChatRequestSerializer(data={"message": "help"})
