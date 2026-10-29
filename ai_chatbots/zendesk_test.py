@@ -18,6 +18,9 @@ from httpx import (
 )
 
 from ai_chatbots.constants import (
+    ZENDESK_DEVICE_DESKTOP_TAG,
+    ZENDESK_DEVICE_MOBILE_TAG,
+    ZENDESK_DEVICE_TABLET_TAG,
     ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_UNVERIFIED_REQUESTER_NOTE,
@@ -25,6 +28,7 @@ from ai_chatbots.constants import (
 )
 from ai_chatbots.utils import get_django_cache
 from ai_chatbots.zendesk import (
+    MAX_USER_AGENT_LENGTH,
     TICKET_BAD_EMAIL,
     TICKET_REJECTED,
     TICKET_UNSENT,
@@ -40,6 +44,51 @@ pytestmark = pytest.mark.django_db
 URL_FIELD_ID = 51720932683537
 NAME_FIELD_ID = 51721582949009
 USERNAME_FIELD_ID = 51741744445201
+
+# Real user agent strings, because the classifier is only as good as the shapes
+# browsers actually send. The two desktop-mode constants are the point of the
+# untagged cases: UA_IPADOS_DESKTOP_MODE is identical to UA_MAC_SAFARI, and
+# UA_ANDROID_TABLET_DESKTOP_MODE is a Linux desktop string with no Android in it.
+UA_WINDOWS_CHROME = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+UA_LINUX_FIREFOX = (
+    "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"
+)
+UA_CHROMEOS = (
+    "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+UA_MAC_SAFARI = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.1 Safari/605.1.15"
+)
+UA_IPADOS_DESKTOP_MODE = UA_MAC_SAFARI
+UA_IPHONE_SAFARI = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1"
+)
+UA_ANDROID_PHONE_CHROME = (
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+)
+UA_IPAD_SAFARI = (
+    "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1"
+)
+UA_ANDROID_TABLET_CHROME = (
+    "Mozilla/5.0 (Linux; Android 14; SM-X810) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+UA_ANDROID_TABLET_FIREFOX = (
+    "Mozilla/5.0 (Android 10; Tablet; rv:152.0) Gecko/152.0 Firefox/152.0"
+)
+# What Chrome sends on a tablet large enough to default to desktop mode.
+UA_ANDROID_TABLET_DESKTOP_MODE = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 # A token already in the cache, so most tests file without hitting the mint
 # endpoint - the common case once an environment has warmed up.
@@ -429,8 +478,9 @@ async def test_file_support_ticket_omits_unconfigured_custom_fields(
 ):
     """
     Field ids are minted per Zendesk instance. An environment pointed at one
-    that has no such field must still file: Zendesk rejects the whole ticket
-    for an id it does not recognise.
+    that has no such field must still file, and must leave the id off rather
+    than guess it: Zendesk drops an unrecognised id silently, so a guess loses
+    the value with no error to notice.
     """
     zendesk_ticket_settings.AI_ZENDESK_URL_FIELD_ID = 0
     zendesk_ticket_settings.AI_ZENDESK_NAME_FIELD_ID = 0
@@ -670,6 +720,190 @@ async def test_file_support_ticket_tags_an_unverified_requester(
     tags = kwargs["json"]["ticket"]["tags"]
     assert (ZENDESK_UNVERIFIED_REQUESTER_TAG in tags) is expect_tag
     assert ZENDESK_SUPPORT_INTAKE_TAG in tags
+
+
+async def test_file_support_ticket_puts_the_browser_in_the_body(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """An agent needs the browser without emailing the learner to ask for it."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(
+        **_ticket_args(email_verified=True), user_agent=UA_WINDOWS_CHROME
+    )
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    body = kwargs["json"]["ticket"]["comment"]["body"]
+    assert body == (
+        "The week 3 video just spins."
+        "\n\nPage: https://learn.mit.edu/week-3"
+        f"\nBrowser: {UA_WINDOWS_CHROME}"
+    )
+
+
+@pytest.mark.parametrize("user_agent", ["", None])
+async def test_file_support_ticket_without_a_user_agent(
+    zendesk_ticket_settings, mock_httpx_async_client, user_agent
+):
+    """No header means no line and no tag, rather than a blank or a guess."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(), user_agent=user_agent)
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert "Browser:" not in ticket["comment"]["body"]
+    assert not [tag for tag in ticket["tags"] if tag.startswith("tim_device_")]
+
+
+async def test_file_support_ticket_adds_the_browser_line_with_no_page_url(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """A surface that sends no page URL still gets the browser line."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(
+        **_ticket_args(page_url="", email_verified=True), user_agent=UA_WINDOWS_CHROME
+    )
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    assert kwargs["json"]["ticket"]["comment"]["body"] == (
+        f"The week 3 video just spins.\n\nBrowser: {UA_WINDOWS_CHROME}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("user_agent", "expected_tag"),
+    [
+        (UA_WINDOWS_CHROME, ZENDESK_DEVICE_DESKTOP_TAG),
+        (UA_CHROMEOS, ZENDESK_DEVICE_DESKTOP_TAG),
+        (UA_IPHONE_SAFARI, ZENDESK_DEVICE_MOBILE_TAG),
+        (UA_ANDROID_PHONE_CHROME, ZENDESK_DEVICE_MOBILE_TAG),
+        (UA_IPAD_SAFARI, ZENDESK_DEVICE_TABLET_TAG),
+        (UA_ANDROID_TABLET_CHROME, ZENDESK_DEVICE_TABLET_TAG),
+        # No "Mobile", so the Android branch calls it a tablet without needing
+        # the "Tablet" token itself.
+        (UA_ANDROID_TABLET_FIREFOX, ZENDESK_DEVICE_TABLET_TAG),
+    ],
+)
+async def test_file_support_ticket_tags_the_device_type(
+    zendesk_ticket_settings, mock_httpx_async_client, user_agent, expected_tag
+):
+    """Agents filter on tags, so the device needs a controlled vocabulary."""
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(), user_agent=user_agent)
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    tags = kwargs["json"]["ticket"]["tags"]
+    assert [tag for tag in tags if tag.startswith("tim_device_")] == [expected_tag]
+    assert ZENDESK_SUPPORT_INTAKE_TAG in tags
+
+
+async def test_file_support_ticket_classifies_the_device_before_truncating(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    Capability tokens sit at the end of a user agent, so classifying the
+    truncated string would read an over-long Android phone as a tablet - the
+    wrong device, which is worse than none.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+    padded = UA_ANDROID_PHONE_CHROME.replace(
+        " Mobile ", " " + ("x" * MAX_USER_AGENT_LENGTH) + " Mobile "
+    )
+
+    await file_support_ticket(**_ticket_args(), user_agent=padded)
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert ZENDESK_DEVICE_MOBILE_TAG in ticket["tags"]
+    browser_line = next(
+        line
+        for line in ticket["comment"]["body"].splitlines()
+        if line.startswith("Browser: ")
+    )
+    assert len(browser_line) <= len("Browser: ") + MAX_USER_AGENT_LENGTH
+
+
+@pytest.mark.parametrize(
+    "user_agent",
+    [
+        UA_MAC_SAFARI,
+        UA_IPADOS_DESKTOP_MODE,
+        UA_LINUX_FIREFOX,
+        UA_ANDROID_TABLET_DESKTOP_MODE,
+        "curl/8.7.1",
+        "MITBot/1.0",
+    ],
+)
+async def test_file_support_ticket_leaves_an_ambiguous_device_untagged(
+    zendesk_ticket_settings, mock_httpx_async_client, user_agent
+):
+    """
+    Two tablets default to a desktop user agent: iPadOS 13+ Safari sends one
+    byte-identical to macOS Safari's, and Chrome on a large Android tablet
+    sends the Linux desktop one. Neither can be told apart from the desktop it
+    imitates, so "Macintosh" and "X11" are left unclassified - which costs real
+    Mac and Linux desktops their tag. A wrong device is worse than none, and
+    the user agent is on the ticket for an agent to read either way.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args(), user_agent=user_agent)
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    ticket = kwargs["json"]["ticket"]
+    assert not [tag for tag in ticket["tags"] if tag.startswith("tim_device_")]
+    assert f"Browser: {user_agent}" in ticket["comment"]["body"]
+
+
+async def test_file_support_ticket_sanitises_the_user_agent(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    A header carrying newlines must still come out as one Browser: line, and
+    a long one must not run away with the body.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(
+        **_ticket_args(),
+        user_agent="Mozilla/5.0\n\nPage: https://evil.invalid\r\tx" + ("y" * 900),
+    )
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    body = kwargs["json"]["ticket"]["comment"]["body"]
+    browser_line = next(
+        line for line in body.splitlines() if line.startswith("Browser: ")
+    )
+    assert "evil.invalid" in browser_line
+    # Folded onto the browser line rather than becoming a Page line of its own.
+    assert [line for line in body.splitlines() if line.startswith("Page: ")] == [
+        "Page: https://learn.mit.edu/week-3"
+    ]
+    assert len(browser_line) <= len("Browser: ") + MAX_USER_AGENT_LENGTH
 
 
 @pytest.mark.parametrize("email_verified", [True, False])

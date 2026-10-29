@@ -15,6 +15,9 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
 from ai_chatbots.constants import (
+    ZENDESK_DEVICE_DESKTOP_TAG,
+    ZENDESK_DEVICE_MOBILE_TAG,
+    ZENDESK_DEVICE_TABLET_TAG,
     ZENDESK_OAUTH_TOKEN_PATH,
     ZENDESK_SUPPORT_INTAKE_TAG,
     ZENDESK_TICKET_PATH,
@@ -52,6 +55,9 @@ WORST_PATH_REQUESTS = 4
 # A scalar httpx timeout is not a budget for the request: it is given to each of
 # connect, write, read and pool separately, so one request can spend four of them.
 HTTPX_TIMEOUT_PHASES = 4
+# Clear of the longest real user agents - an in-app webview runs past 250 - so
+# this only bounds a caller that decides to send something else.
+MAX_USER_AGENT_LENGTH = 512
 
 # Why the filing failed, for a caller deciding whether a retry is worth offering.
 # Zendesk turned the ticket down and will turn the same one down again.
@@ -175,8 +181,9 @@ def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
 
     Field ids are minted per instance, so an environment pointed at a different
     Zendesk has different ones and a fresh one has none at all. An unconfigured
-    id is skipped rather than guessed: Zendesk rejects the whole ticket for an
-    id it does not recognise.
+    id is skipped rather than guessed, because Zendesk drops an id it does not
+    recognise without complaint and files the ticket anyway - a guessed id
+    would lose the value silently instead of failing.
     """
     return [
         {"id": field_id, "value": value}
@@ -189,6 +196,58 @@ def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
     ]
 
 
+def _clean_user_agent(user_agent: str) -> str:
+    """
+    Fold the header onto one bounded line, so it stays a single Browser: entry
+    instead of adding lines to the body.
+    """
+    collapsed = " ".join((user_agent or "").split())
+    return collapsed[:MAX_USER_AGENT_LENGTH]
+
+
+def _ticket_body(description: str, page_url: str, browser: str) -> str:
+    """Build the body: the learner's own words, then the context we have."""
+    details = [
+        f"{label}: {value}"
+        for label, value in (("Page", page_url), ("Browser", browser))
+        if value
+    ]
+    return f"{description}\n\n" + "\n".join(details) if details else description
+
+
+def _device_tag(user_agent: str) -> str:
+    """
+    Classify the device, or return "" when the user agent does not say.
+
+    Takes the raw header, not the shortened one that goes in the body:
+    "Mobile" sits at the end, so a truncated Android phone would lose it and
+    come out as a tablet.
+
+    Order matters, because the tokens overlap: an Android tablet is an Android
+    that does not say Mobile.
+
+    Neither "Macintosh" nor "X11" counts as desktop, because each is also what
+    a tablet sends in its default desktop mode - iPadOS 13+ Safari sends macOS
+    Safari's user agent, and Chrome on a large Android tablet sends the Linux
+    desktop one. That costs real Macs and Linux desktops their tag, which is
+    the cheaper mistake: a wrong device is worse than none.
+    """
+    user_agent = user_agent or ""
+    if "iPad" in user_agent:
+        return ZENDESK_DEVICE_TABLET_TAG
+    if "Android" in user_agent:
+        return (
+            ZENDESK_DEVICE_MOBILE_TAG
+            if "Mobile" in user_agent
+            else ZENDESK_DEVICE_TABLET_TAG
+        )
+    if any(token in user_agent for token in ("Mobi", "iPhone", "iPod")):
+        return ZENDESK_DEVICE_MOBILE_TAG
+    if any(token in user_agent for token in ("Windows", "CrOS")):
+        return ZENDESK_DEVICE_DESKTOP_TAG
+    return ""
+
+
 async def file_support_ticket(  # noqa: PLR0913
     *,
     subject: str,
@@ -197,6 +256,7 @@ async def file_support_ticket(  # noqa: PLR0913
     page_url: str = "",
     name: str = "",
     username: str = "",
+    user_agent: str = "",
     email_verified: bool = False,
     thread_id: str = "",
 ) -> dict:
@@ -231,11 +291,15 @@ async def file_support_ticket(  # noqa: PLR0913
         )
         return {"reference": f"STUB-{uuid4().hex[:8].upper()}", "stub": True}
 
-    body = f"{description}\n\nPage: {page_url}" if page_url else description
+    browser = _clean_user_agent(user_agent)
+    body = _ticket_body(description, page_url, browser)
     tags = [ZENDESK_SUPPORT_INTAKE_TAG]
     if not email_verified:
         tags.append(ZENDESK_UNVERIFIED_REQUESTER_TAG)
         body = f"{body}\n\n{ZENDESK_UNVERIFIED_REQUESTER_NOTE}"
+    device_tag = _device_tag(user_agent)
+    if device_tag:
+        tags.append(device_tag)
 
     custom_fields = _custom_fields(page_url, name, username)
 

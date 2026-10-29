@@ -927,6 +927,10 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            # Read off the request header rather than the chat payload, so the
+            # body has no say in it. The header is still whatever the caller
+            # sent, so the device is claimed, not proven.
+            user_agent=_header(self.scope, b"user-agent"),
         )
 
     def process_extra_state(self, data: dict) -> dict:

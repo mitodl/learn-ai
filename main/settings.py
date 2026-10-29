@@ -766,8 +766,9 @@ AI_ZENDESK_OAUTH_CLIENT_SECRET = get_string(
 AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
 # Custom ticket field ids, from Admin Center > Objects and rules > Tickets >
 # Fields. Minted per Zendesk instance, so they are configured rather than
-# hardcoded. 0 means unconfigured and the value is left off the ticket: Zendesk
-# rejects a whole ticket for a field id it does not recognise.
+# hardcoded. 0 means unconfigured and the value is left off the ticket. Never
+# guess or copy an id between instances: Zendesk drops one it does not
+# recognise silently and files the ticket anyway, so a wrong id looks fine.
 AI_ZENDESK_URL_FIELD_ID = get_int(name="AI_ZENDESK_URL_FIELD_ID", default=0)
 AI_ZENDESK_NAME_FIELD_ID = get_int(name="AI_ZENDESK_NAME_FIELD_ID", default=0)
 AI_ZENDESK_USERNAME_FIELD_ID = get_int(name="AI_ZENDESK_USERNAME_FIELD_ID", default=0)
