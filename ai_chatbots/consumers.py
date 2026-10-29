@@ -30,11 +30,13 @@ from ai_chatbots.chatbots import (
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import (
+    ACCOUNT_TOOLS_FEATURE_FLAG,
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
 )
+from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
@@ -48,6 +50,7 @@ from ai_chatbots.serializers import (
 from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
+from main.features import is_enabled as feature_is_enabled
 from main.utils import decode_value, format_seconds
 from users.models import User
 
@@ -527,7 +530,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             self.body.append(message["body"])
         if not message.get("more_body"):
             try:
-                await self.handle(b"".join(self.body))
+                with forwarded_learner_session(self.scope):
+                    await self.handle(b"".join(self.body))
             except:  # noqa: E722
                 log.exception("Error in handling consumer http_request")
             finally:
@@ -595,6 +599,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     ROOM_NAME = SyllabusBot.__name__
     throttle_scope = "syllabus_bot"
     bot_class = SyllabusBot
+    account_tools_allowed = True
 
     def create_chatbot(
         self,
@@ -606,6 +611,15 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
         enable_related_courses = bool(serializer.validated_data.get("related_courses"))
+        # Account tools need the learner's own session from this request, so
+        # anonymous users and requests without the session never get them.
+        enable_account_tools = (
+            self.account_tools_allowed
+            and has_learner_session()
+            and feature_is_enabled(
+                ACCOUNT_TOOLS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
+            )
+        )
 
         return self.bot_class(
             self.user_id,
@@ -615,6 +629,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            enable_account_tools=enable_account_tools,
             course_id=serializer.validated_data.get("course_id"),
             platform=serializer.validated_data.get("platform"),
         )
@@ -668,6 +683,8 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
     ROOM_NAME = "CanvasSyllabusBot"
     throttle_scope = "canvas_syllabus_bot"
     bot_class = CanvasSyllabusBot
+    # Canvas requests don't come from a learner's MIT Learn session
+    account_tools_allowed = False
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
