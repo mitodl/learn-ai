@@ -54,8 +54,8 @@ WORST_PATH_REQUESTS = 4
 # A scalar httpx timeout is not a budget for the request: it is given to each of
 # connect, write, read and pool separately, so one request can spend four of them.
 HTTPX_TIMEOUT_PHASES = 4
-# Real user agents run under 200 characters; this only bounds a caller that
-# decides to send something else.
+# Clear of the longest real user agents - an in-app webview runs past 250 - so
+# this only bounds a caller that decides to send something else.
 MAX_USER_AGENT_LENGTH = 512
 
 # Why the filing failed, for a caller deciding whether a retry is worth offering.
@@ -197,10 +197,8 @@ def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
 
 def _clean_user_agent(user_agent: str) -> str:
     """
-    Fold the header onto one bounded line.
-
-    It is caller-controlled and lands in a body that also carries the ticket's
-    trust signals, so left alone it could write lines of its own.
+    Fold the header onto one bounded line, so it stays a single Browser: entry
+    instead of adding lines to the body.
     """
     collapsed = " ".join((user_agent or "").split())
     return collapsed[:MAX_USER_AGENT_LENGTH]
@@ -220,17 +218,21 @@ def _device_tag(user_agent: str) -> str:
     """
     Classify the device, or return "" when the user agent does not say.
 
-    Takes the raw header, not the shortened one that goes in the body: the
-    tokens this reads sit at the end, so a truncated Android phone would lose
-    "Mobile" and come out as a tablet.
+    Takes the raw header, not the shortened one that goes in the body:
+    "Mobile" sits at the end, so a truncated Android phone would lose it and
+    come out as a tablet.
 
     Order matters, because the tokens overlap: an Android tablet is an Android
-    that does not say Mobile. "Macintosh" is deliberately not desktop - from
-    iPadOS 13 on, Safari's default desktop mode sends a user agent identical to
-    macOS Safari's, so it cannot be told apart from an iPad.
+    that does not say Mobile.
+
+    Neither "Macintosh" nor "X11" counts as desktop, because each is also what
+    a tablet sends in its default desktop mode - iPadOS 13+ Safari sends macOS
+    Safari's user agent, and Chrome on a large Android tablet sends the Linux
+    desktop one. That costs real Macs and Linux desktops their tag, which is
+    the cheaper mistake: a wrong device is worse than none.
     """
     user_agent = user_agent or ""
-    if "iPad" in user_agent or "Tablet" in user_agent:
+    if "iPad" in user_agent:
         return ZENDESK_DEVICE_TABLET_TAG
     if "Android" in user_agent:
         return (
@@ -240,7 +242,7 @@ def _device_tag(user_agent: str) -> str:
         )
     if any(token in user_agent for token in ("Mobi", "iPhone", "iPod")):
         return ZENDESK_DEVICE_MOBILE_TAG
-    if any(token in user_agent for token in ("Windows", "CrOS", "X11")):
+    if any(token in user_agent for token in ("Windows", "CrOS")):
         return ZENDESK_DEVICE_DESKTOP_TAG
     return ""
 

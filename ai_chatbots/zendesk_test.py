@@ -45,8 +45,9 @@ NAME_FIELD_ID = 51721582949009
 USERNAME_FIELD_ID = 51741744445201
 
 # Real user agent strings, because the classifier is only as good as the shapes
-# browsers actually send. UA_IPADOS_DESKTOP_MODE is what an iPad sends by
-# default from iPadOS 13 on, and is identical to UA_MAC_SAFARI on purpose.
+# browsers actually send. The two desktop-mode constants are the point of the
+# untagged cases: UA_IPADOS_DESKTOP_MODE is identical to UA_MAC_SAFARI, and
+# UA_ANDROID_TABLET_DESKTOP_MODE is a Linux desktop string with no Android in it.
 UA_WINDOWS_CHROME = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -77,6 +78,14 @@ UA_IPAD_SAFARI = (
 )
 UA_ANDROID_TABLET_CHROME = (
     "Mozilla/5.0 (Linux; Android 14; SM-X810) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+UA_ANDROID_TABLET_FIREFOX = (
+    "Mozilla/5.0 (Android 10; Tablet; rv:152.0) Gecko/152.0 Firefox/152.0"
+)
+# What Chrome sends on a tablet large enough to default to desktop mode.
+UA_ANDROID_TABLET_DESKTOP_MODE = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 
@@ -693,7 +702,9 @@ async def test_file_support_ticket_puts_the_browser_in_the_body(
         patch_path="ai_chatbots.zendesk.get_async_http_client",
     )
 
-    await file_support_ticket(**_ticket_args(), user_agent=UA_WINDOWS_CHROME)
+    await file_support_ticket(
+        **_ticket_args(email_verified=True), user_agent=UA_WINDOWS_CHROME
+    )
 
     _, kwargs = mock_patch.return_value.post.call_args
     body = kwargs["json"]["ticket"]["comment"]["body"]
@@ -731,7 +742,9 @@ async def test_file_support_ticket_adds_the_browser_line_with_no_page_url(
         patch_path="ai_chatbots.zendesk.get_async_http_client",
     )
 
-    await file_support_ticket(**_ticket_args(page_url=""), user_agent=UA_WINDOWS_CHROME)
+    await file_support_ticket(
+        **_ticket_args(page_url="", email_verified=True), user_agent=UA_WINDOWS_CHROME
+    )
 
     _, kwargs = mock_patch.return_value.post.call_args
     assert kwargs["json"]["ticket"]["comment"]["body"] == (
@@ -743,12 +756,14 @@ async def test_file_support_ticket_adds_the_browser_line_with_no_page_url(
     ("user_agent", "expected_tag"),
     [
         (UA_WINDOWS_CHROME, ZENDESK_DEVICE_DESKTOP_TAG),
-        (UA_LINUX_FIREFOX, ZENDESK_DEVICE_DESKTOP_TAG),
         (UA_CHROMEOS, ZENDESK_DEVICE_DESKTOP_TAG),
         (UA_IPHONE_SAFARI, ZENDESK_DEVICE_MOBILE_TAG),
         (UA_ANDROID_PHONE_CHROME, ZENDESK_DEVICE_MOBILE_TAG),
         (UA_IPAD_SAFARI, ZENDESK_DEVICE_TABLET_TAG),
         (UA_ANDROID_TABLET_CHROME, ZENDESK_DEVICE_TABLET_TAG),
+        # No "Mobile", so the Android branch calls it a tablet without needing
+        # the "Tablet" token itself.
+        (UA_ANDROID_TABLET_FIREFOX, ZENDESK_DEVICE_TABLET_TAG),
     ],
 )
 async def test_file_support_ticket_tags_the_device_type(
@@ -764,7 +779,7 @@ async def test_file_support_ticket_tags_the_device_type(
 
     _, kwargs = mock_patch.return_value.post.call_args
     tags = kwargs["json"]["ticket"]["tags"]
-    assert expected_tag in tags
+    assert [tag for tag in tags if tag.startswith("tim_device_")] == [expected_tag]
     assert ZENDESK_SUPPORT_INTAKE_TAG in tags
 
 
@@ -798,16 +813,26 @@ async def test_file_support_ticket_classifies_the_device_before_truncating(
 
 
 @pytest.mark.parametrize(
-    "user_agent", [UA_MAC_SAFARI, UA_IPADOS_DESKTOP_MODE, "curl/8.7.1", "MITBot/1.0"]
+    "user_agent",
+    [
+        UA_MAC_SAFARI,
+        UA_IPADOS_DESKTOP_MODE,
+        UA_LINUX_FIREFOX,
+        UA_ANDROID_TABLET_DESKTOP_MODE,
+        "curl/8.7.1",
+        "MITBot/1.0",
+    ],
 )
 async def test_file_support_ticket_leaves_an_ambiguous_device_untagged(
     zendesk_ticket_settings, mock_httpx_async_client, user_agent
 ):
     """
-    Safari on iPadOS 13+ sends, in its default desktop mode, a user agent that
-    is byte-identical to macOS Safari's, so "Macintosh" with no mobile token
-    cannot be told apart from an iPad. A wrong device tag is worse than none,
-    and the verbatim string is on the ticket for an agent to read either way.
+    Two tablets default to a desktop user agent: iPadOS 13+ Safari sends one
+    byte-identical to macOS Safari's, and Chrome on a large Android tablet
+    sends the Linux desktop one. Neither can be told apart from the desktop it
+    imitates, so "Macintosh" and "X11" are left unclassified - which costs real
+    Mac and Linux desktops their tag. A wrong device is worse than none, and
+    the user agent is on the ticket for an agent to read either way.
     """
     mock_patch = mock_httpx_async_client(
         {"ticket": {"id": 4821}},
@@ -826,8 +851,8 @@ async def test_file_support_ticket_sanitises_the_user_agent(
     zendesk_ticket_settings, mock_httpx_async_client
 ):
     """
-    The header is caller-controlled and lands next to the ticket's trust
-    signals, so it cannot be allowed to forge lines of its own or run long.
+    A header carrying newlines must still come out as one Browser: line, and
+    a long one must not run away with the body.
     """
     mock_patch = mock_httpx_async_client(
         {"ticket": {"id": 4821}},
@@ -845,7 +870,7 @@ async def test_file_support_ticket_sanitises_the_user_agent(
         line for line in body.splitlines() if line.startswith("Browser: ")
     )
     assert "evil.invalid" in browser_line
-    # Folded onto the browser line, so it cannot pass for a Page line of its own.
+    # Folded onto the browser line rather than becoming a Page line of its own.
     assert [line for line in body.splitlines() if line.startswith("Page: ")] == [
         "Page: https://learn.mit.edu/week-3"
     ]
