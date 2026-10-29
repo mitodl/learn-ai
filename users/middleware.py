@@ -35,7 +35,7 @@ class ApisixChannelAuthMiddleware:
         headers = {}
 
         for header in scope.get("headers", []):
-            log.debug("decode_scope_header: Header %s", header)
+            log.debug("decode_scope_header: Header %s", header[0])
             headers[header[0].decode()] = header[1]
 
         if decode_header not in headers:

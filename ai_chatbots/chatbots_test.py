@@ -57,7 +57,11 @@ from ai_chatbots.factories import (
     ToolMessageFactory,
 )
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
-from ai_chatbots.prompts import PROMPT_SEARCH_SUMMARY_QUERY, SYSTEM_PROMPT_MAPPING
+from ai_chatbots.prompts import (
+    PROMPT_SEARCH_SUMMARY_QUERY,
+    PROMPT_SYLLABUS_ACCOUNT_TOOLS,
+    SYSTEM_PROMPT_MAPPING,
+)
 from ai_chatbots.proxies import LiteLLMProxy
 from ai_chatbots.tools import SearchToolSchema
 from ai_chatbots.utils import get_django_cache
@@ -671,6 +675,32 @@ async def test_syllabus_bot_tools(mocker, mock_checkpointer, enable_related_cour
     if enable_related_courses:
         expected_tools.insert(1, "search_related_course_content_files")
     assert [tool.name for tool in chatbot.create_tools()] == expected_tools
+
+
+@pytest.mark.parametrize("enable_account_tools", [True, False])
+@pytest.mark.asyncio
+async def test_syllabus_bot_account_tools(
+    mocker, mock_checkpointer, enable_account_tools
+):
+    """SyllabusBot gets the account tools and their instructions only if enabled."""
+    mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous",
+        mock_checkpointer,
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+        enable_account_tools=enable_account_tools,
+    )
+    account_tools = [
+        "get_enrollments",
+        "get_course_progress",
+        "get_certificate_status",
+        "get_upcoming_assignments",
+    ]
+    tool_names = [tool.name for tool in chatbot.create_tools()]
+    assert (tool_names[-4:] == account_tools) is enable_account_tools
+    assert (
+        PROMPT_SYLLABUS_ACCOUNT_TOOLS in chatbot.instructions
+    ) is enable_account_tools
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
