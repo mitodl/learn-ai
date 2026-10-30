@@ -7,10 +7,9 @@ from uuid import uuid4
 import ulid
 from django.conf import settings
 from django.contrib.auth.models import Group
-from factory import LazyFunction, Sequence, SubFactory
+from factory import LazyFunction, Sequence
 from factory.django import DjangoModelFactory
 from factory.fuzzy import FuzzyChoice, FuzzyInteger, FuzzyText
-from social_django.models import UserSocialAuth
 
 from main.models import ConsumerThrottleLimit
 
@@ -36,17 +35,6 @@ class GroupFactory(DjangoModelFactory):
 
     class Meta:
         model = Group
-
-
-class UserSocialAuthFactory(DjangoModelFactory):
-    """Factory for UserSocialAuth"""
-
-    provider = FuzzyText()
-    user = SubFactory(UserFactory)
-    uid = FuzzyText()
-
-    class Meta:
-        model = UserSocialAuth
 
 
 class ConsumerThrottleLimitFactory(DjangoModelFactory):
