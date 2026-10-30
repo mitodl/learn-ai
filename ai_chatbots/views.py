@@ -3,7 +3,7 @@
 import logging
 
 import httpx
-import requests
+from asgiref.sync import async_to_sync
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import QuerySet
@@ -21,6 +21,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView as ApiView
 from rest_framework.viewsets import GenericViewSet, ReadOnlyModelViewSet
 
+from ai_chatbots import learn_api
+from ai_chatbots.learn_api import LearnError
 from ai_chatbots.models import (
     DjangoCheckpoint,
     LLMModel,
@@ -209,13 +211,11 @@ class ProblemSetList(ApiView):
                 {"error": "run_readable_id parameter is required."}, status=400
             )
 
-        url = f"{settings.PROBLEM_SET_URL}/{run_readable_id}"
-        headers = {"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"}
         try:
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            return Response(response.json(), status=200)
-        except requests.RequestException:
+            return Response(
+                async_to_sync(learn_api.problem_set)(run_readable_id), status=200
+            )
+        except LearnError:
             return Response({"error": "Something went wrong"}, status=500)
 
 
@@ -250,21 +250,8 @@ class GetTranscriptBlockId(ApiView):
             )
 
         try:
-            url = settings.AI_MIT_CONTENTFILE_URL
-            params = {
-                "edx_module_id": edx_module_id,
-            }
-            response = requests.get(
-                url,
-                params=params,
-                headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-                timeout=30,
-            )
-            response.raise_for_status()
-            response = response.json()
-            contentfile = (
-                response.get("results")[0] if response.get("results") else None
-            )
+            results = async_to_sync(learn_api.contentfiles)([edx_module_id])
+            contentfile = results[0] if results else None
             if contentfile is None:
                 log.error("No contentfile found for edx_module_id %s", edx_module_id)
                 return Response(
@@ -282,7 +269,7 @@ class GetTranscriptBlockId(ApiView):
                 status=200,
             )
 
-        except requests.RequestException:
+        except LearnError:
             return Response(
                 {"error": "Failed to retrieve contentfile"},
                 status=500,
