@@ -12,8 +12,10 @@ from ai_chatbots.constants import (
     ZENDESK_PLATFORM_CATEGORY_IDS,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
 )
+from ai_chatbots.learner_api import LearnerAPIError, forwarded_learner_session
 from ai_chatbots.tools import (
     COURSE_PLATFORM_CACHE_PREFIX,
+    WITHHELD_LINKS_NOTE,
     SearchToolSchema,
     get_video_transcript_chunk,
     search_content_files,
@@ -429,6 +431,243 @@ async def test_search_canvas_content_files(  # noqa: PLR0913
         if not exclude_canvas
         else 0
     )
+
+
+MITX_RUN = "course-v1:MITxT+18.01x+3T2026"
+MITX_OTHER_RUN = "course-v1:MITxT+18.01x+1T2020"
+LMS = "https://courses.mitxonline.test"
+COURSEWARE_URL = f"{LMS}/courses/{MITX_RUN}/jump_to_id/abc123"
+ASSET_URL = f"{LMS}/asset-v1:MITxT+18.01x+3T2026+type@asset+block@notes.pdf"
+MARKETING_URL = "https://learn.mit.test/courses/course-v1:MITxT+18.01x"
+OCW_URL = "https://ocw.mit.edu/courses/18-01-single-variable-calculus/pages/syllabus/"
+
+
+def content_chunk(
+    url,
+    *,
+    platform="mitxonline",
+    run=MITX_RUN,
+    edx_module_id="block-v1:MITxT+18.01x+3T2026+type@sequential+block@abc123",
+):
+    """Build a content file search result shaped like mit-learn's vector search."""
+    return {
+        "url": url,
+        "title": url,
+        "platform": {"code": platform},
+        "run_readable_id": run,
+        "run_title": "Calculus",
+        "edx_module_id": edx_module_id,
+        "chunk_content": "What a derivative measures",
+    }
+
+
+@pytest.fixture
+def search_returns(settings, mock_httpx_async_client):
+    """Make the content file search return the given results."""
+    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
+
+    def _search_returns(*results):
+        mock_httpx_async_client(
+            {"results": list(results)},
+            patch_path="ai_chatbots.utils.get_async_http_client",
+        )
+
+    return _search_returns
+
+
+@pytest.fixture
+def learner(mocker):
+    """Give the request a learner session with the given MITx Online enrollments."""
+    mocker.patch("ai_chatbots.tools.learner_api.has_learner_session", return_value=True)
+
+    def _learner(*enrollments, error=None):
+        return mocker.patch(
+            "ai_chatbots.tools.learner_api.get_enrollments",
+            side_effect=error,
+            return_value=list(enrollments),
+        )
+
+    return _learner
+
+
+def enrolled_in(run):
+    """Build an enrollment shaped like MITx Online's /api/v3/enrollments/."""
+    return {"run": {"courseware_id": run}}
+
+
+async def _invoke(tool, state):
+    """Invoke a content search tool, returning its raw and parsed output."""
+    state["related_courses"] = [MITX_RUN]
+    raw = await tool.ainvoke({"q": "main topics", "state": state})
+    return raw, json.loads(raw)
+
+
+def _cited(results):
+    return set(results["citation_sources"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "tool", [search_content_files, search_related_course_content_files]
+)
+async def test_course_material_links_hidden_without_session(
+    mocker, search_returns, syllabus_agent_state, tool
+):
+    """Without a learner session, links to course material are dropped."""
+    get_enrollments = mocker.patch("ai_chatbots.tools.learner_api.get_enrollments")
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL),
+        content_chunk(None),
+        content_chunk(MARKETING_URL, edx_module_id=None),
+        content_chunk(OCW_URL, platform="ocw", edx_module_id=None),
+    )
+
+    raw, results = await _invoke(tool, syllabus_agent_state)
+
+    assert [result["id"] for result in results["results"]] == [
+        None,
+        None,
+        None,
+        MARKETING_URL,
+        OCW_URL,
+    ]
+    assert _cited(results) == {MARKETING_URL, OCW_URL}
+    # the chatbot still answers from the content
+    assert results["results"][0]["chunk_content"] == "What a derivative measures"
+    # the hidden links reach neither the model nor the client metadata
+    assert COURSEWARE_URL not in raw
+    assert ASSET_URL not in raw
+    # so the model doesn't offer the files with placeholder links
+    assert results["note"] == WITHHELD_LINKS_NOTE
+    get_enrollments.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "tool", [search_content_files, search_related_course_content_files]
+)
+async def test_course_material_linked_for_enrolled_run(
+    learner, search_returns, syllabus_agent_state, tool
+):
+    """Course material is linked only for the run the learner is enrolled in."""
+    get_enrollments = learner(enrolled_in(MITX_RUN))
+    other_run_url = f"{LMS}/courses/{MITX_OTHER_RUN}/jump_to_id/abc123"
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL),
+        content_chunk(other_run_url, run=MITX_OTHER_RUN),
+    )
+
+    _, results = await _invoke(tool, syllabus_agent_state)
+
+    assert _cited(results) == {COURSEWARE_URL, ASSET_URL}
+    assert results["results"][3]["id"] is None
+    # one lookup for all of the results
+    get_enrollments.assert_called_once()
+
+
+@pytest.mark.django_db
+async def test_course_material_hidden_when_enrollments_fail(
+    learner, search_returns, syllabus_agent_state
+):
+    """A failed enrollment lookup drops the links but keeps every result."""
+    get_enrollments = learner(error=LearnerAPIError("get_enrollments", 500))
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL),
+        content_chunk(OCW_URL, platform="ocw", edx_module_id=None),
+    )
+
+    _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert len(results["results"]) == 3
+    assert _cited(results) == {OCW_URL}
+    get_enrollments.assert_called_once()
+
+
+@pytest.mark.django_db
+async def test_malformed_enrollments_are_skipped(
+    learner, search_returns, syllabus_agent_state
+):
+    """A malformed enrollment neither hides valid ones nor matches a missing run."""
+    learner(
+        "junk",
+        {},
+        {"run": None},
+        {"run": "course-v1:MITxT+18.01x+3T2026"},
+        {"run": {"courseware_id": None}},
+        {"run": {"courseware_id": ""}},
+        enrolled_in(MITX_RUN),
+    )
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL, run=None),
+        content_chunk(f"{LMS}/courses/{MITX_RUN}/jump_to_id/def456", run=""),
+    )
+
+    _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert _cited(results) == {COURSEWARE_URL}
+
+
+CANVAS_URL = "https://canvas.mit.test/courses/1/files/2/"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("chunk", "cited"),
+    [
+        # enrollments on other platforms can't be checked
+        (content_chunk(COURSEWARE_URL, platform="xpro"), set()),
+        (content_chunk(COURSEWARE_URL, platform="edx"), set()),
+        (content_chunk(COURSEWARE_URL, platform="oll"), set()),
+        # Canvas files have an edx_module_id too, but keep their links
+        (content_chunk(CANVAS_URL, platform="canvas"), {CANVAS_URL}),
+        (content_chunk(CANVAS_URL, platform=None), {CANVAS_URL}),
+        # not course material
+        (content_chunk(MARKETING_URL, edx_module_id=None), {MARKETING_URL}),
+        (content_chunk(None), set()),
+    ],
+)
+async def test_links_decided_without_enrollment_lookup(
+    learner, search_returns, syllabus_agent_state, chunk, cited
+):
+    """These results are linked or not without looking up enrollments."""
+    get_enrollments = learner(enrolled_in(MITX_RUN))
+    syllabus_agent_state["exclude_canvas"] = ["False"]
+    search_returns(chunk)
+
+    _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert len(results["results"]) == 1
+    assert _cited(results) == cited
+    get_enrollments.assert_not_called()
+
+
+@pytest.mark.django_db
+async def test_course_material_linked_with_forwarded_session(
+    mocker, settings, search_returns, syllabus_agent_state
+):
+    """A learner session alone is enough; the account tools flag isn't checked."""
+    settings.LEARNER_API_LEARN_COOKIE_NAME = "learn_session"
+    get_enrollments = mocker.patch(
+        "ai_chatbots.tools.learner_api.get_enrollments",
+        return_value=[enrolled_in(MITX_RUN)],
+    )
+    search_returns(content_chunk(COURSEWARE_URL))
+    scope = {
+        "user": mocker.Mock(is_authenticated=True),
+        "cookies": {"learn_session": "learn-1"},
+    }
+
+    with forwarded_learner_session(scope):
+        _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert _cited(results) == {COURSEWARE_URL}
+    assert "note" not in results
+    get_enrollments.assert_called_once()
 
 
 @pytest.mark.parametrize(

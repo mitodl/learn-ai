@@ -291,6 +291,35 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     )
 
 
+WITHHELD_LINKS_NOTE = (
+    "Results with a null id have no url. Answer from them as usual, but never "
+    "write about links, urls or downloads for them: no links, no placeholder "
+    "links, and no remark that a link is unavailable, missing or not provided. "
+    "If the user asks for a link to one of them, answer without commenting on "
+    "links."
+)
+
+
+async def _enrolled_runs() -> set[str]:
+    """
+    Get the MITx Online runs the signed-in learner is enrolled in, read with
+    their own session. Empty with no session or if the records can't be read.
+    """
+    if not learner_api.has_learner_session():
+        return set()
+    runs = set()
+    try:
+        for enrollment in await learner_api.get_enrollments():
+            run = enrollment.get("run") if isinstance(enrollment, dict) else None
+            run_id = run.get("courseware_id") if isinstance(run, dict) else None
+            if run_id and isinstance(run_id, str):
+                runs.add(run_id)
+    except Exception:  # noqa: BLE001
+        log.warning("Couldn't read the learner's enrollments to check course links")
+        return set()
+    return runs
+
+
 async def _content_file_search(url, params, *, exclude_canvas=True):
     try:
         # Convert the exclude_canvas parameter to a boolean if it is a string
@@ -307,6 +336,8 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
         # Simplify the response to only include the main properties
         simplified_results = []
         citations = {}
+        enrolled_runs = None
+        links_withheld = False
         for result in raw_results:
             platform = result.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
@@ -317,6 +348,22 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
             # is shared by every chunk of every file in a course, so keying on
             # it collapsed every citation onto whichever result came back first
             citation_key = result.get("url")
+            # Link a file from an Open edX course (it has an edx_module_id;
+            # Canvas files do too, but stay in Canvas) only for learners
+            # enrolled in its run, since most of them open only for enrolled
+            # learners. Only MITx Online enrollments can be checked.
+            is_course_material = (
+                result.get("edx_module_id") and platform and platform != "canvas"
+            )
+            if citation_key and is_course_material:
+                if platform == MITXONLINE_PLATFORM and enrolled_runs is None:
+                    enrolled_runs = await _enrolled_runs()
+                if (
+                    platform != MITXONLINE_PLATFORM
+                    or result.get("run_readable_id") not in enrolled_runs
+                ):
+                    citation_key = None
+                    links_withheld = True
             simplified_result = {
                 "id": citation_key,
                 "chunk_content": result.get("chunk_content"),
@@ -334,7 +381,9 @@ async def _content_file_search(url, params, *, exclude_canvas=True):
             "citation_sources": citations,
             "metadata": {"search_url": url, "parameters": params},
         }
-        return json.dumps(full_output)
+        # Otherwise the model offers the files anyway, with links to "#"
+        note = {"note": WITHHELD_LINKS_NOTE} if links_withheld else {}
+        return json.dumps(full_output | note)
     except Exception:
         log.exception("Error querying MIT API")
         # keep the url and parameters, so a failed search is distinguishable
