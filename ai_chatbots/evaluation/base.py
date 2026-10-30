@@ -44,6 +44,10 @@ class EvaluationConfig:
     metrics: list[Any]
     metric_thresholds: dict[str, float]
     confident_api_key: str | None = None
+    # Applied to every judge call, including --pairwise
+    timeout_seconds: int = 360
+    max_retries: int = 3
+    retry_delay: float = 5.0
 
 
 class BaseBotEvaluator(ABC):
@@ -127,7 +131,6 @@ class BaseBotEvaluator(ABC):
         """Create DeepEval LLMTestCase from bot response."""
         # Extract tool information if available
         tool_results = self.extract_tool_results(response, test_case)
-        retrieval_context = self.extract_retrieval_context(tool_results)
         tool_calls = self.extract_tool_calls(response)
 
         if test_case.expected_tools:
@@ -151,6 +154,20 @@ class BaseBotEvaluator(ABC):
                     test_case.expected_tools,
                 )
 
+        # Every tool output, so the metrics see all evidence the bot had
+        context = response.get("extra_context", []) + [
+            m.content
+            for m in response.get("messages", [])
+            if getattr(m, "type", None) == "tool" and m.content
+        ]
+        log.info(
+            "Evidence context for %s/%s %r: %d items, %d chars",
+            self.bot_name,
+            model,
+            test_case.question[:50],
+            len(context),
+            sum(len(c) for c in context),
+        )
         return LLMTestCase(
             name=f"{self.bot_name}-{model}-{prompt_label}",
             metadata={
@@ -162,8 +179,8 @@ class BaseBotEvaluator(ABC):
             input=test_case.question,
             actual_output=response["messages"][-1].content,
             expected_output=test_case.expected_output,
-            retrieval_context=retrieval_context,
-            context=retrieval_context,
+            retrieval_context=context,
+            context=context,
             tools_called=tool_calls,
             expected_tools=[ToolCall(name=t) for t in (test_case.expected_tools or [])],
         )
@@ -187,17 +204,6 @@ class BaseBotEvaluator(ABC):
                 continue
 
         return []
-
-    def extract_retrieval_context(
-        self, tool_results: list[dict[str, Any]]
-    ) -> list[str]:
-        """Extract retrieval context from tool results."""
-        if not tool_results:
-            return []
-
-        return [
-            "\n\n".join(f.get("chunk_content", json.dumps(f)) for f in tool_results)
-        ]
 
     def extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
         """Extract tool calls by scanning for message with tool_calls."""

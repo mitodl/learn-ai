@@ -122,6 +122,15 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--pairwise",
+            dest="pairwise",
+            action="store_true",
+            help=(
+                "Also ask the judge which model answered each question best, "
+                "without an expected answer.  Needs two or more models."
+            ),
+        )
+        parser.add_argument(
             "--max-retries",
             dest="max_retries",
             required=False,
@@ -207,6 +216,7 @@ class Command(BaseCommand):
                 max_concurrent=max_concurrent,
                 batch_size=batch_size,
                 error_log_file=error_log_file,
+                pairwise=options["pairwise"],
             )
         finally:
             # Clean up file resources if using DualOutputWrapper

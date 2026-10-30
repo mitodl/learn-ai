@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 from deepeval.test_case import LLMTestCase
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from ai_chatbots.evaluation.base import (
     BaseBotEvaluator,
@@ -221,19 +221,6 @@ class TestConcreteBotEvaluator:
         results = evaluator.extract_tool_results(response, test_case)
         assert results == []
 
-    def test_extract_retrieval_context(self, evaluator):
-        """Test retrieval context extraction."""
-        tool_results = [{"chunk_content": "Content 1"}, {"chunk_content": "Content 2"}]
-
-        context = evaluator.extract_retrieval_context(tool_results)
-        assert len(context) == 1
-        assert "Content 1\n\nContent 2" in context[0]
-
-    def test_extract_retrieval_context_empty(self, evaluator):
-        """Test retrieval context extraction with empty results."""
-        context = evaluator.extract_retrieval_context([])
-        assert context == []
-
     def test_extract_tool_calls(self, evaluator, mocker):
         """Test tool calls extraction."""
         mock_tool_call = mocker.Mock()
@@ -380,6 +367,44 @@ class TestConcreteBotEvaluator:
         assert llm_test_case.metadata["bot_name"] == "test_bot"
         assert llm_test_case.metadata["model"] == "gpt-4o"
         assert llm_test_case.metadata["prompt_label"] == "default"
+
+    def test_create_llm_test_case_context(self, evaluator):
+        """Context holds extra_context plus every non-empty tool message."""
+        test_case = TestCaseSpec(question="Test question")
+        response = {
+            "messages": [
+                HumanMessage(content="User message"),
+                ToolMessage(content='{"results": ["a"]}', tool_call_id="1"),
+                AIMessage(content="Not a tool output"),
+                ToolMessage(content="", tool_call_id="2"),
+                ToolMessage(content="Second tool output", tool_call_id="3"),
+                AIMessage(content="Bot response"),
+            ],
+            "extra_context": ["Facts from the system prompt"],
+        }
+
+        llm_test_case = evaluator.create_llm_test_case(
+            test_case, response, "gpt-4o", "default"
+        )
+
+        expected = [
+            "Facts from the system prompt",
+            '{"results": ["a"]}',
+            "Second tool output",
+        ]
+        assert llm_test_case.context == expected
+        assert llm_test_case.retrieval_context == expected
+
+    def test_create_llm_test_case_no_context(self, evaluator):
+        """A response with no tool calls or extra context has empty context."""
+        response = {"messages": [AIMessage(content="Bot response")]}
+
+        llm_test_case = evaluator.create_llm_test_case(
+            TestCaseSpec(question="Q"), response, "gpt-4o"
+        )
+
+        assert llm_test_case.context == []
+        assert llm_test_case.retrieval_context == []
 
     def test_create_llm_test_case_warns_on_empty_extraction(self, evaluator, caplog):
         """Test that warnings are logged when tools expected but extraction is empty."""

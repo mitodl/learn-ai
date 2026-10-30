@@ -1,0 +1,88 @@
+{
+  "recommendation": [
+    {
+      "question": "What are some free basic courses about data science?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm a high school student interested in robotics. Where should I start?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Recommend an introductory course on machine learning that uses Python.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Are there any courses on climate change and energy policy?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I want to learn about entrepreneurship and starting a company. What do you suggest?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What courses teach linear algebra for beginners?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Find me a course on supply chain management that offers a certificate.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm a nurse and want to learn about healthcare data analytics. Any recommendations?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Do you have anything on the history of architecture?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What are some short courses on public speaking or communication skills?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I already know calculus. What should I take next to get into quantum physics?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Recommend some free courses about artificial intelligence ethics.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    }
+  ]
+}

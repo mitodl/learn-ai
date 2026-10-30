@@ -14,6 +14,12 @@ from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 NUM_METRICS = 5
 
 
+@pytest.fixture(autouse=True)
+def mock_prepare(mocker):
+    """Keep TimeoutMetricWrapper.prepare from asking the judge for GEval steps."""
+    return mocker.patch.object(TimeoutMetricWrapper, "prepare")
+
+
 @pytest.fixture
 def mock_evaluator(mocker):
     """Create a mock evaluator with standard behavior."""
@@ -670,3 +676,223 @@ class TestEvaluationConfigIntegration:
         mock_stdout.write.assert_called()
         # Note: With the new implementation, empty test cases don't trigger "No test cases available"
         # since the bot itself returns empty results
+
+
+def _case(question, model, course="c1"):
+    """Build an LLMTestCase shaped like the ones evaluate_model returns."""
+    from deepeval.test_case import LLMTestCase
+
+    return LLMTestCase(
+        input=question,
+        actual_output=f"{model} answer",
+        retrieval_context=["evidence"],
+        metadata={
+            "model": model,
+            "prompt_label": "default",
+            "metadata": {"extra_state": {"course_id": [course]}},
+        },
+    )
+
+
+class TestPairwise:
+    """Test cases for the --pairwise judge."""
+
+    @pytest.fixture
+    def orchestrator(self, mock_stdout):
+        """Create orchestrator for testing."""
+        return EvaluationOrchestrator(mock_stdout)
+
+    @pytest.fixture
+    def config(self, orchestrator):
+        """Config comparing two models."""
+        return orchestrator.create_evaluation_config(
+            models=["model-a", "model-b"],
+            evaluation_model="judge",
+            timeout_seconds=30,
+            max_retries=1,
+            retry_delay=0.5,
+        )
+
+    @pytest.fixture
+    def arena(self, mocker):
+        """Patch the judge; it picks whichever winner the test sets."""
+        arena_class = mocker.patch("ai_chatbots.evaluation.orchestrator.ArenaGEval")
+        metric = mocker.Mock(reason="because", error=None)
+        wrapper_class = mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.TimeoutMetricWrapper",
+            return_value=metric,
+        )
+        return arena_class, metric, wrapper_class
+
+    def test_run_pairwise_counts_wins(self, orchestrator, config, arena, mock_stdout):
+        """Answers to the same question are grouped, and wins are tallied."""
+        arena_class, metric, wrapper_class = arena
+        metric.measure.side_effect = ["model-b", "model-a", "model-b"]
+        cases = [
+            _case("Q1", "model-a"),
+            _case("Q1", "model-b"),
+            _case("Q2", "model-a"),
+            _case("Q2", "model-b"),
+            # Same question for a different course is judged separately
+            _case("Q1", "model-a", course="c2"),
+            _case("Q1", "model-b", course="c2"),
+        ]
+
+        orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
+
+        assert metric.measure.call_count == 3
+        arenas = [call.args[0] for call in metric.measure.call_args_list]
+        assert [sorted(c.name for c in arena.contestants) for arena in arenas] == [
+            ["model-a", "model-b"]
+        ] * 3
+        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 2}}
+        assert arena_class.call_args.kwargs["model"] == "judge"
+        # The judge gets the run's timeout and retries, and its steps once
+        assert (config.timeout_seconds, config.max_retries, config.retry_delay) == (
+            30,
+            1,
+            0.5,
+        )
+        wrapper_class.assert_called_once_with(
+            arena_class.return_value,
+            timeout_seconds=config.timeout_seconds,
+            max_retries=config.max_retries,
+            retry_base_delay=config.retry_delay,
+        )
+        metric.prepare.assert_called_once_with()
+        assert arena_class.call_args.kwargs["evaluation_params"] == [
+            LLMTestCaseParams.INPUT,
+            LLMTestCaseParams.ACTUAL_OUTPUT,
+            LLMTestCaseParams.RETRIEVAL_CONTEXT,
+        ]
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert "Pairwise wins for syllabus: {'model-a': 1, 'model-b': 2}" in output
+
+    def test_run_pairwise_skips_unmatched_and_judge_errors(
+        self, orchestrator, config, arena, mock_stdout
+    ):
+        """A question only one model answered is skipped; judge errors don't stop
+        the run.
+        """
+        _, metric, _ = arena
+        outcomes = iter([None, "model-a"])
+
+        def measure(_arena):
+            # The wrapper returns 0.0 and sets error once its retries run out
+            winner = next(outcomes)
+            metric.error = None if winner else "judge down"
+            return winner or 0.0
+
+        metric.measure.side_effect = measure
+        cases = [
+            _case("Q1", "model-a"),
+            _case("Q1", "model-b"),
+            _case("Q2", "model-a"),
+            _case("Q2", "model-b"),
+            _case("Only one", "model-a"),
+        ]
+
+        orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
+
+        assert metric.measure.call_count == 2
+        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 0}}
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert "judge error: judge down" in output
+
+    @pytest.mark.parametrize(
+        ("bot_name", "models", "message"),
+        [
+            ("tutor", ["model-a", "model-b"], "Skipping pairwise for tutor"),
+            ("syllabus", ["model-a"], "--pairwise needs two or more models"),
+        ],
+    )
+    def test_run_pairwise_skipped(  # noqa: PLR0913
+        self, orchestrator, arena, mock_stdout, bot_name, models, message
+    ):
+        """Tutor answers (no problem context) and single-model runs are skipped."""
+        _, metric, _ = arena
+        config = orchestrator.create_evaluation_config(
+            models=models, evaluation_model="judge"
+        )
+        cases = [_case("Q1", m) for m in models]
+
+        orchestrator._run_pairwise(bot_name, cases, config)  # noqa: SLF001
+
+        metric.measure.assert_not_called()
+        assert orchestrator.pairwise_wins == {}
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert message in output
+
+    @pytest.mark.parametrize("pairwise", [True, False])
+    @pytest.mark.asyncio
+    async def test_run_evaluation_pairwise_flag(
+        self, orchestrator, config, mock_stdout, mocker, pairwise
+    ):
+        """run_evaluation passes every model's cases to the judge only when
+        asked.
+        """
+        cases = {m: _case("Q1", m) for m in config.models}
+        evaluator = mocker.Mock()
+        evaluator.load_test_cases.return_value = [mocker.Mock()]
+        evaluator.evaluate_model = AsyncMock(
+            side_effect=lambda model, *_args, **_kwargs: [cases[model]]
+        )
+        mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"test_bot": (mocker.Mock(), mocker.Mock(return_value=evaluator))},
+        )
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        from deepeval.evaluate.types import EvaluationResult
+
+        mock_deepeval.evaluate.return_value = EvaluationResult(
+            test_results=[], confident_link=None, test_run_id=None
+        )
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        def fake_pairwise(bot_name, _test_cases, _config):
+            orchestrator.pairwise_wins[bot_name] = {"model-a": 1, "model-b": 0}
+
+        run_pairwise = mocker.patch.object(
+            orchestrator, "_run_pairwise", side_effect=fake_pairwise
+        )
+
+        await orchestrator.run_evaluation(
+            config, bot_names=["test_bot"], use_prompts=False, pairwise=pairwise
+        )
+
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        if pairwise:
+            run_pairwise.assert_called_once_with(
+                "test_bot", list(cases.values()), config
+            )
+            assert "PAIRWISE WINS" in output
+        else:
+            run_pairwise.assert_not_called()
+            assert "PAIRWISE WINS" not in output
+
+    def test_evaluate_prepares_metrics(
+        self, orchestrator, config, mock_prepare, mocker
+    ):
+        """Every metric is prepared (GEval steps generated) before scoring."""
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        mock_deepeval.evaluate.return_value = mocker.Mock(test_results=[1])
+
+        orchestrator._run_deepeval_evaluation(  # noqa: SLF001
+            [_case("Q1", "model-a")], config, 2
+        )
+
+        assert mock_prepare.call_count == len(config.metrics)
+
+    def test_evaluate_warns_when_deepeval_drops_cases(
+        self, orchestrator, config, mock_stdout, mocker
+    ):
+        """A warning is printed when deepeval returns fewer results than cases."""
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+        mock_deepeval.evaluate.return_value = mocker.Mock(test_results=[1])
+
+        orchestrator._run_deepeval_evaluation(  # noqa: SLF001
+            [_case("Q1", "model-a"), _case("Q2", "model-a")], config, 2
+        )
+
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        assert "deepeval returned 1 of 2 test cases" in output

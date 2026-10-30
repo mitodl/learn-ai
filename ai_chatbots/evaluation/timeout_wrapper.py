@@ -5,9 +5,9 @@ import logging
 import random
 import threading
 import time
-from typing import Any
 
 from deepeval.metrics import BaseMetric
+from deepeval.metrics.utils import copy_metrics
 from deepeval.test_case import LLMTestCase
 
 logger = logging.getLogger(__name__)
@@ -51,19 +51,17 @@ class TimeoutMetricWrapper(BaseMetric):
 
     def measure(self, test_case: LLMTestCase) -> float:
         """Execute the base metric with timeout protection."""
-        return self._execute_with_timeout(self.base_metric.measure, test_case)
+        return self._execute_with_timeout("measure", test_case)
 
     async def a_measure(self, test_case: LLMTestCase) -> float:
         """Execute the base metric asynchronously with timeout protection."""
         if hasattr(self.base_metric, "a_measure"):
-            return await self._execute_async_with_timeout(
-                self.base_metric.a_measure, test_case
-            )
+            return await self._execute_async_with_timeout("a_measure", test_case)
         else:
             # Fallback to sync measure in executor
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
-                None, self._execute_with_timeout, self.base_metric.measure, test_case
+                None, self._execute_with_timeout, "measure", test_case
             )
 
     def _compute_retry_delay(self, attempt: int) -> float:
@@ -72,7 +70,47 @@ class TimeoutMetricWrapper(BaseMetric):
         jitter = random.uniform(0, 2)  # noqa: S311
         return delay + jitter
 
-    def _execute_with_timeout(self, method: Any, test_case: LLMTestCase) -> float:
+    def _fresh_metric(self) -> BaseMetric:
+        """Return a new copy of the base metric for one attempt.
+
+        deepeval's copy_metrics rebuilds this wrapper from its init args, so every
+        copy would share one base_metric, and concurrent test cases (or a retry
+        alongside a timed-out thread) would overwrite each other's score/reason.
+        """
+        return copy_metrics([self.base_metric])[0]
+
+    def prepare(self) -> None:
+        """Generate a GEval metric's evaluation steps once, before any scoring.
+
+        GEval generates its steps on first use and keeps them on the instance.
+        Every attempt scores a fresh copy, so without this each test case (and
+        each model's answer to the same question) would get steps of its own.
+        Call it off the event loop; it blocks for up to timeout_seconds.
+        """
+        base = self.base_metric
+        if not hasattr(base, "_generate_evaluation_steps") or base.evaluation_steps:
+            return
+        result = {}
+
+        def target():
+            try:
+                result["steps"] = base._generate_evaluation_steps(multimodal=False)  # noqa: SLF001
+            except Exception:
+                logger.exception("Failed to generate evaluation steps")
+
+        thread = threading.Thread(target=target, daemon=True)
+        thread.start()
+        thread.join(timeout=self.timeout_seconds)
+        # Read only from this thread, so a late finish can't change the metric
+        if steps := result.get("steps"):
+            base.evaluation_steps = steps
+        else:
+            logger.warning(
+                "No shared evaluation steps for %s; each case generates its own",
+                self.__name__,
+            )
+
+    def _execute_with_timeout(self, method_name: str, test_case: LLMTestCase) -> float:
         """Execute a method with timeout using threading, with retries."""
         last_error = None
 
@@ -92,15 +130,17 @@ class TimeoutMetricWrapper(BaseMetric):
                 time.sleep(delay)
 
             result = {"score": None, "error": None, "completed": False}
+            metric = self._fresh_metric()
 
-            def target(result=result):
+            def target(result=result, metric=metric):
                 try:
-                    score = method(test_case)
+                    score = getattr(metric, method_name)(test_case)
                     result["score"] = score
-                    result["base_score"] = self.base_metric.score
-                    result["base_success"] = self.base_metric.success
-                    result["base_reason"] = getattr(self.base_metric, "reason", None)
-                    result["base_error"] = getattr(self.base_metric, "error", None)
+                    # Arena metrics (ArenaGEval) set a winner, not score/success
+                    result["base_score"] = getattr(metric, "score", None)
+                    result["base_success"] = getattr(metric, "success", None)
+                    result["base_reason"] = getattr(metric, "reason", None)
+                    result["base_error"] = getattr(metric, "error", None)
                     result["completed"] = True
                 except Exception as e:  # noqa: BLE001
                     result["error"] = str(e)
@@ -140,7 +180,7 @@ class TimeoutMetricWrapper(BaseMetric):
         return 0.0
 
     async def _execute_async_with_timeout(
-        self, method: Any, test_case: LLMTestCase
+        self, method_name: str, test_case: LLMTestCase
     ) -> float:
         """Execute an async method with timeout, with retries."""
         last_error = None
@@ -160,14 +200,16 @@ class TimeoutMetricWrapper(BaseMetric):
                 )
                 await asyncio.sleep(delay)
 
+            metric = self._fresh_metric()
             try:
                 score = await asyncio.wait_for(
-                    method(test_case), timeout=self.timeout_seconds
+                    getattr(metric, method_name)(test_case),
+                    timeout=self.timeout_seconds,
                 )
-                self.score = self.base_metric.score
-                self.success = self.base_metric.success
-                self.reason = getattr(self.base_metric, "reason", None)
-                self.error = getattr(self.base_metric, "error", None)
+                self.score = getattr(metric, "score", None)
+                self.success = getattr(metric, "success", None)
+                self.reason = getattr(metric, "reason", None)
+                self.error = getattr(metric, "error", None)
             except TimeoutError:
                 last_error = f"Timeout after {self.timeout_seconds} seconds"
                 continue
