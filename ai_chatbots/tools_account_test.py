@@ -295,6 +295,88 @@ async def test_course_number_names_its_course(records, course_id, course):
     assert [e["course_id"] for e in result["enrollments"]] == [course]
 
 
+@pytest.mark.parametrize(
+    ("course_id", "courses"),
+    [
+        ("Foundations of Development Policy", [ECONOMICS_2]),
+        ("foundations of  development policy", [ECONOMICS_2]),
+        ("Calculus 1A", [CALCULUS]),
+        # Whole words only
+        ("Calculus 1", []),
+        ("Develop", []),
+    ],
+)
+async def test_course_title_names_its_course(records, course_id, courses):
+    """Whole words of a course's title name it."""
+    result = await call(get_course_progress, page_course=ECONOMICS, course_id=course_id)
+
+    assert [e["course_id"] for e in result["enrollments"]] == courses
+
+
+@pytest.mark.parametrize(
+    ("course_id", "run"),
+    [
+        (None, "1T2020"),
+        ("Calculus 1A", "1T2020"),
+        ("18.01x", "1T2020"),
+        # A run asked for by its id keeps that run
+        (f"{CALCULUS}+3T2026", "3T2026"),
+    ],
+)
+async def test_page_course_by_another_name_reads_the_page_run(records, course_id, run):
+    """On an older run's page, naming its course reads that run, as the page does."""
+    result = await call(
+        get_course_progress, page_course=f"{CALCULUS}+1T2020", course_id=course_id
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+{run}"]
+
+
+@pytest.mark.parametrize("platform", ["xpro", None])
+async def test_page_course_title_on_another_platform_says_so(mocker, records, platform):
+    """
+    The page course's title, on another platform's run page the learner isn't
+    in, says the page isn't on MITx Online rather than that they aren't enrolled.
+    """
+    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
+
+    result = await call(
+        get_course_progress,
+        page_course=f"{CALCULUS}+1T2099",
+        platform=platform,
+        course_id="Calculus 1A",
+    )
+
+    assert result["enrollments"] == []
+    assert "isn't on MITx Online" in result["note"]
+
+
+async def test_page_course_title_of_another_run_reads_the_page_run(records):
+    """A title only an older run has still reads the page's run of that course."""
+    runs = [
+        enrollment(CALCULUS, "1T2020", "Calculus 1A 2020"),
+        enrollment(CALCULUS, "3T2026", "Differentiation"),
+    ]
+    for run in runs:
+        # Without a course title, each run's own title is used
+        run["run"]["course"]["title"] = None
+    records["enrollments"].return_value = runs
+
+    result = await call(
+        get_course_progress, page_course=f"{CALCULUS}+3T2026", course_id="Calculus 1A"
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+3T2026"]
+
+
+async def test_course_title_of_two_courses_asks_which(records):
+    """Words two titles share get no records, only both ids."""
+    result = await call(get_course_progress, course_id="development")
+
+    assert result["enrollments"] == []
+    assert f"{ECONOMICS_2}, {ECONOMICS}" in result["note"]
+
+
 SHARED = "course-v1:PRO+AIGE"
 
 

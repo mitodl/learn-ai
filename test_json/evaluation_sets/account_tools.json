@@ -418,6 +418,28 @@
         "enable_account_tools": true
       },
       "expected_output": "Calculus 1A: Differentiation: 88%, a B, passing. Just Money: Banking as if Society Mattered: 0%, not passing so far. Political Economy and Economic Development has no grade yet; it starts February 1, 2099."
+    },
+    {
+      "question": "What's my grade in Just Money?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+18.01x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "0%, not passing so far, in Just Money: Banking as if Society Mattered (11.405x), with a link to its Progress tab. It doesn't say what 0% means about assignments (recorded, attempted or complete), and doesn't give the grade of Calculus 1A, the course on this page."
+    },
+    {
+      "question": "Did I get a certificate in Political Economy?",
+      "extra_state": {
+        "course_id": [null],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Not yet: Political Economy and Economic Development is an audit enrollment that starts February 1, 2099, and has no certificate. It doesn't answer from another course."
     }
   ]
 }

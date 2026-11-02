@@ -701,11 +701,11 @@ class CourseAccountToolSchema(AccountToolSchema):
         description=(
             """
             Only when the learner asks about a course other than the one on
-            this page. If they gave its course number or id, such as "18.01x",
-            pass it exactly as they wrote it, without looking it up. If they
-            named it by title, pass the course_id get_enrollments lists for it.
-            Never guess. Leave it out for the course on this page, or, with no
-            course on the page, for all of the learner's courses.
+            this page: the course as they named it, its number, id or title
+            (such as "18.01x" or "Calculus 1A"), exactly as they wrote it.
+            Don't look it up or guess a number for a title. Leave it out for
+            the course on this page, or, with no course on the page, for all of
+            the learner's courses.
             """
         ),
     )
@@ -827,6 +827,10 @@ async def _summaries() -> list[dict]:
     ]
 
 
+NOT_ENROLLED_ON_PAGE = (
+    "The learner has no MITx Online enrollment in the course on this page. Don't "
+    "answer from their other courses."
+)
 NOT_ON_MITXONLINE = (
     "The course on this page isn't on MITx Online, so the learner's records for "
     "it can't be checked here."
@@ -873,19 +877,43 @@ def _page_courses(page_course: str | None, summaries: list[dict]) -> set[str]:
 
 def _names_course(course: str, summary: dict) -> bool:
     """
-    Say whether the course a learner named is this enrollment's: its run id, or
+    Say whether the course a learner named is this enrollment's: its run id;
     its course id or the end of it after a ":" or "+", so "18.01x" and
-    "MITxT+18.01x" name course-v1:MITxT+18.01x but "8.01x" doesn't. Run ids
-    are only matched whole, since "1T2025" ends many of them.
+    "MITxT+18.01x" name course-v1:MITxT+18.01x but "8.01x" doesn't; or whole
+    words of its title, so "Calculus 1A" names "Calculus 1A: Differentiation"
+    but "Calculus 1" doesn't. Run ids are only matched whole, since "1T2025"
+    ends many of them.
     """
+    phrase = r"\s+".join(map(re.escape, course.split()))
     course = course.casefold()
     course_id = (summary["course_id"] or "").casefold()
-    return course in (course_id, (summary["run_id"] or "").casefold()) or (
-        course_id.endswith((f":{course}", f"+{course}"))
+    return (
+        course in (course_id, (summary["run_id"] or "").casefold())
+        or course_id.endswith((f":{course}", f"+{course}"))
+        or bool(
+            phrase
+            and re.search(
+                rf"(?<!\w){phrase}(?!\w)",
+                summary.get("course_title") or "",
+                re.IGNORECASE,
+            )
+        )
     )
 
 
-async def _course_enrollments(  # noqa: PLR0911
+def _names_only_the_page_course(
+    course: str, matches: list[dict], page_courses: set[str]
+) -> bool:
+    """
+    Say whether the course a learner named, such as by its title, is the page's
+    course under another name. A run asked for by its id isn't: it keeps that run.
+    """
+    return all(s["course_id"] in page_courses for s in matches) and (
+        course.casefold() not in {(s["run_id"] or "").casefold() for s in matches}
+    )
+
+
+async def _course_enrollments(  # noqa: C901, PLR0911
     state: dict, course_id: str | None = None, *, prefer_certificate: bool = False
 ) -> dict:
     """
@@ -949,10 +977,7 @@ async def _course_enrollments(  # noqa: PLR0911
     if not matches:
         return {
             "enrollments": [],
-            "note": (
-                "The learner has no MITx Online enrollment in the course on this "
-                "page. Don't answer from their other courses."
-            ),
+            "note": NOT_ENROLLED_ON_PAGE,
         }
     if course_id and len(named := {s["course_id"] or s["run_id"] for s in matches}) > 1:
         return {
@@ -963,13 +988,19 @@ async def _course_enrollments(  # noqa: PLR0911
                 "its course_id."
             ),
         }
+    page_courses = _page_courses(page_course, summaries)
     # Another course is MITx Online's own record, but the page's course, under
     # any of its ids, could be a different platform's course with the same id.
-    page_courses = _page_courses(page_course, summaries)
     if not course_id or any(s["course_id"] in page_courses for s in matches):
         note = await _page_platform_note(platform, matches[0]["course_id"])
         if note:
             return {"enrollments": [], "note": note}
+    if course_id and _names_only_the_page_course(course_id, matches, page_courses):
+        # Read the page's course the way the page reads it
+        course_id = None
+        matches = [s for s in summaries if page_course in (s["course_id"], s["run_id"])]
+        if not matches:
+            return {"enrollments": [], "note": NOT_ENROLLED_ON_PAGE}
     result = {
         "enrollments": _current_runs(matches, prefer_certificate=prefer_certificate)
     }
@@ -1044,8 +1075,9 @@ async def get_course_progress(
     )
     # And read a 0% grade with no letter as "not graded yet"
     result["grade_meaning"] = (
-        "A grade of null means none is recorded yet. A percent of 0 is a grade "
-        "of 0%, not ungraded, even with no letter."
+        "percent is the learner's grade so far: 0 is a grade of 0%, even with no "
+        "letter. Give the grade and whether it passes, nothing more: it doesn't "
+        "show what they have submitted or completed."
     )
     return json.dumps(result)
 
