@@ -903,7 +903,8 @@ def _names_course(course: str, summary: dict) -> bool:
     """
     Say whether the course a learner named is this enrollment's, by its:
     - run id, whole only, since a run tag like "1T2025" ends many of them;
-    - course id, whole or its end after ":" or "+" ("18.01x", not "8.01x");
+    - course id, whole or its end after ":" or "+", with or without the
+      number's trailing "x" ("18.01x" or "18.01", not "8.01x");
     - title, on whole words ("Calculus 1A", not "Calculus 1").
     """
     phrase = r"\s+".join(map(re.escape, course.split()))
@@ -911,7 +912,9 @@ def _names_course(course: str, summary: dict) -> bool:
     course_id = (summary["course_id"] or "").casefold()
     return (
         course in (course_id, (summary["run_id"] or "").casefold())
-        or course_id.endswith((f":{course}", f"+{course}"))
+        or course_id.endswith(
+            tuple(f"{sep}{course}{x}" for sep in ":+" for x in ("", "x"))
+        )
         or bool(
             phrase
             and re.search(

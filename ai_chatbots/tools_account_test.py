@@ -287,6 +287,10 @@ async def test_course_id_not_enrolled_lists_nothing(records, page_course, course
         (ECONOMICS, "18.01X", [f"{CALCULUS}+3T2026"]),
         (ECONOMICS, "MITxT+18.01x", [f"{CALCULUS}+3T2026"]),
         (ECONOMICS, "8.01x", ["course-v1:8.01x+1T2026"]),
+        # Without the trailing "x"
+        (ECONOMICS, "18.01", [f"{CALCULUS}+3T2026"]),
+        (ECONOMICS, "8.01", ["course-v1:8.01x+1T2026"]),
+        (ECONOMICS, "1.801", []),
         # Titles: whole words only
         (ECONOMICS, "Foundations of Development Policy", [f"{ECONOMICS_2}+1T2099"]),
         (ECONOMICS, "foundations of  development policy", [f"{ECONOMICS_2}+1T2099"]),
