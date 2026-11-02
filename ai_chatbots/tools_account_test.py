@@ -546,6 +546,20 @@ async def test_enrollments_for_a_named_course(records, course_id, runs):
     )
 
 
+@pytest.mark.parametrize("platform", ["xpro", None])
+async def test_enrollments_dont_name_another_platforms_page_course(
+    mocker, records, platform
+):
+    """A MITx Online course sharing an xPRO page's id isn't called the page's."""
+    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
+    records["enrollments"].return_value = [enrollment(SHARED, "1T2026", "AI for Good")]
+
+    result = await call(get_enrollments, page_course=SHARED, platform=platform)
+
+    assert [e["course_id"] for e in result["enrollments"]] == [SHARED]
+    assert "isn't on MITx Online" in result["course_on_page"]
+
+
 async def test_enrollments_accept_dates_without_a_timezone(records):
     """A run date with no UTC offset still gets a status."""
     records["enrollments"].return_value = [

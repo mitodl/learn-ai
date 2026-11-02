@@ -1067,11 +1067,16 @@ async def get_enrollments(
         "enrollment_mode",
         "course_url",
     )
-    page_course = ((state or {}).get("course_id") or [None])[-1]
+    state = state or {}
+    page_course = (state.get("course_id") or [None])[-1]
     for summary in result["enrollments"]:
         if page_course in (summary["course_id"], summary["run_id"]):
-            # Small models otherwise take "this course" for the one in progress
-            result["course_on_page"] = (
+            # Small models otherwise take "this course" for the one in progress,
+            # but a shared id could be another platform's course
+            platform = (state.get("platform") or [None])[-1]
+            result["course_on_page"] = await _page_platform_note(
+                platform, summary["course_id"]
+            ) or (
                 f"The course on this page is {summary['course_title']} "
                 f"({summary['course_id']})."
             )
