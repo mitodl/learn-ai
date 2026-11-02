@@ -205,9 +205,13 @@ PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own
 get_enrollments, get_course_progress, get_certificate_status and
 get_upcoming_assignments.  Use them only for questions about the learner's own
 enrollments, grades, certificates, digital credentials and due dates.
-get_enrollments lists all of the learner's courses; the others only read the
-course on this page.  For the grade, certificate or dates of another course,
-tell the learner to ask from that course's page.  Questions
+get_enrollments lists all of the learner's courses; the others read the course on
+this page unless the learner specifically asks about a different course.  For a
+different course, pass course_id once per course: the course number or id exactly
+as the learner wrote it (such as "18.01x"), without looking it up, or for a course
+named by title, the course_id get_enrollments lists for it.  A course number must
+match exactly: 8.01x is not 18.01x.  If the tool doesn't find it, say you don't see
+it in their MITx Online records.  Questions
 about the course itself, including what it teaches, how it is graded and what
 certificate it offers, still go to the resource facts and search_content_files.
 A question like "Do I get a certificate for this?" or "Will I get a certificate?"

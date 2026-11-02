@@ -352,6 +352,72 @@
         "enable_account_tools": true
       },
       "expected_output": "It can't check edX.org records, and points the learner to support. It doesn't say they have no certificate."
+    },
+    {
+      "question": "What's my grade in Calculus 1A?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "88%, a B, passing, in Calculus 1A: Differentiation (18.01x), with a link to its Progress tab. It doesn't give the grade of Just Money, the course on this page."
+    },
+    {
+      "question": "Did I get a certificate in 8.01x?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It doesn't see 8.01x in the learner's MITx Online records and can't check other platforms. It doesn't say they have no certificate, and doesn't answer from another course."
+    },
+    {
+      "question": "What's my grade?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Their grade in Just Money: Banking as if Society Mattered, the course on this page: 0%, not passing so far, with a link to its Progress tab. It doesn't give the grade of another course."
+    },
+    {
+      "question": "What's my grade in Calculus 1A?",
+      "extra_state": {
+        "course_id": [null],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "88%, a B, passing, in Calculus 1A: Differentiation (18.01x), with a link to its Progress tab."
+    },
+    {
+      "question": "Did I get a certificate in 8.01x?",
+      "extra_state": {
+        "course_id": [null],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It doesn't see 8.01x in the learner's MITx Online records and can't check other platforms. It doesn't say they have no certificate, and doesn't answer from another course."
+    },
+    {
+      "question": "What are my grades in all of my courses?",
+      "extra_state": {
+        "course_id": [null],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Calculus 1A: Differentiation: 88%, a B, passing. Just Money: Banking as if Society Mattered: 0%, not passing so far. Political Economy and Economic Development has no grade yet; it starts February 1, 2099."
     }
   ]
 }
