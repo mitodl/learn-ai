@@ -522,7 +522,8 @@ async def test_enrollments_list_all_courses_on_a_course_page(records):
         ECONOMICS_2: "upcoming",
     }
     assert result["course_on_page"] == (
-        f"The course on this page is Calculus 1A ({CALCULUS})."
+        "The learner is enrolled in the course on this page, Calculus 1A "
+        f"({CALCULUS}); its run is in progress."
     )
     assert "grade" not in result["enrollments"][0]
 
@@ -917,6 +918,7 @@ async def test_digital_credential_issued_only_when_present(
     (course,) = result["enrollments"]
     assert course["certificate_earned"] is True
     assert course["digital_credential"] == expected
+    assert ("digital_credential_meaning" in result) is (expected == "not_confirmed")
     records["course_certificate"].assert_called_once_with("abc")
     assert "Jane Learner" not in json.dumps(result)
 

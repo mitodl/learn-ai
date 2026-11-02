@@ -1089,12 +1089,14 @@ async def get_enrollments(
     for summary in result["enrollments"]:
         if page_course in (summary["course_id"], summary["run_id"]):
             # Small models otherwise take "this course" for the one in progress,
-            # but a shared id could be another platform's course
+            # or an ended run for no enrollment; a shared id could be another
+            # platform's course
             result["course_on_page"] = await _page_platform_note(
                 platform, summary["course_id"]
             ) or (
-                f"The course on this page is {summary['course_title']} "
-                f"({summary['course_id']})."
+                "The learner is enrolled in the course on this page, "
+                f"{summary['course_title']} ({summary['course_id']}); its run "
+                f"is {summary['status']}."
             )
     return json.dumps(result)
 
@@ -1309,6 +1311,13 @@ async def get_certificate_status(
     ):
         if credential:
             summary["digital_credential"] = credential
+    if DIGITAL_CREDENTIAL_NOT_CONFIRMED in credentials:
+        # Small models read "not_confirmed" as "not issued"
+        result["digital_credential_meaning"] = (
+            "not_confirmed means it couldn't be confirmed whether a digital "
+            "credential was issued. Don't say it wasn't issued or doesn't exist; "
+            "send the learner to support for it."
+        )
     result["program_certificates"] = [
         _program_certificate_summary(c) for c in program_certificates
     ]
