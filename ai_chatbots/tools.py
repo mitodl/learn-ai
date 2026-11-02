@@ -875,6 +875,12 @@ async def _page_platform_note(platform: str | None, course_id: str) -> str | Non
     return None
 
 
+def _page_summary(page_course: str | None) -> dict:
+    """Return the page's course and run ids, in the shape _names_course reads."""
+    run = RUN_ID_REGEX.fullmatch(page_course or "")
+    return {"course_id": run.group(1) if run else page_course, "run_id": page_course}
+
+
 def _page_courses(page: dict, summaries: list[dict]) -> set[str]:
     """Return the course ids that name the page's course, under any of its runs."""
     page_course = page["run_id"]
@@ -940,8 +946,9 @@ async def _course_enrollments(  # noqa: C901, PLR0911
 ) -> dict:
     """
     Get the learner's enrollment in the course they asked about: course_id if
-    given, else the course of the page they are chatting from, else all of
-    their courses. See _names_course for how a named course is matched.
+    given, else the course of the page they are chatting from, else
+    nothing, and the note asks for the course. See _names_course for how a
+    named course is matched.
 
     Raises:
         learner_api.LearnerAPIError: if the records can't be read
@@ -949,11 +956,7 @@ async def _course_enrollments(  # noqa: C901, PLR0911
     state = state or {}
     page_course = (state.get("course_id") or [None])[-1]
     platform = (state.get("platform") or [None])[-1]
-    run = RUN_ID_REGEX.fullmatch(page_course or "")
-    page_summary = {
-        "course_id": run.group(1) if run else page_course,
-        "run_id": page_course,
-    }
+    page_summary = _page_summary(page_course)
     if course_id and page_course and _names_course(course_id, page_summary):
         # A short name for the page's course is the page's course, which could
         # be another platform's, not a MITx Online course with the same number
@@ -1043,12 +1046,34 @@ async def get_enrollments(
     learner's courses, not just the one on this page, or only the course_id
     given.
     """
+    state = state or {}
+    page_course = (state.get("course_id") or [None])[-1]
+    platform = (state.get("platform") or [None])[-1]
+    page = _page_summary(page_course)
     try:
         summaries = await _summaries()
     except Exception:  # noqa: BLE001
         return _could_not_check("get_enrollments")
     if course_id:
-        summaries = [s for s in summaries if _names_course(course_id, s)]
+        page_courses = _page_courses(page, summaries)
+        # A name for the page's course is the page's course, not another
+        # course with the same number
+        names_page = bool(page_course) and _names_course(course_id, page)
+        summaries = [
+            s
+            for s in summaries
+            if _names_course(course_id, s)
+            and (not names_page or s["course_id"] in page_courses)
+        ]
+        # The page's course, under any of its names, could be another
+        # platform's with the same id
+        on_page = [s for s in summaries if s["course_id"] in page_courses]
+        if (names_page or on_page) and (
+            note := await _page_platform_note(
+                platform, (on_page[0] if on_page else page)["course_id"]
+            )
+        ):
+            return json.dumps({"enrollments": [], "note": note})
     result = {"enrollments": _current_runs(summaries)}
     if course_id and not summaries:
         result["note"] = _not_in_records(course_id)
@@ -1061,13 +1086,10 @@ async def get_enrollments(
         "enrollment_mode",
         "course_url",
     )
-    state = state or {}
-    page_course = (state.get("course_id") or [None])[-1]
     for summary in result["enrollments"]:
         if page_course in (summary["course_id"], summary["run_id"]):
             # Small models otherwise take "this course" for the one in progress,
             # but a shared id could be another platform's course
-            platform = (state.get("platform") or [None])[-1]
             result["course_on_page"] = await _page_platform_note(
                 platform, summary["course_id"]
             ) or (

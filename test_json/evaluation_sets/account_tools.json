@@ -244,7 +244,8 @@
       "question": "When is my next assignment due?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+11.405x"],
-        "collection_name": [null]
+        "collection_name": [null],
+        "platform": ["mitxonline"]
       },
       "extra_init": {
         "enable_account_tools": true
@@ -255,7 +256,8 @@
       "question": "Did I get a certificate in this course, and where is it?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+18.01x"],
-        "collection_name": [null]
+        "collection_name": [null],
+        "platform": ["mitxonline"]
       },
       "extra_init": {
         "enable_account_tools": true
@@ -266,7 +268,8 @@
       "question": "Do I have a digital credential for this course?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+18.01x"],
-        "collection_name": [null]
+        "collection_name": [null],
+        "platform": ["mitxonline"]
       },
       "extra_init": {
         "enable_account_tools": true
@@ -277,7 +280,8 @@
       "question": "So do I have a digital credential for it or not?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+18.01x"],
-        "collection_name": [null]
+        "collection_name": [null],
+        "platform": ["mitxonline"]
       },
       "extra_init": {
         "enable_account_tools": true
@@ -445,7 +449,8 @@
       "question": "Am I enrolled in 18.01x?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+18.01x"],
-        "collection_name": [null]
+        "collection_name": [null],
+        "platform": ["mitxonline"]
       },
       "extra_init": {
         "enable_account_tools": true
@@ -456,7 +461,8 @@
       "question": "Am I enrolled in this course?",
       "extra_state": {
         "course_id": ["course-v1:MITxT+18.01x"],
-        "collection_name": [null]
+        "collection_name": [null],
+        "platform": ["mitxonline"]
       },
       "extra_init": {
         "enable_account_tools": true

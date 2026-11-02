@@ -221,9 +221,12 @@ async def test_page_course_not_enrolled_lists_nothing(records, page_course):
     assert "no MITx Online enrollment in the course on this page" in result["note"]
 
 
-async def test_no_page_course_asks_for_one(records):
-    """Without a course on the page or a course_id, no records are read."""
-    result = await call(get_course_progress)
+@pytest.mark.parametrize(
+    "tool", [get_course_progress, get_certificate_status, get_upcoming_assignments]
+)
+async def test_no_page_course_asks_for_one(records, tool):
+    """Without a course on the page or a course_id, no course records are read."""
+    result = await call(tool)
 
     assert result["enrollments"] == []
     assert "Pass the course the learner asked about" in result["note"]
@@ -556,6 +559,82 @@ async def test_enrollments_dont_name_another_platforms_page_course(
 
     assert [e["course_id"] for e in result["enrollments"]] == [SHARED]
     assert "isn't on MITx Online" in result["course_on_page"]
+
+
+@pytest.mark.parametrize("page_course", [SHARED, f"{SHARED}+1T2020"])
+@pytest.mark.parametrize("platform", ["xpro", None])
+@pytest.mark.parametrize(
+    ("enrolled", "course_id"),
+    [
+        # Another organization's MITx Online course with the page's number
+        ("course-v1:OTHER+AIGE", "AIGE"),
+        # A MITx Online run of the page's course, by any name
+        (SHARED, "AIGE"),
+        (SHARED, SHARED),
+        (SHARED, "AI for Good"),
+        (SHARED, f"{SHARED}+1T2026"),
+    ],
+)
+async def test_enrollments_for_the_page_course_keep_its_platform_check(  # noqa: PLR0913
+    mocker, records, page_course, platform, enrolled, course_id
+):
+    """Naming an xPRO page's course doesn't list a MITx Online course as it."""
+    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
+    records["enrollments"].return_value = [
+        enrollment(enrolled, "1T2026", "AI for Good")
+    ]
+
+    result = await call(
+        get_enrollments, page_course=page_course, platform=platform, course_id=course_id
+    )
+
+    assert result["enrollments"] == []
+    assert "isn't on MITx Online" in result["note"]
+
+
+@pytest.mark.parametrize(
+    ("enrolled", "runs"),
+    [
+        (["course-v1:OTHER+AIGE"], []),
+        (["course-v1:OTHER+AIGE", SHARED], [f"{SHARED}+1T2026"]),
+    ],
+)
+async def test_enrollments_by_the_page_course_name_on_mitxonline(
+    records, enrolled, runs
+):
+    """On a MITx Online page, its number names it, not another course's."""
+    records["enrollments"].return_value = [
+        enrollment(course, "1T2026", "AI") for course in enrolled
+    ]
+
+    result = await call(
+        get_enrollments,
+        page_course=SHARED,
+        platform=MITXONLINE_PLATFORM,
+        course_id="AIGE",
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == runs
+
+
+@pytest.mark.parametrize("course_id", ["Physics I", "course-v1:8.01x+1T2026"])
+async def test_enrollments_check_the_platform_of_the_run_pages_course(
+    mocker, records, course_id
+):
+    """An unusual run id is checked by its course's platform, from the records."""
+    lookup = mocker.patch(
+        "ai_chatbots.tools._get_course_platform", return_value=MITXONLINE_PLATFORM
+    )
+    records["enrollments"].return_value = [
+        enrollment("course-v1:8.01x", "1T2026", "Physics I")
+    ]
+
+    result = await call(
+        get_enrollments, page_course="course-v1:8.01x+1T2026", course_id=course_id
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == ["course-v1:8.01x+1T2026"]
+    lookup.assert_called_with("course-v1:8.01x")
 
 
 async def test_enrollments_accept_dates_without_a_timezone(records):
