@@ -375,11 +375,13 @@ async def test_course_number_of_the_page_course_is_the_page_course(
 ):
     """
     The page course's number reads the page's course, not a MITx Online course
-    from another organization with the same number.
+    from another organization with the same number. A run page's course is
+    known from the learner's enrollment in that run.
     """
     mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
     records["enrollments"].return_value = [
-        enrollment("course-v1:OTHER+AIGE", "1T2026", "AI Governance")
+        enrollment("course-v1:OTHER+AIGE", "1T2026", "AI Governance"),
+        enrollment(SHARED, "1T2020", "AI Governance"),
     ]
 
     result = await call(
@@ -415,14 +417,6 @@ async def test_run_tag_on_a_run_page_names_nothing(records):
             f"{SHARED}+1T2020",
             f"{SHARED}+1T2026",
             [(SHARED, "1T2020"), (SHARED, "1T2026")],
-        ),
-        # A sibling run of a run page the learner isn't enrolled in
-        (f"{SHARED}+1T2020", f"{SHARED}+1T2026", [(SHARED, "1T2026")]),
-        # The page course's title, on a run page the learner isn't in
-        (
-            f"{CALCULUS}+1T2099",
-            "Calculus 1A",
-            [(CALCULUS, "1T2020"), (CALCULUS, "3T2026")],
         ),
     ],
 )
@@ -1011,3 +1005,99 @@ async def test_program_page_keeps_its_platform_check(
     assert ("program_on_page" in result) is on_page
     assert result["note"].startswith("The page is a program") is on_page
     assert lookup.called is (platform is None)
+
+
+# A run whose id doesn't start with its course's (UAI.13), and the course its
+# id does start with (UAI.9), as in MITx Online's records
+UAI_9 = "course-v1:UAI_SOURCE+UAI.9"
+UAI_13 = "course-v1:UAI_SOURCE+UAI.13"
+UAI_RUN = f"{UAI_9}+3T2025"
+
+
+def uai_records(*, in_page_run):
+    """Enrollments in UAI.9 and UAI.13, in the page's UAI.13 run or another."""
+    page_run = enrollment(UAI_13, "3T2025", "Generative AI")
+    page_run["run"]["courseware_id"] = UAI_RUN
+    return [
+        enrollment(UAI_9, "1T2026", "Responsible AI"),
+        page_run if in_page_run else enrollment(UAI_13, "1T2026", "Generative AI"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("in_page_run", "course_id", "run_id"),
+    [
+        # The run's id names another course, which is the one asked about
+        (True, "UAI.9", f"{UAI_9}+1T2026"),
+        # The run's own course, known from the learner's enrollment in it
+        (True, "UAI.13", UAI_RUN),
+        # A run the learner isn't in has no known course; the name reads theirs
+        (False, "UAI.13", f"{UAI_13}+1T2026"),
+        (False, "UAI.9", f"{UAI_9}+1T2026"),
+    ],
+)
+async def test_run_page_course_is_its_enrollments(
+    records, in_page_run, course_id, run_id
+):
+    """A run page's course comes from the learner's enrollment, not its id."""
+    records["enrollments"].return_value = uai_records(in_page_run=in_page_run)
+
+    result = await call(
+        get_course_progress,
+        page_course=UAI_RUN,
+        platform=MITXONLINE_PLATFORM,
+        course_id=course_id,
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == [run_id]
+
+
+@pytest.mark.parametrize(
+    ("in_page_run", "expected"),
+    [(True, "is enrolled in the course on this page"), (False, "no MITx Online")],
+)
+async def test_enrollments_say_whether_the_page_run_is_enrolled(
+    records, in_page_run, expected
+):
+    """Asking whether they're enrolled in the page's run gets a yes or a no."""
+    records["enrollments"].return_value = uai_records(in_page_run=in_page_run)
+
+    result = await call(
+        get_enrollments, page_course=UAI_RUN, platform=MITXONLINE_PLATFORM
+    )
+
+    assert len(result["enrollments"]) == 2
+    assert expected in result["course_on_page"]
+
+
+async def test_enrollments_by_course_number_on_a_run_page_not_enrolled(records):
+    """Naming a course on a run page the learner isn't in reads their runs of it."""
+    result = await call(
+        get_enrollments,
+        page_course=f"{CALCULUS}+1T2099",
+        platform=MITXONLINE_PLATFORM,
+        course_id="18.01x",
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+3T2026"]
+
+
+async def test_enrollments_on_a_program_page_point_to_the_program(records):
+    """A program page isn't said to be a course the learner isn't enrolled in."""
+    result = await call(
+        get_enrollments, page_course=PROGRAM, platform=MITXONLINE_PLATFORM
+    )
+
+    assert "get_certificate_status" in result["course_on_page"]
+    assert "no MITx Online enrollment" not in result["course_on_page"]
+
+
+async def test_enrollments_find_an_ended_page_run_with_a_current_sibling(records):
+    """The page's ended run counts, though the list keeps the current run."""
+    result = await call(
+        get_enrollments, page_course=f"{CALCULUS}+1T2020", platform=MITXONLINE_PLATFORM
+    )
+
+    assert f"{CALCULUS}+3T2026" in [e["run_id"] for e in result["enrollments"]]
+    assert "is enrolled in the course on this page" in result["course_on_page"]
+    assert "its run is ended" in result["course_on_page"]
