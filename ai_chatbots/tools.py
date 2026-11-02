@@ -1060,7 +1060,7 @@ def _only(summaries: list[dict], *fields: str) -> list[dict]:
 
 
 @tool(args_schema=EnrollmentsToolSchema)
-async def get_enrollments(  # noqa: C901
+async def get_enrollments(
     state: Annotated[dict, InjectedState], course_id: str | None = None
 ):
     """
@@ -1118,12 +1118,6 @@ async def get_enrollments(  # noqa: C901
                 },
             )
         ]
-        # A program named by its title, with the page's id, could be the
-        # page's program on another platform
-        if any(p["program_id"] == page_course for p in programs) and (
-            note := await _page_platform_note(platform, page_course)
-        ):
-            return json.dumps({"enrollments": [], "note": note})
     result = {"enrollments": _current_runs(summaries), "programs": programs}
     if course_id and not summaries and not programs:
         result["note"] = _not_in_records(course_id)

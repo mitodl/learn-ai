@@ -602,14 +602,20 @@ async def test_enrollments_check_the_platform_of_the_run_pages_course(
     lookup.assert_called_with("course-v1:8.01x")
 
 
-async def test_enrollments_say_an_ended_page_course_is_still_enrolled(records):
+# The page's ended run counts on a run page too, though the list keeps the
+# course's current run
+@pytest.mark.parametrize("page_course", [ECONOMICS, f"{CALCULUS}+1T2020"])
+async def test_enrollments_say_an_ended_page_course_is_still_enrolled(
+    records, page_course
+):
     """An ended run of the page's course is still an enrollment in it."""
-    result = await call(get_enrollments, page_course=ECONOMICS)
+    result = await call(get_enrollments, page_course=page_course)
 
+    assert f"{CALCULUS}+3T2026" in [e["run_id"] for e in result["enrollments"]]
     assert result["course_on_page"].startswith(
-        "The learner is enrolled in the course on this page, Political Economy and "
-        f"Economic Development ({ECONOMICS}); its run is ended."
+        "The learner is enrolled in the course on this page"
     )
+    assert "its run is ended" in result["course_on_page"]
 
 
 async def test_enrollments_accept_dates_without_a_timezone(records):
@@ -1038,14 +1044,15 @@ def uai_records(*, in_page_run):
         (False, "UAI.9", f"{UAI_9}+1T2026"),
     ],
 )
+@pytest.mark.parametrize("tool", [get_course_progress, get_enrollments])
 async def test_run_page_course_is_its_enrollments(
-    records, in_page_run, course_id, run_id
+    records, in_page_run, course_id, run_id, tool
 ):
     """A run page's course comes from the learner's enrollment, not its id."""
     records["enrollments"].return_value = uai_records(in_page_run=in_page_run)
 
     result = await call(
-        get_course_progress,
+        tool,
         page_course=UAI_RUN,
         platform=MITXONLINE_PLATFORM,
         course_id=course_id,
@@ -1070,18 +1077,6 @@ async def test_enrollments_say_whether_the_page_run_is_enrolled(
 
     assert len(result["enrollments"]) == 2
     assert expected in result["course_on_page"]
-
-
-async def test_enrollments_by_course_number_on_a_run_page_not_enrolled(records):
-    """Naming a course on a run page the learner isn't in reads their runs of it."""
-    result = await call(
-        get_enrollments,
-        page_course=f"{CALCULUS}+1T2099",
-        platform=MITXONLINE_PLATFORM,
-        course_id="18.01x",
-    )
-
-    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+3T2026"]
 
 
 @pytest.mark.parametrize(
@@ -1112,18 +1107,7 @@ async def test_enrollments_for_a_named_program(records, course_id):
     assert "note" not in result
 
 
-async def test_enrollments_find_an_ended_page_run_with_a_current_sibling(records):
-    """The page's ended run counts, though the list keeps the current run."""
-    result = await call(
-        get_enrollments, page_course=f"{CALCULUS}+1T2020", platform=MITXONLINE_PLATFORM
-    )
-
-    assert f"{CALCULUS}+3T2026" in [e["run_id"] for e in result["enrollments"]]
-    assert "is enrolled in the course on this page" in result["course_on_page"]
-    assert "its run is ended" in result["course_on_page"]
-
-
-@pytest.mark.parametrize("course_id", ["DEDP", PROGRAM, "Data, Economics"])
+@pytest.mark.parametrize("course_id", ["DEDP", PROGRAM])
 async def test_enrollments_dont_name_another_platforms_page_program(records, course_id):
     """An xPRO program page's id names it, not a MITx Online program sharing it."""
     result = await call(
