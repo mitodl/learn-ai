@@ -638,6 +638,16 @@ async def test_enrollments_check_the_platform_of_the_run_pages_course(
     lookup.assert_called_with("course-v1:8.01x")
 
 
+async def test_enrollments_say_an_ended_page_course_is_still_enrolled(records):
+    """An ended run of the page's course is still an enrollment in it."""
+    result = await call(get_enrollments, page_course=ECONOMICS)
+
+    assert result["course_on_page"] == (
+        "The learner is enrolled in the course on this page, Political Economy and "
+        f"Economic Development ({ECONOMICS}); its run is ended."
+    )
+
+
 async def test_enrollments_accept_dates_without_a_timezone(records):
     """A run date with no UTC offset still gets a status."""
     records["enrollments"].return_value = [
@@ -933,6 +943,7 @@ async def test_no_certificate_means_no_credential_lookup(records):
     assert result["enrollments"][0]["certificate_earned"] is False
     assert "digital_credential" not in result["enrollments"][0]
     assert "digital_credential" not in result["programs"][0]
+    assert "digital_credential_meaning" not in result
     records["course_certificate"].assert_not_called()
     records["program_certificate"].assert_not_called()
 
@@ -955,6 +966,7 @@ async def test_program_digital_credential(records):
     (program,) = result["programs"]
     assert program["certificate_earned"] is True
     assert program["digital_credential"] == "not_confirmed"
+    assert "couldn't be confirmed" in result["digital_credential_meaning"]
     assert "certificate_uuid" not in program
     assert "certificate_uuid" not in result["enrollments"][0]
     records["program_certificate"].assert_called_once_with("def")
