@@ -1116,3 +1116,20 @@ async def test_enrollments_dont_name_another_platforms_page_program(records, cou
 
     assert result == {"enrollments": [], "note": result["note"]}
     assert "isn't on MITx Online" in result["note"]
+
+
+@pytest.mark.parametrize("page_course", [PROGRAM, CALCULUS])
+async def test_certificate_status_for_a_program_named_by_its_title(
+    records, page_course
+):
+    """A program's title isn't said to be missing from the learner's records."""
+    result = await call(
+        get_certificate_status,
+        page_course=page_course,
+        platform=MITXONLINE_PLATFORM,
+        course_id="Data, Economics",
+    )
+
+    assert result["programs"][0]["program_id"] == PROGRAM
+    assert "is the learner's program Data, Economics" in result["note"]
+    assert "isn't in the learner's MITx Online records" not in result["note"]

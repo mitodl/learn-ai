@@ -947,6 +947,22 @@ def _not_in_records(course: str) -> str:
     )
 
 
+def _named_programs(course: str, programs: list[dict]) -> list[dict]:
+    """Keep the programs a learner named, matched as _names_course matches courses."""
+    return [
+        p
+        for p in programs
+        if _names_course(
+            course,
+            {
+                "course_id": p["program_id"],
+                "run_id": None,
+                "course_title": p["program_title"],
+            },
+        )
+    ]
+
+
 def _names_only_the_page_course(
     course: str, matches: list[dict], page_courses: set[str]
 ) -> bool:
@@ -1106,18 +1122,7 @@ async def get_enrollments(
             and (note := await _page_platform_note(platform, page_id))
         ):
             return json.dumps({"enrollments": [], "note": note})
-        programs = [
-            p
-            for p in programs
-            if _names_course(
-                course_id,
-                {
-                    "course_id": p["program_id"],
-                    "run_id": None,
-                    "course_title": p["program_title"],
-                },
-            )
-        ]
+        programs = _named_programs(course_id, programs)
     result = {"enrollments": _current_runs(summaries), "programs": programs}
     if course_id and not summaries and not programs:
         result["note"] = _not_in_records(course_id)
@@ -1392,6 +1397,17 @@ async def get_certificate_status(
     result["program_certificates"] = [
         _program_certificate_summary(c) for c in program_certificates
     ]
+    if (
+        course_id
+        and result.get("note", "").startswith(_not_in_records(course_id))
+        and (named := _named_programs(course_id, programs))
+    ):
+        # A program's title isn't a course; don't say it isn't in their records
+        result["note"] = (
+            f"{course_id} is the learner's program "
+            f"{', '.join(p['program_title'] for p in named)}; its entry in "
+            "programs says whether they earned its certificate."
+        )
     if result.get("note") == ON_PROGRAM_PAGE:
         # Only set once the page's program is known to be MITx Online's
         page_program = _page(state)[0]["run_id"]
