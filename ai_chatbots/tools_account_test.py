@@ -56,6 +56,7 @@ ECONOMICS = "course-v1:MITxT+14.750x"
 ECONOMICS_2 = "course-v1:MITxT+14.73x"
 # A readable id MITx Online and xPRO share
 SHARED = "course-v1:PRO+AIGE"
+PROGRAM = "program-v1:MITx+DEDP"
 
 ENROLLMENTS = [
     enrollment(
@@ -122,7 +123,7 @@ def records(mocker, settings):
             f"{api}.get_program_enrollments",
             return_value=[
                 {
-                    "program": {"title": "Data, Economics", "readable_id": "DEDP"},
+                    "program": {"title": "Data, Economics", "readable_id": PROGRAM},
                     "certificate": None,
                     "enrollment_mode": "verified",
                 }
@@ -921,7 +922,7 @@ async def test_program_digital_credential(records):
     """Program certificates report their credential, without the uuid."""
     records["programs"].return_value = [
         {
-            "program": {"title": "Data, Economics", "readable_id": "DEDP"},
+            "program": {"title": "Data, Economics", "readable_id": PROGRAM},
             "certificate": {"link": "/certificate/program/def/", "uuid": "def"},
         }
     ]
@@ -939,3 +940,74 @@ async def test_program_digital_credential(records):
     assert "certificate_uuid" not in program
     assert "certificate_uuid" not in result["enrollments"][0]
     records["program_certificate"].assert_called_once_with("def")
+
+
+@pytest.mark.parametrize("tool", [get_course_progress, get_upcoming_assignments])
+@pytest.mark.parametrize("course_id", [None, "DEDP"])
+async def test_program_page_isnt_a_course(records, tool, course_id):
+    """A program's page, or the program by its short name, reads no course."""
+    result = await call(
+        tool, page_course=PROGRAM, platform=MITXONLINE_PLATFORM, course_id=course_id
+    )
+
+    assert result["enrollments"] == []
+    assert result["note"].startswith("The page is a program")
+    records["enrollments"].assert_not_called()
+
+
+async def test_course_named_on_a_program_page(records):
+    """A course the learner names on a program's page is read as usual."""
+    result = await call(
+        get_course_progress,
+        page_course=PROGRAM,
+        platform=MITXONLINE_PLATFORM,
+        course_id="18.01x",
+    )
+
+    assert [e["course_id"] for e in result["enrollments"]] == [CALCULUS]
+
+
+@pytest.mark.parametrize(
+    ("page_course", "expected"),
+    [(PROGRAM, PROGRAM), ("program-v1:MITx+SCM", "no MITx Online enrollment")],
+)
+async def test_certificate_status_names_the_page_program(
+    records, page_course, expected
+):
+    """The page's program is pointed out, or said to be missing, never uncertified."""
+    records["programs"].return_value[0]["certificate"] = {
+        "link": "/certificate/program/def/",
+        "uuid": "def",
+    }
+
+    result = await call(
+        get_certificate_status, page_course=page_course, platform=MITXONLINE_PLATFORM
+    )
+
+    assert result["programs"][0]["certificate_earned"] is True
+    assert expected in result["program_on_page"]
+
+
+@pytest.mark.parametrize(
+    ("platform", "found", "on_page"),
+    [
+        ("xpro", None, False),
+        (None, "xpro", False),
+        (None, None, False),
+        (None, MITXONLINE_PLATFORM, True),
+    ],
+)
+async def test_program_page_keeps_its_platform_check(
+    mocker, records, platform, found, on_page
+):
+    """
+    A program id doesn't say the platform, since xPRO's look like MITx Online's,
+    so a program is only the page's once the page is known to be MITx Online.
+    """
+    lookup = mocker.patch("ai_chatbots.tools._get_course_platform", return_value=found)
+
+    result = await call(get_certificate_status, page_course=PROGRAM, platform=platform)
+
+    assert ("program_on_page" in result) is on_page
+    assert result["note"].startswith("The page is a program") is on_page
+    assert lookup.called is (platform is None)

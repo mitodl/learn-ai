@@ -850,6 +850,12 @@ NOT_ON_MITXONLINE = (
     "The course on this page isn't on MITx Online, so the learner's records for "
     "it can't be checked here."
 )
+ON_PROGRAM_PAGE = (
+    "The page is a program, not a course. For its certificate, see programs and "
+    "program_certificates; for one of its courses, pass that course as course_id."
+)
+# MITx Online's program ids, which xPRO's share, so it doesn't say the platform
+PROGRAM_ID_PREFIX = "program-v1:"
 # A run id is its course's readable id plus a run tag, as MITx Online builds
 # them. Only used to tell whether a requested run is the page's course.
 RUN_ID_REGEX = re.compile(r"(course-v1:[^+]+\+[^+]+)\+[^+]+")
@@ -977,6 +983,9 @@ async def _course_enrollments(  # noqa: C901, PLR0911
     on_page = not course_id and page_course
     if on_page and platform and platform != MITXONLINE_PLATFORM:
         return {"enrollments": [], "note": NOT_ON_MITXONLINE}
+    if on_page and page_course.startswith(PROGRAM_ID_PREFIX):
+        note = await _page_platform_note(platform, page_course)
+        return {"enrollments": [], "note": note or ON_PROGRAM_PAGE}
     summaries = await _summaries()
     matches = [
         s
@@ -1323,6 +1332,20 @@ async def get_certificate_status(
     result["program_certificates"] = [
         _program_certificate_summary(c) for c in program_certificates
     ]
+    if result.get("note") == ON_PROGRAM_PAGE:
+        # Only set once the page's program is known to be MITx Online's
+        page_program = _page(state)[0]["run_id"]
+        result["program_on_page"] = next(
+            (
+                f"The program on this page is {p['program_title']} "
+                f"({p['program_id']}); its entry in programs says whether the "
+                "learner earned its certificate."
+                for p in programs
+                if p["program_id"] == page_program
+            ),
+            "The learner has no MITx Online enrollment in the program on this "
+            "page. program_certificates can still list its certificate, by title.",
+        )
     return json.dumps(result)
 
 
