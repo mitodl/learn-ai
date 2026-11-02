@@ -516,7 +516,7 @@ async def test_enrollments_list_all_courses_on_a_course_page(records):
         ECONOMICS: "ended",
         ECONOMICS_2: "upcoming",
     }
-    assert result["course_on_page"] == (
+    assert result["course_on_page"].startswith(
         "The learner is enrolled in the course on this page, Calculus 1A "
         f"({CALCULUS}); its run is in progress."
     )
@@ -606,7 +606,7 @@ async def test_enrollments_say_an_ended_page_course_is_still_enrolled(records):
     """An ended run of the page's course is still an enrollment in it."""
     result = await call(get_enrollments, page_course=ECONOMICS)
 
-    assert result["course_on_page"] == (
+    assert result["course_on_page"].startswith(
         "The learner is enrolled in the course on this page, Political Economy and "
         f"Economic Development ({ECONOMICS}); its run is ended."
     )
@@ -646,6 +646,7 @@ async def test_unrecorded_grade_is_not_zero(records):
     result = await call(get_course_progress, page_course=CALCULUS)
 
     assert result["enrollments"][0]["grade"] is None
+    assert "null means none is recorded yet" in result["grade_meaning"]
 
 
 def due_date(title, date, date_type="assignment-due-date"):
@@ -853,6 +854,7 @@ async def test_certificate_status_drops_personal_data(settings, records):
     ("tool", "failing"),
     [
         (get_enrollments, "enrollments"),
+        (get_enrollments, "programs"),
         (get_course_progress, "enrollments"),
         (get_upcoming_assignments, "enrollments"),
         (get_certificate_status, "enrollments"),
@@ -1082,14 +1084,32 @@ async def test_enrollments_by_course_number_on_a_run_page_not_enrolled(records):
     assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+3T2026"]
 
 
-async def test_enrollments_on_a_program_page_point_to_the_program(records):
-    """A program page isn't said to be a course the learner isn't enrolled in."""
-    result = await call(
-        get_enrollments, page_course=PROGRAM, platform=MITXONLINE_PLATFORM
-    )
+@pytest.mark.parametrize(
+    ("page_course", "platform", "expected"),
+    [
+        (PROGRAM, MITXONLINE_PLATFORM, "is enrolled in the program on this page"),
+        ("program-v1:MITx+SCM", MITXONLINE_PLATFORM, "no MITx Online enrollment"),
+        (PROGRAM, "xpro", "isn't on MITx Online"),
+    ],
+)
+async def test_enrollments_say_whether_the_page_program_is_enrolled(
+    records, page_course, platform, expected
+):
+    """A program page says whether the learner is in it, not in a course."""
+    result = await call(get_enrollments, page_course=page_course, platform=platform)
 
-    assert "get_certificate_status" in result["course_on_page"]
-    assert "no MITx Online enrollment" not in result["course_on_page"]
+    assert expected in result["program_on_page"]
+    assert "course_on_page" not in result
+
+
+@pytest.mark.parametrize("course_id", ["DEDP", "Data, Economics", PROGRAM])
+async def test_enrollments_for_a_named_program(records, course_id):
+    """A program named by its number, title or id is listed, not said missing."""
+    result = await call(get_enrollments, page_course=CALCULUS, course_id=course_id)
+
+    assert result["enrollments"] == []
+    assert [p["program_id"] for p in result["programs"]] == [PROGRAM]
+    assert "note" not in result
 
 
 async def test_enrollments_find_an_ended_page_run_with_a_current_sibling(records):
@@ -1101,3 +1121,14 @@ async def test_enrollments_find_an_ended_page_run_with_a_current_sibling(records
     assert f"{CALCULUS}+3T2026" in [e["run_id"] for e in result["enrollments"]]
     assert "is enrolled in the course on this page" in result["course_on_page"]
     assert "its run is ended" in result["course_on_page"]
+
+
+@pytest.mark.parametrize("course_id", ["DEDP", PROGRAM, "Data, Economics"])
+async def test_enrollments_dont_name_another_platforms_page_program(records, course_id):
+    """An xPRO program page's id names it, not a MITx Online program sharing it."""
+    result = await call(
+        get_enrollments, page_course=PROGRAM, platform="xpro", course_id=course_id
+    )
+
+    assert result == {"enrollments": [], "note": result["note"]}
+    assert "isn't on MITx Online" in result["note"]

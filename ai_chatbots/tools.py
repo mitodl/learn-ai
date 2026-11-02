@@ -1060,23 +1060,30 @@ def _only(summaries: list[dict], *fields: str) -> list[dict]:
 
 
 @tool(args_schema=EnrollmentsToolSchema)
-async def get_enrollments(
+async def get_enrollments(  # noqa: C901
     state: Annotated[dict, InjectedState], course_id: str | None = None
 ):
     """
     Get the courses the signed-in learner is enrolled in on MITx Online: each
     course run's dates, whether it is upcoming, in progress or ended, and the
-    enrollment mode (audit or verified). Use it for "what am I enrolled in",
-    "when does my course start" or "am I enrolled in X". It returns all of the
-    learner's courses, not just the one on this page, or only the course_id
-    given.
+    enrollment mode (audit or verified), and the programs they are enrolled
+    in. Use it for "what am I enrolled in", "when does my course start" or "am
+    I enrolled in X". It returns all of the learner's courses and programs, not
+    just the one on this page, or only the course_id given.
     """
     try:
-        summaries = await _summaries()
+        summaries, programs = await asyncio.gather(
+            _summaries(), learner_api.get_program_enrollments()
+        )
     except Exception:  # noqa: BLE001
         return _could_not_check("get_enrollments")
+    programs = [
+        {"program_title": p["program_title"], "program_id": p["program_id"]}
+        for p in map(_program_enrollment_summary, programs)
+    ]
     page, platform = _page(state, summaries)
     page_course = page["run_id"]
+    page_program = next((p for p in programs if p["program_id"] == page_course), None)
     if course_id:
         page_courses = _page_courses(page, summaries)
         # A name for the page's course is the page's course, not another
@@ -1099,8 +1106,26 @@ async def get_enrollments(
             and (note := await _page_platform_note(platform, page_id))
         ):
             return json.dumps({"enrollments": [], "note": note})
-    result = {"enrollments": _current_runs(summaries)}
-    if course_id and not summaries:
+        programs = [
+            p
+            for p in programs
+            if _names_course(
+                course_id,
+                {
+                    "course_id": p["program_id"],
+                    "run_id": None,
+                    "course_title": p["program_title"],
+                },
+            )
+        ]
+        # A program named by its title, with the page's id, could be the
+        # page's program on another platform
+        if any(p["program_id"] == page_course for p in programs) and (
+            note := await _page_platform_note(platform, page_course)
+        ):
+            return json.dumps({"enrollments": [], "note": note})
+    result = {"enrollments": _current_runs(summaries), "programs": programs}
+    if course_id and not summaries and not programs:
         result["note"] = _not_in_records(course_id)
     result["enrollments"] = _only(
         result["enrollments"],
@@ -1123,7 +1148,8 @@ async def get_enrollments(
         ) or (
             "The learner is enrolled in the course on this page, "
             f"{summary['course_title']} ({summary['course_id']}); its run "
-            f"is {summary['status']}."
+            f"is {summary['status']}. Answer a question about this course from "
+            "this, not by listing their other courses."
         )
     if page_course and not course_id and "course_on_page" not in result:
         # Say so, rather than leave the model to read it from a missing key. A
@@ -1131,13 +1157,16 @@ async def get_enrollments(
         note = None
         if platform or page["course_id"]:
             note = await _page_platform_note(platform, page["course_id"])
-        if note:
-            result["course_on_page"] = note
-        elif page_course.startswith(PROGRAM_ID_PREFIX):
-            result["course_on_page"] = (
-                "The page is a program, not a course; get_certificate_status says "
-                "whether the learner is enrolled in it."
+        if page_course.startswith(PROGRAM_ID_PREFIX):
+            result["program_on_page"] = note or (
+                "The learner is enrolled in the program on this page, "
+                f"{page_program['program_title']} ({page_course})."
+                if page_program
+                else f"The learner has no MITx Online enrollment in {page_course}, "
+                "the program on this page."
             )
+        elif note:
+            result["course_on_page"] = note
         else:
             result["course_on_page"] = (
                 f"The learner has no MITx Online enrollment in {page_course}, "
@@ -1174,6 +1203,10 @@ async def get_course_progress(
         "letter. Give the grade and whether it passes, nothing more: it doesn't "
         "show what they have submitted or completed."
     )
+    if any(e["grade"] is None for e in result["enrollments"]):
+        result["grade_meaning"] += (
+            " A grade of null means none is recorded yet: say that, not 0%."
+        )
     return json.dumps(result)
 
 

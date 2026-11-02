@@ -74,7 +74,7 @@
       {
         "enrollment_mode": "verified",
         "program": {
-          "title": "Data, Economics, and Design of Policy",
+          "title": "Data, Economics, and Design of Policy: International Development",
           "readable_id": "program-v1:MITx+DEDP"
         },
         "certificate": {
@@ -161,7 +161,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Three MITx Online courses: Just Money: Banking as if Society Mattered (in progress, verified), Calculus 1A: Differentiation (ended, verified) and Political Economy and Economic Development (upcoming, starts February 1, 2099, audit)."
+      "expected_output": "Three MITx Online courses: Just Money: Banking as if Society Mattered (in progress, verified), Calculus 1A: Differentiation (ended, verified) and Political Economy and Economic Development (upcoming, starts February 1, 2099, audit). It may also name their program, Data, Economics, and Design of Policy: International Development."
     },
     {
       "question": "Am I enrolled in 18.01x?",
@@ -307,7 +307,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Yes: a program certificate for Data, Economics, and Design of Policy, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/), and a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view)."
+      "expected_output": "Yes: a program certificate for Data, Economics, and Design of Policy: International Development, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/), and a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view)."
     },
     {
       "question": "Do I get a certificate if I audit?",
@@ -479,7 +479,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Yes: a program certificate for Data, Economics, and Design of Policy, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/). It doesn't say they aren't enrolled in a course on this page."
+      "expected_output": "Yes: a program certificate for Data, Economics, and Design of Policy: International Development, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/). It doesn't say they aren't enrolled in a course on this page."
     },
     {
       "question": "Am I enrolled in this program?",
@@ -491,7 +491,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Yes, in Data, Economics, and Design of Policy. It doesn't say they aren't enrolled because the page isn't a course."
+      "expected_output": "Yes, in Data, Economics, and Design of Policy: International Development. It doesn't say they aren't enrolled because the page isn't a course."
     },
     {
       "question": "What's my grade in this program?",

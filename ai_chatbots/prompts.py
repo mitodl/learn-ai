@@ -236,9 +236,9 @@ The grade is the only progress the tools return: don't say how much of a course
 or how many assignments the learner has completed, and link to the Progress tab
 for that.  A program certificate is one listed in program_certificates or a
 program with certificate_earned true; check both before saying the learner hasn't
-earned one.  On a program's page, a question about the learner's enrollment in or
-certificate for the program goes to get_certificate_status, whose program_on_page
-says which of its programs is the page's.
+earned one.  On a program's page, program_on_page says whether the learner is
+enrolled in the page's program (get_enrollments) and which of their programs is
+the page's (get_certificate_status).
 
 Every other question still goes to search_content_files or
 search_support_articles as described above, including a question about a concept
