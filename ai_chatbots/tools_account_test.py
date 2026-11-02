@@ -167,8 +167,12 @@ async def call(tool, page_course=None, platform=None, course_id=None):
 
 def test_model_fills_in_only_the_course():
     """The agent state is injected, never part of what the model can fill in."""
-    assert not get_enrollments.tool_call_schema.model_json_schema().get("properties")
-    for tool in (get_course_progress, get_certificate_status, get_upcoming_assignments):
+    for tool in (
+        get_enrollments,
+        get_course_progress,
+        get_certificate_status,
+        get_upcoming_assignments,
+    ):
         schema = tool.tool_call_schema.model_json_schema()
         assert list(schema["properties"]) == ["course_id"]
         assert not schema.get("required")
@@ -516,7 +520,30 @@ async def test_enrollments_list_all_courses_on_a_course_page(records):
         ECONOMICS: "ended",
         ECONOMICS_2: "upcoming",
     }
+    assert result["course_on_page"] == (
+        f"The course on this page is Calculus 1A ({CALCULUS})."
+    )
     assert "grade" not in result["enrollments"][0]
+
+
+@pytest.mark.parametrize(
+    ("course_id", "runs"),
+    [
+        ("18.01x", [f"{CALCULUS}+3T2026"]),
+        # An older run asked for by its id isn't hidden by the current one
+        (f"{CALCULUS}+1T2020", [f"{CALCULUS}+1T2020"]),
+        ("Calculus 1A", [f"{CALCULUS}+3T2026"]),
+        ("8.01x", []),
+    ],
+)
+async def test_enrollments_for_a_named_course(records, course_id, runs):
+    """With course_id, only the course it names is listed."""
+    result = await call(get_enrollments, page_course=ECONOMICS, course_id=course_id)
+
+    assert [e["run_id"] for e in result["enrollments"]] == runs
+    assert ("isn't in the learner's MITx Online records" in result.get("note", "")) is (
+        not runs
+    )
 
 
 async def test_enrollments_accept_dates_without_a_timezone(records):

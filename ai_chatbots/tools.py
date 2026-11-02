@@ -711,6 +711,22 @@ class CourseAccountToolSchema(AccountToolSchema):
     )
 
 
+class EnrollmentsToolSchema(AccountToolSchema):
+    """Schema for get_enrollments, which lists all courses or a named one."""
+
+    course_id: str | None = Field(
+        default=None,
+        description=(
+            """
+            The course the learner asks about, the one on this page included:
+            as they named it, its number, id or title (such as "18.01x" or
+            "Calculus 1A"), exactly as they wrote it. Leave it out only when
+            they ask about all of their courses.
+            """
+        ),
+    )
+
+
 def _parse_date(value: str | None) -> datetime | None:
     """Parse an ISO date from the APIs as aware UTC, or None."""
     try:
@@ -898,6 +914,16 @@ def _names_course(course: str, summary: dict) -> bool:
     )
 
 
+def _not_in_records(course: str) -> str:
+    """Say a course the learner named isn't in their records, not that they lack it."""
+    return (
+        f"{course} isn't in the learner's MITx Online records. Say you don't see "
+        "it there and can't check other platforms; don't say they have no "
+        "enrollment or certificate, and don't answer from their other courses "
+        "or programs."
+    )
+
+
 def _names_only_the_page_course(
     course: str, matches: list[dict], page_courses: set[str]
 ) -> bool:
@@ -963,11 +989,8 @@ async def _course_enrollments(  # noqa: C901, PLR0911
         return {
             "enrollments": [],
             "note": (
-                f"{course_id} isn't in the learner's MITx Online records. Say you "
-                "don't see it there and can't check other platforms; don't say "
-                "they have no enrollment or certificate, and don't answer from "
-                "their other courses or programs. get_enrollments lists their "
-                "courses and their course_id."
+                f"{_not_in_records(course_id)} get_enrollments lists their courses "
+                "and their course_id."
             ),
         }
     if not matches:
@@ -1014,21 +1037,27 @@ def _only(summaries: list[dict], *fields: str) -> list[dict]:
     return [{field: summary[field] for field in keep} for summary in summaries]
 
 
-@tool(args_schema=AccountToolSchema)
+@tool(args_schema=EnrollmentsToolSchema)
 async def get_enrollments(
-    state: Annotated[dict, InjectedState],  # noqa: ARG001
+    state: Annotated[dict, InjectedState], course_id: str | None = None
 ):
     """
     Get the courses the signed-in learner is enrolled in on MITx Online: each
     course run's dates, whether it is upcoming, in progress or ended, and the
     enrollment mode (audit or verified). Use it for "what am I enrolled in",
     "when does my course start" or "am I enrolled in X". It returns all of the
-    learner's courses, not just the one on this page.
+    learner's courses, not just the one on this page, or only the course_id
+    given.
     """
     try:
-        result = {"enrollments": _current_runs(await _summaries())}
+        summaries = await _summaries()
     except Exception:  # noqa: BLE001
         return _could_not_check("get_enrollments")
+    if course_id:
+        summaries = [s for s in summaries if _names_course(course_id, s)]
+    result = {"enrollments": _current_runs(summaries)}
+    if course_id and not summaries:
+        result["note"] = _not_in_records(course_id)
     result["enrollments"] = _only(
         result["enrollments"],
         "start_date",
@@ -1038,6 +1067,14 @@ async def get_enrollments(
         "enrollment_mode",
         "course_url",
     )
+    page_course = ((state or {}).get("course_id") or [None])[-1]
+    for summary in result["enrollments"]:
+        if page_course in (summary["course_id"], summary["run_id"]):
+            # Small models otherwise take "this course" for the one in progress
+            result["course_on_page"] = (
+                f"The course on this page is {summary['course_title']} "
+                f"({summary['course_id']})."
+            )
     return json.dumps(result)
 
 

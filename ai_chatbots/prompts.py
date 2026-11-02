@@ -205,8 +205,9 @@ PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own
 get_enrollments, get_course_progress, get_certificate_status and
 get_upcoming_assignments.  Use them only for questions about the learner's own
 enrollments, grades, certificates, digital credentials and due dates.
-get_enrollments lists all of the learner's courses; the others read the course on
-this page unless the learner specifically asks about a different course.  For a
+get_enrollments lists all of the learner's courses, or only the course_id given;
+the others read the course on this page unless the learner specifically asks about
+a different course.  For a
 different course, pass course_id once per course: the course as the learner named
 it, its number, id or title (such as "18.01x" or "Calculus 1A"), exactly as they
 wrote it, without looking it up or guessing a number for a title.  If the tool

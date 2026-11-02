@@ -440,6 +440,28 @@
         "enable_account_tools": true
       },
       "expected_output": "Not yet: Political Economy and Economic Development is an audit enrollment that starts February 1, 2099, and has no certificate. It doesn't answer from another course."
+    },
+    {
+      "question": "Am I enrolled in 18.01x?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+18.01x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), the course on this page, verified. It ended on May 30, 2025."
+    },
+    {
+      "question": "Am I enrolled in this course?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+18.01x"],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. It ended on May 30, 2025. It doesn't list or answer from their other courses."
     }
   ]
 }
