@@ -875,10 +875,16 @@ async def _page_platform_note(platform: str | None, course_id: str) -> str | Non
     return None
 
 
-def _page_summary(page_course: str | None) -> dict:
-    """Return the page's course and run ids, in the shape _names_course reads."""
+def _page(state: dict) -> tuple[dict, str | None]:
+    """
+    Return the page's course and run ids, in the shape _names_course reads, and
+    its platform, from the agent state.
+    """
+    state = state or {}
+    page_course = (state.get("course_id") or [None])[-1]
     run = RUN_ID_REGEX.fullmatch(page_course or "")
-    return {"course_id": run.group(1) if run else page_course, "run_id": page_course}
+    page = {"course_id": run.group(1) if run else page_course, "run_id": page_course}
+    return page, (state.get("platform") or [None])[-1]
 
 
 def _page_courses(page: dict, summaries: list[dict]) -> set[str]:
@@ -895,12 +901,10 @@ def _page_courses(page: dict, summaries: list[dict]) -> set[str]:
 
 def _names_course(course: str, summary: dict) -> bool:
     """
-    Say whether the course a learner named is this enrollment's: its run id;
-    its course id or the end of it after a ":" or "+", so "18.01x" and
-    "MITxT+18.01x" name course-v1:MITxT+18.01x but "8.01x" doesn't; or whole
-    words of its title, so "Calculus 1A" names "Calculus 1A: Differentiation"
-    but "Calculus 1" doesn't. Run ids are only matched whole, since "1T2025"
-    ends many of them.
+    Say whether the course a learner named is this enrollment's, by its:
+    - run id, whole only, since a run tag like "1T2025" ends many of them;
+    - course id, whole or its end after ":" or "+" ("18.01x", not "8.01x");
+    - title, on whole words ("Calculus 1A", not "Calculus 1").
     """
     phrase = r"\s+".join(map(re.escape, course.split()))
     course = course.casefold()
@@ -946,17 +950,15 @@ async def _course_enrollments(  # noqa: C901, PLR0911
 ) -> dict:
     """
     Get the learner's enrollment in the course they asked about: course_id if
-    given, else the course of the page they are chatting from, else
-    nothing, and the note asks for the course. See _names_course for how a
-    named course is matched.
+    given, else the course of the page they are chatting from, else nothing
+    (the note asks for the course). See _names_course for how a named course
+    is matched.
 
     Raises:
         learner_api.LearnerAPIError: if the records can't be read
     """
-    state = state or {}
-    page_course = (state.get("course_id") or [None])[-1]
-    platform = (state.get("platform") or [None])[-1]
-    page_summary = _page_summary(page_course)
+    page_summary, platform = _page(state)
+    page_course = page_summary["run_id"]
     if course_id and page_course and _names_course(course_id, page_summary):
         # A short name for the page's course is the page's course, which could
         # be another platform's, not a MITx Online course with the same number
@@ -1046,10 +1048,8 @@ async def get_enrollments(
     learner's courses, not just the one on this page, or only the course_id
     given.
     """
-    state = state or {}
-    page_course = (state.get("course_id") or [None])[-1]
-    platform = (state.get("platform") or [None])[-1]
-    page = _page_summary(page_course)
+    page, platform = _page(state)
+    page_course = page["run_id"]
     try:
         summaries = await _summaries()
     except Exception:  # noqa: BLE001
@@ -1186,10 +1186,9 @@ async def get_upcoming_assignments(
     Get the signed-in learner's upcoming assignment due dates in their run of
     a course, soonest first, with the run's start and end dates and a link to
     its Dates tab. Reads the course on this page, or the course_id given. Only
-    the next few
-    due dates are listed; more_due_dates counts the rest, which the Dates tab
-    shows. With no upcoming_due_dates, or a due_dates_note saying they
-    couldn't be checked, send the learner to the Dates tab.
+    the next few due dates are listed; more_due_dates counts the rest, which
+    the Dates tab shows. With no upcoming_due_dates, or a due_dates_note saying
+    they couldn't be checked, send the learner to the Dates tab.
     """
     try:
         result = await _course_enrollments(state, course_id)

@@ -362,10 +362,11 @@ async def test_name_of_two_courses_asks_which(
     assert "Ask which one they mean" in result["note"]
 
 
+@pytest.mark.parametrize("tool", [get_course_progress, get_enrollments])
 @pytest.mark.parametrize("page_course", [SHARED, f"{SHARED}+1T2020"])
 @pytest.mark.parametrize("platform", ["xpro", None])
 async def test_course_number_of_the_page_course_is_the_page_course(
-    mocker, records, page_course, platform
+    mocker, records, tool, page_course, platform
 ):
     """
     The page course's number reads the page's course, not a MITx Online course
@@ -377,10 +378,7 @@ async def test_course_number_of_the_page_course_is_the_page_course(
     ]
 
     result = await call(
-        get_course_progress,
-        page_course=page_course,
-        platform=platform,
-        course_id="AIGE",
+        tool, page_course=page_course, platform=platform, course_id="AIGE"
     )
 
     assert result["enrollments"] == []
@@ -424,8 +422,9 @@ async def test_run_tag_on_a_run_page_names_nothing(records):
     ],
 )
 @pytest.mark.parametrize("platform", ["xpro", None])
+@pytest.mark.parametrize("tool", [get_course_progress, get_enrollments])
 async def test_page_course_by_any_name_keeps_its_platform_check(  # noqa: PLR0913
-    mocker, records, page_course, course_id, enrolled, platform
+    mocker, records, page_course, course_id, enrolled, platform, tool
 ):
     """
     A course_id naming the page's course, under any of its ids or its title,
@@ -439,10 +438,7 @@ async def test_page_course_by_any_name_keeps_its_platform_check(  # noqa: PLR091
     ]
 
     result = await call(
-        get_course_progress,
-        page_course=page_course,
-        platform=platform,
-        course_id=course_id,
+        tool, page_course=page_course, platform=platform, course_id=course_id
     )
 
     assert result["enrollments"] == []
@@ -560,37 +556,6 @@ async def test_enrollments_dont_name_another_platforms_page_course(
 
     assert [e["course_id"] for e in result["enrollments"]] == [SHARED]
     assert "isn't on MITx Online" in result["course_on_page"]
-
-
-@pytest.mark.parametrize("page_course", [SHARED, f"{SHARED}+1T2020"])
-@pytest.mark.parametrize("platform", ["xpro", None])
-@pytest.mark.parametrize(
-    ("enrolled", "course_id"),
-    [
-        # Another organization's MITx Online course with the page's number
-        ("course-v1:OTHER+AIGE", "AIGE"),
-        # A MITx Online run of the page's course, by any name
-        (SHARED, "AIGE"),
-        (SHARED, SHARED),
-        (SHARED, "AI for Good"),
-        (SHARED, f"{SHARED}+1T2026"),
-    ],
-)
-async def test_enrollments_for_the_page_course_keep_its_platform_check(  # noqa: PLR0913
-    mocker, records, page_course, platform, enrolled, course_id
-):
-    """Naming an xPRO page's course doesn't list a MITx Online course as it."""
-    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
-    records["enrollments"].return_value = [
-        enrollment(enrolled, "1T2026", "AI for Good")
-    ]
-
-    result = await call(
-        get_enrollments, page_course=page_course, platform=platform, course_id=course_id
-    )
-
-    assert result["enrollments"] == []
-    assert "isn't on MITx Online" in result["note"]
 
 
 @pytest.mark.parametrize(
