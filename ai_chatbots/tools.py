@@ -860,19 +860,16 @@ async def _page_platform_note(platform: str | None, course_id: str) -> str | Non
     return None
 
 
-def _page_courses(page_course: str | None, summaries: list[dict]) -> set[str]:
+def _page_courses(page: dict, summaries: list[dict]) -> set[str]:
     """Return the course ids that name the page's course, under any of its runs."""
+    page_course = page["run_id"]
     if not page_course:
         return set()
-    courses = {page_course}
-    if match := RUN_ID_REGEX.fullmatch(page_course):
-        courses.add(match.group(1))
-    courses.update(
+    return {page_course, page["course_id"]} | {
         summary["course_id"]
         for summary in summaries
         if page_course in (summary["course_id"], summary["run_id"])
-    )
-    return courses
+    }
 
 
 def _names_course(course: str, summary: dict) -> bool:
@@ -919,8 +916,7 @@ async def _course_enrollments(  # noqa: C901, PLR0911
     """
     Get the learner's enrollment in the course they asked about: course_id if
     given, else the course of the page they are chatting from, else all of
-    their courses. Ids are MITx Online's readable ids, compared exactly: a loose
-    match could answer about a different course.
+    their courses. See _names_course for how a named course is matched.
 
     Raises:
         learner_api.LearnerAPIError: if the records can't be read
@@ -975,10 +971,7 @@ async def _course_enrollments(  # noqa: C901, PLR0911
             ),
         }
     if not matches:
-        return {
-            "enrollments": [],
-            "note": NOT_ENROLLED_ON_PAGE,
-        }
+        return {"enrollments": [], "note": NOT_ENROLLED_ON_PAGE}
     if course_id and len(named := {s["course_id"] or s["run_id"] for s in matches}) > 1:
         return {
             "enrollments": [],
@@ -988,7 +981,7 @@ async def _course_enrollments(  # noqa: C901, PLR0911
                 "its course_id."
             ),
         }
-    page_courses = _page_courses(page_course, summaries)
+    page_courses = _page_courses(page_summary, summaries)
     # Another course is MITx Online's own record, but the page's course, under
     # any of its ids, could be a different platform's course with the same id.
     if not course_id or any(s["course_id"] in page_courses for s in matches):
@@ -1004,9 +997,7 @@ async def _course_enrollments(  # noqa: C901, PLR0911
     result = {
         "enrollments": _current_runs(matches, prefer_certificate=prefer_certificate)
     }
-    if course_id:
-        result["course_requested"] = course_id
-    else:
+    if not course_id:
         result["course_on_page"] = page_course
     return result
 

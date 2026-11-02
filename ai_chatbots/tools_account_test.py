@@ -54,6 +54,8 @@ def enrollment(  # noqa: PLR0913
 CALCULUS = "course-v1:MITxT+18.01x"
 ECONOMICS = "course-v1:MITxT+14.750x"
 ECONOMICS_2 = "course-v1:MITxT+14.73x"
+# A readable id MITx Online and xPRO share
+SHARED = "course-v1:PRO+AIGE"
 
 ENROLLMENTS = [
     enrollment(
@@ -246,7 +248,7 @@ async def test_course_id_reads_that_course(
     )
 
     assert [e["run_id"] for e in result["enrollments"]] == [run_id]
-    assert result["course_requested"] == course_id
+    assert "course_on_page" not in result
     lookup.assert_not_called()
 
 
@@ -274,81 +276,40 @@ async def test_course_id_not_enrolled_lists_nothing(records, page_course, course
 
 
 @pytest.mark.parametrize(
-    ("course_id", "course"),
+    ("page_course", "course_id", "runs"),
     [
-        ("18.01x", CALCULUS),
-        ("18.01X", CALCULUS),
-        ("MITxT+18.01x", CALCULUS),
-        # Not the end of 18.01x's id after a separator
-        ("8.01x", "course-v1:8.01x"),
+        # Numbers and ids: the end of a course id after ":" or "+"
+        (ECONOMICS, "18.01x", [f"{CALCULUS}+3T2026"]),
+        (ECONOMICS, "18.01X", [f"{CALCULUS}+3T2026"]),
+        (ECONOMICS, "MITxT+18.01x", [f"{CALCULUS}+3T2026"]),
+        (ECONOMICS, "8.01x", ["course-v1:8.01x+1T2026"]),
+        # Titles: whole words only
+        (ECONOMICS, "Foundations of Development Policy", [f"{ECONOMICS_2}+1T2099"]),
+        (ECONOMICS, "foundations of  development policy", [f"{ECONOMICS_2}+1T2099"]),
+        (ECONOMICS, "Calculus 1A", [f"{CALCULUS}+3T2026"]),
+        (ECONOMICS, "Calculus 1", []),
+        (ECONOMICS, "Develop", []),
+        # On an older run's page, its course by any name reads that run
+        (f"{CALCULUS}+1T2020", None, [f"{CALCULUS}+1T2020"]),
+        (f"{CALCULUS}+1T2020", "Calculus 1A", [f"{CALCULUS}+1T2020"]),
+        (f"{CALCULUS}+1T2020", "18.01x", [f"{CALCULUS}+1T2020"]),
+        # A run asked for by its id keeps that run
+        (f"{CALCULUS}+1T2020", f"{CALCULUS}+3T2026", [f"{CALCULUS}+3T2026"]),
+        (CALCULUS, f"{CALCULUS}+1T2020", [f"{CALCULUS}+1T2020"]),
     ],
 )
-async def test_course_number_names_its_course(records, course_id, course):
-    """The course number the learner gave names the course whose id ends with it."""
+async def test_named_course_reads_its_runs(records, page_course, course_id, runs):
+    """A course named by number, id or title reads that course's run."""
     records["enrollments"].return_value = [
         *ENROLLMENTS,
         enrollment("course-v1:8.01x", "1T2026", "Physics I"),
     ]
 
-    result = await call(get_course_progress, page_course=ECONOMICS, course_id=course_id)
-
-    assert [e["course_id"] for e in result["enrollments"]] == [course]
-
-
-@pytest.mark.parametrize(
-    ("course_id", "courses"),
-    [
-        ("Foundations of Development Policy", [ECONOMICS_2]),
-        ("foundations of  development policy", [ECONOMICS_2]),
-        ("Calculus 1A", [CALCULUS]),
-        # Whole words only
-        ("Calculus 1", []),
-        ("Develop", []),
-    ],
-)
-async def test_course_title_names_its_course(records, course_id, courses):
-    """Whole words of a course's title name it."""
-    result = await call(get_course_progress, page_course=ECONOMICS, course_id=course_id)
-
-    assert [e["course_id"] for e in result["enrollments"]] == courses
-
-
-@pytest.mark.parametrize(
-    ("course_id", "run"),
-    [
-        (None, "1T2020"),
-        ("Calculus 1A", "1T2020"),
-        ("18.01x", "1T2020"),
-        # A run asked for by its id keeps that run
-        (f"{CALCULUS}+3T2026", "3T2026"),
-    ],
-)
-async def test_page_course_by_another_name_reads_the_page_run(records, course_id, run):
-    """On an older run's page, naming its course reads that run, as the page does."""
     result = await call(
-        get_course_progress, page_course=f"{CALCULUS}+1T2020", course_id=course_id
+        get_course_progress, page_course=page_course, course_id=course_id
     )
 
-    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+{run}"]
-
-
-@pytest.mark.parametrize("platform", ["xpro", None])
-async def test_page_course_title_on_another_platform_says_so(mocker, records, platform):
-    """
-    The page course's title, on another platform's run page the learner isn't
-    in, says the page isn't on MITx Online rather than that they aren't enrolled.
-    """
-    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
-
-    result = await call(
-        get_course_progress,
-        page_course=f"{CALCULUS}+1T2099",
-        platform=platform,
-        course_id="Calculus 1A",
-    )
-
-    assert result["enrollments"] == []
-    assert "isn't on MITx Online" in result["note"]
+    assert [e["run_id"] for e in result["enrollments"]] == runs
 
 
 async def test_page_course_title_of_another_run_reads_the_page_run(records):
@@ -369,31 +330,31 @@ async def test_page_course_title_of_another_run_reads_the_page_run(records):
     assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+3T2026"]
 
 
-async def test_course_title_of_two_courses_asks_which(records):
-    """Words two titles share get no records, only both ids."""
-    result = await call(get_course_progress, course_id="development")
-
-    assert result["enrollments"] == []
-    assert f"{ECONOMICS_2}, {ECONOMICS}" in result["note"]
-
-
-SHARED = "course-v1:PRO+AIGE"
-
-
 @pytest.mark.parametrize("page_course", [None, CALCULUS])
-@pytest.mark.parametrize("reverse", [False, True])
-async def test_course_number_of_two_courses_asks_which(records, page_course, reverse):
-    """A number two of the learner's courses share gets no records, only both ids."""
-    shared = [
-        enrollment("course-v1:MITxT+AIGE", "1T2026", "AI Governance"),
-        enrollment(SHARED, "1T2026", "AI for Good"),
-    ]
-    records["enrollments"].return_value = shared[::-1] if reverse else shared
+@pytest.mark.parametrize(
+    ("enrolled", "course_id", "named"),
+    [
+        (["course-v1:MITxT+AIGE", SHARED], "AIGE", f"course-v1:MITxT+AIGE, {SHARED}"),
+        ([SHARED, "course-v1:MITxT+AIGE"], "AIGE", f"course-v1:MITxT+AIGE, {SHARED}"),
+        # Words two titles share
+        (None, "development", f"{ECONOMICS_2}, {ECONOMICS}"),
+    ],
+)
+async def test_name_of_two_courses_asks_which(
+    records, page_course, enrolled, course_id, named
+):
+    """A name two of the learner's courses share gets no records, only both ids."""
+    if enrolled:
+        records["enrollments"].return_value = [
+            enrollment(course, "1T2026", course) for course in enrolled
+        ]
 
-    result = await call(get_course_progress, page_course=page_course, course_id="AIGE")
+    result = await call(
+        get_course_progress, page_course=page_course, course_id=course_id
+    )
 
     assert result["enrollments"] == []
-    assert f"course-v1:MITxT+AIGE, {SHARED}" in result["note"]
+    assert named in result["note"]
     assert "Ask which one they mean" in result["note"]
 
 
@@ -431,45 +392,46 @@ async def test_run_tag_on_a_run_page_names_nothing(records):
     assert "1T2020 isn't in the learner's MITx Online records" in result["note"]
 
 
-async def test_course_id_older_run_of_the_page_course(records):
-    """An older run named on its course's page is that run, not the current one."""
-    result = await call(
-        get_course_progress, page_course=CALCULUS, course_id=f"{CALCULUS}+1T2020"
-    )
-
-    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+1T2020"]
-
-
 @pytest.mark.parametrize(
-    ("page_course", "course_id", "enrolled_runs"),
+    ("page_course", "course_id", "enrolled"),
     [
         # The page's own id
-        (SHARED, SHARED, ["1T2026"]),
+        (SHARED, SHARED, [(SHARED, "1T2026")]),
         # The page course's number
-        (SHARED, "AIGE", ["1T2026"]),
+        (SHARED, "AIGE", [(SHARED, "1T2026")]),
         # A run of a course page
-        (SHARED, f"{SHARED}+1T2026", ["1T2026"]),
+        (SHARED, f"{SHARED}+1T2026", [(SHARED, "1T2026")]),
         # The course of a run page, whose current run isn't the page's
-        (f"{SHARED}+1T2020", SHARED, ["1T2020", "1T2026"]),
+        (f"{SHARED}+1T2020", SHARED, [(SHARED, "1T2020"), (SHARED, "1T2026")]),
         # A sibling run of a run page
-        (f"{SHARED}+1T2020", f"{SHARED}+1T2026", ["1T2020", "1T2026"]),
+        (
+            f"{SHARED}+1T2020",
+            f"{SHARED}+1T2026",
+            [(SHARED, "1T2020"), (SHARED, "1T2026")],
+        ),
         # A sibling run of a run page the learner isn't enrolled in
-        (f"{SHARED}+1T2020", f"{SHARED}+1T2026", ["1T2026"]),
+        (f"{SHARED}+1T2020", f"{SHARED}+1T2026", [(SHARED, "1T2026")]),
+        # The page course's title, on a run page the learner isn't in
+        (
+            f"{CALCULUS}+1T2099",
+            "Calculus 1A",
+            [(CALCULUS, "1T2020"), (CALCULUS, "3T2026")],
+        ),
     ],
 )
 @pytest.mark.parametrize("platform", ["xpro", None])
-async def test_course_id_of_the_page_course_keeps_its_platform_check(  # noqa: PLR0913
-    mocker, records, page_course, course_id, enrolled_runs, platform
+async def test_page_course_by_any_name_keeps_its_platform_check(  # noqa: PLR0913
+    mocker, records, page_course, course_id, enrolled, platform
 ):
     """
-    A course_id naming the page's course, under any of its ids, is still
-    checked against the page's platform: the page could be xPRO's course with
-    the same id as the learner's MITx Online one.
+    A course_id naming the page's course, under any of its ids or its title,
+    is still checked against the page's platform: the page could be xPRO's
+    course with the same id as the learner's MITx Online one.
     """
     mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
     records["enrollments"].return_value = [
-        enrollment(SHARED, run, "AI for Good", start=f"20{run[-2:]}-01-01T00:00:00Z")
-        for run in enrolled_runs
+        enrollment(course, run, "Calculus 1A", start=f"20{run[-2:]}-01-01T00:00:00Z")
+        for course, run in enrolled
     ]
 
     result = await call(
