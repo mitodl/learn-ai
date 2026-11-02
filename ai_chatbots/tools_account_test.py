@@ -221,16 +221,13 @@ async def test_page_course_not_enrolled_lists_nothing(records, page_course):
     assert "no MITx Online enrollment in the course on this page" in result["note"]
 
 
-async def test_no_page_course_lists_all_courses(records):
-    """Without a course on the page or a course_id, every course is listed."""
+async def test_no_page_course_asks_for_one(records):
+    """Without a course on the page or a course_id, no records are read."""
     result = await call(get_course_progress)
 
-    assert {e["run_id"] for e in result["enrollments"]} == {
-        f"{CALCULUS}+3T2026",
-        f"{ECONOMICS}+3T2023",
-        f"{ECONOMICS_2}+1T2099",
-    }
-    assert "Answer only about the course they asked about" in result["note"]
+    assert result["enrollments"] == []
+    assert "Pass the course the learner asked about" in result["note"]
+    records["enrollments"].assert_not_called()
 
 
 @pytest.mark.parametrize("page_course", [None, CALCULUS])
@@ -481,9 +478,10 @@ async def test_earlier_certificate_isnt_hidden_by_a_newer_run(records):
 
     assert certificate["enrollments"][0]["certificate_earned"] is True
     assert progress["enrollments"][0]["run_id"] == f"{ECONOMICS}+1T2099"
-    for kwargs in ({}, {"page_course": CALCULUS, "course_id": ECONOMICS}):
-        certificate = await call(get_certificate_status, **kwargs)
-        assert certificate["enrollments"][0]["certificate_earned"] is True
+    certificate = await call(
+        get_certificate_status, page_course=CALCULUS, course_id=ECONOMICS
+    )
+    assert certificate["enrollments"][0]["certificate_earned"] is True
 
 
 async def test_latest_run_compares_dates_not_text(records):
@@ -765,17 +763,6 @@ async def test_page_run_platform_is_its_course(mocker, settings, page_course):
 
     assert request.call_args.args[1]["readable_id"] == CALCULUS
     assert result["enrollments"][0]["course_id"] == CALCULUS
-
-
-async def test_upcoming_assignments_skip_ended_runs(records):
-    """An ended run has nothing due, so its dates aren't read."""
-    result = await call(get_upcoming_assignments, page_course=ECONOMICS)
-
-    (summary,) = result["enrollments"]
-    assert summary["status"] == "ended"
-    assert summary["upcoming_due_dates"] == []
-    assert summary["dates_url"] == f"{COURSES_URL}/{ECONOMICS}+3T2023/dates"
-    records["course_dates"].assert_not_called()
 
 
 async def test_upcoming_assignments_skip_other_courses(records):

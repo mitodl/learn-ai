@@ -417,7 +417,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Calculus 1A: Differentiation: 88%, a B, passing. Just Money: Banking as if Society Mattered: 0%, not passing so far. Political Economy and Economic Development has no grade yet; it starts February 1, 2099."
+      "expected_output": "Either the grades of the courses it checked (Calculus 1A: Differentiation: 88%, a B, passing; Just Money: Banking as if Society Mattered: 0%, not passing so far), or a question about which course they mean. It doesn't give a grade it didn't check."
     },
     {
       "question": "What's my grade in Just Money?",

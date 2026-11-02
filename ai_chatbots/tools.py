@@ -704,8 +704,7 @@ class CourseAccountToolSchema(AccountToolSchema):
             this page: the course as they named it, its number, id or title
             (such as "18.01x" or "Calculus 1A"), exactly as they wrote it.
             Don't look it up or guess a number for a title. Leave it out for
-            the course on this page, or, with no course on the page, for all of
-            the learner's courses.
+            the course on this page.
             """
         ),
     )
@@ -959,23 +958,18 @@ async def _course_enrollments(  # noqa: C901, PLR0911
         # A short name for the page's course is the page's course, which could
         # be another platform's, not a MITx Online course with the same number
         course_id = None
+    if not course_id and not page_course:
+        return {
+            "enrollments": [],
+            "note": (
+                "There is no course on this page. Pass the course the learner "
+                "asked about as course_id."
+            ),
+        }
     on_page = not course_id and page_course
     if on_page and platform and platform != MITXONLINE_PLATFORM:
         return {"enrollments": [], "note": NOT_ON_MITXONLINE}
     summaries = await _summaries()
-    if not course_id and not page_course:
-        return {
-            "enrollments": _current_runs(
-                summaries, prefer_certificate=prefer_certificate
-            ),
-            "note": (
-                "There is no course on this page, so these are all of the "
-                "learner's MITx Online courses. Answer only about the course they "
-                "asked about, matching its course number exactly (8.01x is not "
-                "18.01x); if it isn't listed, say you don't see it in their MITx "
-                "Online records, not that they have no enrollment or certificate."
-            ),
-        }
     matches = [
         s
         for s in summaries
@@ -1091,8 +1085,7 @@ async def get_course_progress(
     Get the signed-in learner's current grade in a course (percent, letter and
     whether it is passing) and a link to the course's Progress tab, where they
     can see their progress assignment by assignment. Reads the course on this
-    page, the course_id given, or all of their courses when there is no
-    course on the page.
+    page, or the course_id given.
     """
     try:
         result = await _course_enrollments(state, course_id)
@@ -1119,22 +1112,19 @@ async def get_course_progress(
 MAX_DUE_DATES = 10
 
 
-async def _upcoming_due_dates(summary: dict, now: datetime) -> dict:
+async def _upcoming_due_dates(run_id: str, now: datetime) -> dict:
     """
     Get the learner's next due dates in a run from its Open edX Dates tab, or
     say they couldn't be checked. Without the Open edX settings there is no
     lookup, and the Dates tab link is all the learner gets.
     """
-    if summary["status"] == "ended":
-        # Nothing is due after a run ends, so save the call
-        return {"upcoming_due_dates": [], "more_due_dates": 0}
     if not (
         settings.LEARNER_API_OPENEDX_BASE_URL
         and settings.LEARNER_API_OPENEDX_COOKIE_NAME
     ):
         return {}
     try:
-        dates = await learner_api.get_course_dates(summary["run_id"])
+        dates = await learner_api.get_course_dates(run_id)
     except Exception:  # noqa: BLE001
         log.warning("Account tool get_upcoming_assignments couldn't read due dates")
         return {"due_dates_note": "The due dates couldn't be checked."}
@@ -1171,8 +1161,8 @@ async def get_upcoming_assignments(
     """
     Get the signed-in learner's upcoming assignment due dates in their run of
     a course, soonest first, with the run's start and end dates and a link to
-    its Dates tab. Reads the course on this page, the course_id given, or all
-    of their courses when there is no course on the page. Only the next few
+    its Dates tab. Reads the course on this page, or the course_id given. Only
+    the next few
     due dates are listed; more_due_dates counts the rest, which the Dates tab
     shows. With no upcoming_due_dates, or a due_dates_note saying they
     couldn't be checked, send the learner to the Dates tab.
@@ -1183,7 +1173,7 @@ async def get_upcoming_assignments(
         return _could_not_check("get_upcoming_assignments")
     now = datetime.now(UTC)
     due_dates = await asyncio.gather(
-        *(_upcoming_due_dates(e, now) for e in result["enrollments"])
+        *(_upcoming_due_dates(e["run_id"], now) for e in result["enrollments"])
     )
     result["enrollments"] = [
         {**summary, **dates}
@@ -1252,8 +1242,7 @@ async def get_certificate_status(
     on a program, or in program_certificates (MIT Learn's program records).
     Use it for "did I get a certificate", "where is my certificate", "where is
     my digital credential" or "have I finished the program". The course
-    certificate is for the course on this page, the course_id given, or all of
-    their courses when there is no course on the page.
+    certificate is for the course on this page, or the course_id given.
 
     Each earned MITx Online certificate also has digital_credential, for the
     separate digital credential: "issued" when one exists, "not_confirmed" when
