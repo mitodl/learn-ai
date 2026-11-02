@@ -468,6 +468,90 @@
         "enable_account_tools": true
       },
       "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. It ended on May 30, 2025. It doesn't list or answer from their other courses."
+    },
+    {
+      "question": "Did I earn the certificate for this program?",
+      "extra_state": {
+        "course_id": ["program-v1:MITx+DEDP"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes: a program certificate for Data, Economics, and Design of Policy, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/). It doesn't say they aren't enrolled in a course on this page."
+    },
+    {
+      "question": "Am I enrolled in this program?",
+      "extra_state": {
+        "course_id": ["program-v1:MITx+DEDP"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, in Data, Economics, and Design of Policy. It doesn't say they aren't enrolled because the page isn't a course."
+    },
+    {
+      "question": "What's my grade in this program?",
+      "extra_state": {
+        "course_id": ["program-v1:MITx+DEDP"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "There's no grade for a program, only for its courses; it asks which course they mean or gives the grade for one they name. It doesn't say they aren't enrolled."
+    },
+    {
+      "question": "What's my grade in Political Economy?",
+      "extra_state": {
+        "course_id": ["program-v1:MITx+DEDP"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "No grade is recorded yet in Political Economy and Economic Development (14.750x), whose run hasn't started."
+    },
+    {
+      "question": "Did I finish this program?",
+      "extra_state": {
+        "course_id": ["program-v1:MITxT+SDS"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes: a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view). It doesn't say they have no enrollment or certificate."
+    },
+    {
+      "question": "Did I get my certificate for this program?",
+      "extra_state": {
+        "course_id": ["program-v1:xPRO+QCF"],
+        "collection_name": [null],
+        "platform": ["xpro"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "This program isn't on MITx Online, so it can't check the learner's records for it here, and points them to support. It doesn't answer from their MITx Online programs."
+    },
+    {
+      "question": "Am I enrolled in this course?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+18.01x+1T2025"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. That run ended on May 30, 2025."
     }
   ]
 }
