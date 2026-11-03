@@ -285,6 +285,35 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     )
 
 
+WITHHELD_LINKS_NOTE = (
+    "Results with a null id have no url. Answer from them as usual, but never "
+    "write about links, urls or downloads for them: no links, no placeholder "
+    "links, and no remark that a link is unavailable, missing or not provided. "
+    "If the user asks for a link to one of them, answer without commenting on "
+    "links."
+)
+
+
+async def _enrolled_runs() -> set[str]:
+    """
+    Get the MITx Online runs the signed-in learner is enrolled in, read with
+    their own session. Empty with no session or if the records can't be read.
+    """
+    if not learner_api.has_learner_session():
+        return set()
+    runs = set()
+    try:
+        for enrollment in await learner_api.get_enrollments():
+            run = enrollment.get("run") if isinstance(enrollment, dict) else None
+            run_id = run.get("courseware_id") if isinstance(run, dict) else None
+            if run_id and isinstance(run_id, str):
+                runs.add(run_id)
+    except Exception:  # noqa: BLE001
+        log.warning("Couldn't read the learner's enrollments to check course links")
+        return set()
+    return runs
+
+
 async def _content_file_search(
     q: str,
     readable_ids: str | list[str],
@@ -302,6 +331,8 @@ async def _content_file_search(
         exclude = str(exclude_canvas) != "False"
         shaped = []
         citations = {}
+        enrolled_runs = None
+        links_withheld = False
         for chunk in result.results:
             platform = chunk.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
@@ -312,6 +343,22 @@ async def _content_file_search(
             # is shared by every chunk of every file in a course, so keying on
             # it collapsed every citation onto whichever result came back first
             citation_key = chunk.get("url")
+            # Link a file from an Open edX course (it has an edx_module_id;
+            # Canvas files do too, but stay in Canvas) only for learners
+            # enrolled in its run, since most of them open only for enrolled
+            # learners. Only MITx Online enrollments can be checked.
+            is_course_material = (
+                chunk.get("edx_module_id") and platform and platform != "canvas"
+            )
+            if citation_key and is_course_material:
+                if platform == MITXONLINE_PLATFORM and enrolled_runs is None:
+                    enrolled_runs = await _enrolled_runs()
+                if (
+                    platform != MITXONLINE_PLATFORM
+                    or chunk.get("run_readable_id") not in enrolled_runs
+                ):
+                    citation_key = None
+                    links_withheld = True
             shaped.append(
                 {
                     "id": citation_key,
@@ -324,7 +371,9 @@ async def _content_file_search(
                     "citation_url": chunk.get("url"),
                     "citation_title": chunk.get("title") or chunk.get("content_title"),
                 }
-        return _envelope(result, shaped, citation_sources=citations)
+        # Otherwise the model offers the files anyway, with links to "#"
+        note = {"note": WITHHELD_LINKS_NOTE} if links_withheld else {}
+        return _envelope(result, shaped, citation_sources=citations, **note)
     except Exception as error:
         log.exception("Error querying MIT API")
         return _search_error_envelope(error, citation_sources={})
