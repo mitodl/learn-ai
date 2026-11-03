@@ -24,6 +24,7 @@ from open_learning_ai_tutor.utils import (
 )
 from openai import BadRequestError
 
+from ai_chatbots import tools
 from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
@@ -1700,15 +1701,40 @@ async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid
 
 
 @pytest.mark.asyncio
-async def test_support_bot_has_no_tools(mock_checkpointer):
+async def test_support_bot_has_no_tools_by_default(mock_checkpointer):
     """
-    The v1 support bot takes in a problem; it does not try to answer it, and it
-    does not file through the model either. Filing happens in get_completion, so
-    a second tool-driven path could only disagree with it.
+    Answering is opt-in. With it off the bot is the intake form it has always
+    been: no tools, so nothing to answer with, so no new way for intake to fail.
     """
     chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
 
     assert chatbot.create_tools() == []
+    assert chatbot.answering_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_support_bot_takes_the_account_tools_when_asked(mock_checkpointer):
+    """Matt's account tools, as they are, and only those."""
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, enable_account_tools=True
+    )
+
+    assert chatbot.create_tools() == list(tools.ACCOUNT_TOOLS)
+    assert chatbot.answering_enabled is True
+
+
+@pytest.mark.asyncio
+async def test_answering_enabled_follows_the_tool_list(mock_checkpointer):
+    """
+    Not the account_tools kwarg. A second tool set has to be able to turn
+    answering on by existing, without editing this class.
+    """
+    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+    assert chatbot.answering_enabled is False
+
+    chatbot.tools = [tools.ACCOUNT_TOOLS[0]]
+
+    assert chatbot.answering_enabled is True
 
 
 @pytest.mark.asyncio
