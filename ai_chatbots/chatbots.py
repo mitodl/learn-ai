@@ -1544,7 +1544,10 @@ class SupportBot(TruncatingChatbot):
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     STATE_CLASS = SupportAgentState
-    TRACE_STATE_KEYS = ("page_url",)
+    # No user_email, no verified_email, no user_name: a trace property is a
+    # PostHog event property, which is a different retention and a different
+    # access list from a Zendesk ticket.
+    TRACE_STATE_KEYS = ("page_url", "course_id", "platform")
     CALLS_THE_MODEL = False
     # A bot is constructed on every request, including the ones that
     # short-circuit before any model call. The budget is provisioned on the
@@ -1707,13 +1710,29 @@ class SupportBot(TruncatingChatbot):
             # failure as a model that won't answer, and owes the learner the
             # same fallback.
             await self._ensure_proxy_user()
+            callbacks = await self.set_callbacks(
+                self.get_trace_properties(
+                    # course_id and platform are derived here rather than
+                    # carried in extra_state, so they have to be handed over
+                    # for TRACE_STATE_KEYS to find them.
+                    {
+                        **(extra_state or {}),
+                        "course_id": [course_id],
+                        "platform": [platform],
+                    }
+                )
+            )
             result = await asyncio.wait_for(
                 self._answering_agent.ainvoke(
                     {
                         "messages": [*history, HumanMessage(message)],
                         "course_id": [course_id],
                         "platform": [platform],
-                    }
+                    },
+                    # In this call's config, never on self.config: that one is
+                    # the persisted support thread, and the attempt stays out
+                    # of it.
+                    config={"callbacks": callbacks},
                 ),
                 timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
             )
