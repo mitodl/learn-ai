@@ -5,6 +5,8 @@ import inspect
 import json
 import os
 import re
+import threading
+import time
 from operator import add
 from typing import Annotated
 from unittest.mock import ANY, AsyncMock
@@ -1976,8 +1978,14 @@ async def test_a_dead_proxy_hands_the_turn_to_intake(
     settings, mocker, mock_checkpointer
 ):
     """
-    A proxy that won't provision is the same kind of failure as a model that
-    won't answer, and owes the learner the same fallback: the intake form.
+    Provisioning that raises is the same kind of failure as a model that won't
+    answer, and owes the learner the same fallback: the intake form.
+
+    Note what this does NOT cover. The real create_proxy_user catches its own
+    errors and logs them, so a proxy that is genuinely down returns normally
+    and the attempt goes ahead un-provisioned. What is pinned here is the
+    unexpected failure - a thread that cannot start, a future version that
+    raises - not a dead proxy.
     """
     _with_a_proxy(settings)
     mocker.patch(
@@ -1989,6 +1997,65 @@ async def test_a_dead_proxy_hands_the_turn_to_intake(
     )
 
     assert await chatbot._try_to_answer("my grade?", {}, {}) == ""  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_a_slow_proxy_does_not_hold_the_learner(
+    settings, mocker, mock_checkpointer
+):
+    """
+    Provisioning is a synchronous HTTP call with its own REQUESTS_TIMEOUT and
+    a retry behind it, so it can run for twice that. Outside the answer
+    timeout it holds the learner for all of it before the attempt even starts,
+    and the timeout they were promised bounds only the part that never ran.
+    """
+    _with_a_proxy(settings)
+    settings.AI_SUPPORT_ANSWER_TIMEOUT = 0.05
+    mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user",
+        side_effect=lambda *args, **kwargs: time.sleep(0.5),  # noqa: ARG005
+    )
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+
+    started = time.monotonic()
+    answer = await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
+
+    assert answer == ""
+    assert time.monotonic() - started < 0.4
+    chatbot._answering_agent.ainvoke.assert_not_called()  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_provisioning_stays_off_the_shared_executor(
+    settings, mocker, mock_checkpointer
+):
+    """
+    sync_to_async defaults to thread_sensitive=True, which runs every such
+    call in a worker through one shared thread. A provisioning call that can
+    last a minute would stall every other learner's thread-sensitive work
+    behind it, not just this learner's answer. It touches no ORM, so it has
+    no reason to be on that thread.
+    """
+    _with_a_proxy(settings)
+    threads = {}
+    mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user",
+        side_effect=lambda *args, **kwargs: threads.__setitem__(  # noqa: ARG005
+            "proxy", threading.current_thread()
+        ),
+    )
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+
+    await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
+    await sync_to_async(
+        lambda: threads.__setitem__("shared", threading.current_thread())
+    )()
+
+    assert threads["proxy"] is not threads["shared"]
 
 
 @pytest.mark.parametrize(
