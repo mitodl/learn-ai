@@ -5,6 +5,8 @@ import inspect
 import json
 import os
 import re
+from operator import add
+from typing import Annotated
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
@@ -31,6 +33,11 @@ from openai import BadRequestError
 
 from ai_chatbots import tools
 from ai_chatbots.chatbots import (
+    AFFIRMATIVE_PHRASES,
+    ANSWER_CLOSING_PHRASES,
+    DECLINE_PHRASES,
+    NOTHING_MORE_PHRASES,
+    PAUSE_PHRASES,
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
@@ -44,12 +51,14 @@ from ai_chatbots.chatbots import (
     SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
     SearchSummaryBot,
+    SupportAgentState,
     SupportBot,
     SyllabusAgentState,
     SyllabusBot,
     TutorBot,
     VideoGPTAgentState,
     VideoGPTBot,
+    _closes_the_answer,
     get_canvas_problem_set,
     get_problem_from_edx_block,
 )
@@ -1797,6 +1806,68 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
     assert isinstance(chatbot.proxy, LiteLLMProxy)
     assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
     assert chatbot.agent is not None
+
+
+@pytest.mark.parametrize(
+    ("message", "closes"),
+    [
+        # Unambiguously done.
+        ("thanks", True),
+        ("thank you", True),
+        ("that helped", True),
+        ("got it", True),
+        ("no thanks", True),
+        ("no", True),
+        ("nothing else", True),
+        ("that's all", True),
+        # Affirmatives. Said to "tell me more and I'll pass it on", these mean
+        # PASS IT ON. Reading them as "glad that helped" files nothing and
+        # tells the learner it did - the worst outcome this bot has.
+        ("send it", False),
+        ("file it", False),
+        ("submit", False),
+        ("yes please", False),
+        ("go ahead", False),
+        ("ok", False),
+        # Asking for a moment is not being finished.
+        ("wait", False),
+        ("hold on", False),
+        # Anything with content is a new question or the problem itself.
+        ("my certificate still isn't showing", False),
+        ("what about 18.02?", False),
+        ("", False),
+    ],
+)
+def test_closes_the_answer(message, closes):
+    """
+    Said to an answer rather than to a review, these mean the learner is done.
+    An affirmative said to an answer means the opposite - pass it on - so
+    FILLER_PHRASES, which contains every affirmative, cannot be the test here.
+    """
+    assert _closes_the_answer(message) is closes
+
+
+def test_close_out_phrases_exclude_every_affirmative():
+    """
+    Pins the rule rather than the symptom: the table above only catches the
+    affirmatives someone remembered to list, this catches the next one added.
+    """
+    closing = ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
+
+    assert not closing & AFFIRMATIVE_PHRASES
+    assert not closing & PAUSE_PHRASES
+
+
+def test_support_state_tracks_hand_off_and_answers():
+    """
+    handed_off stops a learner who asked for a human being looped back into the
+    assistant; answered is what lets "thanks" be read as closing an answer
+    rather than as a reply to a review.
+    """
+    channels = SupportAgentState.__annotations__
+
+    assert channels["handed_off"] == Annotated[list[bool], add]
+    assert channels["answered"] == Annotated[list[bool], add]
 
 
 def _answer_result(*messages):

@@ -1029,6 +1029,11 @@ class SupportAgentState(SummaryState):
     filing_uncertain: Annotated[list[bool], add]
     filing_blocked: Annotated[list[bool], add]
     cancelled_after: Annotated[list[int], add]
+    # The learner asked for a human, so this thread stops trying to answer.
+    handed_off: Annotated[list[bool], add]
+    # Whether the previous turn was an answer, which is what makes a bare
+    # "thanks" a close-out rather than an edit to a request under review.
+    answered: Annotated[list[bool], add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
@@ -1088,6 +1093,18 @@ SUPPORT_ASK_EMAIL_AGAIN = (
 SUPPORT_ASK_MORE = (
     "Thanks for letting us know. Is there anything else you'd like to add before I "
     "pass this on to the MIT Open Learning support team?"
+)
+# Appended by code to every answer, so the route to a person never depends on
+# the answer having been any good - the same reason filing is in code.
+# Deliberately a statement, not a question: "yes" to "did that help, or shall I
+# send it?" cannot be told apart from "yes, send it".
+SUPPORT_OFFER_TICKET = (
+    "If that didn't sort it out, tell me more and I'll pass it to the MIT Open "
+    "Learning support team."
+)
+SUPPORT_ANSWER_CLOSED = (
+    "Glad that helped. If something else comes up, just ask - and I can still "
+    "pass a request to the MIT Open Learning support team whenever you want."
 )
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
@@ -1202,6 +1219,24 @@ AFFIRMATIVE_OPENERS = frozenset(phrase.split()[0] for phrase in AFFIRMATIVE_PHRA
 # A plain no. Under the review, where the question is whether to send, these
 # mean do not send.
 DECLINE_PHRASES = frozenset({"no", "nope", "no thanks", "no thank you"})
+
+# Said to an answer: the learner is finished and there is nothing to file.
+# Narrow on purpose - see _closes_the_answer for why this is not FILLER_PHRASES.
+ANSWER_CLOSING_PHRASES = frozenset(
+    {
+        "thanks",
+        "thanks a lot",
+        "thank you",
+        "thank you very much",
+        "that helped",
+        "that helps",
+        "that's helpful",
+        "got it",
+        "perfect",
+        "great",
+        "cheers",
+    }
+)
 
 # Answers to "anything else to add?" that add nothing. Before the review they
 # move things along; under it they are ambiguous - "that's all" may mean "go
@@ -1339,6 +1374,23 @@ def _is_affirmative(message: str) -> bool:
 def _is_decline(message: str) -> bool:
     """Report whether the learner said no, plainly and nothing else."""
     return _normalised(message) in DECLINE_PHRASES
+
+
+def _closes_the_answer(message: str) -> bool:
+    """
+    Report whether the learner is finished with an answer rather than asking
+    for more or for a person.
+
+    Not _is_filler: FILLER_PHRASES is the union used to keep chatter out of the
+    ticket body, and it contains every affirmative. Said to "tell me more and
+    I'll pass it on", "send it" and "file it" mean pass it on - reading them as
+    "glad that helped" files nothing and tells the learner it did. Ambiguous
+    replies fall through to the review instead, which the learner can read and
+    cancel; a wrong close-out is silent.
+    """
+    return _normalised(message) in (
+        ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
+    )
 
 
 def _is_unclear_go_ahead(message: str) -> bool:
