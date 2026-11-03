@@ -4787,3 +4787,64 @@ async def test_support_bot_keeps_a_pause_out_of_the_description(
 
     description = mock_file.await_args.kwargs["description"]
     assert description == f"{SUPPORT_PROBLEM}\n\nIt started on Monday."
+
+
+@pytest.mark.asyncio
+async def test_a_failed_answer_leaves_only_the_scripted_exchange(
+    mocker, mock_checkpointer
+):
+    """
+    The intake has to survive the answer attempt failing, and "survive" means
+    the thread looks as if the attempt never ran. Unlike the _try_to_answer
+    unit tests, this one lets the real method run against a raising ainvoke
+    and then reads what actually reached the checkpoint.
+    """
+    thread_id = uuid4().hex
+    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, thread_id=thread_id, enable_account_tools=True
+    )
+    mocker.patch.object(
+        chatbot._answering_agent,  # noqa: SLF001
+        "ainvoke",
+        AsyncMock(side_effect=RuntimeError("the model is down")),
+    )
+
+    reply = await _say(chatbot, SUPPORT_PROBLEM)
+
+    assert reply.startswith(SUPPORT_ASK_MORE)
+    messages = (await _state_of(chatbot))["messages"]
+    assert [type(msg) for msg in messages] == [HumanMessage, AIMessage]
+    assert messages[0].content == SUPPORT_PROBLEM
+
+
+@pytest.mark.asyncio
+async def test_a_bot_that_cannot_answer_runs_todays_intake_unchanged(
+    mocker, mock_checkpointer
+):
+    """
+    REGRESSION, and the one that matters most: with answering off, every reply
+    and every state key must be what main produces. The exact key set is the
+    assertion - a subset check would not catch a new channel leaking into a
+    thread that never answers.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 77}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    first = await _say(chatbot, SUPPORT_PROBLEM)
+    review = await _say(chatbot, "nothing else")
+    filed = await _say(chatbot, "yes")
+
+    # _say carries an address, so the opening turn invites more detail rather
+    # than asking for one - the path an authenticated learner takes. "nothing
+    # else" is NOTHING_MORE_PHRASES, so it stays out of the description.
+    assert first.startswith(SUPPORT_ASK_MORE)
+    assert SUPPORT_PROBLEM in review
+    assert "77" in filed
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+    state = await _state_of(chatbot)
+    assert state.get("answered", []) == []
+    assert state.get("handed_off", []) == []
