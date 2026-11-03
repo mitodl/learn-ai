@@ -16,6 +16,7 @@ from channels.db import database_sync_to_async
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import OperationalError
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
@@ -23,7 +24,10 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.runnables import RunnableBinding
+from langchain_core.tools import tool
 from langchain_litellm import ChatLiteLLM
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import InjectedState
 from open_learning_ai_tutor.constants import Intent
 from open_learning_ai_tutor.utils import (
     filter_out_system_messages,
@@ -141,6 +145,11 @@ def mock_settings(settings):
     os.environ["LANGSMITH_TRACING"] = ""
     settings.LANGSMITH_API_KEY = ""
     return settings
+
+
+# Captured before the autouse fixture below replaces it. ainvoke runs through
+# astream, so a test that drives a real graph has to put the real one back.
+_REAL_ASTREAM = CompiledStateGraph.astream
 
 
 @pytest.fixture(autouse=True)
@@ -1892,6 +1901,13 @@ def _answer_result(*messages):
 
 def _tool_message(content='{"enrollments": []}'):
     return ToolMessage(content=content, tool_call_id="call-1", name="get_enrollments")
+
+
+class _FakeToolCallingModel(GenericFakeChatModel):
+    """A fake model the react agent will accept: bind_tools is a no-op."""
+
+    def bind_tools(self, *args, **kwargs):  # noqa: ARG002
+        return self
 
 
 async def _answering_bot(mocker, mock_checkpointer, result):
@@ -4848,3 +4864,58 @@ async def test_a_bot_that_cannot_answer_runs_todays_intake_unchanged(
     state = await _state_of(chatbot)
     assert state.get("answered", []) == []
     assert state.get("handed_off", []) == []
+
+
+@pytest.mark.asyncio
+async def test_the_answering_graph_hands_the_tools_the_page_course(
+    settings, mocker, mock_checkpointer
+):
+    """
+    The one test here that does not mock ainvoke, because mocking it is what
+    hid this: LangGraph drops input keys the state_schema does not declare, so
+    passing course_id into ainvoke proves nothing about the tools receiving it.
+
+    This drives the real graph with a fake model and a probe tool, and asserts
+    from inside the tool - the only place the answer is actually decided.
+    """
+    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
+    mocker.patch.object(CompiledStateGraph, "astream", _REAL_ASTREAM)
+    seen = {}
+
+    @tool
+    def probe(state: Annotated[dict, InjectedState]) -> str:
+        """Record the course the tools can see."""
+        seen["course_id"] = (state or {}).get("course_id")
+        seen["platform"] = (state or {}).get("platform")
+        return '{"enrollments": []}'
+
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, enable_account_tools=True
+    )
+    chatbot.tools = [probe]
+    chatbot.llm = _FakeToolCallingModel(
+        messages=iter(
+            [
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "probe", "args": {}, "id": "call-1"}],
+                ),
+                AIMessage(content="Your grade is 88%."),
+            ]
+        )
+    )
+    chatbot._build_answering_agent()  # noqa: SLF001
+
+    await chatbot._try_to_answer(  # noqa: SLF001
+        "what's my grade?",
+        {},
+        {
+            "page_url": [
+                "https://courses.learn.test/learn/course/"
+                "course-v1:MITx+18.01x+2T2025/home"
+            ]
+        },
+    )
+
+    assert seen["course_id"] == ["course-v1:MITx+18.01x+2T2025"]
+    assert seen["platform"] == ["mitxonline"]
