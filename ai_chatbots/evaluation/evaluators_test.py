@@ -125,6 +125,13 @@ class TestSyllabusBotEvaluator:
         mock_bot_class = mocker.Mock()
         return SyllabusBotEvaluator(mock_bot_class, "syllabus")
 
+    @pytest.fixture(autouse=True)
+    def no_resource_facts(self, mocker):
+        """Keep collect_response from looking up resource facts."""
+        mocker.patch(
+            "ai_chatbots.evaluation.evaluators.get_resource_facts", return_value=""
+        )
+
     def test_load_test_cases(self, evaluator, mocker):
         """Test loading syllabus bot test cases."""
         mock_load_json = mocker.patch(
@@ -226,9 +233,9 @@ class TestSyllabusBotEvaluator:
         async def ainvoke(state, config):
             await asyncio.sleep(0)  # let the other cases set their records
             try:
-                return await learner_api.get_enrollments()
+                return {"records": await learner_api.get_enrollments()}
             except learner_api.LearnerAPIError:
-                return "error"
+                return {"records": "error"}
 
         chatbot = mocker.Mock(config={"configurable": {}})
         chatbot.agent.ainvoke = ainvoke
@@ -236,7 +243,7 @@ class TestSyllabusBotEvaluator:
             *(evaluator.collect_response(chatbot, case) for case in cases)
         )
 
-        assert results == expected
+        assert [result["records"] for result in results] == expected
 
     async def test_history_comes_before_the_question(self, evaluator, mocker):
         """A follow-up case sends the earlier turns, then the question."""
@@ -258,6 +265,44 @@ class TestSyllabusBotEvaluator:
             *history,
             {"role": "user", "content": "And a digital credential?"},
         ]
+
+    @pytest.mark.parametrize(
+        ("facts", "instructions", "expected"),
+        [
+            ("Facts", "Prompt\n\nFacts", ["Facts"]),
+            ("", "Prompt", []),
+            # Lookup failed when the bot was built, then succeeded here
+            ("Facts", "Prompt", []),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_collect_response_adds_resource_facts(
+        self, evaluator, mocker, facts, instructions, expected
+    ):
+        """The resource facts in the system prompt are returned as extra context."""
+        mock_facts = mocker.patch(
+            "ai_chatbots.evaluation.evaluators.get_resource_facts",
+            return_value=facts,
+        )
+        mock_bot = mocker.Mock()
+        mock_bot.agent.ainvoke = mocker.AsyncMock(
+            return_value={"messages": [AIMessage(content="Response")]}
+        )
+        mock_bot.config = {"configurable": {}}
+        mock_bot.instructions = instructions
+        test_case = TestCaseSpec(
+            question="Test question",
+            metadata={
+                "extra_state": {"course_id": ["8.01SC+fall_2016"], "platform": ["ocw"]},
+                "extra_init": {},
+            },
+        )
+
+        response = await evaluator.collect_response(mock_bot, test_case)
+
+        mock_facts.assert_called_once_with("8.01SC+fall_2016", "ocw")
+        assert response["extra_context"] == expected
+        assert response["messages"][0].content == "Response"
 
 
 class TestVideoGPTBotEvaluator:
