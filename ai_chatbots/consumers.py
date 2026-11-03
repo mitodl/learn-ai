@@ -34,6 +34,7 @@ from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
+    SUPPORT_ANSWERS_FEATURE_FLAG,
     ChatbotCookie,
 )
 from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
@@ -909,6 +910,7 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = SupportChatRequestSerializer
     ROOM_NAME = SupportBot.__name__
     throttle_scope = "support_bot"
+    account_tools_allowed = True
 
     def create_chatbot(
         self,
@@ -919,6 +921,17 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
         temperature = serializer.validated_data.pop("temperature", None)
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
+        # Same three conditions as the syllabus bot, under its own flag. The
+        # session is not optional: the account tools read the learner's
+        # forwarded cookie, so without one every tool returns COULD_NOT_CHECK
+        # and answering can only waste a model call.
+        enable_account_tools = (
+            self.account_tools_allowed
+            and has_learner_session()
+            and feature_is_enabled(
+                SUPPORT_ANSWERS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
+            )
+        )
 
         return SupportBot(
             self.user_id,
@@ -927,6 +940,7 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            enable_account_tools=enable_account_tools,
             # Read off the request header rather than the chat payload, so the
             # body has no say in it. The header is still whatever the caller
             # sent, so the device is claimed, not proven.
@@ -957,4 +971,5 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             # but Zendesk's username field should only ever be the account handle.
             "user_username": [session_username or data.get("user_username", "") or ""],
             "confirm": [bool(data.get("confirm", False))],
+            "escalate": [bool(data.get("escalate", False))],
         }

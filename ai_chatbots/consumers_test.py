@@ -23,6 +23,7 @@ from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
+    SUPPORT_ANSWERS_FEATURE_FLAG,
 )
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
 from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
@@ -1739,6 +1740,7 @@ def test_support_process_extra_state_trusts_only_the_session_email(
         "user_name": [async_user.name],
         "user_username": [async_user.username],
         "confirm": [False],
+        "escalate": [False],
     }
 
 
@@ -1809,6 +1811,7 @@ def test_support_process_extra_state_falls_back_to_the_body_email(support_consum
         "user_name": ["Ada Lovelace"],
         "user_username": ["ada"],
         "confirm": [False],
+        "escalate": [False],
     }
 
 
@@ -1844,6 +1847,7 @@ def test_support_process_extra_state_anonymous_learner(support_consumer):
         "user_name": [""],
         "user_username": [""],
         "confirm": [False],
+        "escalate": [False],
     }
 
 
@@ -1875,6 +1879,55 @@ async def test_support_create_chatbot_carries_the_user_agent(
     )
 
     assert chatbot.user_agent == expected
+
+
+@pytest.mark.parametrize(
+    ("session", "flag_on", "expected"),
+    [(True, True, True), (True, False, False), (False, True, False)],
+)
+async def test_support_create_chatbot_gates_answering(  # noqa: PLR0913
+    mocker, mock_http_consumer_send, support_consumer, session, flag_on, expected
+):
+    """
+    Answering needs both the learner's own session and the flag. Without the
+    session the account tools have no cookie to read and every one of them
+    returns COULD_NOT_CHECK, so an answering bot there is a model call that
+    can only fail - the edX MFE, which learn-ai holds no session for, must get
+    the scripted intake instead.
+    """
+    mocker.patch("ai_chatbots.consumers.has_learner_session", return_value=session)
+    flag = mocker.patch(
+        "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on
+    )
+    support_consumer.scope["headers"] = []
+    serializer = consumers.SupportChatRequestSerializer(data={"message": "help"})
+    serializer.is_valid(raise_exception=True)
+    await support_consumer.prepare_response(serializer)
+
+    chatbot = await sync_to_async(support_consumer.create_chatbot)(
+        serializer, InMemorySaver()
+    )
+
+    assert chatbot.enable_account_tools is expected
+    assert chatbot.answering_enabled is expected
+    # Short-circuits before PostHog when there is no session, so the flag name
+    # is only provable on the branch that reaches it.
+    assert flag.called is session
+    if session:
+        assert flag.call_args[0][0] == SUPPORT_ANSWERS_FEATURE_FLAG
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({}, False), ({"escalate": False}, False), ({"escalate": True}, True)],
+)
+def test_support_process_extra_state_carries_the_escalate_flag(
+    support_consumer, body, expected
+):
+    """The press has to reach get_completion, which pops it off extra_state."""
+    extra_state = support_consumer.process_extra_state({"page_url": "", **body})
+
+    assert extra_state["escalate"] == [expected]
 
 
 async def _handle_with_origin(mocker, consumer, origin, settings, allowed):
