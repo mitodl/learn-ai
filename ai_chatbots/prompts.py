@@ -278,8 +278,11 @@ deadline or refund rule: you have no source for any of those."""
 # Short on purpose: everything about reading tool output is in the core or in
 # the tool output itself (note, completion, grade_meaning,
 # digital_credential_meaning).
-PROMPT_SUPPORT_ACCOUNT_TOOLS = """If a tool asks for a course because there is none on the page, ask the learner
-which course they mean.
+PROMPT_SUPPORT_ACCOUNT_TOOLS = """When the learner is on a course page, the tools already know which course that
+is - leave course_id out and they will use it.  Pass course_id only when the
+learner asks about a different course, and then only as they named it.  If a
+tool asks for a course because there is none on the page, ask the learner which
+course they mean.
 
 Do not offer to contact support, raise a ticket or pass anything on - another
 part of this system always adds that offer itself, in its own words.  Answer

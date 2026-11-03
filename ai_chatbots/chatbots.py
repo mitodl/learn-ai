@@ -51,6 +51,7 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.constants import AZURE_MODEL_PREFIX
+from ai_chatbots.learner_api import COURSE_KEY_RE
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
@@ -1035,6 +1036,11 @@ class SupportAgentState(SummaryState):
     # Whether the previous turn was an answer, which is what makes a bare
     # "thanks" a close-out rather than an edit to a request under review.
     answered: Annotated[list[bool], add]
+    # Only ever passed to the answering graph, never written to the support
+    # thread: the tools read the page's course from agent state, and a course
+    # id has no business on the path that builds a ticket.
+    course_id: Annotated[list[str], add]
+    platform: Annotated[list[str] | None, add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
@@ -1632,7 +1638,26 @@ class SupportBot(TruncatingChatbot):
     # intake conversation to the model every turn.
     ANSWER_HISTORY_MESSAGES = 10
 
-    async def _try_to_answer(self, message: str, prior_state: dict) -> str:
+    @staticmethod
+    def _page_course(page_url: str) -> tuple[str | None, str | None]:
+        """
+        Return the course run on this page and its platform, or (None, None).
+
+        page_url is browser-supplied. The host check is the only thing standing
+        between a crafted url and the tools reading a course the learner is not
+        looking at - though the tools still only ever read that learner's own
+        records, so the worst case is an answer about the wrong one of their
+        own courses.
+        """
+        openedx = settings.LEARNER_API_OPENEDX_BASE_URL
+        if not page_url or not page_url.startswith(openedx):
+            return None, None
+        found = COURSE_KEY_RE.search(page_url)
+        return (found.group(0), "mitxonline") if found else (None, None)
+
+    async def _try_to_answer(
+        self, message: str, prior_state: dict, extra_state: dict | None = None
+    ) -> str:
         """
         Try to answer from the learner's own records. Return the answer, or ""
         to hand the turn to the intake script.
@@ -1651,10 +1676,20 @@ class SupportBot(TruncatingChatbot):
             for msg in (prior_state.get("messages") or [])
             if isinstance(msg, (HumanMessage, AIMessage)) and msg.content
         ][-self.ANSWER_HISTORY_MESSAGES :]
+        # This turn's page, not prior_state's: that one is still the page the
+        # learner was on last turn, and answering about the course they just
+        # left is the whole bug this guards against.
+        course_id, platform = self._page_course(
+            ((extra_state or {}).get("page_url") or [""])[-1]
+        )
         try:
             result = await asyncio.wait_for(
                 self._answering_agent.ainvoke(
-                    {"messages": [*history, HumanMessage(message)]}
+                    {
+                        "messages": [*history, HumanMessage(message)],
+                        "course_id": [course_id],
+                        "platform": [platform],
+                    }
                 ),
                 timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
             )
@@ -1892,7 +1927,7 @@ class SupportBot(TruncatingChatbot):
                     # so a later request starts past both of those too.
                     "cancelled_after": [len(prior_state.get("messages") or []) + 2],
                 }
-            answer = await self._try_to_answer(message, prior_state)
+            answer = await self._try_to_answer(message, prior_state, extra_state)
             if answer:
                 return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
 

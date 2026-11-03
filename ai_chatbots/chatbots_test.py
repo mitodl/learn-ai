@@ -1900,6 +1900,69 @@ async def _answering_bot(mocker, mock_checkpointer, result):
     return chatbot
 
 
+@pytest.mark.parametrize(
+    ("page_url", "expected"),
+    [
+        (
+            "https://courses.learn.test/learn/course/course-v1:MITx+18.01x+2T2025/home",
+            "course-v1:MITx+18.01x+2T2025",
+        ),
+        # Another host with a course key in it is not our page course: page_url
+        # is browser-supplied, and this is the only check on it.
+        ("https://evil.example/course-v1:MITx+18.01x+2T2025", None),
+        ("https://learn.mit.edu/dashboard", None),
+        ("", None),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_answer_attempt_gets_the_pages_course(
+    settings, mocker, mock_checkpointer, page_url, expected
+):
+    """
+    The tools read the page's course out of agent state (tools.py _page), so
+    this is how "my grade" means the course the learner is looking at without
+    them having to name it.
+    """
+    # The host differs per environment, so the check has to read the setting
+    # rather than a literal - on RC the courseware is courses.rc.learn.mit.edu.
+    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+
+    await chatbot._try_to_answer(  # noqa: SLF001
+        "what's my grade?", {}, {"page_url": [page_url]}
+    )
+
+    state = chatbot._answering_agent.ainvoke.call_args[0][0]  # noqa: SLF001
+    assert state["course_id"] == [expected]
+    assert state["platform"] == ["mitxonline" if expected else None]
+
+
+@pytest.mark.asyncio
+async def test_the_page_course_is_this_turns_not_the_last_turns(
+    settings, mocker, mock_checkpointer
+):
+    """
+    A learner who moves from course A to course B must not be answered about
+    A. prior_state still holds A's page_url when this turn runs, so reading it
+    there is the bug - the attempt takes this turn's value.
+    """
+    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+    course_a = "https://courses.learn.test/course-v1:MITx+6.00x+1T2025"
+    course_b = "https://courses.learn.test/course-v1:MITx+18.01x+2T2025"
+
+    await chatbot._try_to_answer(  # noqa: SLF001
+        "my grade?", {"page_url": [course_a]}, {"page_url": [course_b]}
+    )
+
+    state = chatbot._answering_agent.ainvoke.call_args[0][0]  # noqa: SLF001
+    assert state["course_id"] == ["course-v1:MITx+18.01x+2T2025"]
+
+
 @pytest.mark.asyncio
 async def test_try_to_answer_returns_the_answer_when_a_tool_fired(
     mocker, mock_checkpointer
