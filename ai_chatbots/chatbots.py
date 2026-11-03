@@ -11,6 +11,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 import posthog
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.callbacks.base import BaseCallbackHandler
@@ -98,6 +99,11 @@ class BaseChatbot(ABC):
     # never reaches it.
     CALLS_THE_MODEL = True
 
+    # Whether the proxy budget is provisioned in __init__. False for a bot
+    # that only sometimes reaches a model, so the turns that short-circuit
+    # don't pay a blocking HTTP call for a model they never call.
+    PROVISIONS_PROXY_EAGERLY = True
+
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
@@ -129,7 +135,7 @@ class BaseChatbot(ABC):
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
-            if self.CALLS_THE_MODEL:
+            if self.CALLS_THE_MODEL and self.PROVISIONS_PROXY_EAGERLY:
                 self.proxy.create_proxy_user(self.user_id)
             self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
@@ -1540,6 +1546,10 @@ class SupportBot(TruncatingChatbot):
     STATE_CLASS = SupportAgentState
     TRACE_STATE_KEYS = ("page_url",)
     CALLS_THE_MODEL = False
+    # A bot is constructed on every request, including the ones that
+    # short-circuit before any model call. The budget is provisioned on the
+    # first attempt instead, so those turns don't pay a blocking HTTP call.
+    PROVISIONS_PROXY_EAGERLY = False
 
     def __init__(  # noqa: PLR0913
         self,
@@ -1558,6 +1568,7 @@ class SupportBot(TruncatingChatbot):
         # CALLS_THE_MODEL, then calls create_tools() and get_llm(), which binds
         # whatever create_tools returned. A second tool set ORs into `answering`.
         self.enable_account_tools = enable_account_tools
+        self._proxy_user_ready = False
         answering = enable_account_tools
         self.PROMPT_TEMPLATE = "support" if answering else None
         self.CALLS_THE_MODEL = answering
@@ -1638,6 +1649,15 @@ class SupportBot(TruncatingChatbot):
     # intake conversation to the model every turn.
     ANSWER_HISTORY_MESSAGES = 10
 
+    async def _ensure_proxy_user(self) -> None:
+        """Provision this learner's model budget, once, on first use."""
+        if self._proxy_user_ready or not self.proxy:
+            return
+        # Synchronous HTTP: called bare it would block the event loop for every
+        # other request this worker is serving.
+        await sync_to_async(self.proxy.create_proxy_user)(self.user_id)
+        self._proxy_user_ready = True
+
     @staticmethod
     def _page_course(page_url: str) -> tuple[str | None, str | None]:
         """
@@ -1683,6 +1703,10 @@ class SupportBot(TruncatingChatbot):
             ((extra_state or {}).get("page_url") or [""])[-1]
         )
         try:
+            # Inside the try: a proxy that won't provision is the same kind of
+            # failure as a model that won't answer, and owes the learner the
+            # same fallback.
+            await self._ensure_proxy_user()
             result = await asyncio.wait_for(
                 self._answering_agent.ainvoke(
                     {

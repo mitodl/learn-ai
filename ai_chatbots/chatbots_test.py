@@ -1790,14 +1790,14 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
     settings, mocker, answering, mock_checkpointer
 ):
     """
-    create_proxy_user is a blocking HTTP call made during construction. A
-    scripted bot spends no tokens, so paying for it would put the intake form -
-    the thing a learner reaches when something else is already broken - behind
-    the LLM proxy being up.
+    create_proxy_user is a blocking HTTP call. A scripted bot spends no tokens,
+    so paying for it would put the intake form - the thing a learner reaches
+    when something else is already broken - behind the LLM proxy being up.
+
+    The budget is provisioned on the first attempt rather than at construction,
+    so this drives the attempt; the claim is unchanged, only its timing.
     """
-    settings.AI_PROXY_CLASS = "LiteLLMProxy"
-    settings.AI_PROXY_URL = "http://proxy.url"
-    settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
+    _with_a_proxy(settings)
     mock_create_proxy_user = mocker.patch(
         "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
     )
@@ -1805,6 +1805,15 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
     chatbot = await sync_to_async(SupportBot)(
         "anonymous", mock_checkpointer, enable_account_tools=answering
     )
+    if answering:
+        mocker.patch.object(
+            chatbot._answering_agent,  # noqa: SLF001
+            "ainvoke",
+            AsyncMock(return_value=_answer_result(_tool_message(), AIMessage("ok"))),
+        )
+    # A scripted bot has no answering graph, so this returns "" without
+    # reaching the proxy - which is the point.
+    await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
 
     assert mock_create_proxy_user.called is answering
     # Either way the proxy is configured: get_llm needs the prefix and api
@@ -1898,6 +1907,72 @@ async def _answering_bot(mocker, mock_checkpointer, result):
         else AsyncMock(return_value=result),
     )
     return chatbot
+
+
+def _with_a_proxy(settings):
+    """AI_PROXY_CLASS defaults to "", and self.proxy is None without it - which
+    would make every assertion about create_proxy_user pass vacuously.
+    """
+    settings.AI_PROXY_CLASS = "LiteLLMProxy"
+    settings.AI_PROXY_URL = "http://proxy.url"
+    settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
+
+
+@pytest.mark.asyncio
+async def test_a_support_bot_provisions_no_budget_until_it_answers(
+    settings, mocker, mock_checkpointer
+):
+    """
+    Construction happens on every request, including the ones that short
+    circuit at ALREADY_FILED. create_proxy_user is a blocking HTTP call, so
+    doing it there spends the whole turn's cost on a model never called.
+    """
+    _with_a_proxy(settings)
+    proxy = mocker.patch("ai_chatbots.proxies.LiteLLMProxy.create_proxy_user")
+
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, enable_account_tools=True
+    )
+
+    assert proxy.call_count == 0
+    assert chatbot.CALLS_THE_MODEL is True
+
+
+@pytest.mark.asyncio
+async def test_the_budget_is_provisioned_once_however_many_answers(
+    settings, mocker, mock_checkpointer
+):
+    """Once per bot, not once per turn - the call is idempotent but not free."""
+    _with_a_proxy(settings)
+    proxy = mocker.patch("ai_chatbots.proxies.LiteLLMProxy.create_proxy_user")
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+
+    await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
+    await chatbot._try_to_answer("and my certificate?", {}, {})  # noqa: SLF001
+
+    assert proxy.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_dead_proxy_hands_the_turn_to_intake(
+    settings, mocker, mock_checkpointer
+):
+    """
+    A proxy that won't provision is the same kind of failure as a model that
+    won't answer, and owes the learner the same fallback: the intake form.
+    """
+    _with_a_proxy(settings)
+    mocker.patch(
+        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user",
+        side_effect=RuntimeError("proxy is down"),
+    )
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+
+    assert await chatbot._try_to_answer("my grade?", {}, {}) == ""  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
