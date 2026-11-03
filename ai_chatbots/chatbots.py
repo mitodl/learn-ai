@@ -1488,7 +1488,10 @@ class SupportBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         user_agent: str = "",
+        enable_account_tools: bool = False,
     ):
+        # Before super().__init__(): it calls create_tools() at the end.
+        self.enable_account_tools = enable_account_tools
         super().__init__(
             user_id,
             name=name,
@@ -1503,16 +1506,34 @@ class SupportBot(TruncatingChatbot):
         self.user_agent = user_agent
         self.agent = self.create_agent_graph()
 
+    @property
+    def answering_enabled(self) -> bool:
+        """
+        Whether this bot has anything to answer with.
+
+        Read off the tool list rather than off enable_account_tools, so a
+        second tool set turns answering on by existing.
+        """
+        return bool(self.tools)
+
     def create_tools(self):
         """
-        No tools: the bot takes the problem in, it does not answer it, and the
-        ticket is filed deterministically in get_completion. A second,
-        model-driven filing path could only disagree with that one.
+        Whatever tool sets this request enabled - and never a filing tool. The
+        ticket is filed deterministically in get_completion: a second,
+        model-driven filing path could only disagree with that one, and a model
+        that declines to call it leaves the learner believing a ticket exists.
         """
-        return []
+        bot_tools = []
+        if self.enable_account_tools:
+            bot_tools.extend(tools.ACCOUNT_TOOLS)
+        return bot_tools
 
     async def get_tool_metadata(self) -> str:
-        """Return no metadata - this agent has no tools"""
+        """
+        Return no metadata. Every reply goes out through
+        _reply_without_the_model, which writes its own, and the answering
+        graph's tool calls are not part of the thread the frontend reads back.
+        """
         return ""
 
     async def _prior_state(self) -> dict:
