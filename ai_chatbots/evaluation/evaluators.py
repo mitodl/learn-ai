@@ -205,6 +205,90 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         return response
 
 
+class SupportBotEvaluator(BaseBotEvaluator):
+    """Evaluator for SupportBot's answering graph."""
+
+    def load_test_cases(self) -> list[TestCaseSpec]:
+        """Load support bot test cases."""
+        test_data = load_json_with_settings(self.data_file)
+        # Records shared by the file's cases; a case can bring its own
+        default_records = test_data.get("learner_records")
+        cases = [
+            TestCaseSpec(
+                question=case_data["question"],
+                expected_output=case_data.get("expected_output"),
+                expected_tools=case_data.get("expected_tools"),
+                metadata={
+                    "extra_state": case_data.get("extra_state", {}),
+                    "extra_init": case_data.get("extra_init", {}),
+                    "history": case_data.get("history", []),
+                    "learner_records": case_data.get(
+                        "learner_records", default_records
+                    ),
+                },
+            )
+            for case_data in test_data.get("support", [])
+        ]
+        if any(case.metadata["learner_records"] is not None for case in cases):
+            _serve_learner_records()
+        return cases
+
+    def validate_test_case(self, test_case: TestCaseSpec) -> bool:
+        """
+        Require the tools, and nothing else.
+
+        No tools means no answering graph, so the case would be scored against
+        a bot that cannot answer. There is deliberately no course_id check: the
+        support bot reads its course off page_url, so requiring one would
+        reject the cases that test that.
+        """
+        metadata = test_case.metadata or {}
+
+        return bool(metadata.get("extra_init", {}).get("enable_account_tools"))
+
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
+    ):
+        """Create support bot instance."""
+        metadata = test_case.metadata or {}
+
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            instructions=instructions,
+            **metadata.get("extra_init", {}),
+        )
+
+    async def collect_response(
+        self, chatbot, test_case: TestCaseSpec
+    ) -> dict[str, Any]:
+        """
+        Collect a response from the answering graph, not the intake one.
+
+        `agent` never reaches a model - it emits the scripted reply - so
+        running it would let every "calls no tool" case pass without proving
+        anything, and fail every other case for the wrong reason.
+        """
+        metadata = test_case.metadata or {}
+        extra_state = metadata.get("extra_state", {})
+        token = _learner_records.set(metadata.get("learner_records"))
+        try:
+            return await chatbot._answering_agent.ainvoke(  # noqa: SLF001
+                {
+                    # Earlier turns of the conversation, for follow-up questions
+                    "messages": [
+                        *metadata.get("history", []),
+                        {"content": test_case.question, "role": "user"},
+                    ],
+                    **extra_state,
+                },
+                config=chatbot.config["configurable"],
+            )
+        finally:
+            _learner_records.reset(token)
+
+
 class VideoGPTBotEvaluator(BaseBotEvaluator):
     """Evaluator for VideoGPTBot."""
 
@@ -323,4 +407,5 @@ BOT_EVALUATORS = {
     "syllabus": (chatbots.SyllabusBot, SyllabusBotEvaluator),
     "video_gpt": (chatbots.VideoGPTBot, VideoGPTBotEvaluator),
     "tutor": (chatbots.TutorBot, TutorBotEvaluator),
+    "support": (chatbots.SupportBot, SupportBotEvaluator),
 }
