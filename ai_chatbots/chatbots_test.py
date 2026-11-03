@@ -2247,6 +2247,52 @@ async def _state_of(chatbot):
 
 
 @pytest.mark.asyncio
+async def test_an_intake_in_progress_is_not_interrupted_by_an_answer(
+    mocker, mock_checkpointer
+):
+    """
+    Once a turn has failed to answer, the learner is filling in a support
+    request, and the next turn owes them the review. get_enrollments is broad
+    enough to fire on "I'm having trouble with my course", so without this a
+    learner mid-describe can be answered instead of shown their request - and
+    has to press the button to get back to the form they were already in.
+    """
+    # One helper, one patch: _answering_support_bot already replaces
+    # _try_to_answer, so patching it again here would leave two mocks and
+    # assert against the wrong one.
+    chatbot = await _answering_support_bot(mocker, mock_checkpointer, ["", "an answer"])
+
+    first = await _say(chatbot, SUPPORT_PROBLEM)
+    second = await _say(chatbot, "it also happens on week 4")
+
+    assert first.startswith(SUPPORT_ASK_MORE)
+    # The second attempt was never made, so its "an answer" is still unused.
+    assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
+    assert SUPPORT_PROBLEM in second
+    assert "an answer" not in second
+
+
+@pytest.mark.asyncio
+async def test_a_close_out_reopens_answering(mocker, mock_checkpointer):
+    """
+    The lock has to end with the request it belongs to. A learner who was
+    answered, said thanks, and then asks something new is starting over - and
+    cancelled_after, which the close-out already writes, is what says so.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+
+    await _say(chatbot, "did my certificate come through?")
+    closed = await _say(chatbot, "thanks")
+    again = await _say(chatbot, "when does 18.01x start?")
+
+    # get_completion appends the checkpoint comment, so this is "in", not "=="
+    assert SUPPORT_ANSWER_CLOSED in closed
+    assert "second answer" in again
+
+
+@pytest.mark.asyncio
 async def test_support_bot_answers_and_still_offers_the_ticket(
     mocker, mock_checkpointer
 ):
