@@ -2039,6 +2039,39 @@ async def test_the_page_course_is_this_turns_not_the_last_turns(
 
 
 @pytest.mark.asyncio
+async def test_the_answer_attempt_is_traced(settings, mocker, mock_checkpointer):
+    """
+    Every other model call here runs through set_callbacks. An untraced one
+    means no answer rate, no deflection rate and no cost per answer - the
+    three numbers the rollout will be judged on.
+    """
+    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+    handler = object()
+    callbacks = mocker.patch.object(
+        SupportBot, "set_callbacks", AsyncMock(return_value=[handler])
+    )
+    page = "https://courses.learn.test/course-v1:MITx+18.01x+2T2025"
+
+    await chatbot._try_to_answer("my grade?", {}, {"page_url": [page]})  # noqa: SLF001
+
+    config = chatbot._answering_agent.ainvoke.call_args.kwargs["config"]  # noqa: SLF001
+    assert config["callbacks"] == [handler]
+    # The course is derived in the attempt, not carried in extra_state, so
+    # naming it in TRACE_STATE_KEYS does nothing unless it is passed here too.
+    assert callbacks.await_args[0][0] == {
+        "page_url": page,
+        "course_id": "course-v1:MITx+18.01x+2T2025",
+        "platform": "mitxonline",
+    }
+    # Not on the canonical graph's config: that one is the persisted thread,
+    # and the attempt must stay outside it.
+    assert "callbacks" not in chatbot.config
+
+
+@pytest.mark.asyncio
 async def test_try_to_answer_returns_the_answer_when_a_tool_fired(
     mocker, mock_checkpointer
 ):
