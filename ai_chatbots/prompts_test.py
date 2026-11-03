@@ -55,6 +55,46 @@ def test_syllabus_prompts_route_by_subject(prompt):
     assert "OUTSIDE OF THE TOOL OUTPUT AND THE RESOURCE FACTS BELOW" in collapsed
 
 
+def test_support_prompt_names_no_tools():
+    """
+    The base prompt is the bot's identity and its hard "never say" rules; the
+    tools it happens to have are an addendum. Naming a tool here is what makes
+    a second tool set a rewrite instead of one more addendum.
+    """
+    prompt = prompts.CHATBOT_PROMPT_MAPPING["support"]
+
+    assert "get_enrollments" not in prompt
+    assert "search_content_files" not in prompt
+    assert "resource facts" not in prompt
+
+
+def test_support_prompt_forbids_the_things_only_code_may_say():
+    """
+    Filing is deterministic and there is no human on the other end of this
+    chat. A model that says a ticket was sent, or that someone will follow up,
+    makes the learner stop asking - and nothing was filed.
+    """
+    prompt = prompts.CHATBOT_PROMPT_MAPPING["support"].lower()
+
+    assert "never say a support ticket" in prompt
+    assert "never promise" in prompt
+    assert "policy" in prompt
+
+
+def test_support_account_tools_addendum_is_support_flavoured():
+    """
+    The syllabus addendum tells the model to send the learner to another
+    course's page and to fall back on search tools. Neither exists here, and
+    #152 made the first one false: the tools take a course the learner named.
+    """
+    addendum = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+
+    assert "course_id" in addendum
+    assert "couldn't check" in addendum
+    assert "search_content_files" not in addendum
+    assert "from that course's page" not in addendum
+
+
 def test_langsmith_prompt_create(mocker):
     """Test that the langsmith_prompt function creates a prompt if it doesn't exist."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
