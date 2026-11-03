@@ -38,10 +38,12 @@ from ai_chatbots.chatbots import (
     DECLINE_PHRASES,
     NOTHING_MORE_PHRASES,
     PAUSE_PHRASES,
+    SUPPORT_ANSWER_CLOSED,
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
     SUPPORT_FILING_LOCK_PREFIX,
+    SUPPORT_OFFER_TICKET,
     SUPPORT_SEND_UNCLEAR,
     SUPPORT_TICKET_BAD_EMAIL,
     SUPPORT_TICKET_CANCELLED,
@@ -2125,6 +2127,282 @@ SUPPORT_PROBLEM = "The week 3 video just spins forever."
 
 def _support_state(email=""):
     return {"page_url": ["https://learn.mit.edu/week-3"], "user_email": [email]}
+
+
+async def _answering_support_bot(mocker, mock_checkpointer, answer, state=None):
+    """
+    Build a SupportBot with answering on, whose attempt returns answer - or
+    each of answer in turn, when answer is a list.
+    """
+    thread_id = uuid4().hex
+    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, thread_id=thread_id, enable_account_tools=True
+    )
+    if state:
+        await chatbot.agent.aupdate_state(
+            chatbot.config,
+            # A real exchange rather than an empty list: this graph has tools,
+            # so the edge out of its agent node reads messages[-1] as the write
+            # lands. Any thread that reached one of these states has one.
+            {
+                "messages": [
+                    HumanMessage("my certificate is missing"),
+                    AIMessage("Here's what I'll send to the support team:"),
+                ],
+                **state,
+            },
+            as_node="agent",
+        )
+    mocker.patch.object(
+        SupportBot,
+        "_try_to_answer",
+        AsyncMock(side_effect=answer)
+        if isinstance(answer, list)
+        else AsyncMock(return_value=answer),
+    )
+    return chatbot
+
+
+async def _say(chatbot, message, **extra):
+    return "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                message, extra_state={**_support_state("learner@mit.edu"), **extra}
+            )
+        ]
+    )
+
+
+async def _state_of(chatbot):
+    return (await chatbot.agent.aget_state(chatbot.config)).values
+
+
+@pytest.mark.asyncio
+async def test_support_bot_answers_and_still_offers_the_ticket(
+    mocker, mock_checkpointer
+):
+    """
+    The route to a person cannot depend on the answer being good, so the offer
+    is appended by code to every answer - the same reason filing is in code.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+    )
+
+    reply = await _say(chatbot, "what am I enrolled in?")
+
+    assert "You're enrolled in 18.01x." in reply
+    assert SUPPORT_OFFER_TICKET in reply
+    state = await _state_of(chatbot)
+    # An answer is not a request, so nothing is queued to send.
+    assert (state.get("awaiting_send") or [False])[-1] is False
+    assert state["answered"][-1] is True
+
+
+@pytest.mark.asyncio
+async def test_an_answer_reaches_the_learner_from_a_real_tool_call(
+    mocker, mock_checkpointer
+):
+    """
+    The 4.1.1 rule end to end: a ToolMessage with no records in it still
+    produces a learner-visible answer. Every other test here mocks
+    _try_to_answer, so without this one nothing drives the discriminator
+    through to a reply.
+    """
+    thread_id = uuid4().hex
+    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, thread_id=thread_id, enable_account_tools=True
+    )
+    mocker.patch.object(
+        chatbot._answering_agent,  # noqa: SLF001
+        "ainvoke",
+        AsyncMock(
+            return_value=_answer_result(
+                _tool_message(
+                    '{"enrollments": [], "note": "There is no course on this page."}'
+                ),
+                AIMessage("Which course did you mean?"),
+            )
+        ),
+    )
+
+    reply = await _say(chatbot, "what's my grade?")
+
+    assert "Which course did you mean?" in reply
+    assert SUPPORT_ASK_MORE not in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_collects_when_it_cannot_answer(mocker, mock_checkpointer):
+    """
+    REGRESSION - passes before the implementation and must keep passing.
+
+    No tool fired, so this is the bot's original job. The reply has to be the
+    one today's learner gets, not a model's attempt at the same thing.
+    """
+    chatbot = await _answering_support_bot(mocker, mock_checkpointer, "")
+
+    reply = await _say(chatbot, "why was I charged twice?")
+
+    assert SUPPORT_ASK_MORE in reply
+    assert SUPPORT_OFFER_TICKET not in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_closes_out_an_answer_without_filing(
+    mocker, mock_checkpointer
+):
+    """
+    "Thanks" after an answer is not a support request. Filing one would send
+    the team a ticket whose description is a question already answered.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+    )
+    await _say(chatbot, "what am I enrolled in?")
+
+    reply = await _say(chatbot, "thanks")
+
+    assert SUPPORT_ANSWER_CLOSED in reply
+    mock_file.assert_not_called()
+    state = await _state_of(chatbot)
+    assert (state.get("awaiting_send") or [False])[-1] is False
+    assert state["answered"][-1] is False
+    # The next request starts past the answered exchange rather than filing it.
+    assert state["cancelled_after"][-1] == len(state["messages"])
+
+
+@pytest.mark.asyncio
+async def test_send_it_after_an_answer_is_not_a_close_out(mocker, mock_checkpointer):
+    """
+    The ship-blocker, end to end. Said to "tell me more and I'll pass it on",
+    "send it" means pass it on. A close-out here files nothing and tells the
+    learner we are glad it helped.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+    )
+    await _say(chatbot, "my certificate is missing")
+
+    reply = await _say(chatbot, "send it")
+
+    assert SUPPORT_ANSWER_CLOSED not in reply
+
+
+@pytest.mark.asyncio
+async def test_a_filler_after_a_close_out_still_shows_the_review(
+    mocker, mock_checkpointer
+):
+    """
+    REVIEW FOCUS 7, pinned not fixed. Past a close-out, since > 0, so
+    _support_description drops its first-message exemption and a filler leaves
+    the description empty. Pre-existing after a cancel; recorded here so a
+    future fix is a visible change rather than a surprise.
+
+    The second attempt returns nothing because a filler is not a records
+    question - an attempt that answered again would never reach intake, which
+    is why the close-out path needs a bot that can also fail to answer.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", ""]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "thanks")
+
+    reply = await _say(chatbot, "ok")
+
+    assert "**Your message:** \n" in reply
+
+
+@pytest.mark.asyncio
+async def test_support_bot_escalates_to_the_intake_script(mocker, mock_checkpointer):
+    """The button means a person, so the bot stops trying to be one."""
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+    )
+
+    reply = await _say(chatbot, "Contact the support team", escalate=[True])
+
+    assert SUPPORT_OFFER_TICKET not in reply
+    SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
+    assert (await _state_of(chatbot))["handed_off"][-1] is True
+
+
+@pytest.mark.asyncio
+async def test_escalate_sticks_even_under_the_review(mocker, mock_checkpointer):
+    """
+    The second ship-blocker. escalate is popped at the top of get_completion
+    but the answer attempt lives in the last branch, so a press made under the
+    review has to be recorded there too - otherwise a later cancel resumes
+    answering someone who already asked for a person.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "answer", state={"awaiting_send": [True]}
+    )
+
+    await _say(chatbot, "Contact the support team", escalate=[True])
+
+    assert (await _state_of(chatbot))["handed_off"][-1] is True
+
+
+@pytest.mark.asyncio
+async def test_support_bot_never_answers_again_after_a_hand_off(
+    mocker, mock_checkpointer
+):
+    """
+    A learner who asked for a human and then mentions a grade must not be
+    pulled back into the assistant. escalate is this turn's button; handed_off
+    is what makes it stick for the thread.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "answer", state={"handed_off": [True]}
+    )
+
+    await _say(chatbot, "what's my grade?")
+
+    SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_escalate_itself_does_not_persist(mocker, mock_checkpointer):
+    """
+    Like confirm, it is this turn's button press; handed_off is what carries
+    forward. A checkpointed escalate would re-escalate every later turn.
+    """
+    chatbot = await _answering_support_bot(mocker, mock_checkpointer, "")
+
+    await _say(chatbot, "the video won't load", escalate=[True])
+
+    state = await _state_of(chatbot)
+    assert "escalate" not in state
+    assert state["handed_off"][-1] is True
+
+
+@pytest.mark.asyncio
+async def test_a_scripted_support_bot_never_attempts_an_answer(
+    mocker, mock_checkpointer
+):
+    """
+    REGRESSION - passes before the implementation and must keep passing.
+
+    Flag off or anonymous learner: the whole feature has to be invisible, so
+    the signal is that this path is untouched.
+    """
+    mocker.patch.object(SupportBot, "_try_to_answer", AsyncMock(return_value="hi"))
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    reply = await _say(chatbot, SUPPORT_PROBLEM)
+
+    assert SUPPORT_ASK_MORE in reply
+    SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
+    assert chatbot._answering_agent is None  # noqa: SLF001
 
 
 @pytest.mark.asyncio

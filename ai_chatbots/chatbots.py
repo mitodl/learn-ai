@@ -1869,6 +1869,44 @@ class SupportBot(TruncatingChatbot):
         # so a correction made on this turn has to land there.
         return reply, {"user_email": [email], **filing_updates}
 
+    async def _answer_or_collect(
+        self, message: str, *, extra_state: dict, prior_state: dict, escalated: bool
+    ) -> tuple[str, dict]:
+        """
+        Try to answer the learner's question; take their request in when we
+        can't, or when they have asked for a person.
+
+        Answering is the only part of this bot a model touches, and it sits in
+        front of the intake form rather than inside it: everything below this
+        point behaves exactly as it does for a learner who gets no answer.
+        """
+        handed_off = escalated or (prior_state.get("handed_off") or [False])[-1]
+        answered_before = (prior_state.get("answered") or [False])[-1]
+        if self.answering_enabled and not handed_off:
+            if answered_before and _closes_the_answer(message):
+                return SUPPORT_ANSWER_CLOSED, {
+                    "answered": [False],
+                    # This turn's own exchange is written alongside this update,
+                    # so a later request starts past both of those too.
+                    "cancelled_after": [len(prior_state.get("messages") or []) + 2],
+                }
+            answer = await self._try_to_answer(message, prior_state)
+            if answer:
+                return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
+
+        reply, updates = self._collect_the_request(
+            # A button carries whatever words the widget put on it, and
+            # message is required and non-blank on the wire, so the escalate
+            # turn contributes nothing to the ticket - the same reason
+            # _send_edit_or_cancel files with "" after a Send press.
+            "" if escalated else message,
+            extra_state=extra_state,
+            prior_state=prior_state,
+        )
+        if answered_before:
+            updates = {**updates, "answered": [False]}
+        return reply, updates
+
     async def get_completion(
         self,
         message: str,
@@ -1886,6 +1924,9 @@ class SupportBot(TruncatingChatbot):
         # Popped, not stored: it is this turn's Send button, and a checkpointed
         # one would approve every turn after it.
         confirmed = any(extra_state.pop("confirm", None) or [])
+        # Same reason: this turn's "contact the support team" button. What
+        # sticks for the thread is handed_off, merged in below.
+        escalated = any(extra_state.pop("escalate", None) or [])
         session = await UserChatSession.objects.filter(
             thread_id=self.thread_id
         ).afirst()
@@ -1918,9 +1959,20 @@ class SupportBot(TruncatingChatbot):
                 confirmed=confirmed,
             )
         else:
-            reply, updates = self._collect_the_request(
-                message, extra_state=extra_state, prior_state=prior_state
+            reply, updates = await self._answer_or_collect(
+                message,
+                extra_state=extra_state,
+                prior_state=prior_state,
+                escalated=escalated,
             )
+
+        if escalated:
+            # Merged after the chain, not inside the else: the press has to
+            # count whichever branch ran. handed_off makes exactly one promise,
+            # that a learner who asked for a person is never looped back into
+            # the assistant, and a press that only counts under one of five
+            # branches does not keep it.
+            updates = {**updates, "handed_off": [True]}
 
         async for chunk in self._reply_without_the_model(
             message, reply, {**extra_state, **updates}
