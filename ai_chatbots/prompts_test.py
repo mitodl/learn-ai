@@ -81,18 +81,75 @@ def test_support_prompt_forbids_the_things_only_code_may_say():
     assert "policy" in prompt
 
 
-def test_support_account_tools_addendum_is_support_flavoured():
+def test_support_account_tools_prompt_is_support_flavoured():
     """
-    The syllabus addendum tells the model to send the learner to another
-    course's page and to fall back on search tools. Neither exists here, and
-    #152 made the first one false: the tools take a course the learner named.
+    What SupportBot is actually given is the core plus its own addendum, so the
+    guarantee is about the pair: it must still carry every rule for reading the
+    tools, and none of the syllabus routing - it has no search tools to route
+    to, and no other course's page to send anyone from.
     """
-    addendum = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+    composed = "\n\n".join(
+        prompts.SYSTEM_PROMPT_MAPPING[name]
+        for name in ("account_tools_core", "support_account_tools")
+    )
 
-    assert "course_id" in addendum
-    assert "couldn't check" in addendum
-    assert "search_content_files" not in addendum
-    assert "from that course's page" not in addendum
+    assert "course_id" in composed
+    assert "couldn't check" in composed
+    assert "search_content_files" not in composed
+    assert "from that course's page" not in composed
+    assert "resource facts" not in composed
+
+
+def test_account_tools_core_holds_the_rules_both_bots_need():
+    """
+    The core is what any bot with these tools must obey. A rule that lives in
+    only one addendum is a rule the other bot silently doesn't have.
+    """
+    core = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
+
+    assert "course_id" in core
+    assert "exactly as they wrote it" in core
+    assert "couldn't check" in core
+    assert "issued" in core
+
+
+def test_account_tools_core_names_no_bot_specific_tool():
+    """
+    The core is shared, so a search tool named here would be offered to a bot
+    that does not have it - the model would call a tool that isn't bound.
+    """
+    core = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
+
+    assert "search_content_files" not in core
+    assert "resource facts" not in core
+    assert "Contact us" not in core
+
+
+def test_the_split_addenda_keep_only_what_is_theirs():
+    """
+    REGRESSION guard on the split itself: whatever moved to the core must not
+    also be left behind, or a later edit fixes one copy and not the other.
+    """
+    syllabus = prompts.SYSTEM_PROMPT_MAPPING["syllabus_account_tools"]
+    support = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+
+    assert "search_content_files" in syllabus
+    assert "search_content_files" not in support
+    # #152 made this false: the tools now take a course the learner named.
+    assert "from that course's page" not in syllabus
+    for addendum in (syllabus, support):
+        assert "exactly as they wrote it" not in addendum
+
+
+def test_support_addendum_leaves_the_offer_to_code():
+    """
+    SUPPORT_OFFER_TICKET is appended to every answer by code, so a model that
+    also offers makes the learner read two offers in one reply - and the
+    wording of the one that matters stops being something code guarantees.
+    """
+    support = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+
+    assert "do not offer" in support.lower()
 
 
 def test_langsmith_prompt_create(mocker):

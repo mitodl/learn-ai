@@ -646,10 +646,11 @@ class SyllabusBot(TruncatingChatbot):
                 "about these courses."
             )
         if self.enable_account_tools and self.instructions:
-            account_prompt = get_system_prompt(
-                "syllabus_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
-            )
-            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
+            for prompt_name in ("account_tools_core", "syllabus_account_tools"):
+                account_prompt = get_system_prompt(
+                    prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
+                )
+                self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -1570,10 +1571,11 @@ class SupportBot(TruncatingChatbot):
         # rather than a rewrite. Before create_agent_graph, which captures
         # self.instructions as it builds.
         if self.enable_account_tools and self.instructions:
-            account_prompt = get_system_prompt(
-                "support_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
-            )
-            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
+            for prompt_name in ("account_tools_core", "support_account_tools"):
+                account_prompt = get_system_prompt(
+                    prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
+                )
+                self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
         # A second graph, deliberately without the checkpointer: an attempt
         # that fails or times out must leave nothing behind, so falling back to
