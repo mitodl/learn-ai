@@ -1042,9 +1042,20 @@ class SupportAgentState(SummaryState):
     # Whether the previous turn was an answer, which is what makes a bare
     # "thanks" a close-out rather than an edit to a request under review.
     answered: Annotated[list[bool], add]
-    # Only ever passed to the answering graph, never written to the support
-    # thread: the tools read the page's course from agent state, and a course
-    # id has no business on the path that builds a ticket.
+
+
+class SupportAnsweringState(SummaryState):
+    """
+    State for the support bot's answer attempt, which is a different graph from
+    the persisted intake thread and needs a different shape.
+
+    It declares the page's course because LangGraph silently drops input keys
+    the schema does not define, and the account tools read course_id and
+    platform out of state through InjectedState. None of the intake channels
+    belong here: the attempt is never checkpointed, and a course id that cannot
+    reach the support thread cannot reach a ticket.
+    """
+
     course_id: Annotated[list[str], add]
     platform: Annotated[list[str] | None, add]
 
@@ -1544,6 +1555,7 @@ class SupportBot(TruncatingChatbot):
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     STATE_CLASS = SupportAgentState
+    ANSWERING_STATE_CLASS = SupportAnsweringState
     # No user_email, no verified_email, no user_name: a trace property is a
     # PostHog event property, which is a different retention and a different
     # access list from a Zendesk ticket.
@@ -1602,11 +1614,23 @@ class SupportBot(TruncatingChatbot):
         # the script is structural rather than cleanup that has to be right
         # under every failure mode. The canonical thread stays the one
         # _reply_without_the_model writes.
+        self._build_answering_agent()
+
+    def _build_answering_agent(self) -> None:
+        """
+        Build the unpersisted graph the answer attempt runs on.
+
+        ANSWERING_STATE_CLASS, not STATE_CLASS: LangGraph drops any input key
+        the state schema does not declare, so a schema without course_id means
+        the tools never see the page's course however carefully it is passed
+        in. Keeping it off the persisted class is also what keeps a course id
+        out of reach of the ticket path.
+        """
         self._answering_agent = (
             create_react_agent(
                 self.llm,
                 tools=self.tools,
-                state_schema=self.STATE_CLASS,
+                state_schema=self.ANSWERING_STATE_CLASS,
                 prompt=self.instructions,
             )
             if self.answering_enabled
