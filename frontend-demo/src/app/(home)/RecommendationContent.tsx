@@ -2,7 +2,6 @@ import React from "react"
 import { RECOMMENDATION_GPT_URL } from "@/services/ai/urls"
 import { type AiChatProps } from "@mitodl/smoot-design/ai"
 import { useSearchParamSettings } from "./util"
-import SelectSearchURL from "./SelectSearchUrl"
 import BaseChatContent from "./BaseChatContent"
 
 const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
@@ -14,7 +13,6 @@ const CONVERSATION_STARTERS: AiChatProps["conversationStarters"] = [
 const RecommendationContent: React.FC = () => {
   const [settings, setSettings] = useSearchParamSettings({
     rec_model: "",
-    search_url: "",
     rec_prompt: "",
   })
 
@@ -30,17 +28,10 @@ const RecommendationContent: React.FC = () => {
       isReady={true}
       extraBody={{
         model: settings.rec_model,
-        search_url: settings.search_url,
         instructions: settings.rec_prompt,
       }}
       settings={settings}
       setSettings={setSettings}
-      sidebarContent={
-        <SelectSearchURL
-          value={settings.search_url}
-          onChange={(e) => setSettings({ search_url: e.target.value })}
-        />
-      }
     />
   )
 }

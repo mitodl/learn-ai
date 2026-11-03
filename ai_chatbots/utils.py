@@ -4,15 +4,20 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import Callable
 from enum import Enum
+from functools import cache
 
 import httpx
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.core.cache import BaseCache, caches
+from django.core.exceptions import ImproperlyConfigured
 from langchain_core.messages import HumanMessage
 from named_enum import ExtendedEnum
 
+from ai_chatbots.constants import AZURE_COGNITIVE_SERVICES_SCOPE
 from ai_chatbots.models import DjangoCheckpoint
 
 log = logging.getLogger(__name__)
@@ -125,6 +130,40 @@ def enum_zip(label: str, enum: ExtendedEnum) -> type[Enum]:
 
     """
     return Enum(label, dict(zip(enum.names(), enum.names())))
+
+
+@cache
+def get_azure_ad_token_provider() -> Callable[[], str]:
+    """
+    Return a process-wide Entra bearer token provider for Azure OpenAI.
+
+    The provider caches its token and refreshes it shortly before expiry, and
+    the openai SDK calls it on every request, so long-lived LLM objects never
+    hold a stale token. It is created once because litellm keys its cached
+    Azure client on the provider's identity.
+    """
+    return get_bearer_token_provider(
+        DefaultAzureCredential(), AZURE_COGNITIVE_SERVICES_SCOPE
+    )
+
+
+def get_azure_openai_kwargs() -> dict:
+    """
+    Return the ChatLiteLLM kwargs for an `azure/` model.
+
+    ChatLiteLLM has no api_version or azure_ad_token_provider fields, so those
+    go in model_kwargs, which it spreads into every litellm completion call.
+    """
+    if not settings.AZURE_OPENAI_ENDPOINT:
+        msg = "AZURE_OPENAI_ENDPOINT must be set to use an azure/ model"
+        raise ImproperlyConfigured(msg)
+    return {
+        "api_base": settings.AZURE_OPENAI_ENDPOINT,
+        "model_kwargs": {
+            "api_version": settings.AZURE_OPENAI_API_VERSION or None,
+            "azure_ad_token_provider": get_azure_ad_token_provider(),
+        },
+    }
 
 
 def get_django_cache() -> BaseCache:

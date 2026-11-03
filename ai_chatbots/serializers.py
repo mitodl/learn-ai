@@ -4,6 +4,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from ai_chatbots.constants import RECOMMENDATION_SEARCH_FILTERS
 from ai_chatbots.models import (
     ChatResponseRating,
     ChatResponseScore,
@@ -65,9 +66,28 @@ class RecommendationChatRequestSerializer(ChatRequestSerializer):
     Serializer for requests sent to the syllabus chatbot.
     """
 
-    search_url = serializers.CharField(
-        required=False, allow_blank=False, default=settings.AI_MIT_SEARCH_URL
+    search_filters = serializers.DictField(
+        child=serializers.ListField(
+            child=serializers.CharField(allow_blank=False, max_length=256),
+            allow_empty=False,
+            max_length=50,
+        ),
+        required=False,
+        help_text=(
+            "MIT Learn search filters to always apply, e.g. {'topic': ['Biology']}. "
+            "They stay in effect for later messages in the thread until replaced; "
+            "send {} to clear them. Filter values are not validated, and the "
+            "search API ignores values it does not recognize."
+        ),
     )
+
+    def validate_search_filters(self, value):
+        """Only allow filters the MIT Learn search API supports"""
+        invalid = sorted(set(value) - set(RECOMMENDATION_SEARCH_FILTERS))
+        if invalid:
+            err_msg = f"Invalid search filters: {', '.join(invalid)}"
+            raise serializers.ValidationError(err_msg)
+        return value
 
 
 class SyllabusChatRequestSerializer(ChatRequestSerializer):
@@ -92,6 +112,28 @@ class VideoGPTRequestSerializer(ChatRequestSerializer):
     """
 
     transcript_asset_id = serializers.CharField(required=True, allow_blank=False)
+
+
+class SupportChatRequestSerializer(ChatRequestSerializer):
+    """
+    Serializer for requests sent to the support chatbot.
+    """
+
+    page_url = serializers.URLField(required=False, allow_blank=True, max_length=2048)
+    # Only used when learn-ai has no session of its own for the learner; the
+    # consumer prefers the authenticated session over this.
+    # max_length matches UserChatSession.support_ticket_email's column, so an
+    # address that validates here can always be recorded against the session.
+    user_email = serializers.EmailField(
+        required=False, allow_blank=True, max_length=254
+    )
+    # Display name and account handle for hosts with no learn-ai session; the
+    # consumer prefers the authenticated session over these, same as user_email.
+    user_name = TruncatedCharField(required=False, allow_blank=True, max_length=255)
+    user_username = TruncatedCharField(required=False, allow_blank=True, max_length=255)
+    # Set by a widget that offers a Send button, so the learner's approval does
+    # not depend on the bot recognising the word they typed.
+    confirm = serializers.BooleanField(required=False, default=False)
 
 
 class UserChatSessionSerializer(serializers.ModelSerializer):

@@ -2,14 +2,15 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from http.cookies import SimpleCookie
+from urllib.parse import urlsplit
 from uuid import uuid4
 
-import litellm
 from asgiref.sync import sync_to_async
 from channels.exceptions import StopConsumer
 from channels.generic.http import AsyncHttpConsumer
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.http.request import split_domain_port, validate_host
 from django.middleware.csrf import _get_new_csrf_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -22,22 +23,26 @@ from ai_chatbots.chatbots import (
     CanvasSyllabusBot,
     ResourceRecommendationBot,
     SearchSummaryBot,
+    SupportBot,
     SyllabusBot,
     TutorBot,
     VideoGPTBot,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.constants import (
+    ACCOUNT_TOOLS_FEATURE_FLAG,
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
     ChatbotCookie,
 )
+from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
     ChatRequestSerializer,
     RecommendationChatRequestSerializer,
+    SupportChatRequestSerializer,
     SyllabusChatRequestSerializer,
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
@@ -45,10 +50,74 @@ from ai_chatbots.serializers import (
 from ai_chatbots.utils import comment_safe_json
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
+from main.features import is_enabled as feature_is_enabled
 from main.utils import decode_value, format_seconds
 from users.models import User
 
 log = logging.getLogger(__name__)
+
+
+class CrossOriginRequestError(Exception):
+    """A request whose origin is not in the CORS allow-list."""
+
+
+def _header(scope: dict, name: bytes) -> str:
+    """Return a request header from the ASGI scope, or ''."""
+    return next(
+        (
+            value.decode("latin-1")
+            for key, value in (scope.get("headers") or [])
+            if key.lower() == name
+        ),
+        "",
+    )
+
+
+def request_origin(scope: dict) -> str:
+    """
+    Return the origin the request came from, falling back to Referer the way
+    CsrfViewMiddleware does for browsers that send one but no Origin.
+    """
+    origin = _header(scope, b"origin")
+    if origin:
+        return origin
+    parts = urlsplit(_header(scope, b"referer"))
+    return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
+
+
+def _request_scheme(scope: dict) -> str:
+    """
+    Return the scheme the browser used, not the one that reached the worker.
+
+    APISIX terminates TLS, so an https request arrives over plain http. Read
+    from SECURE_PROXY_SSL_HEADER the way HttpRequest.scheme does, rather than
+    naming X-Forwarded-Proto here, so both honour the same setting.
+    """
+    proxy_header = settings.SECURE_PROXY_SSL_HEADER
+    if proxy_header:
+        meta_name, secure_value = proxy_header
+        name = meta_name.removeprefix("HTTP_").replace("_", "-").lower()
+        forwarded = _header(scope, name.encode("latin-1"))
+        if forwarded:
+            first, _, _ = forwarded.partition(",")
+            return "https" if first.strip() == secure_value else "http"
+    return scope.get("scheme") or "http"
+
+
+def request_host_origin(scope: dict) -> str:
+    """
+    Return the scheme://host the request was sent to, or '' if the Host header
+    is missing or not one this site answers to.
+    """
+    host = _header(scope, b"x-forwarded-host") if settings.USE_X_FORWARDED_HOST else ""
+    host = host or _header(scope, b"host")
+    domain, _ = split_domain_port(host)
+    # ALLOWED_HOSTS is what stops a forged Host header nominating itself as the
+    # origin. get_host() rejects the same way, and the caller falls back to the
+    # allow-list from here, exactly as CsrfViewMiddleware does on DisallowedHost.
+    if not domain or not validate_host(domain, settings.ALLOWED_HOSTS):
+        return ""
+    return f"{_request_scheme(scope)}://{host}"
 
 
 def build_csrf_cookie_header():
@@ -88,6 +157,45 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         """Return a bot instance"""
         raise NotImplementedError
 
+    def check_origin(self):
+        """
+        Reject a cross-site POST.
+
+        main/asgi.py routes these consumers ahead of django_asgi_app, so
+        CsrfViewMiddleware never runs for them, and the thread cookie is
+        SameSite=None when AI_CHATBOTS_COOKIE_CROSS_SITE is on. CORS stops an
+        attacker reading the reply, not sending the request - a text/plain POST
+        is a simple request and skips the preflight.
+
+        An absent origin is allowed: server-to-server callers send none, and a
+        Referrer-Policy can strip both headers. So is an empty allow-list, but
+        only while the cookies stay same-site: this gates every bot, and an
+        environment that never needed to set CORS_ALLOW_ORIGINS would otherwise
+        start rejecting the chatbots that work there today. Turning on
+        cross-site cookies removes the browser's own protection and leaves the
+        allow-list as the only limit, so that combination has to fail closed
+        rather than silently allow every site.
+        """
+        origin = request_origin(self.scope)
+        allowed = settings.CORS_ALLOW_ORIGINS
+        # Sandboxed iframes and data: URLs send this. Nothing that should embed
+        # a bot does, and it can never match an allow-list entry.
+        if origin == "null":
+            raise CrossOriginRequestError(origin)
+        # A page on this site posting to this site is not cross-site, whatever
+        # the allow-list says. CORS_ALLOW_ORIGINS names the other sites allowed
+        # to embed a bot, so nobody adding one would think to list our own, and
+        # CsrfViewMiddleware does not make them: it accepts same-origin before
+        # it consults any list.
+        if origin and origin == request_host_origin(self.scope):
+            return
+        if not allowed or "*" in allowed:
+            if settings.AI_CHATBOTS_COOKIE_CROSS_SITE:
+                raise CrossOriginRequestError(origin or "unset allow-list")
+            return
+        if origin and origin not in allowed:
+            raise CrossOriginRequestError(origin)
+
     def process_message(
         self, message_json: str, serializer_class: type[ChatRequestSerializer]
     ) -> ChatRequestSerializer:
@@ -100,6 +208,45 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         )
         serializer.is_valid(raise_exception=True)
         return serializer
+
+    async def may_continue_thread(self, thread_id: str, user: User) -> bool:
+        """
+        Say whether this request is allowed to carry on an existing thread.
+
+        One rule however the thread id arrived, body or cookie: it belongs to
+        the user who started it, or - with no login - to the session that did.
+        Without this the thread id is a bearer token, and whoever sends it
+        resumes the conversation. On the support bot that files the owner's
+        ticket.
+        """
+        session = await UserChatSession.objects.filter(thread_id=thread_id).afirst()
+        if not session:
+            # Nothing started yet, so there is no owner to contradict.
+            return True
+        if user and not user.is_anonymous:
+            return session.user_id == user.id
+        return bool(
+            session.user_id is None
+            and self.session_key
+            and session.dj_session_key == self.session_key
+        )
+
+    async def cookie_thread_id(
+        self, user: User, cookie_keys: list[str], object_id: str
+    ) -> str | None:
+        """Return the first thread id in the cookies that this user may continue."""
+        for key in cookie_keys:
+            thread_id = decode_value(self.scope["cookies"].get(key) or "")
+            if "|" in thread_id:
+                # Object-specific thread, ensure it's the same object
+                thread_id, cookie_object_id = thread_id.split("|")
+                if object_id and object_id != cookie_object_id:
+                    continue
+            if not thread_id:
+                continue
+            if await self.may_continue_thread(thread_id, user):
+                return thread_id
+        return None
 
     async def assign_thread_cookies(
         self,
@@ -128,56 +275,14 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             or self.ident
             or uuid4().hex
         )
-        anon_cookie = False
         if clear_history:
             # Create a new random thread id
             current_thread_id = uuid4().hex
-        elif (
-            # If an explicit thread_id is passed in the serializer,
-            # use it if not related to another user
-            thread_id
-            and (
-                # is a new thread?
-                not await UserChatSession.objects.filter(thread_id=thread_id).aexists()
-                or (
-                    # existing thread belonging to same user?
-                    user
-                    and not user.is_anonymous
-                    and (
-                        await UserChatSession.objects.filter(
-                            user=user, thread_id=thread_id
-                        ).aexists()
-                    )
-                )
-                or (
-                    # existing chat thread, anon user, same session key
-                    user.is_anonymous
-                    and await UserChatSession.objects.filter(
-                        user=None, thread_id=thread_id, dj_session_key=self.session_key
-                    ).aexists()
-                )
-            )
-        ):
+        elif thread_id and await self.may_continue_thread(thread_id, user):
+            # An explicit thread_id in the serializer wins over the cookies
             current_thread_id = thread_id
         else:
-            # Use cookie thread id if any, check anon cookie first
-            anon_cookie = True
-            current_thread_id = decode_value(
-                self.scope["cookies"].get(anon_cookie_key) or ""
-            )
-            if not current_thread_id:
-                # no anon cookie thread id, check authenticated cookie
-                anon_cookie = False
-                current_thread_id = decode_value(
-                    self.scope["cookies"].get(latest_cookie_key) or ""
-                )
-            if current_thread_id and "|" in current_thread_id:
-                # Object-specific thread, ensure it's the same object
-                current_thread_id, cookie_object_id = current_thread_id.split("|")
-                if object_id and object_id != cookie_object_id:
-                    current_thread_id = None
-        if user and not user.is_anonymous:
-            if anon_cookie:
+            if not user.is_anonymous and self.scope["cookies"].get(anon_cookie_key):
                 # Anon user has logged in, so associate any existing anon threads
                 # with the same session key
                 await (
@@ -185,16 +290,13 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     .filter(user_id=None, dj_session_key=self.session_key)
                     .aupdate(user=user)
                 )
-            if not clear_history and current_thread_id:
-                # User may have logged in under a different account
-                session = (
-                    await UserChatSession.objects.filter(thread_id=current_thread_id)
-                    .select_related("user")
-                    .afirst()
-                )
-                current_thread_id = (
-                    None if (session and session.user != user) else current_thread_id
-                )
+            # Signed-in users resume their own thread before any anonymous one
+            cookie_keys = [anon_cookie_key, latest_cookie_key]
+            if not user.is_anonymous:
+                cookie_keys.reverse()
+            current_thread_id = await self.cookie_thread_id(
+                user, cookie_keys, object_id
+            )
         current_thread_id = current_thread_id or uuid4().hex
 
         # Incorporate object id into cookie value if present
@@ -206,7 +308,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         cookies = [
             ChatbotCookie(
                 name=latest_cookie_key,
-                value=("" if user.is_anonymous else cookie_value),
+                # Kept while anonymous, so logging back in resumes that thread
+                value=(
+                    self.scope["cookies"].get(latest_cookie_key, "")
+                    if user.is_anonymous
+                    else cookie_value
+                ),
                 max_age=max_age,
             ),
             ChatbotCookie(
@@ -217,6 +324,9 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             ChatbotCookie(
                 name=AI_SESSION_COOKIE_KEY,
                 value=self.session_key,
+                # An anonymous thread resumes only while this key still matches,
+                # so it has to outlive the browser session like the thread cookies.
+                max_age=max_age,
             ),
         ]
         return current_thread_id, cookies
@@ -336,6 +446,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             return
         cookies = None
         try:
+            self.check_origin()
             await self.check_throttles()
             serializer = self.process_message(message, self.serializer_class)
             thread_id, cookies = await self.prepare_response(serializer)
@@ -368,6 +479,12 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                     await self.send_chunk(chunk)
                     output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
+        except CrossOriginRequestError as err:
+            log.warning("Rejected chat request from origin %s", err)
+            await self.start_response(thread_id=None, status=403, cookies=cookies)
+            await self.send_chunk(
+                json.dumps({"error": {"message": "Origin not allowed."}})
+            )
         except (ValidationError, json.JSONDecodeError) as err:
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
@@ -391,12 +508,6 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
-        # Close any unclosed async HTTP clients from LiteLLM to prevent resource leaks
-        try:
-            await litellm.close_litellm_async_clients()
-        except Exception:
-            log.exception("Error closing LiteLLM async clients")
-
         # Clean up Django Channels group
         if hasattr(self, "channel_layer") and hasattr(self, "room_group_name"):
             await self.channel_layer.group_discard(
@@ -419,7 +530,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             self.body.append(message["body"])
         if not message.get("more_body"):
             try:
-                await self.handle(b"".join(self.body))
+                with forwarded_learner_session(self.scope):
+                    await self.handle(b"".join(self.body))
             except:  # noqa: E722
                 log.exception("Error in handling consumer http_request")
             finally:
@@ -439,9 +551,11 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
-        return {
-            "search_url": [data.get("search_url") or settings.AI_MIT_SEARCH_URL],
-        }
+        state = {}
+        # An explicit {} replaces any filters pinned earlier in the thread
+        if "search_filters" in data:
+            state["search_filters"] = [data["search_filters"]]
+        return state
 
     def create_chatbot(
         self,
@@ -485,6 +599,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     ROOM_NAME = SyllabusBot.__name__
     throttle_scope = "syllabus_bot"
     bot_class = SyllabusBot
+    account_tools_allowed = True
 
     def create_chatbot(
         self,
@@ -496,6 +611,15 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
         enable_related_courses = bool(serializer.validated_data.get("related_courses"))
+        # Account tools need the learner's own session from this request, so
+        # anonymous users and requests without the session never get them.
+        enable_account_tools = (
+            self.account_tools_allowed
+            and has_learner_session()
+            and feature_is_enabled(
+                ACCOUNT_TOOLS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
+            )
+        )
 
         return self.bot_class(
             self.user_id,
@@ -505,6 +629,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
+            enable_account_tools=enable_account_tools,
             course_id=serializer.validated_data.get("course_id"),
             platform=serializer.validated_data.get("platform"),
         )
@@ -558,6 +683,8 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
     ROOM_NAME = "CanvasSyllabusBot"
     throttle_scope = "canvas_syllabus_bot"
     bot_class = CanvasSyllabusBot
+    # Canvas requests don't come from a learner's MIT Learn session
+    account_tools_allowed = False
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
@@ -772,3 +899,62 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
             agent=self.ROOM_NAME,
             object_id=serializer.validated_data.get("transcript_asset_id"),
         )
+
+
+class SupportBotHttpConsumer(BaseBotHttpConsumer):
+    """
+    Async HTTP consumer for the support intake bot.
+    """
+
+    serializer_class = SupportChatRequestSerializer
+    ROOM_NAME = SupportBot.__name__
+    throttle_scope = "support_bot"
+
+    def create_chatbot(
+        self,
+        serializer: SupportChatRequestSerializer,
+        checkpointer: BaseCheckpointSaver,
+    ):
+        """Return a SupportBot instance"""
+        temperature = serializer.validated_data.pop("temperature", None)
+        instructions = serializer.validated_data.pop("instructions", None)
+        model = serializer.validated_data.pop("model", None)
+
+        return SupportBot(
+            self.user_id,
+            checkpointer,
+            temperature=temperature,
+            instructions=instructions,
+            model=model,
+            thread_id=self.thread_id,
+            # Read off the request header rather than the chat payload, so the
+            # body has no say in it. The header is still whatever the caller
+            # sent, so the device is claimed, not proven.
+            user_agent=_header(self.scope, b"user-agent"),
+        )
+
+    def process_extra_state(self, data: dict) -> dict:
+        """
+        Pass the page the learner was on, plus their name and email if we know them.
+
+        The authenticated session wins, so a request body cannot name somebody
+        else as the requester for a signed-in learner. Hosts learn-ai holds no
+        session for, such as the edX MFE, fall back to the body. That is no
+        weaker than the alternative: an anonymous caller is otherwise asked to
+        type an address, and could type the same one.
+        """
+        user = self.scope.get("user", None)
+        session_email = getattr(user, "email", "") or ""
+        session_username = getattr(user, "username", "") or ""
+        session_name = getattr(user, "name", "") or session_username
+        return {
+            "page_url": [data.get("page_url", "")],
+            "user_email": [session_email or data.get("user_email", "") or ""],
+            # Carried separately so the ticket can say whether anyone checked.
+            "verified_email": [session_email],
+            "user_name": [session_name or data.get("user_name", "") or ""],
+            # Kept distinct from user_name: a display name may stand in there,
+            # but Zendesk's username field should only ever be the account handle.
+            "user_username": [session_username or data.get("user_username", "") or ""],
+            "confirm": [bool(data.get("confirm", False))],
+        }

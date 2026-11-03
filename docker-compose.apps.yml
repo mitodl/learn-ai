@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
     mem_limit: 1gb
     cpus: 2
     command: ./scripts/run-django-dev.sh
@@ -24,6 +25,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
     command: >
       /bin/bash -c '
       sleep 3;

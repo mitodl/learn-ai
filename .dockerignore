@@ -3,3 +3,4 @@ htmlcov
 .coverage
 node_modules
 staticfiles/
+.venv

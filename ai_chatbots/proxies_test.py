@@ -3,7 +3,9 @@
 from unittest.mock import ANY
 from urllib.parse import urljoin
 
+import litellm
 import pytest
+from langchain_litellm import ChatLiteLLM
 
 from ai_chatbots.constants import AI_ANONYMOUS_USER
 from ai_chatbots.proxies import LiteLLMProxy
@@ -109,3 +111,29 @@ def test_get_additional_kwargs(mocker):
             },
         },
     }
+
+
+def test_get_api_kwargs_defaults(settings):
+    """By default the kwargs are named for ChatLiteLLM"""
+    assert LiteLLMProxy().get_api_kwargs() == {
+        "api_base": settings.AI_PROXY_URL,
+        "api_key": settings.AI_PROXY_AUTH_TOKEN,
+    }
+
+
+def test_get_api_kwargs_reach_litellm(settings, mocker):
+    """ChatLiteLLM should pass the proxy url and token on to litellm"""
+    mock_completion = mocker.patch(
+        "litellm.completion",
+        return_value=litellm.ModelResponse(
+            choices=[{"message": {"role": "assistant", "content": "hi"}}]
+        ),
+    )
+    llm = ChatLiteLLM(
+        model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}openai/gpt-4o-mini",
+        **LiteLLMProxy().get_api_kwargs(),
+    )
+    llm.invoke("hello")
+    call_kwargs = mock_completion.call_args.kwargs
+    assert call_kwargs["api_base"] == settings.AI_PROXY_URL
+    assert call_kwargs["api_key"] == settings.AI_PROXY_AUTH_TOKEN

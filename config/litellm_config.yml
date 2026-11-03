@@ -9,7 +9,8 @@ model_list:
       api_key: os.environ/OPENAI_API_KEY
 
 general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
+  # Read from env files: learn-ai sends AI_PROXY_AUTH_TOKEN as the proxy key
+  master_key: os.environ/AI_PROXY_AUTH_TOKEN
   database_url: os.environ/DATABASE_URL
 
 litellm_settings:

@@ -1,5 +1,6 @@
 """Tests for consumer throttle classes."""
 
+from pathlib import Path
 from time import time
 
 import pytest
@@ -7,6 +8,8 @@ from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 
+import main
+from ai_chatbots.consumers import BaseBotHttpConsumer
 from main.constants import DURATION_MAPPING
 from main.consumer_throttles import CONSUMER_THROTTLES_KEY, UserScopedRateThrottle
 from main.consumers import BaseThrottledAsyncConsumer
@@ -78,3 +81,30 @@ async def test_wait(now, history, duration, num_requests, expected):
     rate.duration = duration
     rate.num_requests = num_requests
     assert await rate.wait() == expected
+
+
+def test_every_bot_consumer_has_a_seeded_throttle_limit():
+    """
+    A consumer whose throttle_scope has no ConsumerThrottleLimit row raises
+    ImproperlyConfigured on the first live request, so every bot needs a data
+    migration seeding its row.
+    """
+
+    def bot_consumers(cls):
+        for subclass in cls.__subclasses__():
+            yield subclass
+            yield from bot_consumers(subclass)
+
+    scopes = {
+        consumer.throttle_scope
+        for consumer in bot_consumers(BaseBotHttpConsumer)
+        if getattr(consumer, "throttle_scope", None)
+    }
+    # Read the migrations rather than the database: a transactional test flushes
+    # the rows data migrations seeded, and --reuse-db keeps the empty table.
+    migrations_dir = Path(main.__file__).parent / "migrations"
+    sources = "\n".join(
+        path.read_text() for path in sorted(migrations_dir.glob("0*.py"))
+    )
+
+    assert {scope for scope in scopes if f'"{scope}"' not in sources} == set()

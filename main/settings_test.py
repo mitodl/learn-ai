@@ -141,6 +141,14 @@ class TestSettings(TestCase):
             self.reload_settings()
             assert os.environ["OPIK_SENTRY_ENABLE"] == "true"
 
+    def test_opik_analytics_disabled_by_default(self):
+        """OPIK_ANALYTICS_ENABLE defaults to false so the Opik SDK doesn't send
+        usage events to Comet's stats collector.
+        """
+        with mock.patch.dict("os.environ", REQUIRED_SETTINGS, clear=True):
+            self.reload_settings()
+            assert os.environ["OPIK_ANALYTICS_ENABLE"] == "false"
+
     def test_server_side_cursors_enabled(self):
         """DISABLE_SERVER_SIDE_CURSORS should be false if MITOL_DB_DISABLE_SS_CURSORS is false"""
         with mock.patch.dict(

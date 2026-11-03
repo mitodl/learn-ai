@@ -8,12 +8,16 @@ from django.core.cache import caches
 from httpx import RequestError
 from pydantic_core._pydantic_core import ValidationError
 
+from ai_chatbots import learn_api
 from ai_chatbots.constants import (
     ZENDESK_PLATFORM_CATEGORY_IDS,
     ZENDESK_UNIVERSAL_LEARNING_CATEGORY_ID,
 )
+from ai_chatbots.learner_api import LearnerAPIError, forwarded_learner_session
 from ai_chatbots.tools import (
     COURSE_PLATFORM_CACHE_PREFIX,
+    LEARN_ERROR_ENVELOPE,
+    WITHHELD_LINKS_NOTE,
     SearchToolSchema,
     get_video_transcript_chunk,
     search_content_files,
@@ -33,98 +37,18 @@ COURSE_ID = "8.20+january-iap_2021"
 @pytest.fixture(autouse=True)
 def _mock_feature_flag(mocker):
     """Default feature flags to disabled so tests don't touch the durable cache."""
-    return mocker.patch("ai_chatbots.tools.feature_is_enabled", return_value=False)
+    return mocker.patch("ai_chatbots.learn_api.is_enabled", return_value=False)
 
 
 @pytest.fixture
-def mock_get_resources(mock_httpx_async_client, search_results):
-    """Mock httpx async client for resource search tests."""
-    return mock_httpx_async_client(
-        search_results, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
-
-
-@pytest.fixture
-def mock_get_content_files(mock_httpx_async_client, content_chunk_results):
-    """Mock httpx async requests for content file tests."""
-    return mock_httpx_async_client(
-        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
-
-
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"q": "physics"},
-        {"q": "biology", "resource_type": ["course", "video", "document"]},
-        {"q": "chemistry", "resource_type": ["course"], "free": True},
-        {
-            "q": "astronomy",
-            "resource_type": ["course"],
-            "free": False,
-            "certification": True,
-        },
-        {
-            "q": "ecology",
-            "resource_type": ["course"],
-            "certification": True,
-            "offered_by": ["xpro"],
-        },
-    ],
-)
-@pytest.mark.parametrize(
-    ("search_url", "limit"),
-    [
-        ("https://mit.edu/search", 5),
-        ("https://mit.edu/vector", 10),
-        ("https://mit.edu/vector", 20),
-    ],
-)
-async def test_search_courses(  # noqa: PLR0913
-    settings, params, mock_get_resources, search_results, search_url, limit
-):
-    """Test that the search_courses tool returns expected results w/expected params."""
-    settings.AI_MIT_SEARCH_URL = search_url
-    settings.AI_MIT_SEARCH_LIMIT = limit
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    params["state"] = {"search_url": [search_url]}
-    results = json.loads(await search_courses.ainvoke(params))
-    params.pop("state")
-    expected_params = {"limit": limit, **params}
-    # The mock client's get method should be called
-    mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-    # The vector endpoint can ignore `limit` and return more rows than asked;
-    # the tool must cap results at AI_MIT_SEARCH_LIMIT regardless.
-    assert len(results["results"]) == min(limit, len(search_results["results"]))
-
-
-@pytest.mark.parametrize(
-    "search_url",
-    ["https://mit.edu/search", "https://mit.edu/vector"],
-)
-async def test_search_courses_override_url(settings, mock_get_resources, search_url):
-    """Test that the search_courses tool returns expected results w/expected params."""
-    settings.AI_MIT_SEARCH_URL = "http://default_url.edu"
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    params = {
-        "q": "physics",
-        "limit": 10,
-        "resource_type": ["course"],
-        "state": {"search_url": [search_url]},
-    }
-    await search_courses.ainvoke(params)
-    params.pop("state")
-    # The mock client's get method should be called
-    mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
-        params=params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
+def mock_search_content_files(mocker, content_chunk_results):
+    """Fake the Learn content file search with the fixture chunks."""
+    params = {"q": "main topics", "resource_readable_id": "x", "limit": 5}
+    return mocker.patch(
+        "ai_chatbots.learn_api.search_content_files",
+        return_value=learn_api.SearchResult(
+            content_chunk_results["results"], "https://mit.edu/search", params
+        ),
     )
 
 
@@ -146,388 +70,236 @@ def test_invalid_params(params):
         search_courses.invoke(params)
 
 
-async def test_httpx_exception(mocker):
-    """Test that a request exception returns a JSON error msg"""
-    mock_client = mocker.Mock()
-    mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
+MITX_RUN = "course-v1:MITxT+18.01x+3T2026"
+MITX_OTHER_RUN = "course-v1:MITxT+18.01x+1T2020"
+LMS = "https://courses.mitxonline.test"
+COURSEWARE_URL = f"{LMS}/courses/{MITX_RUN}/jump_to_id/abc123"
+ASSET_URL = f"{LMS}/asset-v1:MITxT+18.01x+3T2026+type@asset+block@notes.pdf"
+MARKETING_URL = "https://learn.mit.test/courses/course-v1:MITxT+18.01x"
+OCW_URL = "https://ocw.mit.edu/courses/18-01-single-variable-calculus/pages/syllabus/"
 
-    mocker.patch("ai_chatbots.utils.get_async_http_client", return_value=mock_client)
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
-    # a failed search still reports what it tried, so the metadata shows a
-    # failure rather than an empty result set
-    assert json.loads(result) == {
-        "error": "An error occurred while searching",
-        "results": [],
-        "metadata": {
-            "search_url": "https://test.edu/search",
-            "parameters": {"q": "physics", "limit": 10},
-        },
+def content_chunk(
+    url,
+    *,
+    platform="mitxonline",
+    run=MITX_RUN,
+    edx_module_id="block-v1:MITxT+18.01x+3T2026+type@sequential+block@abc123",
+):
+    """Build a content file search result shaped like mit-learn's vector search."""
+    return {
+        "url": url,
+        "title": url,
+        "platform": {"code": platform},
+        "run_readable_id": run,
+        "run_title": "Calculus",
+        "edx_module_id": edx_module_id,
+        "chunk_content": "What a derivative measures",
     }
 
 
-@pytest.mark.usefixtures("_no_retry_sleep")
-async def test_search_courses_handles_http_status_error(
-    mock_async_get_client, httpx_response
-):
-    """Persistent 502s should become the tool's JSON error payload."""
-    mock_client = mock_async_get_client(
-        return_value=httpx_response(502, url="https://test.edu/search")
-    )
+@pytest.fixture
+def search_returns(mocker):
+    """Make the content file search return the given results."""
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
-    )
-
-    # a failed search still reports what it tried, so the metadata shows a
-    # failure rather than an empty result set
-    assert json.loads(result) == {
-        "error": "An error occurred while searching",
-        "results": [],
-        "metadata": {
-            "search_url": "https://test.edu/search",
-            "parameters": {"q": "physics", "limit": 10},
-        },
-    }
-    # Confirm the retry budget was actually exercised before giving up.
-    assert mock_client.get.call_count == 3
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    ("search_url", "limit"),
-    [("https://mit.edu/search", 5), ("https://mit.edu/vector", 10)],
-)
-@pytest.mark.parametrize("no_collection_name", [True, False])
-@pytest.mark.parametrize("platform", [None, "ocw"])
-async def test_search_content_files(  # noqa: PLR0913
-    settings,
-    mock_get_content_files,
-    syllabus_agent_state,
-    content_chunk_results,
-    search_url,
-    limit,
-    no_collection_name,
-    platform,
-):
-    """Test that the search_content_files tool returns expected results w/expected params."""
-    settings.AI_MIT_SYLLABUS_URL = search_url
-    settings.AI_MIT_CONTENT_SEARCH_LIMIT = limit
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    expected_params = {
-        "q": "main topics",
-        "limit": limit,
-        "resource_readable_id": syllabus_agent_state["course_id"][-1],
-        "collection_name": syllabus_agent_state["collection_name"][-1],
-    }
-    if no_collection_name:
-        expected_params.pop("collection_name")
-        syllabus_agent_state.pop("collection_name")
-    if platform:
-        syllabus_agent_state["platform"] = [platform]
-        expected_params["platform"] = [platform]
-
-    results = json.loads(
-        await search_content_files.ainvoke(
-            {"q": "main topics", "state": syllabus_agent_state}
-        )
-    )
-    mock_get_content_files.return_value.get.assert_called_once_with(
-        search_url,
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-    assert results["metadata"]["search_url"] == search_url
-    assert len(results["results"]) == len(content_chunk_results["results"])
-    assert len(results["citation_sources"]) == len(
-        {result["url"] for result in content_chunk_results["results"] if result["url"]}
-    )
-    for result in content_chunk_results["results"]:
-        if result["url"]:
-            assert results["citation_sources"][result["url"]] == {
-                "citation_url": result.get("url"),
-                "citation_title": (result.get("title") or result["content_title"]),
-            }
-
-
-@pytest.mark.django_db
-async def test_search_content_files_cites_each_file(
-    settings,
-    mock_get_content_files,
-    syllabus_agent_state,
-    content_chunk_results,
-):
-    """Chunks sharing a resource_point_id should each keep their own citation url."""
-    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    for idx, result in enumerate(content_chunk_results["results"]):
-        # every chunk of a course carries the same resource-level point id
-        result["resource_point_id"] = "028cbf92-dded-5f7b-8b19-cd9c5a8b5c41"
-        result["url"] = f"https://mit.edu/file/{idx}"
-
-    results = json.loads(
-        await search_content_files.ainvoke(
-            {"q": "learning goals", "state": syllabus_agent_state}
-        )
-    )
-
-    for idx, result in enumerate(results["results"]):
-        assert (
-            results["citation_sources"][result["id"]]["citation_url"]
-            == f"https://mit.edu/file/{idx}"
+    def _search_returns(*results):
+        mocker.patch(
+            "ai_chatbots.learn_api.search_content_files",
+            return_value=learn_api.SearchResult(
+                list(results), "https://mit.edu/vector", {"q": "main topics"}
+            ),
         )
 
+    return _search_returns
 
-@pytest.mark.django_db
-async def test_search_content_files_collapses_chunks_of_one_file(
-    settings,
-    mock_get_content_files,
-    syllabus_agent_state,
-    content_chunk_results,
-):
-    """Chunks sharing a url should share one citation."""
-    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    url = "https://mit.edu/courses/some-course/pages/syllabus/"
-    for result in content_chunk_results["results"]:
-        result["url"] = url
 
-    results = json.loads(
-        await search_content_files.ainvoke(
-            {"q": "learning goals", "state": syllabus_agent_state}
+@pytest.fixture
+def learner(mocker):
+    """Give the request a learner session with the given MITx Online enrollments."""
+    mocker.patch("ai_chatbots.tools.learner_api.has_learner_session", return_value=True)
+
+    def _learner(*enrollments, error=None):
+        return mocker.patch(
+            "ai_chatbots.tools.learner_api.get_enrollments",
+            side_effect=error,
+            return_value=list(enrollments),
         )
-    )
 
-    assert len(results["results"]) == len(content_chunk_results["results"])
-    assert {result["id"] for result in results["results"]} == {url}
-    assert list(results["citation_sources"]) == [url]
+    return _learner
 
 
-@pytest.mark.django_db
-async def test_search_content_files_keeps_uncitable_results(
-    settings,
-    mock_get_content_files,
-    syllabus_agent_state,
-    content_chunk_results,
-):
-    """A result with no url is still returned, with no citation to look up."""
-    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/vector"
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-    uncitable = [r for r in content_chunk_results["results"] if not r["url"]]
-    assert uncitable, "fixture should include results with no url"
-
-    results = json.loads(
-        await search_content_files.ainvoke(
-            {"q": "learning goals", "state": syllabus_agent_state}
-        )
-    )
-
-    assert len(results["results"]) == len(content_chunk_results["results"])
-    assert len([r for r in results["results"] if r["id"] is None]) == len(uncitable)
-    assert None not in results["citation_sources"]
+def enrolled_in(run):
+    """Build an enrollment shaped like MITx Online's /api/v3/enrollments/."""
+    return {"run": {"courseware_id": run}}
 
 
-@pytest.mark.django_db
+async def _invoke(tool, state):
+    """Invoke a content search tool, returning its raw and parsed output."""
+    state["related_courses"] = [MITX_RUN]
+    raw = await tool.ainvoke({"q": "main topics", "state": state})
+    return raw, json.loads(raw)
+
+
+def _cited(results):
+    return set(results["citation_sources"])
+
+
 @pytest.mark.parametrize(
     "tool", [search_content_files, search_related_course_content_files]
 )
-@pytest.mark.parametrize("exclude_canvas", [True, False])
-async def test_search_canvas_content_files(  # noqa: PLR0913
-    settings,
-    mock_httpx_async_client,
-    syllabus_agent_state,
-    content_chunk_results,
-    tool,
-    exclude_canvas,
+async def test_course_material_links_hidden_without_session(
+    mocker, search_returns, syllabus_agent_state, tool
 ):
-    """Content file searches return canvas results only if exclude_canvas is False."""
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-
-    syllabus_agent_state["related_courses"] = ["course-v1:UAI+12"]
-    syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
-    for result in content_chunk_results["results"]:
-        result["platform"]["code"] = "canvas"
-
-    # Mock httpx async client
-    mock_httpx_async_client(
-        content_chunk_results, patch_path="ai_chatbots.utils.get_async_http_client"
+    """Without a learner session, links to course material are dropped."""
+    get_enrollments = mocker.patch("ai_chatbots.tools.learner_api.get_enrollments")
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL),
+        content_chunk(None),
+        content_chunk(MARKETING_URL, edx_module_id=None),
+        content_chunk(OCW_URL, platform="ocw", edx_module_id=None),
     )
 
-    results = json.loads(
-        await tool.ainvoke({"q": "main topics", "state": syllabus_agent_state})
-    )
+    raw, results = await _invoke(tool, syllabus_agent_state)
 
-    assert len(results["results"]) == (
-        len(content_chunk_results["results"]) if not exclude_canvas else 0
-    )
-    assert len(results["citation_sources"]) == (
-        len(
-            {
-                result["url"]
-                for result in content_chunk_results["results"]
-                if result["url"]
-            }
-        )
-        if not exclude_canvas
-        else 0
-    )
+    assert [result["id"] for result in results["results"]] == [
+        None,
+        None,
+        None,
+        MARKETING_URL,
+        OCW_URL,
+    ]
+    assert _cited(results) == {MARKETING_URL, OCW_URL}
+    # the chatbot still answers from the content
+    assert results["results"][0]["chunk_content"] == "What a derivative measures"
+    # the hidden links reach neither the model nor the client metadata
+    assert COURSEWARE_URL not in raw
+    assert ASSET_URL not in raw
+    # so the model doesn't offer the files with placeholder links
+    assert results["note"] == WITHHELD_LINKS_NOTE
+    get_enrollments.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    ("resource_type", "offered_by"),
+    "tool", [search_content_files, search_related_course_content_files]
+)
+async def test_course_material_linked_for_enrolled_run(
+    learner, search_returns, syllabus_agent_state, tool
+):
+    """Course material is linked only for the run the learner is enrolled in."""
+    get_enrollments = learner(enrolled_in(MITX_RUN))
+    other_run_url = f"{LMS}/courses/{MITX_OTHER_RUN}/jump_to_id/abc123"
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL),
+        content_chunk(other_run_url, run=MITX_OTHER_RUN),
+    )
+
+    _, results = await _invoke(tool, syllabus_agent_state)
+
+    assert _cited(results) == {COURSEWARE_URL, ASSET_URL}
+    assert results["results"][3]["id"] is None
+    # one lookup for all of the results
+    get_enrollments.assert_called_once()
+
+
+async def test_course_material_hidden_when_enrollments_fail(
+    learner, search_returns, syllabus_agent_state
+):
+    """A failed enrollment lookup drops the links but keeps every result."""
+    get_enrollments = learner(error=LearnerAPIError("get_enrollments", 500))
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL),
+        content_chunk(OCW_URL, platform="ocw", edx_module_id=None),
+    )
+
+    _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert len(results["results"]) == 3
+    assert _cited(results) == {OCW_URL}
+    get_enrollments.assert_called_once()
+
+
+async def test_malformed_enrollments_are_skipped(
+    learner, search_returns, syllabus_agent_state
+):
+    """A malformed enrollment neither hides valid ones nor matches a missing run."""
+    learner(
+        "junk",
+        {},
+        {"run": None},
+        {"run": "course-v1:MITxT+18.01x+3T2026"},
+        {"run": {"courseware_id": None}},
+        {"run": {"courseware_id": ""}},
+        enrolled_in(MITX_RUN),
+    )
+    search_returns(
+        content_chunk(COURSEWARE_URL),
+        content_chunk(ASSET_URL, run=None),
+        content_chunk(f"{LMS}/courses/{MITX_RUN}/jump_to_id/def456", run=""),
+    )
+
+    _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert _cited(results) == {COURSEWARE_URL}
+
+
+CANVAS_URL = "https://canvas.mit.test/courses/1/files/2/"
+
+
+@pytest.mark.parametrize(
+    ("chunk", "cited"),
     [
-        (None, None),
-        (None, ["xpro"]),
-        (["course"], None),
+        # enrollments on other platforms can't be checked
+        (content_chunk(COURSEWARE_URL, platform="xpro"), set()),
+        (content_chunk(COURSEWARE_URL, platform="edx"), set()),
+        (content_chunk(COURSEWARE_URL, platform="oll"), set()),
+        # Canvas files have an edx_module_id too, but keep their links
+        (content_chunk(CANVAS_URL, platform="canvas"), {CANVAS_URL}),
+        (content_chunk(CANVAS_URL, platform=None), {CANVAS_URL}),
+        # not course material
+        (content_chunk(MARKETING_URL, edx_module_id=None), {MARKETING_URL}),
+        (content_chunk(None), set()),
     ],
 )
-async def test_search_courses_handles_none_kwargs(
-    settings, mock_get_resources, resource_type, offered_by
+async def test_links_decided_without_enrollment_lookup(
+    learner, search_returns, syllabus_agent_state, chunk, cited
 ):
-    """Test that search_courses handles None values for resource_type and offered_by."""
-    settings.AI_MIT_SEARCH_URL = "https://mit.edu/search"
-    settings.AI_MIT_SEARCH_LIMIT = 10
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
+    """These results are linked or not without looking up enrollments."""
+    get_enrollments = learner(enrolled_in(MITX_RUN))
+    syllabus_agent_state["exclude_canvas"] = ["False"]
+    search_returns(chunk)
 
-    params = {
-        "q": "physics",
-        "state": {"search_url": ["https://mit.edu/search"]},
-        "resource_type": resource_type,
-        "offered_by": offered_by,
+    _, results = await _invoke(search_content_files, syllabus_agent_state)
+
+    assert len(results["results"]) == 1
+    assert _cited(results) == cited
+    get_enrollments.assert_not_called()
+
+
+async def test_course_material_linked_with_forwarded_session(
+    mocker, settings, search_returns, syllabus_agent_state
+):
+    """A learner session alone is enough; the account tools flag isn't checked."""
+    settings.LEARNER_API_LEARN_COOKIE_NAME = "learn_session"
+    get_enrollments = mocker.patch(
+        "ai_chatbots.tools.learner_api.get_enrollments",
+        return_value=[enrolled_in(MITX_RUN)],
+    )
+    search_returns(content_chunk(COURSEWARE_URL))
+    scope = {
+        "user": mocker.Mock(is_authenticated=True),
+        "cookies": {"learn_session": "learn-1"},
     }
 
-    await search_courses.ainvoke(params)
+    with forwarded_learner_session(scope):
+        _, results = await _invoke(search_content_files, syllabus_agent_state)
 
-    # Build expected params - None values should be excluded
-    expected_params = {"q": "physics", "limit": 10}
-    if resource_type is not None:
-        expected_params["resource_type"] = resource_type
-    if offered_by is not None:
-        expected_params["offered_by"] = offered_by
-
-    mock_get_resources.return_value.get.assert_called_once_with(
-        "https://mit.edu/search",
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("no_collection_name", [True, False])
-async def test_search_related_course_content_files(
-    settings,
-    mock_get_content_files,
-    syllabus_agent_state,
-    content_chunk_results,
-    no_collection_name,
-):
-    """Test that search_related_course_content_files searches across related courses."""
-    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/search"
-    settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-
-    related = ["course-v1:UAI+12", "course-v1:UAI+13"]
-    syllabus_agent_state["related_courses"] = related
-
-    expected_params = {
-        "q": "main topics",
-        "limit": 5,
-        "resource_readable_id": related,
-        "collection_name": syllabus_agent_state["collection_name"][-1],
-    }
-    if no_collection_name:
-        expected_params.pop("collection_name")
-        syllabus_agent_state.pop("collection_name")
-
-    results = json.loads(
-        await search_related_course_content_files.ainvoke(
-            {"q": "main topics", "state": syllabus_agent_state}
-        )
-    )
-    mock_get_content_files.return_value.get.assert_called_once_with(
-        "https://mit.edu/search",
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-    assert len(results["results"]) == len(content_chunk_results["results"])
-
-
-@pytest.mark.parametrize("is_hybrid_enabled", [True, False])
-async def test_content_file_search_hybrid_flag(
-    settings,
-    mock_get_content_files,
-    syllabus_agent_state,
-    is_hybrid_enabled,
-    mocker,
-):
-    """Test that the hybrid_search parameter is added when the feature flag is enabled."""
-    settings.AI_MIT_SYLLABUS_URL = "https://mit.edu/search"
-    settings.AI_MIT_CONTENT_SEARCH_LIMIT = 5
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-
-    mocker.patch(
-        "ai_chatbots.tools.feature_is_enabled",
-        return_value=is_hybrid_enabled,
-    )
-
-    expected_params = {
-        "q": "main topics",
-        "limit": 5,
-        "resource_readable_id": syllabus_agent_state["course_id"][-1],
-        "collection_name": syllabus_agent_state["collection_name"][-1],
-    }
-    if is_hybrid_enabled:
-        expected_params["hybrid_search"] = True
-
-    await search_content_files.ainvoke(
-        {"q": "main topics", "state": syllabus_agent_state}
-    )
-
-    mock_get_content_files.return_value.get.assert_called_once_with(
-        "https://mit.edu/search",
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
-
-
-@pytest.mark.parametrize("is_hybrid_enabled", [True, False])
-async def test_search_courses_hybrid_flag(
-    settings,
-    mock_get_resources,
-    is_hybrid_enabled,
-    mocker,
-):
-    """Test that search_courses adds hybrid_search when the feature flag is enabled."""
-    search_url = "https://mit.edu/search"
-    settings.AI_MIT_SEARCH_URL = search_url
-    settings.AI_MIT_SEARCH_LIMIT = 10
-    settings.LEARN_ACCESS_TOKEN = "test_token"  # noqa: S105
-
-    mocker.patch(
-        "ai_chatbots.tools.feature_is_enabled",
-        return_value=is_hybrid_enabled,
-    )
-
-    expected_params = {"q": "physics", "limit": 10}
-    if is_hybrid_enabled:
-        expected_params["hybrid_search"] = True
-
-    await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": [search_url]}}
-    )
-
-    mock_get_resources.return_value.get.assert_called_once_with(
-        search_url,
-        params=expected_params,
-        headers={"Authorization": f"Bearer {settings.LEARN_ACCESS_TOKEN}"},
-        timeout=30,
-    )
+    assert _cited(results) == {COURSEWARE_URL}
+    assert "note" not in results
+    get_enrollments.assert_called_once()
 
 
 @pytest.fixture
@@ -946,14 +718,16 @@ def test_invalid_support_article_params():
 
 
 async def test_get_video_transcript_chunk(
-    settings, mock_httpx_async_client, video_transcript_content_chunk_results
+    mocker, video_transcript_content_chunk_results
 ):
     """Transcript search returns chunk content and the URL it searched."""
-    settings.AI_MIT_VIDEO_TRANSCRIPT_URL = "https://mit.edu/transcripts"
-    settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT = 4
-    mock = mock_httpx_async_client(
-        video_transcript_content_chunk_results,
-        patch_path="ai_chatbots.utils.get_async_http_client",
+    chunks = video_transcript_content_chunk_results["results"]
+    params = {"q": "eigenvalues", "edx_module_id": "asset-1", "limit": 4}
+    search = mocker.patch(
+        "ai_chatbots.learn_api.search_transcript",
+        return_value=learn_api.SearchResult(
+            chunks, "https://mit.edu/transcripts", params
+        ),
     )
 
     results = json.loads(
@@ -962,41 +736,25 @@ async def test_get_video_transcript_chunk(
         )
     )
 
-    mock.return_value.get.assert_called_once()
-    assert mock.return_value.get.call_args.kwargs["params"] == {
-        "q": "eigenvalues",
-        "edx_module_id": "asset-1",
-        "limit": 4,
+    search.assert_called_once_with("eigenvalues", "asset-1")
+    assert results == {
+        "results": [{"chunk_content": r["chunk_content"]} for r in chunks],
+        "metadata": {"search_url": "https://mit.edu/transcripts", "parameters": params},
     }
-    assert [r["chunk_content"] for r in results["results"]] == [
-        r["chunk_content"] for r in video_transcript_content_chunk_results["results"]
-    ]
-    assert results["metadata"]["search_url"] == "https://mit.edu/transcripts"
 
 
-async def test_search_courses_handles_invalid_json(mock_httpx_async_client):
-    """A non-JSON body is a tool error, not an exception escaping into the graph."""
-    mock = mock_httpx_async_client(
-        {}, patch_path="ai_chatbots.utils.get_async_http_client"
-    )
-    mock.return_value.get.return_value.json.side_effect = json.JSONDecodeError(
-        "Expecting value", "<html>", 0
+async def test_get_video_transcript_chunk_error(mocker):
+    """A Learn failure is reported to the LLM as the shared error envelope."""
+    mocker.patch(
+        "ai_chatbots.learn_api.search_transcript",
+        side_effect=learn_api.LearnError("502", "https://mit.edu/transcripts", {}),
     )
 
-    result = await search_courses.ainvoke(
-        {"q": "physics", "state": {"search_url": ["https://test.edu/search"]}}
+    result = await get_video_transcript_chunk.ainvoke(
+        {"q": "eigenvalues", "state": {"transcript_asset_id": ["asset-1"]}}
     )
 
-    # a failed search still reports what it tried, so the metadata shows a
-    # failure rather than an empty result set
-    assert json.loads(result) == {
-        "error": "An error occurred while searching",
-        "results": [],
-        "metadata": {
-            "search_url": "https://test.edu/search",
-            "parameters": {"q": "physics", "limit": 10},
-        },
-    }
+    assert result == LEARN_ERROR_ENVELOPE
 
 
 def test_offered_by_enum_is_named_offered_by():
@@ -1004,3 +762,373 @@ def test_offered_by_enum_is_named_offered_by():
     defs = SearchToolSchema.model_json_schema()["$defs"]
 
     assert "offered_by" in defs
+
+
+@pytest.mark.parametrize("no_collection_name", [True, False])
+@pytest.mark.parametrize("platform", [None, "ocw"])
+async def test_search_content_files(
+    mock_search_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+    no_collection_name,
+    platform,
+):
+    """search_content_files searches the current course and shapes chunks + citations."""
+    if no_collection_name:
+        syllabus_agent_state.pop("collection_name")
+    if platform:
+        syllabus_agent_state["platform"] = [platform]
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
+    )
+
+    mock_search_content_files.assert_called_once_with(
+        "main topics",
+        syllabus_agent_state["course_id"][-1],
+        collection_name=None if no_collection_name else "vector512",
+        platform=platform,
+    )
+    chunks = content_chunk_results["results"]
+    assert results["results"] == [
+        {
+            "id": c["url"],
+            "chunk_content": c.get("chunk_content"),
+            "run_title": c.get("run_title"),
+        }
+        for c in chunks
+    ]
+    assert results["citation_sources"] == {
+        c["url"]: {
+            "citation_url": c["url"],
+            "citation_title": c.get("title") or c["content_title"],
+        }
+        for c in chunks
+        if c["url"]
+    }
+    assert results["metadata"] == {
+        "search_url": "https://mit.edu/search",
+        "parameters": mock_search_content_files.return_value.params,
+    }
+
+
+async def test_search_content_files_cites_each_file(
+    mock_search_content_files, syllabus_agent_state, content_chunk_results
+):
+    """Chunks sharing a resource_point_id should each keep their own citation url."""
+    for idx, result in enumerate(content_chunk_results["results"]):
+        # every chunk of a course carries the same resource-level point id
+        result["resource_point_id"] = "028cbf92-dded-5f7b-8b19-cd9c5a8b5c41"
+        result["url"] = f"https://mit.edu/file/{idx}"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    for idx, result in enumerate(results["results"]):
+        assert (
+            results["citation_sources"][result["id"]]["citation_url"]
+            == f"https://mit.edu/file/{idx}"
+        )
+
+
+async def test_search_content_files_collapses_chunks_of_one_file(
+    mock_search_content_files, syllabus_agent_state, content_chunk_results
+):
+    """Chunks sharing a url should share one citation."""
+    url = "https://mit.edu/courses/some-course/pages/syllabus/"
+    for result in content_chunk_results["results"]:
+        result["url"] = url
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == len(content_chunk_results["results"])
+    assert {result["id"] for result in results["results"]} == {url}
+    assert list(results["citation_sources"]) == [url]
+
+
+async def test_search_content_files_keeps_uncitable_results(
+    mock_search_content_files, syllabus_agent_state, content_chunk_results
+):
+    """A result with no url is still returned, with no citation to look up."""
+    uncitable = [r for r in content_chunk_results["results"] if not r["url"]]
+    assert uncitable, "fixture should include results with no url"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "learning goals", "state": syllabus_agent_state}
+        )
+    )
+
+    assert len(results["results"]) == len(content_chunk_results["results"])
+    assert len([r for r in results["results"] if r["id"] is None]) == len(uncitable)
+    assert None not in results["citation_sources"]
+
+
+async def test_search_content_files_readable_id_fallback(
+    mock_search_content_files, syllabus_agent_state
+):
+    """Without a course in state, the LLM-supplied readable_id is searched."""
+    syllabus_agent_state.pop("course_id")
+
+    await search_content_files.ainvoke(
+        {"q": "main topics", "state": syllabus_agent_state, "readable_id": "MITx+8.01"}
+    )
+
+    assert mock_search_content_files.call_args.args == ("main topics", "MITx+8.01")
+
+
+@pytest.mark.parametrize(
+    ("state_value", "exclude_canvas"),
+    # consumers send strings; evaluation sets (test_json) send bools
+    [("True", True), ("False", False), (True, True), (False, False)],
+)
+async def test_search_canvas_content_files(
+    mock_search_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+    state_value,
+    exclude_canvas,
+):
+    """Canvas chunks are returned only when exclude_canvas is False."""
+    syllabus_agent_state["exclude_canvas"] = [state_value]
+    for result in content_chunk_results["results"]:
+        result["platform"]["code"] = "canvas"
+
+    results = json.loads(
+        await search_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
+    )
+
+    expected = 0 if exclude_canvas else len(content_chunk_results["results"])
+    assert len(results["results"]) == expected
+    assert len(results["citation_sources"]) == (
+        0
+        if exclude_canvas
+        else len({c["url"] for c in content_chunk_results["results"] if c["url"]})
+    )
+
+
+@pytest.mark.parametrize("exclude_canvas", [True, False])
+async def test_search_related_course_content_files(
+    mock_search_content_files,
+    syllabus_agent_state,
+    content_chunk_results,
+    exclude_canvas,
+):
+    """The related-course search passes the related course list and honors exclude_canvas."""
+    related = ["course-v1:UAI+12", "course-v1:UAI+13"]
+    syllabus_agent_state["related_courses"] = related
+    syllabus_agent_state["exclude_canvas"] = [str(exclude_canvas)]
+    for result in content_chunk_results["results"]:
+        result["platform"]["code"] = "canvas"
+
+    results = json.loads(
+        await search_related_course_content_files.ainvoke(
+            {"q": "main topics", "state": syllabus_agent_state}
+        )
+    )
+
+    mock_search_content_files.assert_called_once_with(
+        "main topics", related, collection_name="vector512", platform=None
+    )
+    assert len(results["results"]) == (
+        0 if exclude_canvas else len(content_chunk_results["results"])
+    )
+
+
+async def test_search_content_files_error(mocker, syllabus_agent_state):
+    """A failed search still reports what it tried, so it isn't mistaken for no results."""
+    params = {"q": "main topics", "resource_readable_id": "x", "limit": 5}
+    mocker.patch(
+        "ai_chatbots.learn_api.search_content_files",
+        side_effect=learn_api.LearnError("502", "https://mit.edu/search", params),
+    )
+
+    result = await search_content_files.ainvoke(
+        {"q": "main topics", "state": syllabus_agent_state}
+    )
+
+    assert json.loads(result) == {
+        "error": "An error occurred while searching",
+        "results": [],
+        "citation_sources": {},
+        "metadata": {"search_url": "https://mit.edu/search", "parameters": params},
+    }
+
+
+DETAIL_URL = "https://learn.mit.edu/?resource="
+RESOURCE_ROWS = [
+    {
+        "id": 1,
+        "title": "A",
+        "readable_id": "a",
+        "next_start_date": "2026-01-01",
+        "runs": [
+            {"start_date": "2025-01-01", "level": ["Old"], "instructors": ["I1"]},
+            {"start_date": "2026-01-01", "level": ["Intro"], "instructors": ["I2"]},
+        ],
+    },
+    {"id": 2, "title": "B", "runs": [{"level": ["Adv"], "instructors": []}]},
+    {"id": 3, "title": "C"},
+]
+
+
+@pytest.fixture
+def mock_search_learning_resources(mocker):
+    """Fake the Learn resource search with three rows exercising run selection."""
+    return mocker.patch(
+        "ai_chatbots.learn_api.search_learning_resources",
+        return_value=learn_api.SearchResult(
+            [dict(r) for r in RESOURCE_ROWS],
+            "https://mit.edu/search",
+            {"q": "physics", "limit": 10},
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("params", "filters"),
+    [
+        ({}, {}),
+        (
+            {"resource_type": ["course", "video"], "free": True},
+            {"resource_type": ["course", "video"], "free": True},
+        ),
+        (
+            {"resource_type": None, "offered_by": ["xpro"], "certification": False},
+            {"offered_by": ["xpro"], "certification": False},
+        ),
+    ],
+)
+async def test_search_courses(
+    settings, mock_search_learning_resources, params, filters
+):
+    """search_courses passes stringified non-None filters and shapes rows for the LLM."""
+    settings.AI_MIT_SEARCH_DETAIL_URL = DETAIL_URL
+
+    results = json.loads(
+        await search_courses.ainvoke(
+            {
+                "q": "physics",
+                "state": {},
+                **params,
+            }
+        )
+    )
+
+    mock_search_learning_resources.assert_called_once_with("physics", filters)
+    base = dict.fromkeys(
+        (
+            "readable_id",
+            "description",
+            "offered_by",
+            "free",
+            "certification",
+            "resource_type",
+        )
+    )
+    assert results["results"] == [
+        {
+            **base,
+            "id": 1,
+            "title": "A",
+            "readable_id": "a",
+            "url": f"{DETAIL_URL}1",
+            "level": ["Intro"],
+            "instructors": ["I2"],
+        },
+        {
+            **base,
+            "id": 2,
+            "title": "B",
+            "url": f"{DETAIL_URL}2",
+            "level": ["Adv"],
+            "instructors": [],
+        },
+        {**base, "id": 3, "title": "C", "url": f"{DETAIL_URL}3"},
+    ]
+    assert results["metadata"] == {
+        "search_url": "https://mit.edu/search",
+        "parameters": {"q": "physics", "limit": 10},
+    }
+
+
+async def test_search_courses_ignores_state_search_url(
+    mock_search_learning_resources,
+):
+    """
+    A search_url left in an old checkpoint's state is ignored, so the Learn
+    token only ever goes to AI_MIT_SEARCH_URL.
+    """
+    await search_courses.ainvoke(
+        {"q": "physics", "state": {"search_url": ["https://attacker.example/x"]}}
+    )
+
+    mock_search_learning_resources.assert_called_once_with("physics", {})
+
+
+@pytest.mark.parametrize(
+    "agent_params",
+    [
+        {},
+        {"offered_by": ["mitx"], "free": True},
+    ],
+)
+async def test_search_courses_pinned_filters(
+    mock_search_learning_resources, agent_params
+):
+    """Filters pinned in the state are always applied, over the agent's choices"""
+    pinned = {"topic": ["Biology"], "offered_by": ["ocw"]}
+    await search_courses.ainvoke(
+        {"q": "japan", **agent_params, "state": {"search_filters": [pinned]}}
+    )
+
+    mock_search_learning_resources.assert_called_once_with(
+        "japan", {**agent_params, **pinned}
+    )
+
+
+@pytest.mark.parametrize(
+    ("latest", "expected"),
+    [
+        ({"topic": ["Physics"]}, {"topic": ["Physics"]}),
+        ({}, {}),
+    ],
+)
+async def test_search_courses_latest_pinned_filters(
+    mock_search_learning_resources, latest, expected
+):
+    """Only the most recently pinned filters apply; {} clears earlier ones"""
+    old = {"topic": ["Biology"], "offered_by": ["ocw"]}
+    await search_courses.ainvoke(
+        {"q": "japan", "state": {"search_filters": [old, latest]}}
+    )
+
+    mock_search_learning_resources.assert_called_once_with("japan", expected)
+
+
+async def test_search_courses_error(mocker):
+    """A failed search still reports what it tried, so it isn't mistaken for no results."""
+    params = {"q": "physics", "limit": 10}
+    mocker.patch(
+        "ai_chatbots.learn_api.search_learning_resources",
+        side_effect=learn_api.LearnError("502", "https://mit.edu/search", params),
+    )
+
+    result = await search_courses.ainvoke({"q": "physics", "state": {}})
+
+    assert json.loads(result) == {
+        "error": "An error occurred while searching",
+        "results": [],
+        "metadata": {"search_url": "https://mit.edu/search", "parameters": params},
+    }

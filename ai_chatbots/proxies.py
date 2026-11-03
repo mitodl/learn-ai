@@ -52,12 +52,13 @@ class LiteLLMProxy(AIProxy):
     PROXY_MODEL_PREFIX = "litellm_proxy/"
 
     def get_api_kwargs(
-        self, base_url_key: str = "api_base", api_key_key: str = "openai_api_key"
+        self, base_url_key: str = "api_base", api_key_key: str = "api_key"
     ) -> dict:
         """
         Get the required API kwargs to connect to the Lite LLM proxy.
         When using the ChatLiteLLM class, these kwargs should be
-        "api_base" and "openai_api_key".
+        "api_base" and "api_key" (ChatLiteLLM does not forward
+        "openai_api_key" to litellm).
 
         Args:
             base_url_key (str): The key to pass in the proxy API URL.

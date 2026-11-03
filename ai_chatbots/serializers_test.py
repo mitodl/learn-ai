@@ -9,6 +9,8 @@ from ai_chatbots.serializers import (
     ChatMessageSerializer,
     ChatRatingSerializer,
     ChatRequestSerializer,
+    RecommendationChatRequestSerializer,
+    SupportChatRequestSerializer,
 )
 from main.factories import UserFactory
 
@@ -145,3 +147,129 @@ def test_human_message_no_rating_field():
 
     assert data["role"] == "human"
     assert "rating" not in data
+
+
+def test_support_serializer_keeps_page_url():
+    """The page the learner was on is passed through to the bot state."""
+    serializer = SupportChatRequestSerializer(
+        data={
+            "message": "my video will not play",
+            "page_url": "https://learn.mit.edu/courses/18.01/week-3",
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert (
+        serializer.validated_data["page_url"]
+        == "https://learn.mit.edu/courses/18.01/week-3"
+    )
+
+
+@pytest.mark.parametrize(
+    "page_url",
+    [
+        "javascript:alert(1)",
+        "not a url at all",
+        f"https://learn.mit.edu/{'x' * 2048}",
+    ],
+)
+def test_support_serializer_rejects_bad_page_url(page_url):
+    """page_url reaches a Zendesk ticket, so only real http(s) urls get through."""
+    serializer = SupportChatRequestSerializer(
+        data={"message": "help", "page_url": page_url}
+    )
+
+    assert not serializer.is_valid()
+    assert "page_url" in serializer.errors
+
+
+def test_support_serializer_keeps_user_email():
+    """Hosts learn-ai has no session for supply the learner's address themselves."""
+    serializer = SupportChatRequestSerializer(
+        data={"message": "my video will not play", "user_email": "learner@mit.edu"}
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["user_email"] == "learner@mit.edu"
+
+
+def test_support_serializer_keeps_user_name_and_username():
+    """A host with no learn-ai session supplies the learner's name and handle."""
+    serializer = SupportChatRequestSerializer(
+        data={
+            "message": "my video will not play",
+            "user_name": "Ada Lovelace",
+            "user_username": "ada",
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["user_name"] == "Ada Lovelace"
+    assert serializer.validated_data["user_username"] == "ada"
+
+
+def test_support_serializer_rejects_a_malformed_user_email():
+    """The address becomes the Zendesk requester, so junk must not reach the tool."""
+    serializer = SupportChatRequestSerializer(
+        data={"message": "help", "user_email": "not an address"}
+    )
+
+    assert not serializer.is_valid()
+    assert "user_email" in serializer.errors
+
+
+def test_support_serializer_rejects_a_user_email_too_long_to_store():
+    """
+    UserChatSession.support_ticket_email is varchar(254). A longer address that
+    validated here would file the ticket and then blow up on save, leaving no
+    reference recorded and every retry filing again.
+    """
+    serializer = SupportChatRequestSerializer(
+        data={"message": "help", "user_email": f"{'a' * 300}@example.com"}
+    )
+
+    assert not serializer.is_valid()
+    assert "user_email" in serializer.errors
+
+
+def test_recommendation_serializer_search_filters():
+    """Supported search filters are passed through to the bot state."""
+    filters = {"topic": ["Biology", "Genetics"], "free": ["true"]}
+    serializer = RecommendationChatRequestSerializer(
+        data={"message": "japan", "search_filters": filters}
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["search_filters"] == filters
+
+
+@pytest.mark.parametrize(
+    "search_filters",
+    [
+        {"q": ["biology"]},
+        {"limit": ["100"]},
+        {"topic": "Biology"},
+        {"topic": []},
+        {"topic": [""]},
+        {"topic": ["a" * 257]},
+        {"topic": [str(i) for i in range(51)]},
+    ],
+)
+def test_recommendation_serializer_invalid_search_filters(search_filters):
+    """Unsupported or malformed search filters are rejected."""
+    serializer = RecommendationChatRequestSerializer(
+        data={"message": "japan", "search_filters": search_filters}
+    )
+
+    assert not serializer.is_valid()
+    assert "search_filters" in serializer.errors
+
+
+def test_recommendation_serializer_drops_search_url():
+    """search_url is no longer accepted, so it never reaches the bot state."""
+    serializer = RecommendationChatRequestSerializer(
+        data={"message": "physics", "search_url": "https://attacker.example/x"}
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert "search_url" not in serializer.validated_data

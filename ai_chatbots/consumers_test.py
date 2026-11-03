@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import litellm
 import pytest
 from asgiref.sync import sync_to_async
 from channels.layers import InMemoryChannelLayer
@@ -12,6 +13,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from langgraph.checkpoint.memory import InMemorySaver
+from openai import AsyncOpenAI
 from rest_framework.exceptions import ValidationError
 
 from ai_chatbots import consumers, prompts
@@ -23,6 +25,7 @@ from ai_chatbots.constants import (
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
 )
 from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
+from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
 from main.factories import UserFactory
@@ -105,6 +108,19 @@ def video_gpt_consumer(async_user, django_session):
         "session": django_session,
     }
     consumer.channel_name = "test_video_gpt_channel"
+    return consumer
+
+
+@pytest.fixture
+def support_consumer(async_user, django_session):
+    """Return a support consumer."""
+    consumer = consumers.SupportBotHttpConsumer()
+    consumer.scope = {
+        "user": async_user,
+        "cookies": {AI_SESSION_COOKIE_KEY: "test_session_key"},
+        "session": django_session,
+    }
+    consumer.channel_name = "test_support_channel"
     return consumer
 
 
@@ -208,8 +224,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
     assert recommendation_consumer.bot.instructions == (
         instructions if instructions else prompts.PROMPT_RECOMMENDATION
     )
-    default_state = {"search_url": [settings.AI_MIT_SEARCH_URL]}
-    mock_completion.assert_called_once_with(message, extra_state=default_state)
+    mock_completion.assert_called_once_with(message, extra_state={})
     assert (
         mock_http_consumer_send.send_body.call_count
         == len(response.content.split(" ")) + 2
@@ -316,9 +331,7 @@ async def test_search_summary_agent_handle(
 
     assert isinstance(consumer.bot, SearchSummaryBot)
     assert consumer.bot.instructions == prompts.PROMPT_RECOMMENDATION
-    mock_completion.assert_called_once_with(
-        "hello", extra_state={"search_url": [settings.AI_MIT_SEARCH_URL]}
-    )
+    mock_completion.assert_called_once_with("hello", extra_state={})
     headers = mock_http_consumer_send.send_headers.call_args_list[0][-1]["headers"]
     cookie_names = [
         value.decode().split("=")[0] for name, value in headers if name == b"Set-Cookie"
@@ -340,6 +353,7 @@ async def test_http_request_complete_body(mocker):
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
     msg = {"body": b"test message without chunks"}
     with pytest.raises(consumers.StopConsumer):
         await consumer.http_request(msg)
@@ -352,6 +366,7 @@ async def test_http_request_chunked_body(mocker):
         "ai_chatbots.consumers.RecommendationBotHttpConsumer.handle"
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
 
     # Test chunked message body with multiple chunks
     first_chunk = {"body": b"test", "more_body": True}
@@ -376,10 +391,33 @@ async def test_http_request_error(mocker):
         side_effect=Exception("Test exception"),
     )
     consumer = consumers.RecommendationBotHttpConsumer()
+    consumer.scope = {}
     with pytest.raises(consumers.StopConsumer):
         await consumer.http_request({"body": b"test"})
     mock_handle.assert_called_once()
     mock_log.assert_called_once_with("Error in handling consumer http_request")
+
+
+@pytest.mark.parametrize("signed_in", [True, False])
+async def test_http_request_scopes_learner_session(mocker, settings, signed_in):
+    """The learner's session is available while handling the request, then gone."""
+    seen = []
+
+    async def handle(_consumer, _message):
+        seen.append(has_learner_session())
+
+    mocker.patch.object(consumers.SyllabusBotHttpConsumer, "handle", handle)
+    settings.LEARNER_API_LEARN_COOKIE_NAME = "learn-session"
+    consumer = consumers.SyllabusBotHttpConsumer()
+    consumer.scope = {
+        "user": mocker.Mock(is_authenticated=True) if signed_in else AnonymousUser(),
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with pytest.raises(consumers.StopConsumer):
+        await consumer.http_request({"body": b"test"})
+
+    assert seen == [signed_in]
+    assert has_learner_session() is False
 
 
 @pytest.mark.parametrize("has_layer", [True, False])
@@ -461,6 +499,74 @@ async def test_syllabus_create_chatbot_without_related_courses(
     assert "search_related_course_content_files" not in [
         tool.name for tool in chatbot.create_tools()
     ]
+
+
+@pytest.mark.parametrize(
+    ("signed_in", "flag_on", "expected"),
+    [(True, True, True), (True, False, False), (False, True, False)],
+)
+async def test_syllabus_create_chatbot_account_tools(  # noqa: PLR0913
+    mocker,
+    settings,
+    mock_http_consumer_send,
+    syllabus_consumer,
+    async_user,
+    signed_in,
+    flag_on,
+    expected,
+):
+    """Account tools are attached only for a learner session with the flag on."""
+    flag = mocker.patch(
+        "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on
+    )
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={"message": "hello", "course_id": "MITx+6.00.1x"}
+    )
+    serializer.is_valid(raise_exception=True)
+    await syllabus_consumer.prepare_response(serializer)
+    settings.LEARNER_API_LEARN_COOKIE_NAME = "learn-session"
+    scope = {
+        "user": async_user if signed_in else AnonymousUser(),
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with forwarded_learner_session(scope):
+        chatbot = await sync_to_async(syllabus_consumer.create_chatbot)(
+            serializer, InMemorySaver()
+        )
+
+    tool_names = [tool.name for tool in chatbot.create_tools()]
+    assert ("get_enrollments" in tool_names) is expected
+    assert ("get_course_progress" in chatbot.instructions) is expected
+    # Anonymous requests don't make a PostHog call
+    assert flag.called is signed_in
+
+
+async def test_canvas_syllabus_create_chatbot_no_account_tools(
+    mocker,
+    settings,
+    mock_http_consumer_send,
+    canvas_syllabus_consumer,
+    async_user,
+):
+    """The Canvas syllabus bot never gets account tools, even with a session."""
+    mocker.patch("ai_chatbots.consumers.feature_is_enabled", return_value=True)
+    serializer = consumers.SyllabusChatRequestSerializer(
+        data={"message": "hello", "course_id": "MITx+6.00.1x"}
+    )
+    serializer.is_valid(raise_exception=True)
+    await canvas_syllabus_consumer.prepare_response(serializer)
+    settings.LEARNER_API_LEARN_COOKIE_NAME = "learn-session"
+    scope = {
+        "user": async_user,
+        "cookies": {settings.LEARNER_API_LEARN_COOKIE_NAME: "session-value"},
+    }
+    with forwarded_learner_session(scope):
+        chatbot = await sync_to_async(canvas_syllabus_consumer.create_chatbot)(
+            serializer, InMemorySaver()
+        )
+
+    assert chatbot.enable_account_tools is False
+    assert "get_enrollments" not in [tool.name for tool in chatbot.create_tools()]
 
 
 @pytest.mark.parametrize(
@@ -557,10 +663,14 @@ async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
         ("", "", False),  # Authenticated user 1st message
     ],
 )
-async def test_assign_thread_cookie(
-    syllabus_consumer, async_user, user_cookie, anon_cookie, is_anon
+async def test_assign_thread_cookie(  # noqa: PLR0913
+    settings, syllabus_consumer, async_user, user_cookie, anon_cookie, is_anon
 ):
     """Test the cookie handling for the consumer."""
+    settings.AI_CHATBOTS_COOKIE_CROSS_SITE = True
+    cookie_attrs = (
+        f"Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};SameSite=None;Secure;"
+    )
 
     anon_cookie_name = (
         f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
@@ -608,13 +718,10 @@ async def test_assign_thread_cookie(
         assert thread_id == anon_cookie
         if not is_anon:  # User just authenticated, associate older sessions with user
             # Clear out anon cookie thread ids and set current thread id to auth user cookie
-            assert (
-                str(cookies[1])
-                == f"{anon_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
-            )
+            assert str(cookies[1]) == f"{anon_cookie_name}=;Path=/;{cookie_attrs}"
             assert (
                 str(cookies[0])
-                == f"{user_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+                == f"{user_cookie_name}={encoded_thread_id};Path=/;{cookie_attrs}"
             )
             for thread in anon_cookie.split(","):
                 # All anon thread ids should now be associated with user
@@ -636,11 +743,12 @@ async def test_assign_thread_cookie(
         ):  # User must have logged out, so current thread id should be in anon cookie
             assert (
                 str(cookies[1])
-                == f"{anon_cookie_name}={encoded_thread_id};Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+                == f"{anon_cookie_name}={encoded_thread_id};Path=/;{cookie_attrs}"
             )
+            # The user cookie is kept, to resume when the user logs back in
             assert (
                 str(cookies[0])
-                == f"{user_cookie_name}=;Path=/;Max-Age={settings.AI_CHATBOTS_COOKIE_MAX_AGE};"
+                == f"{user_cookie_name}={encoded_user_cookie};Path=/;{cookie_attrs}"
             )
 
 
@@ -675,6 +783,174 @@ async def test_assign_thread_cookie_changed_account(syllabus_consumer, async_use
     # Should have gotten assigned a new thread id
     assert thread_id != old_thread_id
     assert cookies[0].value == encoded_thread_id
+
+
+async def test_assign_thread_cookie_ignores_a_signed_in_users_thread(
+    syllabus_consumer, async_user
+):
+    """
+    A request with no login must not pick up a thread that belongs to someone.
+
+    With no anon cookie the authenticated cookie is read instead, and the
+    ownership check only ran for signed-in requests. Cross-site cookies make
+    that reachable: the browser sends the thread cookie without the gateway's
+    login cookie, so the request arrives anonymous on the owner's thread.
+    """
+    owned_thread_id = uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: urlsafe_base64_encode(force_bytes(owned_thread_id)),
+        AI_SESSION_COOKIE_KEY: "a_passing_session_key",
+    }
+    syllabus_consumer.scope["user"] = AnonymousUser()
+
+    await UserChatSession.objects.all().adelete()
+    await UserChatSession.objects.acreate(
+        thread_id=owned_thread_id,
+        user=async_user,
+        agent=SyllabusBot.__name__,
+        dj_session_key="the_owners_session_key",
+    )
+
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    assert thread_id != owned_thread_id
+    assert cookies[1].value == urlsafe_base64_encode(force_bytes(thread_id))
+    # Kept for when the user logs back in
+    assert cookies[0].value == urlsafe_base64_encode(force_bytes(owned_thread_id))
+
+
+async def test_assign_thread_cookie_ignores_another_sessions_anon_thread(
+    syllabus_consumer,
+):
+    """
+    An anonymous thread belongs to the session that started it, and the anon
+    cookie was never checked against that session.
+    """
+    other_thread_id = uuid4().hex
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    syllabus_consumer.scope["cookies"] = {
+        anon_cookie_name: urlsafe_base64_encode(force_bytes(other_thread_id)),
+        AI_SESSION_COOKIE_KEY: "my_session_key",
+    }
+    syllabus_consumer.scope["user"] = AnonymousUser()
+
+    await UserChatSession.objects.all().adelete()
+    await UserChatSession.objects.acreate(
+        thread_id=other_thread_id,
+        user=None,
+        agent=SyllabusBot.__name__,
+        dj_session_key="someone_elses_session_key",
+    )
+
+    thread_id, _ = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    assert thread_id != other_thread_id
+
+
+async def test_assign_thread_cookie_logged_back_in(syllabus_consumer, async_user):
+    """Logging back in resumes the user's thread, and keeps the anonymous one."""
+    user_thread_id, anon_thread_id = uuid4().hex, uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: urlsafe_base64_encode(force_bytes(user_thread_id)),
+        anon_cookie_name: urlsafe_base64_encode(force_bytes(anon_thread_id)),
+        AI_SESSION_COOKIE_KEY: "test_session_key",
+    }
+    syllabus_consumer.scope["user"] = async_user
+    for thread, owner in ((user_thread_id, async_user), (anon_thread_id, None)):
+        await UserChatSession.objects.acreate(
+            thread_id=thread,
+            user=owner,
+            agent=SyllabusBot.__name__,
+            dj_session_key="test_session_key",
+        )
+
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(async_user)
+
+    assert thread_id == user_thread_id
+    assert cookies[1].value == ""
+    anon_session = await UserChatSession.objects.aget(thread_id=anon_thread_id)
+    assert anon_session.user_id == async_user.id
+
+
+@pytest.mark.parametrize("cookie_user", ["other_user", "other_object"])
+async def test_assign_thread_cookie_falls_back_to_anon(
+    syllabus_consumer, async_user, cookie_user
+):
+    """An unusable user cookie falls back to the anonymous thread."""
+    user_thread_id, anon_thread_id = uuid4().hex, uuid4().hex
+    user_cookie_name = f"{syllabus_consumer.ROOM_NAME}_{AI_THREAD_COOKIE_KEY}"
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    user_cookie = (
+        f"{user_thread_id}|other_course"
+        if cookie_user == "other_object"
+        else user_thread_id
+    )
+    syllabus_consumer.scope["cookies"] = {
+        user_cookie_name: urlsafe_base64_encode(force_bytes(user_cookie)),
+        anon_cookie_name: urlsafe_base64_encode(
+            force_bytes(f"{anon_thread_id}|this_course")
+        ),
+        AI_SESSION_COOKIE_KEY: "test_session_key",
+    }
+    syllabus_consumer.scope["user"] = async_user
+    await UserChatSession.objects.acreate(
+        thread_id=user_thread_id,
+        user=(
+            await sync_to_async(UserFactory.create)()
+            if cookie_user == "other_user"
+            else async_user
+        ),
+        agent=SyllabusBot.__name__,
+    )
+    await UserChatSession.objects.acreate(
+        thread_id=anon_thread_id,
+        agent=SyllabusBot.__name__,
+        dj_session_key="test_session_key",
+    )
+
+    thread_id, _ = await syllabus_consumer.assign_thread_cookies(
+        async_user, object_id="this_course"
+    )
+
+    assert thread_id == anon_thread_id
+
+
+@pytest.mark.parametrize("same_session", [True, False])
+async def test_assign_thread_cookie_anon_thread_needs_its_session(
+    syllabus_consumer, same_session
+):
+    """An anonymous thread in the cookie is only resumed by the session that started it."""
+    anon_thread_id = uuid4().hex
+    anon_cookie_name = (
+        f"{syllabus_consumer.ROOM_NAME}_{AI_THREADS_ANONYMOUS_COOKIE_KEY}"
+    )
+    syllabus_consumer.scope["cookies"] = {
+        anon_cookie_name: urlsafe_base64_encode(force_bytes(anon_thread_id)),
+        AI_SESSION_COOKIE_KEY: (
+            "test_session_key" if same_session else "other_session_key"
+        ),
+    }
+    syllabus_consumer.scope["user"] = AnonymousUser()
+    await UserChatSession.objects.acreate(
+        thread_id=anon_thread_id,
+        agent=SyllabusBot.__name__,
+        dj_session_key="test_session_key",
+    )
+
+    thread_id, cookies = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    assert (thread_id == anon_thread_id) is same_session
+    # Lasts as long as the thread cookie, so the thread survives a browser restart
+    assert cookies[2].max_age == settings.AI_CHATBOTS_COOKIE_MAX_AGE
 
 
 @pytest.mark.parametrize(
@@ -1194,6 +1470,18 @@ async def test_anonymous_user_session_cookie_assignment(
     assert session.dj_session_key != ""
 
 
+async def test_session_cookie_lasts_as_long_as_the_thread_cookies(syllabus_consumer):
+    """
+    An anonymous thread only resumes while its session key still matches, so a
+    session-scoped cookie here would cut continuity to one browser session while
+    the thread cookie it is checked against lives for a week.
+    """
+    _, cookies = await syllabus_consumer.assign_thread_cookies(AnonymousUser())
+
+    session_cookie = next(c for c in cookies if c.name == AI_SESSION_COOKIE_KEY)
+    assert session_cookie.max_age == settings.AI_CHATBOTS_COOKIE_MAX_AGE
+
+
 async def test_anonymous_user_login_session_association(  # noqa: PLR0913
     mocker,
     mock_http_consumer_send,
@@ -1359,68 +1647,17 @@ async def test_assign_thread_cookies_session_key_filtering(
         ).aexists()
 
 
-@pytest.mark.asyncio
-async def test_disconnect_closes_litellm_clients(mocker, recommendation_consumer):
-    """Test that disconnect properly closes LiteLLM async clients."""
-    # Mock litellm.close_litellm_async_clients
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    # Call disconnect
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_handles_litellm_exception(mocker, recommendation_consumer):
-    """Test that disconnect handles exceptions from LiteLLM cleanup gracefully."""
-    # Mock litellm.close_litellm_async_clients to raise an exception
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients",
-        side_effect=Exception("Test exception"),
-    )
-
-    # Mock channel layer
-    recommendation_consumer.channel_layer = mocker.Mock()
-    recommendation_consumer.channel_layer.group_discard = AsyncMock()
-    recommendation_consumer.room_group_name = "test_room"
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was attempted
-    mock_close.assert_called_once()
-    # Verify channel cleanup still happened despite exception
-    recommendation_consumer.channel_layer.group_discard.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_disconnect_without_channel_layer(mocker, recommendation_consumer):
-    """Test disconnect works when channel_layer is not set."""
-    # Mock litellm
-    mock_close = mocker.patch(
-        "ai_chatbots.consumers.litellm.close_litellm_async_clients"
-    )
-    mock_close.return_value = AsyncMock()
-
-    # Don't set channel_layer
-    if hasattr(recommendation_consumer, "channel_layer"):
-        delattr(recommendation_consumer, "channel_layer")
-
-    # Call disconnect - should not raise exception
-    await recommendation_consumer.disconnect()
-
-    # Verify litellm cleanup was called
-    mock_close.assert_called_once()
+async def test_disconnect_keeps_litellm_clients_open(recommendation_consumer):
+    """Disconnect must not close litellm's cached clients, later requests reuse them"""
+    client = AsyncOpenAI(api_key="test")
+    cache_key = f"test_disconnect_{uuid4()}"
+    litellm.in_memory_llm_clients_cache.set_cache(cache_key, client)
+    try:
+        await recommendation_consumer.disconnect()
+        assert not client.is_closed()
+    finally:
+        litellm.in_memory_llm_clients_cache.delete_cache(cache_key)
+        await client.close()
 
 
 @pytest.fixture
@@ -1479,3 +1716,401 @@ async def test_throttle_log_omits_raw_session_key(
     assert "throttled on" in caplog.text
     assert test_session_key not in caplog.text
     assert consumer.get_trace_ident() in caplog.text
+
+
+def test_support_process_extra_state_trusts_only_the_session_email(
+    support_consumer, async_user
+):
+    """
+    A signed-in learner's email comes from the authenticated session, so a
+    request body cannot name somebody else as the ticket requester.
+    """
+    extra_state = support_consumer.process_extra_state(
+        {
+            "page_url": "https://learn.mit.edu/courses/18.01/week-3",
+            "user_email": "attacker@example.com",
+        }
+    )
+
+    assert extra_state == {
+        "page_url": ["https://learn.mit.edu/courses/18.01/week-3"],
+        "user_email": [async_user.email],
+        "verified_email": [async_user.email],
+        "user_name": [async_user.name],
+        "user_username": [async_user.username],
+        "confirm": [False],
+    }
+
+
+def test_support_process_extra_state_names_a_user_without_a_name(
+    support_consumer, async_user
+):
+    """SSO accounts can reach us with no name set, so support gets the username."""
+    async_user.name = ""
+
+    extra_state = support_consumer.process_extra_state({"page_url": ""})
+
+    assert extra_state["user_name"] == [async_user.username]
+
+
+def test_support_process_extra_state_carries_the_username_separately(
+    support_consumer, async_user
+):
+    """
+    user_username always carries the account username, even when user_name is
+    showing the learner's display name instead - Zendesk gets both as distinct
+    fields rather than losing the username whenever a name is set.
+    """
+    extra_state = support_consumer.process_extra_state({"page_url": ""})
+
+    assert extra_state["user_name"] == [async_user.name]
+    assert extra_state["user_username"] == [async_user.username]
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({}, False), ({"confirm": False}, False), ({"confirm": True}, True)],
+)
+def test_support_process_extra_state_carries_the_confirm_flag(
+    support_consumer, body, expected
+):
+    """
+    A widget with a Send button says so with confirm rather than a word the bot
+    has to recognise. Absent, it must read as "not confirmed" - a default that
+    files would send every request the learner never approved.
+    """
+    extra_state = support_consumer.process_extra_state({"page_url": "", **body})
+
+    assert extra_state["confirm"] == [expected]
+
+
+def test_support_process_extra_state_falls_back_to_the_body_email(support_consumer):
+    """
+    Nothing gives learn-ai an APISIX session for a learner arriving from the edX
+    MFE, so the host that does know who they are has to say. An anonymous caller
+    can already type any address into the chat, so taking one here names no
+    requester they could not already have named.
+    """
+    support_consumer.scope["user"] = AnonymousUser()
+
+    extra_state = support_consumer.process_extra_state(
+        {
+            "page_url": "",
+            "user_email": "learner@example.com",
+            "user_name": "Ada Lovelace",
+            "user_username": "ada",
+        }
+    )
+
+    assert extra_state == {
+        "page_url": [""],
+        "user_email": ["learner@example.com"],
+        "verified_email": [""],
+        "user_name": ["Ada Lovelace"],
+        "user_username": ["ada"],
+        "confirm": [False],
+    }
+
+
+def test_support_process_extra_state_prefers_session_over_body_name(
+    support_consumer, async_user
+):
+    """
+    A signed-in learner's name and handle come from the session, so a request
+    body cannot relabel the requester the same way it cannot for the email.
+    """
+    extra_state = support_consumer.process_extra_state(
+        {
+            "page_url": "",
+            "user_name": "Someone Else",
+            "user_username": "someone_else",
+        }
+    )
+
+    assert extra_state["user_name"] == [async_user.name]
+    assert extra_state["user_username"] == [async_user.username]
+
+
+def test_support_process_extra_state_anonymous_learner(support_consumer):
+    """An anonymous learner with no email anywhere means TIM has to ask for one."""
+    support_consumer.scope["user"] = AnonymousUser()
+
+    extra_state = support_consumer.process_extra_state({"page_url": ""})
+
+    assert extra_state == {
+        "page_url": [""],
+        "user_email": [""],
+        "verified_email": [""],
+        "user_name": [""],
+        "user_username": [""],
+        "confirm": [False],
+    }
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        ([(b"user-agent", b"Mozilla/5.0 (Macintosh)")], "Mozilla/5.0 (Macintosh)"),
+        ([(b"accept", b"*/*")], ""),
+        ([], ""),
+    ],
+)
+async def test_support_create_chatbot_carries_the_user_agent(
+    mock_http_consumer_send, support_consumer, headers, expected
+):
+    """
+    The browser comes off the request header, never the chat payload, so the
+    body cannot name a device. The header is still caller-supplied, so this is
+    about where the value comes from, not about trusting it. It is a
+    constructor argument rather than graph state because the turn that files
+    the ticket is itself a live request.
+    """
+    support_consumer.scope["headers"] = headers
+    serializer = consumers.SupportChatRequestSerializer(data={"message": "help"})
+    serializer.is_valid(raise_exception=True)
+    await support_consumer.prepare_response(serializer)
+
+    chatbot = await sync_to_async(support_consumer.create_chatbot)(
+        serializer, InMemorySaver()
+    )
+
+    assert chatbot.user_agent == expected
+
+
+async def _handle_with_origin(mocker, consumer, origin, settings, allowed):
+    """Run handle() with an Origin header and return the captured send mock."""
+    headers = [] if origin is None else [(b"origin", origin.encode())]
+    return await _handle_with_headers(mocker, consumer, headers, settings, allowed)
+
+
+async def _handle_with_headers(mocker, consumer, headers, settings, allowed):
+    """Run handle() with the given request headers and return the send mock."""
+    settings.CORS_ALLOW_ORIGINS = allowed
+    consumer.scope["headers"] = headers
+    mocker.patch(
+        "ai_chatbots.consumers.SyllabusBot.get_completion",
+        return_value=MockAsyncIterator(["hello"]),
+    )
+    mock_send = mocker.patch(
+        "ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock
+    )
+    await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
+    return mock_send
+
+
+def _response_status(mock_send):
+    start = next(
+        call
+        for call in mock_send.call_args_list
+        if call.args and call.args[0].get("type") == "http.response.start"
+    )
+    return start.args[0]["status"]
+
+
+@pytest.mark.parametrize(
+    "origin", ["https://evil.example.com", "http://learn.mit.edu", "null"]
+)
+async def test_handle_rejects_disallowed_origin(
+    mocker, syllabus_consumer, settings, origin
+):
+    """
+    The chatbot routes sit ahead of django_asgi_app in main/asgi.py, so
+    CsrfViewMiddleware never runs for them, and the thread cookie is
+    SameSite=None. CORS stops an attacker reading the reply, not sending the
+    request: a text/plain POST is a simple request and skips the preflight
+    entirely.
+    """
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, origin, settings, ["https://learn.mit.edu"]
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_allows_listed_origin(mocker, syllabus_consumer, settings):
+    """The surfaces that are supposed to embed the widget must keep working."""
+    mock_send = await _handle_with_origin(
+        mocker,
+        syllabus_consumer,
+        "https://learn.mit.edu",
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_allows_request_without_origin(
+    mocker, syllabus_consumer, settings
+):
+    """
+    Server-to-server callers send no Origin, and neither did same-origin POSTs
+    in older browsers. Absence is not evidence of a cross-site request.
+    """
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, None, settings, ["https://learn.mit.edu"]
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_allows_any_origin_when_cors_is_wildcarded(
+    mocker, syllabus_consumer, settings
+):
+    """A deployment that opened CORS to everything has already made this call."""
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "https://evil.example.com", settings, ["*"]
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_allows_any_origin_when_cors_is_unset(
+    mocker, syllabus_consumer, settings
+):
+    """
+    This check gates every bot, not just support intake. An environment that
+    never had to set CORS_ALLOW_ORIGINS would otherwise start 403ing the
+    chatbots that work there today, so an empty list means "not configured",
+    not "allow nothing".
+    """
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "https://learn.mit.edu", settings, []
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+@pytest.mark.parametrize("allowed", [[], ["*"]])
+async def test_handle_rejects_everything_when_cross_site_cookies_lack_an_allow_list(
+    mocker, syllabus_consumer, settings, allowed
+):
+    """
+    Treating an unconfigured allow-list as "allow everything" is only safe while
+    the thread cookie stays same-site. Once it is SameSite=None any page can
+    send it along, and the allow-list is the only thing left deciding who may.
+    Refusing to run in that combination makes it a deployment error rather than
+    a silent hole.
+    """
+    settings.AI_CHATBOTS_COOKIE_CROSS_SITE = True
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "https://evil.example.com", settings, allowed
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_allows_a_same_origin_request_missing_from_the_allow_list(
+    mocker, syllabus_consumer, settings
+):
+    """
+    CORS_ALLOW_ORIGINS lists the other sites allowed to embed a bot, so nobody
+    adding one would think to put learn-ai's own origin in it. Browsers send
+    Origin on a same-origin POST too, which is how frontend-demo's relative
+    fetches started arriving with one. CsrfViewMiddleware never 403s these
+    because it accepts same-origin before it consults any list.
+    """
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [(b"host", b"ai.open.odl.local"), (b"origin", b"http://ai.open.odl.local")],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_allows_a_same_origin_request_behind_a_tls_terminating_proxy(
+    mocker, syllabus_consumer, settings
+):
+    """
+    APISIX terminates TLS, so the browser's https origin reaches an ASGI scope
+    whose scheme is http. Comparing against that raw scheme would 403 every
+    deployed environment while passing locally.
+    """
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [
+            (b"host", b"api.learn.mit.edu"),
+            (b"x-forwarded-proto", b"https"),
+            (b"origin", b"https://api.learn.mit.edu"),
+        ],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 200
+
+
+async def test_handle_does_not_treat_a_forged_host_as_same_origin(
+    mocker, syllabus_consumer, settings
+):
+    """
+    The Host header is the caller's to set, so matching Origin against it
+    unchecked would let anyone nominate their own site as ours. ALLOWED_HOSTS
+    is the list that already says which hosts this site answers to.
+    """
+    settings.ALLOWED_HOSTS = ["ai.open.odl.local"]
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [(b"host", b"evil.example.com"), (b"origin", b"http://evil.example.com")],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_rejects_an_origin_matching_the_host_on_the_wrong_scheme(
+    mocker, syllabus_consumer, settings
+):
+    """
+    Same host over https is still a different origin, and a plain-http request
+    is not evidence the browser was on the https one.
+    """
+    mock_send = await _handle_with_headers(
+        mocker,
+        syllabus_consumer,
+        [(b"host", b"ai.open.odl.local"), (b"origin", b"https://ai.open.odl.local")],
+        settings,
+        ["https://learn.mit.edu"],
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+async def test_handle_rejects_null_origin_even_with_no_allow_list(
+    mocker, syllabus_consumer, settings
+):
+    """
+    A sandboxed iframe and a data: URL both send Origin: null. Nothing that is
+    supposed to embed these bots does, and "null" can never be matched against
+    an allow-list, so it is refused regardless of configuration.
+    """
+    mock_send = await _handle_with_origin(
+        mocker, syllabus_consumer, "null", settings, []
+    )
+
+    assert _response_status(mock_send) == 403
+
+
+@pytest.mark.parametrize(
+    ("search_filters", "expected"),
+    [
+        (None, {}),
+        ({}, {"search_filters": [{}]}),
+        ({"topic": ["Biology"]}, {"search_filters": [{"topic": ["Biology"]}]}),
+    ],
+)
+def test_recommendation_process_extra_state(
+    recommendation_consumer, search_filters, expected
+):
+    """Pinned search filters are added to the state whenever sent, {} included."""
+    # search_url is no longer supported and must never reach the state
+    data = {"search_url": "https://attacker.example/x"}
+    if search_filters is not None:
+        data["search_filters"] = search_filters
+    assert recommendation_consumer.process_extra_state(data) == expected

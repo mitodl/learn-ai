@@ -76,7 +76,7 @@ def calculate_writes(checkpoint: dict) -> dict[str, Any]:
     """
     writes = None
 
-    updated_channels = checkpoint.get("updated_channels", [])
+    updated_channels = checkpoint.get("updated_channels") or []
     if "messages" in updated_channels:
         channel_values = checkpoint.get("channel_values", {})
         native_keys = ["context", "__pregel_tasks", "llm_input_messages", "messages"]

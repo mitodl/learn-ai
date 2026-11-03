@@ -1,6 +1,6 @@
 [project]
 name = "learn-ai"
-version = "0.34.0"
+version = "2026.10.29.1"
 description = "AI applications for MIT Open Learning."
 authors = [{ name = "MIT ODL" }]
 requires-python = ">=3.14,<3.15"
@@ -44,7 +44,7 @@ dependencies = [
     "litellm>=1.53.5,<2",
     "markdown2>=2.5.2,<3",
     "mitol-django-observability>=2026.8.19",
-    "setuptools<84",
+    "setuptools<85",
     "named-enum>=1.4.0,<2",
     "opentelemetry-instrumentation-asgi>=0.52b0",
     "opentelemetry-instrumentation-celery>=0.52b0",
@@ -58,18 +58,18 @@ dependencies = [
     "pygithub>=2.0.0,<3",
     "redis>=5.0.0,<6",
     "requests>=2.31.0,<3",
-    "ruff==0.16.6",
+    "ruff==0.17.0",
     "sentry-sdk[django, langgraph]>=2.37.1,<3",
-    "social-auth-app-django>=5.6.0,<6",
-    "social-auth-core>=4.4.2,<5",
-    "starlette==1.3.1",
+    "starlette==1.8.0",
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
     "open-learning-ai-tutor==0.2.16",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
-    "opik~=2.1.22",
+    "ol-llm>=0.0.5,<0.1",
+    "opik==2.2.94",
+    "azure-identity>=1.25,<2",
 ]
 
 [dependency-groups]
@@ -81,6 +81,7 @@ dev = [
     "django-debug-toolbar>=6.0.0,<7",
     "factory_boy>=3.3.0,<4",
     "faker>=40.0.0,<41",
+    "granian[reload]>=2.5.4,<3",
     "ipdb>=0.13.13,<0.14",
     "nplusone>=1.0.0,<2",
     "pdbpp>=0.12.1,<0.13",
@@ -91,7 +92,7 @@ dev = [
     "pytest-freezegun>=0.4.2,<0.5",
     "pytest-mock>=3.10.0,<4",
     "responses>=0.26.0,<0.27",
-    "ruff>=0.16.3,<0.17",
+    "ruff>=0.17,<0.18",
     "safety>=3.0.0,<4",
     "semantic-version>=2.10.0,<3",
     "freezegun>=1.4.0,<2",
@@ -105,11 +106,12 @@ dev = [
     "google-genai>=1.9.0",
     "chromadb>=1.0.13,<2",
     "pandas>=3.0.1,<4",
-    "mitol-drf-lint==2026.4.2",
+    "mitol-drf-lint==2026.8.28",
     "deepeval>=4.0.7",
 ]
 
 [tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
 package = false
 default-groups = "all"
 environments = ["sys_platform != 'win32'"]
@@ -117,15 +119,17 @@ exclude-newer = "7d"
 required-version = ">=0.9.17"
 
 [tool.uv.exclude-newer-package]
+brotli = "0d"  # CVE-2026-111497 fix (1.2.1), remove after 2026-10-29
 mitol-django-common = "0d"
 mitol-django-observability = "0d"
 mitol-drf-lint = "0d"
+ol-llm = "0d"
 
 [tool.uv.build-backend]
 module-root = ""
 
 [build-system]
-requires = ["uv_build>=0.10.0,<0.11.0"]
+requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
@@ -226,6 +230,7 @@ inline-quotes = "double"
 "**/migrations/**" = ["ARG001"]
 
 [tool.bumpversion]
+current_version = "2026.10.29.1"
 commit = false
 tag = false
 parse = "(?P<release>(?:[1-9][0-9]{3})\\.(?:1[0-2]|[1-9])\\.(?:3[0-1]|[12][0-9]|[1-9]))\\.(?P<build>\\d+)"

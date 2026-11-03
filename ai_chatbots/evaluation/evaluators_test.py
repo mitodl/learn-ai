@@ -1,10 +1,12 @@
 """Unit tests for bot-specific evaluators."""
 
+import asyncio
 import inspect
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
+from ai_chatbots import learner_api
 from ai_chatbots.evaluation.base import TestCaseSpec
 from ai_chatbots.evaluation.evaluators import (
     BOT_EVALUATORS,
@@ -35,7 +37,7 @@ class TestRecommendationBotEvaluator:
                     "question": "What courses are available?",
                     "expected_output": "Here are the courses...",
                     "expected_tools": ["search_courses"],
-                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_state": {"search_filters": [{"topic": ["Physics"]}]},
                     "extra_init": {"param": "value"},
                 }
             ]
@@ -48,36 +50,24 @@ class TestRecommendationBotEvaluator:
         assert test_cases[0].question == "What courses are available?"
         assert test_cases[0].expected_output == "Here are the courses..."
         assert test_cases[0].expected_tools == ["search_courses"]
-        assert test_cases[0].metadata["extra_state"]["search_url"] == [
-            "http://test.com"
+        assert test_cases[0].metadata["extra_state"]["search_filters"] == [
+            {"topic": ["Physics"]}
         ]
         assert test_cases[0].metadata["extra_init"]["param"] == "value"
 
-    def test_validate_test_case_valid(self, evaluator):
-        """Test validation of valid recommendation bot test case."""
-        test_case = TestCaseSpec(
-            question="Test question",
-            metadata={
-                "extra_state": {"search_url": ["http://test.com"]},
-                "extra_init": {},
-            },
-        )
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            {"extra_state": {"search_filters": [{"topic": ["Physics"]}]}},
+            {"extra_state": {}, "extra_init": {}},
+            None,
+        ],
+    )
+    def test_validate_test_case(self, evaluator, metadata):
+        """Recommendation bot test cases need no extra state."""
+        test_case = TestCaseSpec(question="Test question", metadata=metadata)
 
         assert evaluator.validate_test_case(test_case) is True
-
-    def test_validate_test_case_invalid(self, evaluator):
-        """Test validation of invalid recommendation bot test case."""
-        test_case = TestCaseSpec(
-            question="Test question", metadata={"extra_state": {}, "extra_init": {}}
-        )
-
-        assert evaluator.validate_test_case(test_case) is False
-
-    def test_validate_test_case_missing_metadata(self, evaluator):
-        """Test validation with missing metadata."""
-        test_case = TestCaseSpec(question="Test question")
-
-        assert evaluator.validate_test_case(test_case) is False
 
     def test_create_bot_instance(self, evaluator):
         """Test bot instance creation."""
@@ -106,7 +96,7 @@ class TestRecommendationBotEvaluator:
         test_case = TestCaseSpec(
             question="Test question",
             metadata={
-                "extra_state": {"search_url": ["http://test.com"]},
+                "extra_state": {"search_filters": [{"topic": ["Physics"]}]},
                 "extra_init": {},
             },
         )
@@ -116,7 +106,7 @@ class TestRecommendationBotEvaluator:
         mock_bot.agent.ainvoke.assert_called_once_with(
             {
                 "messages": [{"content": "Test question", "role": "user"}],
-                "search_url": ["http://test.com"],
+                "search_filters": [{"topic": ["Physics"]}],
             },
             config={"test": "config"},
         )
@@ -134,6 +124,13 @@ class TestSyllabusBotEvaluator:
         """Create evaluator for testing."""
         mock_bot_class = mocker.Mock()
         return SyllabusBotEvaluator(mock_bot_class, "syllabus")
+
+    @pytest.fixture(autouse=True)
+    def no_resource_facts(self, mocker):
+        """Keep collect_response from looking up resource facts."""
+        mocker.patch(
+            "ai_chatbots.evaluation.evaluators.get_resource_facts", return_value=""
+        )
 
     def test_load_test_cases(self, evaluator, mocker):
         """Test loading syllabus bot test cases."""
@@ -181,6 +178,131 @@ class TestSyllabusBotEvaluator:
         )
 
         assert evaluator.validate_test_case(test_case) is False
+
+    @pytest.mark.parametrize(
+        ("shared", "expected"),
+        [
+            # no shared records: a case without its own reads the live API
+            (None, ["live", [{"id": "own"}], "error", []]),
+            (
+                {"enrollments": [{"id": "shared"}]},
+                [[{"id": "shared"}], [{"id": "own"}], "error", []],
+            ),
+        ],
+    )
+    async def test_learner_records_stay_with_their_case(
+        self, evaluator, mocker, shared, expected
+    ):
+        """Cases run concurrently each read their own records, or their error."""
+        for name in (
+            "get_program_enrollments",
+            "get_program_certificates",
+            "get_course_certificate",
+            "get_program_certificate",
+            "get_course_dates",
+        ):
+            mocker.patch.object(learner_api, name, getattr(learner_api, name))
+        mocker.patch.object(
+            learner_api, "get_enrollments", mocker.AsyncMock(return_value="live")
+        )
+        own = [
+            {"enrollments": [{"id": "own"}]},
+            {"error": True},
+            {},
+        ]
+        mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings",
+            return_value={
+                "learner_records": shared,
+                "syllabus": [
+                    {"question": "a", "extra_state": {"course_id": ["c"]}},
+                    *(
+                        {
+                            "question": "b",
+                            "extra_state": {"course_id": ["c"]},
+                            "learner_records": records,
+                        }
+                        for records in own
+                    ),
+                ],
+            },
+        )
+        cases = evaluator.load_test_cases()
+        evaluator.load_test_cases()  # loading again doesn't wrap the API twice
+
+        async def ainvoke(state, config):
+            await asyncio.sleep(0)  # let the other cases set their records
+            try:
+                return {"records": await learner_api.get_enrollments()}
+            except learner_api.LearnerAPIError:
+                return {"records": "error"}
+
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot.agent.ainvoke = ainvoke
+        results = await asyncio.gather(
+            *(evaluator.collect_response(chatbot, case) for case in cases)
+        )
+
+        assert [result["records"] for result in results] == expected
+
+    async def test_history_comes_before_the_question(self, evaluator, mocker):
+        """A follow-up case sends the earlier turns, then the question."""
+        history = [
+            {"role": "user", "content": "Did I earn a certificate?"},
+            {"role": "assistant", "content": "Yes."},
+        ]
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot.agent.ainvoke = mocker.AsyncMock()
+        case = TestCaseSpec(
+            question="And a digital credential?",
+            metadata={"extra_state": {"course_id": ["c"]}, "history": history},
+        )
+
+        await evaluator.collect_response(chatbot, case)
+
+        sent = chatbot.agent.ainvoke.call_args.args[0]
+        assert sent["messages"] == [
+            *history,
+            {"role": "user", "content": "And a digital credential?"},
+        ]
+
+    @pytest.mark.parametrize(
+        ("facts", "instructions", "expected"),
+        [
+            ("Facts", "Prompt\n\nFacts", ["Facts"]),
+            ("", "Prompt", []),
+            # Lookup failed when the bot was built, then succeeded here
+            ("Facts", "Prompt", []),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_collect_response_adds_resource_facts(
+        self, evaluator, mocker, facts, instructions, expected
+    ):
+        """The resource facts in the system prompt are returned as extra context."""
+        mock_facts = mocker.patch(
+            "ai_chatbots.evaluation.evaluators.get_resource_facts",
+            return_value=facts,
+        )
+        mock_bot = mocker.Mock()
+        mock_bot.agent.ainvoke = mocker.AsyncMock(
+            return_value={"messages": [AIMessage(content="Response")]}
+        )
+        mock_bot.config = {"configurable": {}}
+        mock_bot.instructions = instructions
+        test_case = TestCaseSpec(
+            question="Test question",
+            metadata={
+                "extra_state": {"course_id": ["8.01SC+fall_2016"], "platform": ["ocw"]},
+                "extra_init": {},
+            },
+        )
+
+        response = await evaluator.collect_response(mock_bot, test_case)
+
+        mock_facts.assert_called_once_with("8.01SC+fall_2016", "ocw")
+        assert response["extra_context"] == expected
+        assert response["messages"][0].content == "Response"
 
 
 class TestVideoGPTBotEvaluator:
@@ -361,7 +483,7 @@ class TestEvaluatorIntegration:
                     "question": "Test question",
                     "expected_output": "Test output",
                     "expected_tools": ["search_courses"],
-                    "extra_state": {"search_url": ["http://test.com"]},
+                    "extra_state": {"search_filters": [{"topic": ["Physics"]}]},
                     "extra_init": {},
                 }
             ]

@@ -109,9 +109,11 @@ REMEMBER: It's better to have NO citation than WRONG citations.
 
 # The syllabus prompts differ only in where the citation instructions go, so
 # the part that routes a question between the two search tools is shared.
-PROMPT_SYLLABUS_ROUTING = """Use "search_content_files" for anything about the resource itself that the facts
-below do not answer: what it covers and requires, when it runs, how it is
-delivered, what it costs and what it offers.  It searches this resource's own
+PROMPT_SYLLABUS_ROUTING = """Use "search_content_files" for questions about the resource itself or its subject
+matter that the facts below do not answer: the concepts, terms, methods and
+examples it teaches, even when the question does not mention the resource, and
+what it covers and requires, when it runs, how it is delivered, what it costs and
+what it offers.  It searches this resource's own
 material and already has the resource identifier, so never put the course id in
 the query.
 
@@ -196,6 +198,47 @@ tool messages and any previous summaries in this new summary.
 """
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
+# Added to the syllabus prompt only when the account tools are attached. What
+# each tool returns is in its docstring, so this only covers routing and the
+# rules for an answer about the learner's own records.
+PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own MITx Online records with
+get_enrollments, get_course_progress, get_certificate_status and
+get_upcoming_assignments.  Use them only for questions about the learner's own
+enrollments, grades, certificates, digital credentials and due dates.
+get_enrollments lists all of the learner's courses; the others only read the
+course on this page.  For the grade, certificate or dates of another course,
+tell the learner to ask from that course's page.  Questions
+about the course itself, including what it teaches, how it is graded and what
+certificate it offers, still go to the resource facts and search_content_files.
+A question like "Do I get a certificate for this?" or "Will I get a certificate?"
+asks what the course offers; "Did I get my certificate?" or "Have I earned it?"
+asks about the learner's own record.
+
+If a tool says it couldn't check, tell the learner that, and never tell them they
+have no enrollment, grade, certificate or digital credential.  Say a digital
+credential was issued only when digital_credential is "issued".  Don't guess
+details the tools don't return; link to the course's Progress or Dates tab
+instead.
+
+The tools only read MITx Online and MIT Learn.  For a course on another platform
+(edX.org, MIT xPRO, MIT Professional Education, residential MIT), say you can't
+check it here and point them to support.  For a course that isn't in their
+records, say you don't see it in their MITx Online records and that you can't
+check other platforms.  Never say they have no enrollment or certificate in a
+course you couldn't find.  A "not_confirmed"
+digital credential means you couldn't confirm one, not that they have none, even
+when you answer from earlier in the conversation; point them to support for it.
+The grade is the only progress the tools return: don't say how much of a course
+or how many assignments the learner has completed, and link to the Progress tab
+for that.  A program certificate is one listed in program_certificates or a
+program with certificate_earned true; check both before saying the learner hasn't
+earned one.
+
+Every other question still goes to search_content_files or
+search_support_articles as described above, including a question about a concept
+or idea that doesn't mention this resource.  Search before saying you could not
+find anything."""
+
 
 def parse_prompt(prompt_text: str, prompt_name) -> str:
     """
@@ -224,6 +267,7 @@ CHATBOT_PROMPT_MAPPING = {
 
 SYSTEM_PROMPT_MAPPING = {
     **CHATBOT_PROMPT_MAPPING,
+    "syllabus_account_tools": PROMPT_SYLLABUS_ACCOUNT_TOOLS,
     "summary_initial": PROMPT_SUMMARY_INITIAL,
     "summary_existing": PROMPT_SUMMARY_EXISTING,
     "summary_final": PROMPT_SUMMARY_FINAL,

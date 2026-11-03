@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "0.37.1"
+VERSION = "2026.10.29.1"
 
 log = logging.getLogger()
 
@@ -47,6 +47,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # anywhere in the process, so it's set here, ahead of every other import that
 # could reach opik transitively.
 os.environ.setdefault("OPIK_SENTRY_ENABLE", "false")
+# opik >= 2.2 also reports SDK usage events to stats.comet.com unless this is
+# false (each event once per process, e.g. the first OpikTracer we build). It
+# is read on the first tracked event, so setting it here is early enough.
+os.environ.setdefault("OPIK_ANALYTICS_ENABLE", "false")
 
 # initialize Sentry before doing anything else so we capture any config errors
 SENTRY_DSN = get_string("SENTRY_DSN", "")
@@ -238,8 +242,6 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "social_django.context_processors.backends",
-                "social_django.context_processors.login_redirect",
             ]
         },
     }
@@ -561,9 +563,8 @@ OPIK_URL_OVERRIDE = get_string(name="OPIK_URL_OVERRIDE", default=None)
 OPIK_WORKSPACE = get_string(name="OPIK_WORKSPACE", default="default")
 OPIK_PROJECT_NAME = get_string(name="OPIK_PROJECT_NAME", default="learn-ai")
 OPIK_KEYCLOAK_TOKEN_URL = get_string(name="OPIK_KEYCLOAK_TOKEN_URL", default=None)
-OPIK_KEYCLOAK_CLIENT_ID = get_string(
-    name="OPIK_KEYCLOAK_CLIENT_ID", default="ol-opik-client"
-)
+# One client per environment (opik-learn-ai-<env>), so there is no default.
+OPIK_KEYCLOAK_CLIENT_ID = get_string(name="OPIK_KEYCLOAK_CLIENT_ID", default=None)
 OPIK_KEYCLOAK_CLIENT_SECRET = get_string(
     name="OPIK_KEYCLOAK_CLIENT_SECRET", default=None
 )
@@ -596,6 +597,12 @@ AI_CHATBOTS_SESSION_EXPIRY_DAYS = get_int(
 AI_CHATBOTS_COOKIE_MAX_AGE = get_int(
     name="AI_CHATBOTS_COOKIE_MAX_AGE", default=24 * 60 * 60 * 7
 )
+# Sends the thread cookies as SameSite=None;Secure, which a widget embedded
+# outside mit.edu needs. Off by default: this covers every bot, other mit.edu
+# hosts are already same-site with the API, and switching it on gives up the
+# browser's own cross-site protection. Turning it on requires a populated
+# CORS_ALLOW_ORIGINS - BaseBotHttpConsumer.check_origin refuses the pair.
+AI_CHATBOTS_COOKIE_CROSS_SITE = get_bool("AI_CHATBOTS_COOKIE_CROSS_SITE", False)  # noqa: FBT003
 AI_CITED_PROMPTS = get_list_of_str("AI_CITED_PROMPTS", default=[])
 AI_DEBUG = get_bool("AI_DEBUG", False)  # noqa: FBT003
 AI_DEFAULT_MODEL = get_string(name="AI_DEFAULT_MODEL", default="openai/gpt-4o-mini")
@@ -612,6 +619,7 @@ AI_DEFAULT_SYLLABUS_MAX_TOKENS = get_int("AI_DEFAULT_SYLLABUS_MAX_TOKENS", 16384
 AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "openai/gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
+AI_DEFAULT_SUPPORT_MODEL = get_string("AI_DEFAULT_SUPPORT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(
     name="AI_MAX_MESSAGE_LENGTH", default=6000
@@ -653,16 +661,46 @@ PROBLEM_SET_URL = get_string(
     name="PROBLEM_SET_URL",
     default="https://api.learn.mit.edu/api/v0/tutor/problems/",
 )
+# Hosts the login route may redirect to with ?next=, matched exactly (with port)
+LOGIN_REDIRECT_ALLOWED_HOSTS = get_list_of_str(
+    name="LOGIN_REDIRECT_ALLOWED_HOSTS",
+    default=[
+        "learn-ai.ol.mit.edu",
+        "mitxonline.mit.edu",
+        "courses.learn.mit.edu",
+        "learn.mit.edu",
+    ],
+)
+# Only turn off for local development, where the frontend is served over http
+LOGIN_REDIRECT_REQUIRE_HTTPS = get_bool(
+    name="LOGIN_REDIRECT_REQUIRE_HTTPS", default=True
+)
+# Learner records, read with the learner's own forwarded session cookies.
+# See ai_chatbots/learner_api.py. Each cookie is only ever sent to its own host.
+# The cookie names default to none, so no session is read until a deployment
+# names its own: production's .learn.mit.edu cookie also reaches RC and CI hosts.
+LEARNER_API_LEARN_BASE_URL = get_string(
+    name="LEARNER_API_LEARN_BASE_URL", default="https://api.learn.mit.edu/"
+)
+LEARNER_API_LEARN_COOKIE_NAME = get_string(
+    name="LEARNER_API_LEARN_COOKIE_NAME", default=""
+)
+LEARNER_API_OPENEDX_BASE_URL = get_string(
+    name="LEARNER_API_OPENEDX_BASE_URL", default="https://courses.learn.mit.edu/"
+)
+LEARNER_API_OPENEDX_COOKIE_NAME = get_string(
+    name="LEARNER_API_OPENEDX_COOKIE_NAME", default=""
+)
+# Where MITx Online's own pages (certificates) are, to make their links absolute
+LEARNER_API_MITXONLINE_BASE_URL = get_string(
+    name="LEARNER_API_MITXONLINE_BASE_URL", default="https://mitxonline.mit.edu/"
+)
 # Search summary threads that never got a follow-up are deleted after this many days
 AI_SEARCH_SUMMARY_EXPIRY_DAYS = get_int(name="AI_SEARCH_SUMMARY_EXPIRY_DAYS", default=7)
 # AI search settings
 AI_MIT_SEARCH_DETAIL_URL = get_string(
     name="AI_MIT_SEARCH_DETAIL_URL",
     default="https://learn.mit.edu/?resource=",
-)
-AI_MIT_SEARCH_ELASTIC_URL = get_string(
-    name="AI_MIT_SEARCH_ELASTIC_URL",
-    default="https://api.learn.mit.edu/api/v1/learning_resources_search/",
 )
 AI_MIT_SEARCH_VECTOR_URL = get_string(
     name="AI_MIT_SEARCH_VECTOR_URL",
@@ -681,6 +719,12 @@ AI_MIT_TRANSCRIPT_SEARCH_LIMIT = get_int(
 # Provider keys
 OPENAI_API_KEY = get_string(name="OPENAI_API_KEY", default="")
 LANGSMITH_API_KEY = get_string(name="LANGSMITH_API_KEY", default=None)
+
+# Azure OpenAI, used for `azure/` model ids when no AI proxy is configured.
+# Auth is an Entra bearer token from DefaultAzureCredential (workload identity
+# in-cluster, `az login` locally); the Azure accounts have key auth disabled.
+AZURE_OPENAI_ENDPOINT = get_string(name="AZURE_OPENAI_ENDPOINT", default="")
+AZURE_OPENAI_API_VERSION = get_string(name="AZURE_OPENAI_API_VERSION", default="")
 
 # AI proxy settings (aka LiteLLM)
 AI_PROXY_CLASS = get_string(name="AI_PROXY_CLASS", default="")
@@ -703,6 +747,29 @@ AI_ZENDESK_SEARCH_LIMIT = get_int(name="AI_ZENDESK_SEARCH_LIMIT", default=5)
 AI_ZENDESK_ARTICLE_MAX_CHARS = get_int(
     name="AI_ZENDESK_ARTICLE_MAX_CHARS", default=1500
 )
+
+# Zendesk support ticket creation (hq#13712). Kept separate from AI_ZENDESK_URL:
+# that one is the branded help center used for article search, while API calls
+# have to go to the canonical {subdomain}.zendesk.com host.
+AI_ZENDESK_API_URL = get_string(name="AI_ZENDESK_API_URL", default="")
+# OAuth client_credentials, not an API token: Zendesk stops honouring API tokens
+# on 2027-04-30 and new accounts can no longer create them. The backend mints a
+# short-lived access token from these and caches it (hq#13712).
+AI_ZENDESK_OAUTH_CLIENT_ID = get_string(name="AI_ZENDESK_OAUTH_CLIENT_ID", default="")
+AI_ZENDESK_OAUTH_CLIENT_SECRET = get_string(
+    name="AI_ZENDESK_OAUTH_CLIENT_SECRET", default=""
+)
+# Defaults off: an environment that forgets this setting should fail to file
+# loudly, not tell every learner their request was filed and then drop it.
+AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
+# Custom ticket field ids, from Admin Center > Objects and rules > Tickets >
+# Fields. Minted per Zendesk instance, so they are configured rather than
+# hardcoded. 0 means unconfigured and the value is left off the ticket. Never
+# guess or copy an id between instances: Zendesk drops one it does not
+# recognise silently and files the ticket anyway, so a wrong id looks fine.
+AI_ZENDESK_URL_FIELD_ID = get_int(name="AI_ZENDESK_URL_FIELD_ID", default=0)
+AI_ZENDESK_NAME_FIELD_ID = get_int(name="AI_ZENDESK_NAME_FIELD_ID", default=0)
+AI_ZENDESK_USERNAME_FIELD_ID = get_int(name="AI_ZENDESK_USERNAME_FIELD_ID", default=0)
 # How long the platform of a course is cached for, in seconds.  A course does
 # not change platforms, so this only needs to expire often enough to pick up
 # resources that were not yet published at the time of the first lookup.
