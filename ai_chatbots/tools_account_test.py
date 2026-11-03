@@ -493,7 +493,7 @@ async def test_page_run_platform_is_its_course(mocker, settings, page_course):
     )
     response = mocker.Mock()
     response.json.return_value = {"results": [{"platform": {"code": "mitxonline"}}]}
-    request = mocker.patch("ai_chatbots.tools.async_request", return_value=response)
+    request = mocker.patch("ai_chatbots.learn_api.async_request", return_value=response)
 
     result = await call(get_course_progress, page_course=page_course)
 
