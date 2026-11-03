@@ -1468,13 +1468,13 @@ def _ticket_subject(description: str) -> str:
 class SupportBot(TruncatingChatbot):
     """Service class for the support intake agent"""
 
-    # No prompt, because nothing here calls the model.
+    # Both are set per instance in __init__: only a bot with tools has a prompt
+    # worth loading or a token budget worth provisioning.
     PROMPT_TEMPLATE = None
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     STATE_CLASS = SupportAgentState
     TRACE_STATE_KEYS = ("page_url",)
-    # Every branch of get_completion ends at _reply_without_the_model.
     CALLS_THE_MODEL = False
 
     def __init__(  # noqa: PLR0913
@@ -1490,8 +1490,13 @@ class SupportBot(TruncatingChatbot):
         user_agent: str = "",
         enable_account_tools: bool = False,
     ):
-        # Before super().__init__(): it calls create_tools() at the end.
+        # Before super().__init__(): it reads PROMPT_TEMPLATE and
+        # CALLS_THE_MODEL, then calls create_tools() and get_llm(), which binds
+        # whatever create_tools returned. A second tool set ORs into `answering`.
         self.enable_account_tools = enable_account_tools
+        answering = enable_account_tools
+        self.PROMPT_TEMPLATE = "support" if answering else None
+        self.CALLS_THE_MODEL = answering
         super().__init__(
             user_id,
             name=name,
@@ -1504,6 +1509,14 @@ class SupportBot(TruncatingChatbot):
         # Not graph state: the turn that files is itself a request, so this is
         # the live header rather than something accumulated over the thread.
         self.user_agent = user_agent
+        # Each tool set appends its own rules, so adding a set is an addendum
+        # rather than a rewrite. Before create_agent_graph, which captures
+        # self.instructions as it builds.
+        if self.enable_account_tools and self.instructions:
+            account_prompt = get_system_prompt(
+                "support_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
+            )
+            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
 
     @property
