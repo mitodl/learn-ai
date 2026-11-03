@@ -1775,9 +1775,13 @@ async def test_support_bot_loads_its_prompt_only_when_answering(
 
     assert [call[0][0] for call in mock_get_prompt.call_args_list] == [
         "support",
+        "account_tools_core",
         "support_account_tools",
     ]
-    assert answering.instructions == "support\n\nsupport_account_tools"
+    assert (
+        answering.instructions
+        == "support\n\naccount_tools_core\n\nsupport_account_tools"
+    )
 
 
 @pytest.mark.parametrize("answering", [False, True])
