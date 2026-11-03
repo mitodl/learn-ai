@@ -15,7 +15,12 @@ from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
@@ -1518,6 +1523,21 @@ class SupportBot(TruncatingChatbot):
             )
             self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
+        # A second graph, deliberately without the checkpointer: an attempt
+        # that fails or times out must leave nothing behind, so falling back to
+        # the script is structural rather than cleanup that has to be right
+        # under every failure mode. The canonical thread stays the one
+        # _reply_without_the_model writes.
+        self._answering_agent = (
+            create_react_agent(
+                self.llm,
+                tools=self.tools,
+                state_schema=self.STATE_CLASS,
+                prompt=self.instructions,
+            )
+            if self.answering_enabled
+            else None
+        )
 
     @property
     def answering_enabled(self) -> bool:
@@ -1553,6 +1573,57 @@ class SupportBot(TruncatingChatbot):
         """Return the graph state already accumulated on this thread."""
         state = await self.agent.aget_state(self.config)
         return (state.values if state else None) or {}
+
+    # Enough thread for a follow-up to make sense, without resending a long
+    # intake conversation to the model every turn.
+    ANSWER_HISTORY_MESSAGES = 10
+
+    async def _try_to_answer(self, message: str, prior_state: dict) -> str:
+        """
+        Try to answer from the learner's own records. Return the answer, or ""
+        to hand the turn to the intake script.
+
+        A turn where no tool fired is not a question we have a source for: the
+        model will still have produced text, and showing it would put an answer
+        nothing stands behind in front of a learner who came here for help. A
+        tool that fired and returned no records is the opposite case - "which
+        course did you mean?" is an answer - so the test is the tool call, not
+        the data. See the spec, 4.1.1.
+        """
+        if not self._answering_agent:
+            return ""
+        history = [
+            msg
+            for msg in (prior_state.get("messages") or [])
+            if isinstance(msg, (HumanMessage, AIMessage)) and msg.content
+        ][-self.ANSWER_HISTORY_MESSAGES :]
+        try:
+            result = await asyncio.wait_for(
+                self._answering_agent.ainvoke(
+                    {"messages": [*history, HumanMessage(message)]}
+                ),
+                timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
+            )
+        except Exception as error:  # noqa: BLE001
+            # Type only, and no exc_info: Sentry scrubs frame locals from every
+            # frame of a matching event, and these frames hold the learner's
+            # session cookies and their records.
+            log.warning("Support answer attempt failed: %s", type(error).__name__)
+            return ""
+        messages = result.get("messages") or []
+        if not any(isinstance(msg, ToolMessage) for msg in messages):
+            return ""
+        answer = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                # Content blocks come back as a list for some models, and the
+                # repr of a list is not an answer.
+                if isinstance(msg, AIMessage) and isinstance(msg.content, str)
+            ),
+            "",
+        )
+        return answer.strip()
 
     async def _reply_without_the_model(
         self, message: str, reply: str, extra_state: dict
