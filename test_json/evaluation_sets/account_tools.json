@@ -586,6 +586,18 @@
         "enable_account_tools": true
       },
       "expected_output": "It asks which course or program they mean. It may list the certificates it sees (Calculus 1A: Differentiation, and the Data, Economics, and Design of Policy and Statistics and Data Science programs), but doesn't answer as if one of them were the certificate they asked about."
+    },
+    {
+      "question": "Did I get a certificate in Statistics and Data Science?",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Yes: a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view). It doesn't say it isn't in the learner's records."
     }
   ]
 }

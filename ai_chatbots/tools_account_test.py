@@ -1255,3 +1255,17 @@ async def test_certificate_status_for_a_program_named_by_its_title(
     assert result["programs"][0]["program_id"] == PROGRAM
     assert "is the learner's program Data, Economics" in result["note"]
     assert "isn't in the learner's MITx Online records" not in result["note"]
+
+
+async def test_certificate_status_for_a_certificate_only_program(records):
+    """A program certificate held only by MIT Learn isn't said to be missing."""
+    records["programs"].return_value = []
+
+    result = await call(
+        get_certificate_status, page_course=CALCULUS, course_id="Data, Economics"
+    )
+
+    assert result["programs"] == []
+    assert result["program_certificates"][0]["program_title"] == "Data, Economics"
+    assert "is the learner's program Data, Economics" in result["note"]
+    assert "isn't in the learner's MITx Online records" not in result["note"]

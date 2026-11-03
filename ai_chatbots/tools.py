@@ -1479,17 +1479,23 @@ async def get_certificate_status(  # noqa: C901, PLR0912
     result["program_certificates"] = [
         _program_certificate_summary(c) for c in program_certificates
     ]
-    if (
-        course_id
-        and result.get("note", "").startswith(_not_in_records(course_id))
-        and (named := _named_programs(course_id, programs))
-    ):
-        # A program's title isn't a course; don't say it isn't in their records
-        result["note"] = (
-            f"{course_id} is the learner's program "
-            f"{', '.join(p['program_title'] for p in named)}; its entry in "
-            "programs says whether they earned its certificate."
-        )
+    if course_id and result.get("note", "").startswith(_not_in_records(course_id)):
+        # A program's title isn't a course; don't say it isn't in their records.
+        # MIT Learn can hold a program certificate with no MITx Online enrollment.
+        named = {p["program_title"] for p in _named_programs(course_id, programs)} | {
+            c["program_title"]
+            for c in result["program_certificates"]
+            if _names_course(
+                course_id,
+                {"course_id": None, "run_id": None, "course_title": c["program_title"]},
+            )
+        }
+        if named:
+            result["note"] = (
+                f"{course_id} is the learner's program {', '.join(sorted(named))}; "
+                "its entry in programs or program_certificates says whether they "
+                "earned its certificate."
+            )
     if result.get("note") == ON_PROGRAM_PAGE:
         # Only set once the page's program is known to be MITx Online's
         page_program = _page(state)[0]["run_id"]
