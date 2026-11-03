@@ -1738,13 +1738,41 @@ async def test_answering_enabled_follows_the_tool_list(mock_checkpointer):
 
 
 @pytest.mark.asyncio
-async def test_support_bot_does_not_provision_a_proxy_budget(
-    settings, mocker, mock_checkpointer
+async def test_support_bot_loads_its_prompt_only_when_answering(
+    mocker, mock_checkpointer
 ):
     """
-    Every reply is scripted, so the bot spends no tokens and has no budget to
-    provision. Asking for one is a blocking HTTP call that puts the intake
-    form - the thing a learner reaches when something else is broken - behind
+    A scripted bot loading a prompt costs a LangSmith lookup on a cache miss
+    and buys nothing. A bot that calls the model cannot work without one.
+    """
+    mock_get_prompt = mocker.patch(
+        "ai_chatbots.chatbots.get_system_prompt", side_effect=lambda name, *_: name
+    )
+
+    scripted = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+    assert scripted.instructions is None
+    mock_get_prompt.assert_not_called()
+
+    answering = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, enable_account_tools=True
+    )
+
+    assert [call[0][0] for call in mock_get_prompt.call_args_list] == [
+        "support",
+        "support_account_tools",
+    ]
+    assert answering.instructions == "support\n\nsupport_account_tools"
+
+
+@pytest.mark.parametrize("answering", [False, True])
+@pytest.mark.asyncio
+async def test_support_bot_provisions_a_budget_only_when_it_answers(
+    settings, mocker, answering, mock_checkpointer
+):
+    """
+    create_proxy_user is a blocking HTTP call made during construction. A
+    scripted bot spends no tokens, so paying for it would put the intake form -
+    the thing a learner reaches when something else is already broken - behind
     the LLM proxy being up.
     """
     settings.AI_PROXY_CLASS = "LiteLLMProxy"
@@ -1754,11 +1782,13 @@ async def test_support_bot_does_not_provision_a_proxy_budget(
         "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
     )
 
-    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+    chatbot = await sync_to_async(SupportBot)(
+        "anonymous", mock_checkpointer, enable_account_tools=answering
+    )
 
-    mock_create_proxy_user.assert_not_called()
-    # The proxy itself still has to be configured: get_llm needs the prefix and
-    # api kwargs to build the graph this bot reads and writes state through.
+    assert mock_create_proxy_user.called is answering
+    # Either way the proxy is configured: get_llm needs the prefix and api
+    # kwargs to build the graph this bot reads and writes state through.
     assert isinstance(chatbot.proxy, LiteLLMProxy)
     assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
     assert chatbot.agent is not None
@@ -1791,20 +1821,6 @@ SUPPORT_PROBLEM = "The week 3 video just spins forever."
 
 def _support_state(email=""):
     return {"page_url": ["https://learn.mit.edu/week-3"], "user_email": [email]}
-
-
-@pytest.mark.asyncio
-async def test_support_bot_loads_no_system_prompt(mocker, mock_checkpointer):
-    """
-    No branch of get_completion calls the model, so loading a prompt buys
-    nothing and costs a LangSmith lookup on a cache miss.
-    """
-    mock_get_prompt = mocker.patch("ai_chatbots.chatbots.get_system_prompt")
-
-    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
-
-    assert chatbot.instructions is None
-    mock_get_prompt.assert_not_called()
 
 
 @pytest.mark.asyncio
