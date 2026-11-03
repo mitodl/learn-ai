@@ -1919,7 +1919,14 @@ class SupportBot(TruncatingChatbot):
         """
         handed_off = escalated or (prior_state.get("handed_off") or [False])[-1]
         answered_before = (prior_state.get("answered") or [False])[-1]
-        if self.answering_enabled and not handed_off:
+        # Intake is under way when a previous turn in this request produced a
+        # scripted reply rather than an answer. Both ways a request ends - a
+        # close-out and a cancel - already push cancelled_after past the whole
+        # thread, so each of them reopens answering without saying so here.
+        intake_started = not answered_before and len(
+            prior_state.get("messages") or []
+        ) > _cancelled_after(prior_state)
+        if self.answering_enabled and not handed_off and not intake_started:
             if answered_before and _closes_the_answer(message):
                 return SUPPORT_ANSWER_CLOSED, {
                     "answered": [False],
