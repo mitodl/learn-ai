@@ -8,6 +8,8 @@ from django.conf import settings
 from named_enum import ExtendedEnum
 
 HYBRID_SEARCH_FEATURE_FLAG = "bot_hybrid_search_enabled"
+# Gives signed-in learners tools that read their own enrollments and records
+ACCOUNT_TOOLS_FEATURE_FLAG = "bot_account_tools_enabled"
 # MIT Learn search filters a client can pin for a recommendation thread,
 # e.g. a channel page's topic. The search tool always applies them.
 RECOMMENDATION_SEARCH_FILTERS = (
@@ -83,6 +85,22 @@ ZENDESK_SUPPORT_INTAKE_TAG = "tim_support_intake"
 # Added when the requester address was asserted by the caller rather than taken
 # from an authenticated session, so support does not read it as confirmed.
 ZENDESK_UNVERIFIED_REQUESTER_TAG = "tim_unverified_requester"
+
+# The same warning in the body. The name and username fields look no different
+# when a learner typed them than when a session vouched for them, and an agent
+# about to act on the ticket reads the body rather than the tag list.
+ZENDESK_UNVERIFIED_REQUESTER_NOTE = (
+    "Note: nothing on this request confirmed the requester. Treat the email "
+    "address, and any name or username shown on this ticket, as unconfirmed."
+)
+
+# What the requester was on, derived from the User-Agent. A controlled
+# vocabulary, because tags are what agents filter views on; the verbatim user
+# agent goes in the ticket body for anything finer. Nothing is tagged when the
+# header is missing or ambiguous - a wrong device is worse than no device.
+ZENDESK_DEVICE_MOBILE_TAG = "tim_device_mobile"
+ZENDESK_DEVICE_TABLET_TAG = "tim_device_tablet"
+ZENDESK_DEVICE_DESKTOP_TAG = "tim_device_desktop"
 
 # Stands in for the learner's own words on an unverified ticket: a
 # received-request trigger puts the subject straight into an email to an address

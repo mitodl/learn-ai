@@ -35,7 +35,7 @@ from open_learning_ai_tutor.utils import (
 )
 from openai import BadRequestError
 
-from ai_chatbots import tools
+from ai_chatbots import learn_api, tools
 from ai_chatbots.admin import LLMModel
 from ai_chatbots.api import (
     DjangoCheckpoint,
@@ -54,7 +54,6 @@ from ai_chatbots.prompts import (
     SYSTEM_PROMPT_MAPPING,
 )
 from ai_chatbots.utils import (
-    async_request,
     comment_safe_json,
     get_azure_openai_kwargs,
     get_django_cache,
@@ -606,10 +605,14 @@ class SyllabusBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         enable_related_courses: bool | None = False,
+        enable_account_tools: bool = False,
         course_id: str | None = None,
         platform: str | None = None,
     ):
         self.enable_related_courses = enable_related_courses
+        # Only for a signed-in learner whose request carries their session;
+        # see SyllabusBotHttpConsumer.create_chatbot.
+        self.enable_account_tools = enable_account_tools
         super().__init__(
             user_id,
             name=name,
@@ -637,6 +640,11 @@ class SyllabusBot(TruncatingChatbot):
                 "tool for questions about how MIT platforms work rather than "
                 "about these courses."
             )
+        if self.enable_account_tools and self.instructions:
+            account_prompt = get_system_prompt(
+                "syllabus_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
+            )
+            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -645,6 +653,8 @@ class SyllabusBot(TruncatingChatbot):
         if self.enable_related_courses:
             bot_tools.append(tools.search_related_course_content_files)
         bot_tools.append(tools.search_support_articles)
+        if self.enable_account_tools:
+            bot_tools.extend(tools.ACCOUNT_TOOLS)
         return bot_tools
 
     async def get_tool_metadata(self) -> str:
@@ -876,14 +886,7 @@ async def get_problem_from_edx_block(
         problem_set: The problem set xml
     """
 
-    api_url = settings.AI_MIT_CONTENTFILE_URL
-    params = {"edx_module_id": block_siblings}
-
-    response = await async_request(
-        api_url, params, timeout=10, include_learn_token=True
-    )
-
-    response = response.json()
+    response = {"results": await learn_api.contentfiles(block_siblings, timeout=10)}
 
     problem = get_matching_content(response, edx_module_id)
 
@@ -909,10 +912,9 @@ async def get_canvas_problem_set(
         problem_set: The problem set xml
     """
 
-    api_url = f"{settings.PROBLEM_SET_URL}{run_readable_id}/{problem_set_title}/"
-
-    response = await async_request(api_url, {}, timeout=10, include_learn_token=True)
-    response = response.json()
+    response = await learn_api.problem_set(
+        run_readable_id, problem_set_title, timeout=10
+    )
 
     return {
         key: value
@@ -1485,6 +1487,7 @@ class SupportBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        user_agent: str = "",
     ):
         super().__init__(
             user_id,
@@ -1495,6 +1498,9 @@ class SupportBot(TruncatingChatbot):
             instructions=instructions,
             thread_id=thread_id,
         )
+        # Not graph state: the turn that files is itself a request, so this is
+        # the live header rather than something accumulated over the thread.
+        self.user_agent = user_agent
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -1694,6 +1700,7 @@ class SupportBot(TruncatingChatbot):
                 "email": email,
                 "name": _accumulated(prior_state, extra_state, "user_name"),
                 "username": _accumulated(prior_state, extra_state, "user_username"),
+                "user_agent": self.user_agent,
                 # Only this request's session can vouch for the address. Reading
                 # the thread's accumulated verifications would let any later turn
                 # inherit a sign-in it never presented.

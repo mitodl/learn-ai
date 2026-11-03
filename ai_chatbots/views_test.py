@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.exceptions import ErrorDetail
 from rest_framework.test import APIClient
 
+from ai_chatbots import learn_api
 from ai_chatbots.constants import AI_SESSION_COOKIE_KEY, AI_THREADS_ANONYMOUS_COOKIE_KEY
 from ai_chatbots.factories import (
     ChatResponseRatingFactory,
@@ -377,12 +378,31 @@ def test_get_transcript_block_id():
     assert get_transcript_block_id(contentfile) == expected_block_id
 
 
+def test_get_transcript_block_id_view(mocker, client):
+    """The view returns the transcript block id of the matching contentfile."""
+    edx_module_id = "block-v1:UAI_B2C+UAI.1+1T2026+type@video+block@bcaf9b394ff141459c2dae7ccac0efde"
+    contentfiles = mocker.patch(
+        "ai_chatbots.learn_api.contentfiles",
+        return_value=[{"edx_module_id": edx_module_id, "url": "x", "content": ""}],
+    )
+    expected = mocker.patch(
+        "ai_chatbots.views.get_transcript_block_id", return_value="asset-1"
+    )
+
+    response = client.get(
+        "/api/v0/get_transcript_edx_module_id/", {"edx_module_id": edx_module_id}
+    )
+
+    contentfiles.assert_called_once_with([edx_module_id])
+    expected.assert_called_once()
+    assert response.status_code == 200
+    assert response.json() == {"transcript_block_id": "asset-1"}
+
+
 def test_get_transcript_block_id_view_no_contentfile(mocker, client):
     """The view should return a clean 404 error when no matching contentfile is found"""
-    mock_response = mocker.Mock()
     mock_log = mocker.patch("ai_chatbots.views.log.error")
-    mock_response.json.return_value = {"results": []}
-    mocker.patch("ai_chatbots.views.requests.get", return_value=mock_response)
+    mocker.patch("ai_chatbots.learn_api.contentfiles", return_value=[])
 
     edx_module_id = "block-v1:UAI_B2C+UAI.1+1T2026+type@video+block@bcaf9b394ff141459c2dae7ccac0efde"
     response = client.get(
@@ -395,6 +415,49 @@ def test_get_transcript_block_id_view_no_contentfile(mocker, client):
     mock_log.assert_called_once_with(
         "No contentfile found for edx_module_id %s", edx_module_id
     )
+
+
+def test_get_transcript_block_id_view_learn_error(mocker, client):
+    """A Learn failure is a 500 with a generic message."""
+    mocker.patch(
+        "ai_chatbots.learn_api.contentfiles",
+        side_effect=learn_api.LearnError("502", "https://mit.edu", {}),
+    )
+
+    response = client.get(
+        "/api/v0/get_transcript_edx_module_id/", {"edx_module_id": "block-1"}
+    )
+
+    assert response.status_code == 500
+
+
+def test_problem_set_list_view(mocker, client):
+    """The view passes the run's problem sets through from Learn."""
+    body = {"problem_sets": [{"title": "PS1"}]}
+    problem_set = mocker.patch("ai_chatbots.learn_api.problem_set", return_value=body)
+
+    response = client.get(
+        "/api/v0/problem_set_list/", {"run_readable_id": "course-v1:MITxT+1"}
+    )
+
+    problem_set.assert_called_once_with("course-v1:MITxT+1")
+    assert response.status_code == 200
+    assert response.json() == body
+
+
+def test_problem_set_list_view_learn_error(mocker, client):
+    """A Learn failure is a 500 with a generic message."""
+    mocker.patch(
+        "ai_chatbots.learn_api.problem_set",
+        side_effect=learn_api.LearnError("502", "https://mit.edu", {}),
+    )
+
+    response = client.get(
+        "/api/v0/problem_set_list/", {"run_readable_id": "course-v1:MITxT+1"}
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"error": "Something went wrong"}
 
 
 def test_list_all_prompts(client):

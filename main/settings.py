@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "2026.10.27.1"
+VERSION = "2026.10.29.1"
 
 log = logging.getLogger()
 
@@ -242,8 +242,6 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "social_django.context_processors.backends",
-                "social_django.context_processors.login_redirect",
             ]
         },
     }
@@ -677,6 +675,26 @@ LOGIN_REDIRECT_ALLOWED_HOSTS = get_list_of_str(
 LOGIN_REDIRECT_REQUIRE_HTTPS = get_bool(
     name="LOGIN_REDIRECT_REQUIRE_HTTPS", default=True
 )
+# Learner records, read with the learner's own forwarded session cookies.
+# See ai_chatbots/learner_api.py. Each cookie is only ever sent to its own host.
+# The cookie names default to none, so no session is read until a deployment
+# names its own: production's .learn.mit.edu cookie also reaches RC and CI hosts.
+LEARNER_API_LEARN_BASE_URL = get_string(
+    name="LEARNER_API_LEARN_BASE_URL", default="https://api.learn.mit.edu/"
+)
+LEARNER_API_LEARN_COOKIE_NAME = get_string(
+    name="LEARNER_API_LEARN_COOKIE_NAME", default=""
+)
+LEARNER_API_OPENEDX_BASE_URL = get_string(
+    name="LEARNER_API_OPENEDX_BASE_URL", default="https://courses.learn.mit.edu/"
+)
+LEARNER_API_OPENEDX_COOKIE_NAME = get_string(
+    name="LEARNER_API_OPENEDX_COOKIE_NAME", default=""
+)
+# Where MITx Online's own pages (certificates) are, to make their links absolute
+LEARNER_API_MITXONLINE_BASE_URL = get_string(
+    name="LEARNER_API_MITXONLINE_BASE_URL", default="https://mitxonline.mit.edu/"
+)
 # Search summary threads that never got a follow-up are deleted after this many days
 AI_SEARCH_SUMMARY_EXPIRY_DAYS = get_int(name="AI_SEARCH_SUMMARY_EXPIRY_DAYS", default=7)
 # AI search settings
@@ -746,8 +764,9 @@ AI_ZENDESK_OAUTH_CLIENT_SECRET = get_string(
 AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
 # Custom ticket field ids, from Admin Center > Objects and rules > Tickets >
 # Fields. Minted per Zendesk instance, so they are configured rather than
-# hardcoded. 0 means unconfigured and the value is left off the ticket: Zendesk
-# rejects a whole ticket for a field id it does not recognise.
+# hardcoded. 0 means unconfigured and the value is left off the ticket. Never
+# guess or copy an id between instances: Zendesk drops one it does not
+# recognise silently and files the ticket anyway, so a wrong id looks fine.
 AI_ZENDESK_URL_FIELD_ID = get_int(name="AI_ZENDESK_URL_FIELD_ID", default=0)
 AI_ZENDESK_NAME_FIELD_ID = get_int(name="AI_ZENDESK_NAME_FIELD_ID", default=0)
 AI_ZENDESK_USERNAME_FIELD_ID = get_int(name="AI_ZENDESK_USERNAME_FIELD_ID", default=0)

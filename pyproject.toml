@@ -1,6 +1,6 @@
 [project]
 name = "learn-ai"
-version = "2026.10.27.1"
+version = "2026.10.29.1"
 description = "AI applications for MIT Open Learning."
 authors = [{ name = "MIT ODL" }]
 requires-python = ">=3.14,<3.15"
@@ -44,7 +44,7 @@ dependencies = [
     "litellm>=1.53.5,<2",
     "markdown2>=2.5.2,<3",
     "mitol-django-observability>=2026.8.19",
-    "setuptools<84",
+    "setuptools<85",
     "named-enum>=1.4.0,<2",
     "opentelemetry-instrumentation-asgi>=0.52b0",
     "opentelemetry-instrumentation-celery>=0.52b0",
@@ -60,8 +60,6 @@ dependencies = [
     "requests>=2.31.0,<3",
     "ruff==0.17.0",
     "sentry-sdk[django, langgraph]>=2.37.1,<3",
-    "social-auth-app-django>=6.0.0,<7",
-    "social-auth-core>=5.0.2,<6",
     "starlette==1.8.0",
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
@@ -232,7 +230,7 @@ inline-quotes = "double"
 "**/migrations/**" = ["ARG001"]
 
 [tool.bumpversion]
-current_version = "2026.10.27.1"
+current_version = "2026.10.29.1"
 commit = false
 tag = false
 parse = "(?P<release>(?:[1-9][0-9]{3})\\.(?:1[0-2]|[1-9])\\.(?:3[0-1]|[12][0-9]|[1-9]))\\.(?P<build>\\d+)"

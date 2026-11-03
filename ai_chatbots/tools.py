@@ -1,19 +1,22 @@
 """Tools and schemas for AI agents"""
 
+import asyncio
 import json
 import logging
+import re
+from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urljoin
 
 import pydantic
-from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
 from django.conf import settings
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from pydantic import Field
 
+from ai_chatbots import learn_api, learner_api
 from ai_chatbots.constants import (
-    HYBRID_SEARCH_FEATURE_FLAG,
     UAI_READABLE_ID_REGEX,
     ZENDESK_ARTICLE_SEARCH_PATH,
     ZENDESK_PLATFORM_CATEGORY_IDS,
@@ -22,18 +25,48 @@ from ai_chatbots.constants import (
     OfferedBy,
 )
 from ai_chatbots.utils import async_request, enum_zip, get_django_cache
-from main.features import is_enabled as feature_is_enabled
 
 log = logging.getLogger(__name__)
 
 # Cache key prefix for the platform a course is offered on
 COURSE_PLATFORM_CACHE_PREFIX = "course_platform_"
 
+# Learn's platform code for MITx Online, the only platform the tools can read
+MITXONLINE_PLATFORM = "mitxonline"
 
-async def _is_hybrid_search_enabled() -> bool:
-    """Check if the hybrid search feature flag is enabled."""
-    return await sync_to_async(feature_is_enabled)(
-        HYBRID_SEARCH_FEATURE_FLAG, default=False
+# What the LLM sees when a Learn-backed tool fails
+LEARN_ERROR_ENVELOPE = json.dumps(
+    {"error": "An error occurred while querying MIT Learn"}
+)
+
+
+def _search_error_envelope(error: Exception, **extra) -> str:
+    """
+    Serialize a failed search.  It keeps the url and parameters when the Learn
+    client raised, so a failed search is distinguishable from one that ran and
+    found nothing.
+    """
+    return json.dumps(
+        {
+            "error": "An error occurred while searching",
+            "results": [],
+            **extra,
+            "metadata": {
+                "search_url": getattr(error, "url", None),
+                "parameters": getattr(error, "params", None),
+            },
+        }
+    )
+
+
+def _envelope(result: learn_api.SearchResult, shaped: list[dict], **extra) -> str:
+    """Serialize shaped search results plus what was searched, for the LLM."""
+    return json.dumps(
+        {
+            "results": shaped,
+            "metadata": {"search_url": result.url, "parameters": result.params},
+            **extra,
+        }
     )
 
 
@@ -147,38 +180,21 @@ async def search_courses(
     Query the MIT API for learning resources, and
     return simplified results as a JSON string
     """
-    params = {"q": q, "limit": settings.AI_MIT_SEARCH_LIMIT}
-
-    valid_params = {
+    filters = {
         "resource_type": [rt.name for rt in (kwargs.get("resource_type") or [])]
         or None,
         "free": kwargs.get("free"),
         "offered_by": [o.name for o in (kwargs.get("offered_by") or [])] or None,
         "certification": kwargs.get("certification"),
     }
-    if await _is_hybrid_search_enabled():
-        valid_params["hybrid_search"] = True
-
-    params.update({k: v for k, v in valid_params.items() if v is not None})
+    filters = {k: v for k, v in filters.items() if v is not None}
     # Filters pinned by the client (e.g. a channel page) replace any the agent
     # chose for the same field, so results can't fall outside them.
     search_filters = (state or {}).get("search_filters") or []
     if search_filters:
-        params.update(search_filters[-1])
-    search_url = settings.AI_MIT_SEARCH_URL
-    log.debug("Searching MIT resources API at %s with params: %s", search_url, params)
+        filters.update(search_filters[-1])
     try:
-        response = await async_request(
-            search_url,
-            params,
-            timeout=settings.REQUESTS_TIMEOUT,
-            include_learn_token=True,
-        )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Ignore any results over the maximum limit
-        raw_results = raw_results[: settings.AI_MIT_SEARCH_LIMIT]
-        # Simplify the response to only include the main properties
+        result = await learn_api.search_learning_resources(q, filters)
         main_properties = [
             "title",
             "id",
@@ -189,42 +205,28 @@ async def search_courses(
             "certification",
             "resource_type",
         ]
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {k: result.get(k) for k in main_properties}
-            simplified_result["url"] = (
-                f"{settings.AI_MIT_SEARCH_DETAIL_URL}{result.pop('id')}"
-            )
+        shaped = []
+        for row in result.results:
+            simplified = {k: row.get(k) for k in main_properties}
+            simplified["url"] = f"{settings.AI_MIT_SEARCH_DETAIL_URL}{row.get('id')}"
             # Instructors and level will be in the runs data if present
-            next_date = result.get("next_start_date", None)
-            raw_runs = result.get("runs", [])
+            next_date = row.get("next_start_date")
+            raw_runs = row.get("runs", [])
             best_run = None
             if next_date:
-                runs = [run for run in raw_runs if run["start_date"] == next_date]
+                runs = [run for run in raw_runs if run.get("start_date") == next_date]
                 if runs:
                     best_run = runs[0]
             elif raw_runs:
                 best_run = raw_runs[-1]
             if best_run:
                 for attribute in ("level", "instructors"):
-                    simplified_result[attribute] = best_run.get(attribute, [])
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"search_url": search_url, "parameters": params},
-        }
-        return json.dumps(full_output)
-    except Exception:
+                    simplified[attribute] = best_run.get(attribute, [])
+            shaped.append(simplified)
+        return _envelope(result, shaped)
+    except Exception as error:
         log.exception("Error querying MIT API")
-        # keep the url and parameters, so a failed search is distinguishable
-        # from one that ran and found nothing
-        return json.dumps(
-            {
-                "error": "An error occurred while searching",
-                "results": [],
-                "metadata": {"search_url": search_url, "parameters": params},
-            }
-        )
+        return _search_error_envelope(error)
 
 
 class SearchContentFilesToolSchema(pydantic.BaseModel):
@@ -283,62 +285,98 @@ class VideoGPTToolSchema(pydantic.BaseModel):
     )
 
 
-async def _content_file_search(url, params, *, exclude_canvas=True):
-    try:
-        # Convert the exclude_canvas parameter to a boolean if it is a string
-        if exclude_canvas and exclude_canvas == "False":
-            exclude_canvas = False
-        if await _is_hybrid_search_enabled():
-            params["hybrid_search"] = True
+WITHHELD_LINKS_NOTE = (
+    "Results with a null id have no url. Answer from them as usual, but never "
+    "write about links, urls or downloads for them: no links, no placeholder "
+    "links, and no remark that a link is unavailable, missing or not provided. "
+    "If the user asks for a link to one of them, answer without commenting on "
+    "links."
+)
 
-        response = await async_request(
-            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
+
+async def _enrolled_runs() -> set[str]:
+    """
+    Get the MITx Online runs the signed-in learner is enrolled in, read with
+    their own session. Empty with no session or if the records can't be read.
+    """
+    if not learner_api.has_learner_session():
+        return set()
+    runs = set()
+    try:
+        for enrollment in await learner_api.get_enrollments():
+            run = enrollment.get("run") if isinstance(enrollment, dict) else None
+            run_id = run.get("courseware_id") if isinstance(run, dict) else None
+            if run_id and isinstance(run_id, str):
+                runs.add(run_id)
+    except Exception:  # noqa: BLE001
+        log.warning("Couldn't read the learner's enrollments to check course links")
+        return set()
+    return runs
+
+
+async def _content_file_search(
+    q: str,
+    readable_ids: str | list[str],
+    *,
+    collection_name: str | None,
+    exclude_canvas: str = "True",
+    platform: str | None = None,
+) -> str:
+    """Search content files and shape chunks + citations for the LLM."""
+    try:
+        result = await learn_api.search_content_files(
+            q, readable_ids, collection_name=collection_name, platform=platform
         )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
+        # Consumers store the flag as a string, evaluation sets as a bool
+        exclude = str(exclude_canvas) != "False"
+        shaped = []
         citations = {}
-        for result in raw_results:
-            platform = result.get("platform", {}).get("code")
+        enrolled_runs = None
+        links_withheld = False
+        for chunk in result.results:
+            platform = chunk.get("platform", {}).get("code")
             # Currently, canvas contentfiles have blank platform values,
             # those from other sources do not.
-            if exclude_canvas and (not platform or platform == "canvas"):
+            if exclude and (not platform or platform == "canvas"):
                 continue
             # the citation url is what identifies a citation; resource_point_id
             # is shared by every chunk of every file in a course, so keying on
             # it collapsed every citation onto whichever result came back first
-            citation_key = result.get("url")
-            simplified_result = {
-                "id": citation_key,
-                "chunk_content": result.get("chunk_content"),
-                "run_title": result.get("run_title"),
-            }
-            simplified_results.append(simplified_result)
+            citation_key = chunk.get("url")
+            # Link a file from an Open edX course (it has an edx_module_id;
+            # Canvas files do too, but stay in Canvas) only for learners
+            # enrolled in its run, since most of them open only for enrolled
+            # learners. Only MITx Online enrollments can be checked.
+            is_course_material = (
+                chunk.get("edx_module_id") and platform and platform != "canvas"
+            )
+            if citation_key and is_course_material:
+                if platform == MITXONLINE_PLATFORM and enrolled_runs is None:
+                    enrolled_runs = await _enrolled_runs()
+                if (
+                    platform != MITXONLINE_PLATFORM
+                    or chunk.get("run_readable_id") not in enrolled_runs
+                ):
+                    citation_key = None
+                    links_withheld = True
+            shaped.append(
+                {
+                    "id": citation_key,
+                    "chunk_content": chunk.get("chunk_content"),
+                    "run_title": chunk.get("run_title"),
+                }
+            )
             if citation_key and not citations.get(citation_key):
                 citations[citation_key] = {
-                    "citation_url": result.get("url"),
-                    "citation_title": result.get("title")
-                    or result.get("content_title"),
+                    "citation_url": chunk.get("url"),
+                    "citation_title": chunk.get("title") or chunk.get("content_title"),
                 }
-        full_output = {
-            "results": simplified_results,
-            "citation_sources": citations,
-            "metadata": {"search_url": url, "parameters": params},
-        }
-        return json.dumps(full_output)
-    except Exception:
+        # Otherwise the model offers the files anyway, with links to "#"
+        note = {"note": WITHHELD_LINKS_NOTE} if links_withheld else {}
+        return _envelope(result, shaped, citation_sources=citations, **note)
+    except Exception as error:
         log.exception("Error querying MIT API")
-        # keep the url and parameters, so a failed search is distinguishable
-        # from one that ran and found nothing
-        return json.dumps(
-            {
-                "error": "An error occurred while searching",
-                "results": [],
-                "citation_sources": {},
-                "metadata": {"search_url": url, "parameters": params},
-            }
-        )
+        return _search_error_envelope(error, citation_sources={})
 
 
 @tool(args_schema=SearchContentFilesToolSchema)
@@ -353,24 +391,15 @@ async def search_content_files(
     its enrollment and payment deadlines.  Use this first for any question that
     could be specific to this resource.
     """
-
-    url = settings.AI_MIT_SYLLABUS_URL
-    course_id = state.get("course_id", [None])[-1] or readable_id
-    collection_name = state.get("collection_name", [None])[-1]
-    exclude_canvas = state.get("exclude_canvas", ["True"])[-1]
-    platform = (state.get("platform") or [None])[-1]
-    params = {
-        "q": q,
-        "resource_readable_id": course_id,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
-    }
-    if collection_name:
-        params["collection_name"] = collection_name
-    if platform:
+    return await _content_file_search(
+        q,
+        state.get("course_id", [None])[-1] or readable_id,
+        collection_name=state.get("collection_name", [None])[-1],
+        exclude_canvas=state.get("exclude_canvas", ["True"])[-1],
         # A readable id can match resources on two platforms; scope the search
         # to the one the request named so the other one's content can't answer.
-        params["platform"] = [platform]
-    return await _content_file_search(url, params, exclude_canvas=exclude_canvas)
+        platform=(state.get("platform") or [None])[-1],
+    )
 
 
 @tool(args_schema=SearchRelatedCourseContentFilesToolSchema)
@@ -383,18 +412,11 @@ async def search_related_course_content_files(
     other courses in the program, or when the current course search does not
     return sufficient results.
     """
-    url = settings.AI_MIT_SYLLABUS_URL
-    collection_name = state.get("collection_name", [None])[-1]
-    related_courses = state["related_courses"]
-    params = {
-        "q": q,
-        "resource_readable_id": related_courses,
-        "limit": settings.AI_MIT_CONTENT_SEARCH_LIMIT,
-    }
-    if collection_name:
-        params["collection_name"] = collection_name
     return await _content_file_search(
-        url, params, exclude_canvas=state.get("exclude_canvas", ["True"])[-1]
+        q,
+        state["related_courses"],
+        collection_name=state.get("collection_name", [None])[-1],
+        exclude_canvas=state.get("exclude_canvas", ["True"])[-1],
     )
 
 
@@ -405,39 +427,13 @@ async def get_video_transcript_chunk(
     """
     Query the MIT video transcript API, and return results as a JSON string.
     """
-
-    url = settings.AI_MIT_VIDEO_TRANSCRIPT_URL
-
-    transcript_asset_id = state["transcript_asset_id"][-1]
-    params = {
-        "q": q,
-        "edx_module_id": transcript_asset_id,
-        "limit": settings.AI_MIT_TRANSCRIPT_SEARCH_LIMIT,
-    }
-
-    log.debug("Searching MIT API with params: %s", params)
     try:
-        response = await async_request(
-            url, params, timeout=settings.REQUESTS_TIMEOUT, include_learn_token=True
-        )
-        response.raise_for_status()
-        raw_results = response.json().get("results", [])
-        # Simplify the response to only include the main properties
-        simplified_results = []
-        for result in raw_results:
-            simplified_result = {
-                "chunk_content": result.get("chunk_content"),
-            }
-            simplified_results.append(simplified_result)
-        full_output = {
-            "results": simplified_results,
-            "metadata": {"search_url": url, "parameters": params},
-        }
-
-        return json.dumps(full_output)
+        result = await learn_api.search_transcript(q, state["transcript_asset_id"][-1])
+        shaped = [{"chunk_content": r.get("chunk_content")} for r in result.results]
+        return _envelope(result, shaped)
     except Exception:
         log.exception("Error querying MIT API for transcripts")
-        return json.dumps({"error": "An error occurred while getting the transcript"})
+        return LEARN_ERROR_ENVELOPE
 
 
 class SearchSupportArticlesToolSchema(pydantic.BaseModel):
@@ -529,19 +525,7 @@ async def _get_course_platform(readable_id: str) -> str | None:
         # Failed and empty lookups are cached as an empty string
         return cached_platform or None
     try:
-        response = await async_request(
-            settings.AI_MIT_LEARNING_RESOURCES_URL,
-            {"readable_id": readable_id, "limit": 5},
-            # A cheap metadata lookup, not a search, and every support search
-            # waits on it, so it gets a tighter timeout than the default.
-            timeout=settings.AI_COURSE_PLATFORM_LOOKUP_TIMEOUT,
-            # Courses are public, so the lookup still works without a token.
-            # httpx rejects an empty bearer header outright, so only send one
-            # when a token is actually configured.
-            include_learn_token=bool(settings.LEARN_ACCESS_TOKEN),
-        )
-        response.raise_for_status()
-        results = response.json().get("results", [])
+        results = await learn_api.learning_resources(readable_id)
         codes = {(r.get("platform") or {}).get("code") for r in results} - {None}
         # A readable id can match resources on two platforms.  Picking one of
         # them scopes the support search to the wrong help center section, so
@@ -686,3 +670,453 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
             "platform": platform,
         },
     )
+
+
+# Account tools: read the signed-in learner's own records with learner_api.
+# The learner's session comes from the request (see learner_api), never from
+# tool arguments or state, and only the fields an answer needs reach the model.
+
+COULD_NOT_CHECK = (
+    "The learner's records could not be checked right now. Tell them you "
+    "couldn't check, and never conclude they have no enrollment, grade or "
+    "certificate."
+)
+DIGITAL_CREDENTIAL_ISSUED = "issued"
+DIGITAL_CREDENTIAL_NOT_CONFIRMED = "not_confirmed"
+
+
+class AccountToolSchema(pydantic.BaseModel):
+    """Schema for tools that read the signed-in learner's own records."""
+
+    state: Annotated[dict, InjectedState] = Field(
+        description="The agent state, which includes the course_id of the page."
+    )
+
+
+def _parse_date(value: str | None) -> datetime | None:
+    """Parse an ISO date from the APIs as aware UTC, or None."""
+    try:
+        parsed = datetime.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+    # A date with no offset can't be compared with an aware "now"
+    if parsed and parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _run_status(run: dict, now: datetime) -> str:
+    """Say whether a course run is upcoming, in progress or ended."""
+    start, end = _parse_date(run.get("start_date")), _parse_date(run.get("end_date"))
+    if start and start > now:
+        return "upcoming"
+    if end and end < now:
+        return "ended"
+    return "in progress"
+
+
+def _course_tab_url(run: dict, tab: str) -> str | None:
+    """Link to a tab (progress, dates) of the run's course, if it can be built."""
+    url = run.get("courseware_url")
+    if url and re.search(r"/home/?$", url):
+        return re.sub(r"/home/?$", f"/{tab}", url)
+    return None
+
+
+def _certificate_url(certificate) -> str | None:
+    """Make a MITx Online certificate's link (a path) absolute."""
+    link = certificate.get("link") if isinstance(certificate, dict) else None
+    return urljoin(settings.LEARNER_API_MITXONLINE_BASE_URL, link) if link else None
+
+
+def _certificate_uuid(certificate) -> str | None:
+    """Return a MITx Online certificate's uuid, used to look up its credential."""
+    return certificate.get("uuid") if isinstance(certificate, dict) else None
+
+
+def _enrollment_summary(enrollment: dict, now: datetime) -> dict:
+    """Keep the parts of a MITx Online enrollment that an answer needs."""
+    run = enrollment.get("run") or {}
+    course = run.get("course") or {}
+    grades = enrollment.get("grades") or []
+    grade = grades[0] if grades else None
+    # grade_percent reads 0 when no grade is recorded, so it's only used
+    # alongside a recorded grade (a 0-1 fraction).
+    if grade and grade.get("grade") is None:
+        grade = None
+    certificate = enrollment.get("certificate")
+    return {
+        "course_title": course.get("title") or run.get("title"),
+        "course_id": course.get("readable_id"),
+        "run_id": run.get("courseware_id"),
+        "start_date": run.get("start_date"),
+        "end_date": run.get("end_date"),
+        "status": _run_status(run, now),
+        "self_paced": run.get("is_self_paced"),
+        "enrollment_mode": enrollment.get("enrollment_mode"),
+        "grade": {
+            "percent": grade.get("grade_percent"),
+            "letter": grade.get("letter_grade"),
+            "passed": grade.get("passed"),
+        }
+        if grade
+        else None,
+        "certificate_earned": bool(certificate),
+        "certificate_url": _certificate_url(certificate),
+        "certificate_uuid": _certificate_uuid(certificate),
+        "course_url": run.get("courseware_url"),
+        "progress_url": _course_tab_url(run, "progress"),
+        "dates_url": _course_tab_url(run, "dates"),
+    }
+
+
+def _current_runs(
+    summaries: list[dict], *, prefer_certificate: bool = False
+) -> list[dict]:
+    """
+    Keep one enrollment per course: the run in progress, else the latest. With
+    prefer_certificate, a run that earned a certificate wins, so a newer run
+    doesn't hide a certificate from an earlier one.
+    """
+    order = {"in progress": 2, "upcoming": 1, "ended": 0}
+
+    def rank(summary):
+        return (
+            prefer_certificate and summary["certificate_earned"],
+            order[summary["status"]],
+            _parse_date(summary["start_date"]) or datetime.min.replace(tzinfo=UTC),
+        )
+
+    best: dict[str, dict] = {}
+    for summary in summaries:
+        key = summary["course_id"] or summary["run_id"]
+        if key not in best or rank(summary) > rank(best[key]):
+            best[key] = summary
+    return list(best.values())
+
+
+async def _summaries() -> list[dict]:
+    """
+    Get a summary of each of the learner's MITx Online enrollments.
+
+    Raises:
+        learner_api.LearnerAPIError: if the records can't be read
+    """
+    now = datetime.now(tz=UTC)
+    return [
+        _enrollment_summary(enrollment, now)
+        for enrollment in await learner_api.get_enrollments()
+    ]
+
+
+async def _page_course_enrollments(
+    state: dict, *, prefer_certificate: bool = False
+) -> dict:
+    """
+    Get the learner's enrollment in the course of the page they are chatting
+    from. Its course_id is MITx Online's readable id, so it's compared exactly:
+    a loose match could answer about a different course.
+
+    Raises:
+        learner_api.LearnerAPIError: if the records can't be read
+    """
+    state = state or {}
+    page_course = (state.get("course_id") or [None])[-1]
+    platform = (state.get("platform") or [None])[-1]
+    if not page_course:
+        return {
+            "enrollments": [],
+            "note": "There is no course on this page to check the records of.",
+        }
+    not_on_mitxonline = {
+        "enrollments": [],
+        "note": (
+            "The course on this page isn't on MITx Online, so the "
+            "learner's records for it can't be checked here."
+        ),
+    }
+    if platform and platform != MITXONLINE_PLATFORM:
+        return not_on_mitxonline
+    matches = _current_runs(
+        [
+            summary
+            for summary in await _summaries()
+            if page_course in (summary["course_id"], summary["run_id"])
+        ],
+        prefer_certificate=prefer_certificate,
+    )
+    if not matches:
+        return {
+            "enrollments": [],
+            "note": (
+                "The learner has no MITx Online enrollment in the course on this "
+                "page. Don't answer from their other courses."
+            ),
+        }
+    if not platform:
+        # A readable id can be shared by courses on two platforms, so without
+        # one the MITx Online records could be another platform's course. The
+        # catalog only knows courses, so look up the course, not the run.
+        platform = await _get_course_platform(matches[0]["course_id"])
+        if platform is None:
+            return {
+                "enrollments": [],
+                "note": (
+                    "It isn't clear which platform the course on this page is "
+                    "on, so the learner's records for it can't be checked "
+                    "here."
+                ),
+            }
+        if platform != MITXONLINE_PLATFORM:
+            return not_on_mitxonline
+    return {"enrollments": matches, "course_on_page": page_course}
+
+
+def _could_not_check(operation: str) -> str:
+    """Report a failed lookup without suggesting the learner has no records."""
+    log.warning("Account tool %s couldn't read the learner's records", operation)
+    return json.dumps({"error": COULD_NOT_CHECK})
+
+
+def _only(summaries: list[dict], *fields: str) -> list[dict]:
+    """Keep the named fields, plus what identifies the course."""
+    keep = ("course_title", "course_id", "run_id", *fields)
+    return [{field: summary[field] for field in keep} for summary in summaries]
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_enrollments(
+    state: Annotated[dict, InjectedState],  # noqa: ARG001
+):
+    """
+    Get the courses the signed-in learner is enrolled in on MITx Online: each
+    course run's dates, whether it is upcoming, in progress or ended, and the
+    enrollment mode (audit or verified). Use it for "what am I enrolled in",
+    "when does my course start" or "am I enrolled in X". It returns all of the
+    learner's courses, not just the one on this page.
+    """
+    try:
+        result = {"enrollments": _current_runs(await _summaries())}
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_enrollments")
+    result["enrollments"] = _only(
+        result["enrollments"],
+        "start_date",
+        "end_date",
+        "status",
+        "self_paced",
+        "enrollment_mode",
+        "course_url",
+    )
+    return json.dumps(result)
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_course_progress(state: Annotated[dict, InjectedState]):
+    """
+    Get the signed-in learner's current grade in a course (percent, letter and
+    whether it is passing) and a link to the course's Progress tab, where they
+    can see their progress assignment by assignment. Only for the course of the
+    page they are chatting from.
+    """
+    try:
+        result = await _page_course_enrollments(state)
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_course_progress")
+    result["enrollments"] = _only(
+        result["enrollments"], "status", "grade", "progress_url"
+    )
+    # Small models read a 0% grade as "nothing completed"; say it isn't.
+    result["completion"] = (
+        "Not available. The grade doesn't show how much of the course or how "
+        "many assignments the learner has completed; link progress_url for that."
+    )
+    return json.dumps(result)
+
+
+# Enough for "what's due next"; the Dates tab lists the rest
+MAX_DUE_DATES = 10
+
+
+async def _upcoming_due_dates(run_id: str, now: datetime) -> dict:
+    """
+    Get the learner's next due dates in a run from its Open edX Dates tab, or
+    say they couldn't be checked. Without the Open edX settings there is no
+    lookup, and the Dates tab link is all the learner gets.
+    """
+    if not (
+        settings.LEARNER_API_OPENEDX_BASE_URL
+        and settings.LEARNER_API_OPENEDX_COOKIE_NAME
+    ):
+        return {}
+    try:
+        dates = await learner_api.get_course_dates(run_id)
+    except Exception:  # noqa: BLE001
+        log.warning("Account tool get_upcoming_assignments couldn't read due dates")
+        return {"due_dates_note": "The due dates couldn't be checked."}
+    upcoming = sorted(
+        (
+            (due, block)
+            for block in dates.get("course_date_blocks") or []
+            if block.get("date_type") == "assignment-due-date"
+            and (due := _parse_date(block.get("date")))
+            and due > now
+        ),
+        key=lambda item: item[0],
+    )
+    return {
+        "upcoming_due_dates": [
+            {
+                "title": block.get("title"),
+                "assignment_type": block.get("assignment_type"),
+                "due": due.isoformat(),
+                "complete": block.get("complete"),
+                "learner_has_access": block.get("learner_has_access"),
+                "link": block.get("link"),
+            }
+            for due, block in upcoming[:MAX_DUE_DATES]
+        ],
+        "more_due_dates": max(len(upcoming) - MAX_DUE_DATES, 0),
+    }
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_upcoming_assignments(state: Annotated[dict, InjectedState]):
+    """
+    Get the signed-in learner's upcoming assignment due dates in their run of
+    the course on this page, soonest first, with the run's start and end dates
+    and a link to its Dates tab. Only the next few due dates are listed;
+    more_due_dates counts the rest, which the Dates tab shows. With no
+    upcoming_due_dates, or a due_dates_note saying they couldn't be checked,
+    send the learner to the Dates tab.
+    """
+    try:
+        result = await _page_course_enrollments(state)
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_upcoming_assignments")
+    now = datetime.now(UTC)
+    due_dates = await asyncio.gather(
+        *(_upcoming_due_dates(e["run_id"], now) for e in result["enrollments"])
+    )
+    result["enrollments"] = [
+        {**summary, **dates}
+        for summary, dates in zip(
+            _only(
+                result["enrollments"], "start_date", "end_date", "status", "dates_url"
+            ),
+            due_dates,
+        )
+    ]
+    return json.dumps(result)
+
+
+def _program_certificate_summary(certificate: dict) -> dict:
+    """Keep a program certificate's title, date and link; drop personal data."""
+    return {
+        "program_title": certificate.get("program_title"),
+        "completed_on": certificate.get("program_completion_timestamp"),
+        "certificate_url": certificate.get("program_letter_share_url"),
+    }
+
+
+def _program_enrollment_summary(enrollment: dict) -> dict:
+    """Keep a program enrollment's title and whether it earned a certificate."""
+    program = enrollment.get("program") or {}
+    certificate = enrollment.get("certificate")
+    return {
+        "program_title": program.get("title"),
+        "program_id": program.get("readable_id"),
+        "certificate_earned": bool(certificate),
+        "certificate_url": _certificate_url(certificate),
+        "certificate_uuid": _certificate_uuid(certificate),
+    }
+
+
+async def _digital_credential(get_certificate, summary: dict) -> str | None:
+    """
+    Return "issued" only when MITx Online returns the signed credential, and
+    None when there is no certificate. A missing credential can mean the course
+    doesn't issue one or that issuing it failed (hq#13746), so anything else is
+    "not_confirmed", never "none".
+    """
+    if not summary["certificate_earned"]:
+        return None
+    try:
+        certificate = await get_certificate(summary["certificate_uuid"])
+    except learner_api.LearnerAPIError:
+        return DIGITAL_CREDENTIAL_NOT_CONFIRMED
+    if (
+        isinstance(certificate, dict)
+        and certificate.get("verifiable_credential_json")
+        and not certificate.get("is_revoked")
+    ):
+        return DIGITAL_CREDENTIAL_ISSUED
+    return DIGITAL_CREDENTIAL_NOT_CONFIRMED
+
+
+@tool(args_schema=AccountToolSchema)
+async def get_certificate_status(state: Annotated[dict, InjectedState]):
+    """
+    Get whether the signed-in learner has earned a certificate in a course,
+    with its link, plus their program enrollments and program certificates.
+    A program certificate can show up in either place: as certificate_earned
+    on a program, or in program_certificates (MIT Learn's program records).
+    Use it for "did I get a certificate", "where is my certificate", "where is
+    my digital credential" or "have I finished the program". The course
+    certificate is only for the course of the page they are chatting from.
+
+    Each earned MITx Online certificate also has digital_credential, for the
+    separate digital credential: "issued" when one exists, "not_confirmed" when
+    it couldn't be confirmed (send the learner to support for that one).
+    """
+    try:
+        results = await asyncio.gather(
+            _page_course_enrollments(state, prefer_certificate=True),
+            learner_api.get_program_enrollments(),
+            learner_api.get_program_certificates(),
+            return_exceptions=True,
+        )
+    except Exception:  # noqa: BLE001
+        return _could_not_check("get_certificate_status")
+    if any(isinstance(item, BaseException) for item in results):
+        return _could_not_check("get_certificate_status")
+    result, programs, program_certificates = results
+    enrollments = result["enrollments"]
+    programs = [_program_enrollment_summary(p) for p in programs]
+    credentials = await asyncio.gather(
+        *(
+            _digital_credential(learner_api.get_course_certificate, summary)
+            for summary in enrollments
+        ),
+        *(
+            _digital_credential(learner_api.get_program_certificate, summary)
+            for summary in programs
+        ),
+    )
+    result["enrollments"] = _only(
+        enrollments,
+        "status",
+        "enrollment_mode",
+        "certificate_earned",
+        "certificate_url",
+    )
+    for summary in programs:
+        del summary["certificate_uuid"]
+    result["programs"] = programs
+    for summary, credential in zip(
+        [*result["enrollments"], *programs], credentials, strict=True
+    ):
+        if credential:
+            summary["digital_credential"] = credential
+    result["program_certificates"] = [
+        _program_certificate_summary(c) for c in program_certificates
+    ]
+    return json.dumps(result)
+
+
+ACCOUNT_TOOLS = [
+    get_enrollments,
+    get_course_progress,
+    get_certificate_status,
+    get_upcoming_assignments,
+]
