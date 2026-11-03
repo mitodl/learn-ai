@@ -20,6 +20,7 @@ from ai_chatbots import consumers, prompts
 from ai_chatbots.chatbots import SearchSummaryBot, SyllabusBot, VideoGPTBot
 from ai_chatbots.conftest import MockAsyncIterator
 from ai_chatbots.constants import (
+    ACCOUNT_TOOLS_FEATURE_FLAG,
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
@@ -1915,6 +1916,30 @@ async def test_support_create_chatbot_gates_answering(  # noqa: PLR0913
     assert flag.called is session
     if session:
         assert flag.call_args[0][0] == SUPPORT_ANSWERS_FEATURE_FLAG
+
+
+@pytest.mark.parametrize("flag_on", [True, False])
+async def test_the_two_bots_gates_are_independent(
+    mocker, mock_http_consumer_send, support_consumer, flag_on
+):
+    """
+    A shared helper is one edit away from a shared flag. These stay separate
+    on purpose: breaking AskTIM loses an answer, breaking Contact Us loses a
+    support request, and an incident on one must not take the other with it.
+    """
+    mocker.patch("ai_chatbots.consumers.has_learner_session", return_value=True)
+    flag = mocker.patch(
+        "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on
+    )
+    support_consumer.scope["headers"] = []
+    serializer = consumers.SupportChatRequestSerializer(data={"message": "help"})
+    serializer.is_valid(raise_exception=True)
+    await support_consumer.prepare_response(serializer)
+
+    await sync_to_async(support_consumer.create_chatbot)(serializer, InMemorySaver())
+
+    assert flag.call_args[0][0] == SUPPORT_ANSWERS_FEATURE_FLAG
+    assert flag.call_args[0][0] != ACCOUNT_TOOLS_FEATURE_FLAG
 
 
 @pytest.mark.parametrize(
