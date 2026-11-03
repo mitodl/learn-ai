@@ -1993,7 +1993,19 @@ class SupportBot(TruncatingChatbot):
         intake_started = not answered_before and len(
             prior_state.get("messages") or []
         ) > _cancelled_after(prior_state)
-        if self.answering_enabled and not handed_off and not intake_started:
+        # The offer says "tell me more and I'll pass it on", so a bare "yes"
+        # after an answer accepts it. _closes_the_answer leaves affirmatives
+        # out by design, so without this they go back to the model, which
+        # answers again and re-appends the offer - and the learner who said
+        # yes never reaches a person. A bare affirmative is filler, so it
+        # stays out of the description either way.
+        took_up_the_offer = answered_before and _is_affirmative(message)
+        if (
+            self.answering_enabled
+            and not handed_off
+            and not intake_started
+            and not took_up_the_offer
+        ):
             if answered_before and _closes_the_answer(message):
                 return SUPPORT_ANSWER_CLOSED, {
                     "answered": [False],

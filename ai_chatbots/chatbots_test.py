@@ -2559,6 +2559,32 @@ async def test_a_filler_after_a_close_out_still_shows_the_review(
 
 
 @pytest.mark.asyncio
+async def test_yes_after_an_answer_takes_up_the_offer(mocker, mock_checkpointer):
+    """
+    The offer says "tell me more and I'll pass it to the support team", so
+    "yes" is the learner accepting it. _closes_the_answer leaves affirmatives
+    out on purpose, so without a branch of their own they go back to the model,
+    which answers again and re-appends the offer - and a learner who keeps
+    saying yes never reaches a person.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "another answer"]
+    )
+    await _say(chatbot, "my certificate is missing")
+
+    reply = await _say(chatbot, "yes")
+
+    # One attempt, for the question. "another answer" is still unused.
+    assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
+    assert "another answer" not in reply
+    assert SUPPORT_OFFER_TICKET not in reply
+    assert SUPPORT_ANSWER_CLOSED not in reply
+    # Straight into intake, with the question they already asked as the request.
+    assert "my certificate is missing" in reply
+    assert (await _state_of(chatbot))["answered"][-1] is False
+
+
+@pytest.mark.asyncio
 async def test_support_bot_escalates_to_the_intake_script(mocker, mock_checkpointer):
     """The button means a person, so the bot stops trying to be one."""
     chatbot = await _answering_support_bot(
