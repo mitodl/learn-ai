@@ -1681,8 +1681,13 @@ class SupportBot(TruncatingChatbot):
         if self._proxy_user_ready or not self.proxy:
             return
         # Synchronous HTTP: called bare it would block the event loop for every
-        # other request this worker is serving.
-        await sync_to_async(self.proxy.create_proxy_user)(self.user_id)
+        # other request this worker is serving. thread_sensitive=False because
+        # it touches no ORM, and the default shared thread is where every other
+        # sync_to_async call in the worker queues - a call that can run for
+        # REQUESTS_TIMEOUT twice over has no business holding it.
+        await sync_to_async(self.proxy.create_proxy_user, thread_sensitive=False)(
+            self.user_id
+        )
         self._proxy_user_ready = True
 
     @staticmethod
@@ -1701,6 +1706,46 @@ class SupportBot(TruncatingChatbot):
             return None, None
         found = COURSE_KEY_RE.search(page_url)
         return (found.group(0), "mitxonline") if found else (None, None)
+
+    async def _run_the_attempt(
+        self,
+        message: str,
+        history: list,
+        course_id: str | None,
+        platform: str | None,
+        extra_state: dict | None,
+    ) -> dict:
+        """
+        Everything the answer timeout has to cover: provision, trace, answer.
+
+        Provisioning is in here rather than ahead of the timeout because it is
+        a synchronous HTTP call with a retry behind it, so it can run for
+        REQUESTS_TIMEOUT twice over - longer than the whole attempt is allowed
+        to take, on a learner who was never going to see an answer.
+        """
+        await self._ensure_proxy_user()
+        callbacks = await self.set_callbacks(
+            self.get_trace_properties(
+                # course_id and platform are derived in _try_to_answer rather
+                # than carried in extra_state, so they have to be handed over
+                # for TRACE_STATE_KEYS to find them.
+                {
+                    **(extra_state or {}),
+                    "course_id": [course_id],
+                    "platform": [platform],
+                }
+            )
+        )
+        return await self._answering_agent.ainvoke(
+            {
+                "messages": [*history, HumanMessage(message)],
+                "course_id": [course_id],
+                "platform": [platform],
+            },
+            # In this call's config, never on self.config: that one is the
+            # persisted support thread, and the attempt stays out of it.
+            config={"callbacks": callbacks},
+        )
 
     async def _try_to_answer(
         self, message: str, prior_state: dict, extra_state: dict | None = None
@@ -1730,33 +1775,11 @@ class SupportBot(TruncatingChatbot):
             ((extra_state or {}).get("page_url") or [""])[-1]
         )
         try:
-            # Inside the try: a proxy that won't provision is the same kind of
-            # failure as a model that won't answer, and owes the learner the
-            # same fallback.
-            await self._ensure_proxy_user()
-            callbacks = await self.set_callbacks(
-                self.get_trace_properties(
-                    # course_id and platform are derived here rather than
-                    # carried in extra_state, so they have to be handed over
-                    # for TRACE_STATE_KEYS to find them.
-                    {
-                        **(extra_state or {}),
-                        "course_id": [course_id],
-                        "platform": [platform],
-                    }
-                )
-            )
+            # Inside the try: anything that goes wrong before an answer owes
+            # the learner the same fallback as a model that won't answer.
             result = await asyncio.wait_for(
-                self._answering_agent.ainvoke(
-                    {
-                        "messages": [*history, HumanMessage(message)],
-                        "course_id": [course_id],
-                        "platform": [platform],
-                    },
-                    # In this call's config, never on self.config: that one is
-                    # the persisted support thread, and the attempt stays out
-                    # of it.
-                    config={"callbacks": callbacks},
+                self._run_the_attempt(
+                    message, history, course_id, platform, extra_state
                 ),
                 timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
             )
