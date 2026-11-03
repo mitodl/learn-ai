@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from ai_chatbots import learner_api
 from ai_chatbots.evaluation.base import TestCaseSpec
 from ai_chatbots.evaluation.evaluators import (
+    _RECORD_KEYS,
     BOT_EVALUATORS,
     RecommendationBotEvaluator,
     SupportBotEvaluator,
@@ -16,6 +17,23 @@ from ai_chatbots.evaluation.evaluators import (
     TutorBotEvaluator,
     VideoGPTBotEvaluator,
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_learner_api():
+    """
+    Put learner_api back the way it was after every test in this file.
+
+    Loading cases that carry learner_records calls _serve_learner_records,
+    which replaces the module's functions for the rest of the process. Left
+    in place it fails every later test that calls one for real - which is
+    the whole of tools_account_test.py, and only when the two run in the
+    same session.
+    """
+    original = {name: getattr(learner_api, name) for name in _RECORD_KEYS}
+    yield
+    for name, func in original.items():
+        setattr(learner_api, name, func)
 
 
 class TestRecommendationBotEvaluator:
