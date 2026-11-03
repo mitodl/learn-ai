@@ -1975,6 +1975,13 @@ class SupportBot(TruncatingChatbot):
             updates = {**updates, "handed_off": [True]}
 
         async for chunk in self._reply_without_the_model(
-            message, reply, {**extra_state, **updates}
+            # Blanked here as well as in the description: this write is
+            # prior_messages on the next turn, and an edit after an escalate
+            # would otherwise file the button's label as the learner's problem.
+            # _support_description drops a blank HumanMessage, and the message
+            # still occupies a position, so cancelled_after's arithmetic holds.
+            "" if escalated else message,
+            reply,
+            {**extra_state, **updates},
         ):
             yield chunk

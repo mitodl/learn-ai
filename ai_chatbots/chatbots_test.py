@@ -2386,6 +2386,31 @@ async def test_escalate_itself_does_not_persist(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
+async def test_support_bot_keeps_the_escalate_buttons_words_out_of_the_ticket(
+    mocker, mock_checkpointer
+):
+    """
+    Review Focus 3. message is required and non-blank on the wire, so a press
+    arrives carrying something - almost certainly the button's own label. The
+    support team must not read that as the learner's problem, on this turn or
+    on the edit that follows it.
+    """
+    label = "Contact the support team"
+    chatbot = await _answering_support_bot(mocker, mock_checkpointer, "an answer")
+    await _say(chatbot, SUPPORT_PROBLEM)
+
+    review = await _say(chatbot, label, escalate=[True])
+    # The edit is what proves the checkpointed message, not just the
+    # description this turn built.
+    edited = await _say(chatbot, "It also happens on week 4.")
+
+    assert SUPPORT_PROBLEM in review
+    assert label not in review
+    assert label not in edited
+    assert "It also happens on week 4." in edited
+
+
+@pytest.mark.asyncio
 async def test_a_scripted_support_bot_never_attempts_an_answer(
     mocker, mock_checkpointer
 ):
