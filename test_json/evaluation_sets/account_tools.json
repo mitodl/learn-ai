@@ -552,6 +552,40 @@
         "enable_account_tools": true
       },
       "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. That run ended on May 30, 2025."
+    },
+    {
+      "question": "What certificates have I earned?",
+      "extra_state": {
+        "course_id": [null],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Three: a course certificate for Calculus 1A: Differentiation ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01/), whose digital credential it couldn't confirm; a program certificate for Data, Economics, and Design of Policy: International Development, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/); and a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view). It doesn't say Just Money or Political Economy and Economic Development have a certificate."
+    },
+    {
+      "question": "List all my certificates.",
+      "extra_state": {
+        "course_id": ["course-v1:MITxT+11.405x"],
+        "collection_name": [null],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Three: a course certificate for Calculus 1A: Differentiation ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01/), whose digital credential it couldn't confirm; a program certificate for Data, Economics, and Design of Policy: International Development, with its digital credential issued ({{settings.LEARNER_API_MITXONLINE_BASE_URL}}certificate/program/2f4d6a8c-1b3e-4c5d-8e9f-0a1b2c3d4e5f/); and a program certificate for Statistics and Data Science, completed June 15, 2024 (https://learn.mit.edu/program_letter/5c7e9a1b-3d5f-4a6c-8e0a-2b4d6f8a0c1e/view). It doesn't say Just Money or Political Economy and Economic Development have a certificate. It doesn't answer only for Just Money, the course on this page."
+    },
+    {
+      "question": "Did I get my certificate?",
+      "extra_state": {
+        "course_id": [null],
+        "collection_name": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It asks which course or program they mean. It may list the certificates it sees (Calculus 1A: Differentiation, and the Data, Economics, and Design of Policy and Statistics and Data Science programs), but doesn't answer as if one of them were the certificate they asked about."
     }
   ]
 }

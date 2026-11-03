@@ -710,6 +710,23 @@ class CourseAccountToolSchema(AccountToolSchema):
     )
 
 
+class CertificateToolSchema(CourseAccountToolSchema):
+    """Schema for get_certificate_status, which can also list every certificate."""
+
+    all_courses: bool = Field(
+        default=False,
+        description=(
+            """
+            True only when the learner asks about all of their certificates,
+            such as "what certificates do I have". Never for a question about
+            one course or program, including the one on this page ("did I get
+            my certificate for this program"). The course on this page and
+            course_id are then ignored.
+            """
+        ),
+    )
+
+
 class EnrollmentsToolSchema(AccountToolSchema):
     """Schema for get_enrollments, which lists all courses or a named one."""
 
@@ -854,6 +871,14 @@ ON_PROGRAM_PAGE = (
     "The page is a program, not a course. For its certificate, see programs and "
     "program_certificates; for one of its courses, pass that course as course_id."
 )
+PLATFORM_UNCLEAR = (
+    "It isn't clear which platform the course on this page is on, so the "
+    "learner's records for it can't be checked here."
+)
+NO_PAGE_COURSE = (
+    "There is no course on this page. Pass the course the learner asked about as "
+    "course_id."
+)
 # MITx Online's program ids, which xPRO's share, so it doesn't say the platform
 PROGRAM_ID_PREFIX = "program-v1:"
 # A run id. Most don't start with their course's readable id, so its course
@@ -872,10 +897,7 @@ async def _page_platform_note(platform: str | None, course_id: str) -> str | Non
         # catalog only knows courses, so look up the course, not the run.
         platform = await _get_course_platform(course_id)
         if platform is None:
-            return (
-                "It isn't clear which platform the course on this page is on, "
-                "so the learner's records for it can't be checked here."
-            )
+            return PLATFORM_UNCLEAR
     if platform != MITXONLINE_PLATFORM:
         return NOT_ON_MITXONLINE
     return None
@@ -963,6 +985,17 @@ def _named_programs(course: str, programs: list[dict]) -> list[dict]:
     ]
 
 
+async def _page_program_note(state: dict, programs: list[dict]) -> str | None:
+    """
+    Say why the learner's MITx Online records can't answer for a program they
+    named, if it is the page's program, which could be another platform's.
+    """
+    page, platform = _page(state)
+    if any(p["program_id"] == page["run_id"] for p in programs):
+        return await _page_platform_note(platform, page["run_id"])
+    return None
+
+
 def _names_only_the_page_course(
     course: str, matches: list[dict], page_courses: set[str]
 ) -> bool:
@@ -999,13 +1032,7 @@ async def _course_enrollments(  # noqa: C901, PLR0911, PLR0912
         # be another platform's, not a MITx Online course with the same number
         course_id = None
     if not course_id and not page_course:
-        return {
-            "enrollments": [],
-            "note": (
-                "There is no course on this page. Pass the course the learner "
-                "asked about as course_id."
-            ),
-        }
+        return {"enrollments": [], "note": NO_PAGE_COURSE}
     on_page = not course_id and page_course
     if on_page and platform and platform != MITXONLINE_PLATFORM:
         return {"enrollments": [], "note": NOT_ON_MITXONLINE}
@@ -1076,16 +1103,21 @@ def _only(summaries: list[dict], *fields: str) -> list[dict]:
 
 
 @tool(args_schema=EnrollmentsToolSchema)
-async def get_enrollments(
+async def get_enrollments(  # noqa: C901
     state: Annotated[dict, InjectedState], course_id: str | None = None
 ):
     """
     Get the courses the signed-in learner is enrolled in on MITx Online: each
-    course run's dates, whether it is upcoming, in progress or ended, and the
-    enrollment mode (audit or verified), and the programs they are enrolled
-    in. Use it for "what am I enrolled in", "when does my course start" or "am
-    I enrolled in X". It returns all of the learner's courses and programs, not
-    just the one on this page, or only the course_id given.
+    course run's dates, whether it is upcoming, in progress or ended, the
+    enrollment mode (audit or verified) and the course's certificate, and the
+    programs they are enrolled in, with whether they earned each program's
+    certificate. A course's certificate can be from an earlier run than the
+    one listed; its run_id says which. Use it for "what am I enrolled in",
+    "when does my course start" or "am I enrolled in X". It returns all of the
+    learner's courses and programs, not just the one on this page, or only the
+    course_id given. For "what certificates do I have", use
+    get_certificate_status with all_courses instead: only it lists program
+    certificates from MIT Learn and digital credentials.
     """
     try:
         summaries, programs = await asyncio.gather(
@@ -1094,7 +1126,7 @@ async def get_enrollments(
     except Exception:  # noqa: BLE001
         return _could_not_check("get_enrollments")
     programs = [
-        {"program_title": p["program_title"], "program_id": p["program_id"]}
+        {k: v for k, v in p.items() if k != "certificate_uuid"}
         for p in map(_program_enrollment_summary, programs)
     ]
     page, platform = _page(state, summaries)
@@ -1123,6 +1155,8 @@ async def get_enrollments(
         ):
             return json.dumps({"enrollments": [], "note": note})
         programs = _named_programs(course_id, programs)
+        if note := await _page_program_note(state, programs):
+            return json.dumps({"enrollments": [], "note": note})
     result = {"enrollments": _current_runs(summaries), "programs": programs}
     if course_id and not summaries and not programs:
         result["note"] = _not_in_records(course_id)
@@ -1135,6 +1169,19 @@ async def get_enrollments(
         "enrollment_mode",
         "course_url",
     )
+    # From any run, since the one listed may not be the one that earned it
+    certificates = {
+        s["course_id"] or s["run_id"]: {
+            "run_id": s["run_id"],
+            "url": s["certificate_url"],
+        }
+        for s in summaries
+        if s["certificate_earned"]
+    }
+    for summary in result["enrollments"]:
+        summary["certificate"] = certificates.get(
+            summary["course_id"] or summary["run_id"]
+        )
     # From every run, since the one kept per course may not be the page's run
     for summary in _current_runs(
         [s for s in summaries if page_course in (s["course_id"], s["run_id"])]
@@ -1331,9 +1378,11 @@ async def _digital_credential(get_certificate, summary: dict) -> str | None:
     return DIGITAL_CREDENTIAL_NOT_CONFIRMED
 
 
-@tool(args_schema=CourseAccountToolSchema)
-async def get_certificate_status(
-    state: Annotated[dict, InjectedState], course_id: str | None = None
+@tool(args_schema=CertificateToolSchema)
+async def get_certificate_status(  # noqa: C901, PLR0912
+    state: Annotated[dict, InjectedState],
+    course_id: str | None = None,
+    all_courses: bool = False,  # noqa: FBT001, FBT002
 ):
     """
     Get whether the signed-in learner has earned a certificate in a course,
@@ -1342,26 +1391,59 @@ async def get_certificate_status(
     on a program, or in program_certificates (MIT Learn's program records).
     Use it for "did I get a certificate", "where is my certificate", "where is
     my digital credential" or "have I finished the program". The course
-    certificate is for the course on this page, or the course_id given.
+    certificate is for the course on this page, or the course_id given. For
+    "what certificates do I have", pass all_courses to list all of the
+    learner's courses.
 
     Each earned MITx Online certificate also has digital_credential, for the
     separate digital credential: "issued" when one exists, "not_confirmed" when
     it couldn't be confirmed (send the learner to support for that one).
     """
     try:
-        results = await asyncio.gather(
-            _course_enrollments(state, course_id, prefer_certificate=True),
+        if all_courses:
+            result = {
+                "enrollments": _current_runs(
+                    await _summaries(), prefer_certificate=True
+                )
+            }
+            page, platform = _page(state)
+            if page["run_id"] and platform and platform != MITXONLINE_PLATFORM:
+                # So a question about this page isn't answered from these
+                result["note"] = (
+                    "These are the learner's MITx Online records only. The "
+                    "course or program on this page isn't on MITx Online, so "
+                    "its certificate can't be checked here; don't answer a "
+                    "question about it from these."
+                )
+        else:
+            result = await _course_enrollments(
+                state, course_id, prefer_certificate=True
+            )
+        if result.get("note") == NO_PAGE_COURSE:
+            result["note"] += " For all of their certificates, pass all_courses."
+            return json.dumps(result)
+        if result.get("note") in (NOT_ON_MITXONLINE, PLATFORM_UNCLEAR):
+            # No course to answer for, or another platform's, so the learner's
+            # MITx Online programs aren't read either, or a model answers from them
+            return json.dumps(result)
+        programs, program_certificates = await asyncio.gather(
             learner_api.get_program_enrollments(),
             learner_api.get_program_certificates(),
-            return_exceptions=True,
         )
     except Exception:  # noqa: BLE001
         return _could_not_check("get_certificate_status")
-    if any(isinstance(item, BaseException) for item in results):
-        return _could_not_check("get_certificate_status")
-    result, programs, program_certificates = results
     enrollments = result["enrollments"]
     programs = [_program_enrollment_summary(p) for p in programs]
+    if (
+        course_id
+        and not all_courses
+        and (
+            note := await _page_program_note(
+                state, _named_programs(course_id, programs)
+            )
+        )
+    ):
+        return json.dumps({"enrollments": [], "note": note})
     credentials = await asyncio.gather(
         *(
             _digital_credential(learner_api.get_course_certificate, summary)

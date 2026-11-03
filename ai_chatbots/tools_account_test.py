@@ -155,12 +155,12 @@ def records(mocker, settings):
     }
 
 
-async def call(tool, page_course=None, platform=None, course_id=None):
+async def call(tool, page_course=None, platform=None, course_id=None, **args):
     """Invoke a tool the way the agent does, and decode its JSON."""
     state = {"course_id": [page_course]} if page_course else {}
     if platform:
         state["platform"] = [platform]
-    args = {"state": state}
+    args["state"] = state
     if course_id:
         args["course_id"] = course_id
     return json.loads(await tool.ainvoke(args))
@@ -168,14 +168,14 @@ async def call(tool, page_course=None, platform=None, course_id=None):
 
 def test_model_fills_in_only_the_course():
     """The agent state is injected, never part of what the model can fill in."""
-    for tool in (
-        get_enrollments,
-        get_course_progress,
-        get_certificate_status,
-        get_upcoming_assignments,
+    for tool, fields in (
+        (get_enrollments, ["course_id"]),
+        (get_course_progress, ["course_id"]),
+        (get_certificate_status, ["course_id", "all_courses"]),
+        (get_upcoming_assignments, ["course_id"]),
     ):
         schema = tool.tool_call_schema.model_json_schema()
-        assert list(schema["properties"]) == ["course_id"]
+        assert list(schema["properties"]) == fields
         assert not schema.get("required")
 
 
@@ -226,12 +226,14 @@ async def test_page_course_not_enrolled_lists_nothing(records, page_course):
     "tool", [get_course_progress, get_certificate_status, get_upcoming_assignments]
 )
 async def test_no_page_course_asks_for_one(records, tool):
-    """Without a course on the page or a course_id, no course records are read."""
+    """Without a course on the page or a course_id, no records are read."""
     result = await call(tool)
 
     assert result["enrollments"] == []
+    assert "programs" not in result
     assert "Pass the course the learner asked about" in result["note"]
-    records["enrollments"].assert_not_called()
+    for api in records.values():
+        api.assert_not_called()
 
 
 @pytest.mark.parametrize("page_course", [None, CALCULUS])
@@ -629,6 +631,50 @@ async def test_enrollments_accept_dates_without_a_timezone(records):
     assert result["enrollments"][0]["status"] == "upcoming"
 
 
+async def test_enrollments_list_certificates(settings, records):
+    """Each course and program says whether the learner earned its certificate."""
+    settings.LEARNER_API_MITXONLINE_BASE_URL = "https://mitxonline.test/"
+    result = await call(get_enrollments)
+
+    assert {e["course_id"]: e["certificate"] for e in result["enrollments"]} == {
+        CALCULUS: None,
+        ECONOMICS: {
+            "run_id": f"{ECONOMICS}+3T2023",
+            "url": "https://mitxonline.test/certificate/abc/",
+        },
+        ECONOMICS_2: None,
+    }
+    assert result["programs"] == [
+        {
+            "program_title": "Data, Economics",
+            "program_id": PROGRAM,
+            "certificate_earned": False,
+            "certificate_url": None,
+        }
+    ]
+
+
+async def test_enrollments_keep_an_earlier_runs_certificate(records):
+    """A retaken course lists the current run, and the earlier run's certificate."""
+    records["enrollments"].return_value = [
+        enrollment(
+            CALCULUS,
+            "1T2020",
+            "Calculus 1A",
+            end="2020-06-01T00:00:00Z",
+            certificate={"link": "/certificate/abc/", "uuid": "abc"},
+        ),
+        enrollment(CALCULUS, "3T2026", "Calculus 1A"),
+    ]
+
+    (course,) = (await call(get_enrollments))["enrollments"]
+
+    assert course["run_id"] == f"{CALCULUS}+3T2026"
+    assert course["status"] == "in progress"
+    assert course["end_date"] == "2099-01-01T00:00:00Z"
+    assert course["certificate"]["run_id"] == f"{CALCULUS}+1T2020"
+
+
 async def test_enrollments_keep_only_answer_fields(records):
     """Payment and email settings never reach the model."""
     result = await call(get_enrollments)
@@ -1013,6 +1059,68 @@ async def test_program_page_keeps_its_platform_check(
     assert ("program_on_page" in result) is on_page
     assert result["note"].startswith("The page is a program") is on_page
     assert lookup.called is (platform is None)
+    # Another platform's program reads none of the learner's MITx Online ones
+    assert ("programs" in result) is on_page
+    assert records["programs"].called is on_page
+    assert records["program_certificates"].called is on_page
+
+
+@pytest.mark.parametrize("page_course", [None, CALCULUS])
+@pytest.mark.parametrize("course_id", [None, "18.01x"])
+async def test_certificate_status_all_courses_ignores_the_page(
+    records, page_course, course_id
+):
+    """all_courses lists every course's certificate, on any page."""
+    result = await call(
+        get_certificate_status,
+        page_course=page_course,
+        platform=MITXONLINE_PLATFORM,
+        course_id=course_id,
+        all_courses=True,
+    )
+
+    assert {e["course_id"] for e in result["enrollments"]} == {
+        CALCULUS,
+        ECONOMICS,
+        ECONOMICS_2,
+    }
+    assert "note" not in result
+    assert "course_on_page" not in result
+    assert result["program_certificates"]
+
+
+async def test_certificate_status_all_courses_on_another_platforms_page(records):
+    """On an xPRO page, all_courses says the list can't answer for the page."""
+    result = await call(
+        get_certificate_status, page_course=PROGRAM, platform="xpro", all_courses=True
+    )
+
+    assert result["enrollments"]
+    assert "isn't on MITx Online" in result["note"]
+
+
+@pytest.mark.parametrize(
+    ("page_course", "platform", "found"),
+    [
+        (SHARED, "xpro", MITXONLINE_PLATFORM),
+        (CALCULUS, None, None),
+    ],
+)
+async def test_certificate_status_on_another_platform_reads_no_programs(
+    mocker, records, page_course, platform, found
+):
+    """A course that can't be checked here reads no programs or credentials."""
+    mocker.patch("ai_chatbots.tools._get_course_platform", return_value=found)
+
+    result = await call(
+        get_certificate_status, page_course=page_course, platform=platform
+    )
+
+    assert set(result) == {"enrollments", "note"}
+    assert "can't be checked here" in result["note"]
+    for api in ("programs", "program_certificates", "program_certificate"):
+        records[api].assert_not_called()
+    records["course_certificate"].assert_not_called()
 
 
 # A run whose id doesn't start with its course's (UAI.13), and the course its
@@ -1112,6 +1220,20 @@ async def test_enrollments_dont_name_another_platforms_page_program(records, cou
     """An xPRO program page's id names it, not a MITx Online program sharing it."""
     result = await call(
         get_enrollments, page_course=PROGRAM, platform="xpro", course_id=course_id
+    )
+
+    assert result == {"enrollments": [], "note": result["note"]}
+    assert "isn't on MITx Online" in result["note"]
+
+
+@pytest.mark.parametrize("tool", [get_enrollments, get_certificate_status])
+async def test_page_program_by_title_keeps_its_platform_check(records, tool):
+    """
+    An xPRO program page's title names it, not a MITx Online program sharing
+    its id.
+    """
+    result = await call(
+        tool, page_course=PROGRAM, platform="xpro", course_id="Data, Economics"
     )
 
     assert result == {"enrollments": [], "note": result["note"]}
