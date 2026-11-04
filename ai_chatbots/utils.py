@@ -9,6 +9,7 @@ from enum import Enum
 from functools import cache
 
 import httpx
+import litellm
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from channels.db import database_sync_to_async
 from django.conf import settings
@@ -164,6 +165,17 @@ def get_azure_openai_kwargs() -> dict:
             "azure_ad_token_provider": get_azure_ad_token_provider(),
         },
     }
+
+
+def catalog_model_id(model: str) -> str:
+    """
+    Return a litellm model id in the ol-llm model catalog's provider:model form.
+
+    The provider is the one litellm resolves the id to, so the catalog checks
+    the model litellm calls, e.g. ``openai/gpt-4o-mini`` -> ``openai:gpt-4o-mini``.
+    """
+    name, provider, _api_key, _api_base = litellm.get_llm_provider(model=model)
+    return f"{provider}:{name}"
 
 
 def get_django_cache() -> BaseCache:

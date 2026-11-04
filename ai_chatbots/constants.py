@@ -35,6 +35,8 @@ AI_THREAD_COOKIE_KEY = "ai_thread_auth"
 AI_THREADS_ANONYMOUS_COOKIE_KEY = "ai_threads_anon"
 AI_SESSION_COOKIE_KEY = "ai_odl_unique_id"
 AZURE_MODEL_PREFIX = "azure/"
+# The application, as ol-llm and Opik name it.
+APP_NAME = "learn-ai"
 AZURE_COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 
