@@ -373,6 +373,34 @@ async def test_search_summary_bot_get_completion(
     )
 
 
+async def test_search_summary_bot_closes_the_completion_it_wraps(
+    mocker, mock_checkpointer
+):
+    """Closing the summary early closes the recommendation completion, which
+    holds the trace, in the same task.
+    """
+    closed = []
+
+    async def parent_completion(self, message, **kwargs):
+        try:
+            yield "summary"
+            yield "more"
+        finally:
+            closed.append(asyncio.current_task())
+
+    mocker.patch.object(ResourceRecommendationBot, "get_completion", parent_completion)
+    chatbot = await sync_to_async(SearchSummaryBot)("anonymous", mock_checkpointer)
+    mocker.patch.object(
+        chatbot.agent, "aget_state", return_value=mocker.Mock(values={"messages": []})
+    )
+
+    completion = chatbot.get_completion("physics")
+    assert await anext(completion) == "summary"
+    await completion.aclose()
+
+    assert closed == [asyncio.current_task()]
+
+
 @pytest.mark.asyncio
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""

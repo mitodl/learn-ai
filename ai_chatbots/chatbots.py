@@ -6,6 +6,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
+from contextlib import aclosing
 from operator import add
 from typing import Annotated, Any
 from uuid import uuid4
@@ -574,8 +575,11 @@ class SearchSummaryBot(ResourceRecommendationBot):
             # anything that could close the <search_query> tag in the prompt.
             query = " ".join(message.split())[:200].replace("<", "").replace(">", "")
             message = PROMPT_SEARCH_SUMMARY_QUERY.format(query=query)
-        async for chunk in super().get_completion(message, **kwargs):
-            yield chunk
+        # Closing this completion has to close the one that holds the trace too,
+        # in the same task, or the loop's finalizer ends the trace elsewhere.
+        async with aclosing(super().get_completion(message, **kwargs)) as completion:
+            async for chunk in completion:
+                yield chunk
 
 
 class SyllabusAgentState(SummaryState):
