@@ -538,6 +538,11 @@ async def test_get_completion_passes_the_trace_callbacks(
             "bedrock:us.anthropic.claude-sonnet-5",
         ),
         ("gpt-4o", "openai:gpt-4o"),
+        ("gemini/gemini-3.1-pro-preview", "google:gemini-3.1-pro-preview"),
+        ("vertex_ai/gemini-2.5-pro", "google-cloud:gemini-2.5-pro"),
+        ("together_ai/meta-llama/Llama-3-8b", "together:meta-llama/Llama-3-8b"),
+        # litellm resolves no provider for a name only the proxy knows.
+        ("proxy-only-alias", "unresolved:proxy-only-alias"),
     ],
 )
 @pytest.mark.asyncio
@@ -552,6 +557,29 @@ async def test_bot_use_case_names_the_catalog_model(
     assert chatbot.use_case == ol_llm.UseCase(
         app="learn-ai", name="syllabus", profile="request", model=catalog_id
     )
+
+
+@pytest.mark.asyncio
+async def test_bot_with_a_retired_gemini_model_is_refused(mock_checkpointer):
+    """The catalog names litellm's gemini/ provider google:, and retires this model."""
+    with pytest.raises(ValueError, match="retired"):
+        await sync_to_async(SyllabusBot)(
+            "anonymous", mock_checkpointer, model="gemini/gemini-3-pro-preview"
+        )
+
+
+@pytest.mark.asyncio
+async def test_bot_with_an_unresolvable_model_is_built_uncataloged(mock_checkpointer):
+    """A model id litellm resolves to no provider does not fail the bot's build.
+
+    The catalog does not list it, and the completion goes to litellm as before.
+    """
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous", mock_checkpointer, model="proxy-only-alias"
+    )
+
+    assert ol_llm.check_chat_model(chatbot.use_case) == ("model_status:uncataloged",)
+    assert chatbot.llm.model == "proxy-only-alias"
 
 
 @pytest.mark.asyncio
