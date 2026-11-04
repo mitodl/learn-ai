@@ -1,6 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+from contextlib import aclosing
 from http.cookies import SimpleCookie
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -473,11 +474,15 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 },
             ) as langsmith_trace:
                 output = []
-                async for chunk in self.bot.get_completion(
-                    message_text, extra_state=extra_state
-                ):
-                    await self.send_chunk(chunk)
-                    output.append(chunk)
+                # aclosing closes the completion in this task if sending a chunk
+                # fails or is cancelled, so its ol-llm trace ends with this
+                # request rather than later from the loop's generator finalizer.
+                async with aclosing(
+                    self.bot.get_completion(message_text, extra_state=extra_state)
+                ) as completion:
+                    async for chunk in completion:
+                        await self.send_chunk(chunk)
+                        output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
         except CrossOriginRequestError as err:
             log.warning("Rejected chat request from origin %s", err)
