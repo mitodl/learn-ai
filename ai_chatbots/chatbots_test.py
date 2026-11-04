@@ -492,11 +492,16 @@ async def test_get_completion_traces_through_ol_llm(
     assert model_span.usage["completion_tokens"] == 5
 
 
+@pytest.mark.parametrize("tracing", [True, False])
 @pytest.mark.asyncio
 async def test_get_completion_passes_the_trace_callbacks(
-    mocker, mock_checkpointer, mock_openai_astream
+    mocker, mock_checkpointer, mock_openai_astream, tracing
 ):
-    """The PostHog handler and ol-llm's tracer both reach the graph."""
+    """The PostHog handler and ol-llm's tracer both reach the graph.
+
+    The agent graph is drawn for the trace only when ol-llm traces.
+    """
+    mocker.patch.object(ol_llm.tracing, "enabled", return_value=tracing)
     traced_chat = mocker.patch.object(ol_llm, "traced_chat")
     chat = traced_chat.return_value.__enter__.return_value
     chat.callbacks = [mocker.sentinel.tracer]
@@ -520,9 +525,12 @@ async def test_get_completion_passes_the_trace_callbacks(
         attribution=ol_llm.Attribution(
             user_id="user-1", thread_id="12345678-1234-5678-9abc-123456789abc"
         ),
-        graph=graph,
+        graph=graph if tracing else None,
     )
-    chatbot.agent.get_graph.assert_called_once_with(xray=True)
+    if tracing:
+        chatbot.agent.get_graph.assert_called_once_with(xray=True)
+    else:
+        chatbot.agent.get_graph.assert_not_called()
     assert chatbot.config["callbacks"] == [
         mocker.sentinel.posthog,
         mocker.sentinel.tracer,

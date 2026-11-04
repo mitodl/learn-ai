@@ -381,7 +381,10 @@ class BaseChatbot(ABC):
                 attribution=self.attribution,
                 # Opik draws the agent graph in the trace sidebar ("Show Agent
                 # Graph"); xray=True expands nested subgraphs such as ToolNode's.
-                graph=self.agent.get_graph(xray=True),
+                # Drawn only for a trace, since it is rebuilt every turn.
+                graph=self.agent.get_graph(xray=True)
+                if ol_llm.tracing.enabled()
+                else None,
             ) as chat:
                 self.config["callbacks"] = [
                     *await self.set_callbacks(properties=trace_properties),
