@@ -1200,9 +1200,7 @@ async def test_get_llm_azure_streams_with_token_provider(
 
 @pytest.mark.asyncio
 async def test_llm_with_tools_streams_through_litellm(mock_checkpointer):
-    """A tool-bound LLM streams a reply through litellm's real completion code."""
-    # Not mocking litellm.acompletion: litellm 1.106 broke every tool call there
-    # with "No module named 'mcp'" (BerriAI/litellm#46045).
+    """A real litellm call with tools bound returns a reply (litellm is not mocked)."""
     chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
     assert isinstance(chatbot.llm, RunnableBinding)
 
