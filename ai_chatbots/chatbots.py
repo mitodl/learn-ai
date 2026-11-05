@@ -18,6 +18,7 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
     AIMessage,
+    BaseMessage,
     HumanMessage,
     SystemMessage,
     ToolMessage,
@@ -1538,6 +1539,21 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     return "\n".join(lines)
 
 
+def _quotes_the_reply_to(message: BaseMessage) -> bool:
+    """
+    Whether a persisted reply is the scripted review, which quotes the
+    learner's address back at them.
+
+    The two other scripted texts holding an address, SUPPORT_TICKET_FILED and
+    SUPPORT_TICKET_ALREADY_FILED, cannot reach an answer attempt: both mean the
+    thread already has a ticket reference, which get_completion answers from its
+    first branch without ever calling one.
+    """
+    return isinstance(message, AIMessage) and str(message.content).startswith(
+        SUPPORT_TICKET_REVIEW_HEADER
+    )
+
+
 def _read_the_records(message: ToolMessage) -> bool:
     """
     Whether a tool call reached the learner's records, as opposed to reporting
@@ -1791,8 +1807,15 @@ class SupportBot(TruncatingChatbot):
             return ""
         history = [
             msg
-            for msg in (prior_state.get("messages") or [])
-            if isinstance(msg, (HumanMessage, AIMessage)) and msg.content
+            # Sliced from the cancellation, like every other read of the thread:
+            # a learner who cancelled withdrew those words, and replaying them
+            # would hand them to the model and to the trace this attempt writes.
+            for msg in (prior_state.get("messages") or [])[
+                _cancelled_after(prior_state) :
+            ]
+            if isinstance(msg, (HumanMessage, AIMessage))
+            and msg.content
+            and not _quotes_the_reply_to(msg)
         ][-self.ANSWER_HISTORY_MESSAGES :]
         # This turn's page, not prior_state's: that one is still the page the
         # learner was on last turn, and answering about the course they just

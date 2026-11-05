@@ -67,6 +67,7 @@ from ai_chatbots.chatbots import (
     VideoGPTAgentState,
     VideoGPTBot,
     _closes_the_answer,
+    _support_review,
     get_canvas_problem_set,
     get_problem_from_edx_block,
 )
@@ -2403,6 +2404,56 @@ async def test_try_to_answer_sends_a_bounded_slice_of_the_thread(
     assert len(sent) == SupportBot.ANSWER_HISTORY_MESSAGES + 1
     assert sent[0].content == "message 20"
     assert sent[-1].content == "and now?"
+
+
+@pytest.mark.asyncio
+async def test_try_to_answer_leaves_withdrawn_messages_out_of_the_attempt(
+    mocker, mock_checkpointer
+):
+    """
+    A cancellation withdraws every word before it - that is what cancelled_after
+    means everywhere else in this file. Replaying them would send the model, and
+    the trace it writes, text the learner already took back.
+    """
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+    history = [
+        HumanMessage("withdrawn problem"),
+        AIMessage("cancelled"),
+        HumanMessage("a fresh start"),
+    ]
+
+    await chatbot._try_to_answer(  # noqa: SLF001
+        "and my grade?", {"messages": history, "cancelled_after": [2]}
+    )
+
+    sent = chatbot._answering_agent.ainvoke.call_args[0][0]["messages"]  # noqa: SLF001
+    assert [msg.content for msg in sent] == ["a fresh start", "and my grade?"]
+
+
+@pytest.mark.asyncio
+async def test_try_to_answer_keeps_the_review_block_out_of_the_attempt(
+    mocker, mock_checkpointer
+):
+    """
+    The scripted review quotes the learner's reply-to address back at them. It
+    is persisted like any other reply, so replaying the thread would feed that
+    address to the model and into the PostHog and Opik traces the attempt
+    writes - the same leak the no-exc_info rule avoids for Sentry.
+    """
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
+    )
+    history = [
+        HumanMessage("I can't log in"),
+        AIMessage(_support_review("I can't log in", "", "learner@example.com")),
+    ]
+
+    await chatbot._try_to_answer("and my grade?", {"messages": history})  # noqa: SLF001
+
+    sent = chatbot._answering_agent.ainvoke.call_args[0][0]["messages"]  # noqa: SLF001
+    assert not any("learner@example.com" in str(msg.content) for msg in sent)
 
 
 async def _support_bot(
