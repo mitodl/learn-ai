@@ -5,15 +5,19 @@ import inspect
 import json
 import os
 import re
+import warnings
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
+import ol_llm
+import opik
 import pytest
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import OperationalError
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableBinding
 from langchain_litellm import ChatLiteLLM
@@ -23,6 +27,7 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
+from pydantic.warnings import PydanticDeprecatedSince20
 
 from ai_chatbots.chatbots import (
     SUPPORT_ASK_EMAIL,
@@ -368,6 +373,34 @@ async def test_search_summary_bot_get_completion(
     )
 
 
+async def test_search_summary_bot_closes_the_completion_it_wraps(
+    mocker, mock_checkpointer
+):
+    """Closing the summary early closes the recommendation completion, which
+    holds the trace, in the same task.
+    """
+    closed = []
+
+    async def parent_completion(self, message, **kwargs):
+        try:
+            yield "summary"
+            yield "more"
+        finally:
+            closed.append(asyncio.current_task())
+
+    mocker.patch.object(ResourceRecommendationBot, "get_completion", parent_completion)
+    chatbot = await sync_to_async(SearchSummaryBot)("anonymous", mock_checkpointer)
+    mocker.patch.object(
+        chatbot.agent, "aget_state", return_value=mocker.Mock(values={"messages": []})
+    )
+
+    completion = chatbot.get_completion("physics")
+    assert await anext(completion) == "summary"
+    await completion.aclose()
+
+    assert closed == [asyncio.current_task()]
+
+
 @pytest.mark.asyncio
 async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
     """Test that create_agent_graph function creates a graph with expected nodes/edges"""
@@ -413,33 +446,190 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
         assert test_condition
 
 
+@pytest.fixture
+def opik_traces():
+    """Trace through ol-llm into local storage instead of sending to Opik."""
+    ol_llm.tracing.reset()
+    ol_llm.configure_tracing(ol_llm.TracingConfig())
+    with opik.record_traces_locally() as storage:
+        yield storage
+    ol_llm.tracing.reset()
+    ol_llm.configure_tracing(ol_llm.TracingConfig(enabled=False))
+
+
+def opik_spans(span):
+    """Return a span and every span under it, depth first."""
+    return [span, *(child for sub in span.spans for child in opik_spans(sub))]
+
+
 @pytest.mark.asyncio
-async def test_set_callbacks_logs_agent_graph_to_opik(mocker, mock_checkpointer):
-    """set_callbacks should pass the agent graph to the Opik tracer for logging."""
-    # Disable PostHog so the Opik tracer is the only callback added
+async def test_get_completion_traces_through_ol_llm(
+    mocker, mock_checkpointer, mock_openai_astream, opik_traces
+):
+    """A chat turn is one ol-llm root trace, with the model's span priced inside."""
+    mocker.stop(mock_openai_astream)
     mocker.patch.object(settings, "POSTHOG_API_HOST", None)
-    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
-    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
+        return_value=[],
+    )
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
+        "user-1",
+        mock_checkpointer,
+        model="openai/gpt-4o-mini",
+        thread_id="12345678-1234-5678-9abc-123456789abc",
+    )
+    chatbot.llm = FakeMessagesListChatModel(
+        responses=[
+            AIMessage(
+                content="Here are some courses",
+                usage_metadata={
+                    "input_tokens": 12,
+                    "output_tokens": 5,
+                    "total_tokens": 17,
+                },
+            )
+        ]
+    )
+    chatbot.agent = chatbot.create_agent_graph()
+
+    with warnings.catch_warnings():
+        # Opik's LangChain tracer reads runs with the deprecated Run.dict().
+        warnings.simplefilter("ignore", category=PydanticDeprecatedSince20)
+        reply = "".join([chunk async for chunk in chatbot.get_completion("courses?")])
+
+    assert reply.startswith("Here are some courses")
+    [trace] = opik_traces.trace_trees
+    assert trace.name == "recommendation"
+    assert trace.project_name == "learn-ai"
+    assert trace.thread_id == "12345678-1234-5678-9abc-123456789abc"
+    assert sorted(trace.tags) == [
+        "app:learn-ai",
+        f"env:{settings.OL_LLM_ENVIRONMENT}",
+        "use_case:recommendation",
+    ]
+    assert trace.metadata["user_id"] == "user-1"
+    assert trace.metadata["_opik_graph_definition"]["format"] == "mermaid"
+    assert trace.input == {"user_prompt": "courses?"}
+    assert trace.output == {"output": "Here are some courses"}
+    [model_span] = [
+        span for root in trace.spans for span in opik_spans(root) if span.type == "llm"
+    ]
+    assert (model_span.provider, model_span.model) == ("openai", "gpt-4o-mini")
+    assert model_span.usage["prompt_tokens"] == 12
+    assert model_span.usage["completion_tokens"] == 5
+
+
+@pytest.mark.parametrize("tracing", [True, False])
+@pytest.mark.asyncio
+async def test_get_completion_passes_the_trace_callbacks(
+    mocker, mock_checkpointer, mock_openai_astream, tracing
+):
+    """The PostHog handler and ol-llm's tracer both reach the graph.
+
+    The agent graph is drawn for the trace only when ol-llm traces.
+    """
+    mocker.patch.object(ol_llm.tracing, "enabled", return_value=tracing)
+    traced_chat = mocker.patch.object(ol_llm, "traced_chat")
+    chat = traced_chat.return_value.__enter__.return_value
+    chat.callbacks = [mocker.sentinel.tracer]
+    mocker.patch.object(
+        ResourceRecommendationBot,
+        "set_callbacks",
+        return_value=[mocker.sentinel.posthog],
+    )
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user-1", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     graph = mocker.Mock()
     mocker.patch.object(chatbot.agent, "get_graph", return_value=graph)
 
-    callbacks = await chatbot.set_callbacks()
+    async for _ in chatbot.get_completion("hello"):
+        pass
 
-    chatbot.agent.get_graph.assert_called_once_with(xray=True)
-    mock_tracer.assert_called_once()
-    assert mock_tracer.call_args.kwargs["graph"] is graph
-    assert mock_tracer.return_value in callbacks
+    traced_chat.assert_called_once_with(
+        chatbot.use_case,
+        "hello",
+        attribution=ol_llm.Attribution(
+            user_id="user-1", thread_id="12345678-1234-5678-9abc-123456789abc"
+        ),
+        graph=graph if tracing else None,
+    )
+    if tracing:
+        chatbot.agent.get_graph.assert_called_once_with(xray=True)
+    else:
+        chatbot.agent.get_graph.assert_not_called()
+    assert chatbot.config["callbacks"] == [
+        mocker.sentinel.posthog,
+        mocker.sentinel.tracer,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("model", "catalog_id"),
+    [
+        ("openai/gpt-4o-mini", "openai:gpt-4o-mini"),
+        (
+            "bedrock/us.anthropic.claude-sonnet-5",
+            "bedrock:us.anthropic.claude-sonnet-5",
+        ),
+        ("gpt-4o", "openai:gpt-4o"),
+        ("gemini/gemini-3.1-pro-preview", "google:gemini-3.1-pro-preview"),
+        ("vertex_ai/gemini-2.5-pro", "google-cloud:gemini-2.5-pro"),
+        ("together_ai/meta-llama/Llama-3-8b", "together:meta-llama/Llama-3-8b"),
+        # litellm resolves no provider for a name only the proxy knows.
+        ("proxy-only-alias", "unresolved:proxy-only-alias"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_bot_use_case_names_the_catalog_model(
+    mock_checkpointer, model, catalog_id
+):
+    """Each bot's ol-llm use case names its model as the catalog does."""
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous", mock_checkpointer, model=model
+    )
+
+    assert chatbot.use_case == ol_llm.UseCase(
+        app="learn-ai", name="syllabus", profile="request", model=catalog_id
+    )
 
 
 @pytest.mark.asyncio
-async def test_syllabus_bot_trace_properties(mocker, mock_checkpointer):
+async def test_bot_with_a_retired_gemini_model_is_refused(mock_checkpointer):
+    """The catalog names litellm's gemini/ provider google:, and retires this model."""
+    with pytest.raises(ValueError, match="retired"):
+        await sync_to_async(SyllabusBot)(
+            "anonymous", mock_checkpointer, model="gemini/gemini-3-pro-preview"
+        )
+
+
+@pytest.mark.asyncio
+async def test_bot_with_an_unresolvable_model_is_built_uncataloged(mock_checkpointer):
+    """A model id litellm resolves to no provider does not fail the bot's build.
+
+    The catalog does not list it, and the completion goes to litellm as before.
+    """
+    chatbot = await sync_to_async(SyllabusBot)(
+        "anonymous", mock_checkpointer, model="proxy-only-alias"
+    )
+
+    assert ol_llm.check_chat_model(chatbot.use_case) == ("model_status:uncataloged",)
+    assert chatbot.llm.model == "proxy-only-alias"
+
+
+@pytest.mark.asyncio
+async def test_bot_with_a_retired_model_is_refused(mocker, mock_checkpointer):
+    """The catalog check runs when the bot builds its model."""
+    mocker.patch.object(ol_llm, "check_chat_model", side_effect=ValueError("retired"))
+
+    with pytest.raises(ValueError, match="retired"):
+        await sync_to_async(SyllabusBot)("anonymous", mock_checkpointer)
+
+
+@pytest.mark.asyncio
+async def test_syllabus_bot_trace_properties(mock_checkpointer):
     """The syllabus bot should tag traces with the resource it was asked about."""
-    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
-    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
-    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
     chatbot = await sync_to_async(SyllabusBot)(
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
@@ -454,11 +644,6 @@ async def test_syllabus_bot_trace_properties(mocker, mock_checkpointer):
         "course_id": "MITx+6.00.1x",
         "collection_name": "content_files",
     }
-
-    await chatbot.set_callbacks(properties=properties)
-    metadata = mock_tracer.call_args.kwargs["metadata"]
-    assert metadata["course_id"] == "MITx+6.00.1x"
-    assert metadata["collection_name"] == "content_files"
 
 
 @pytest.mark.asyncio
@@ -507,22 +692,20 @@ async def test_edx_tutor_bot_trace_properties(mock_checkpointer):
 
 
 @pytest.mark.asyncio
-async def test_edx_tutor_bot_callback_metadata_has_derived_run(
-    mocker, mock_checkpointer
-):
+async def test_edx_tutor_bot_trace_metadata_has_derived_run(mocker, mock_checkpointer):
     """
-    The derived run must reach the Opik/PostHog callbacks too, not just the
-    LangSmith wrapper the consumer opens.  TutorBot.get_completion builds its
-    callbacks from get_tool_metadata(), bypassing BaseChatbot.get_completion.
+    The derived run must reach the Opik trace's spans too, not just the
+    LangSmith wrapper the consumer opens.  TutorBot.get_completion opens its
+    own trace, bypassing BaseChatbot.get_completion.
     """
-    mocker.patch.object(settings, "POSTHOG_API_HOST", None)
-    mocker.patch("ai_chatbots.chatbots.is_opik_configured", return_value=True)
-    mock_tracer = mocker.patch("ai_chatbots.opik_tracing.CostTrackingOpikTracer")
+    traced_chat = mocker.patch.object(ol_llm, "traced_chat")
     mocker.patch(
         "ai_chatbots.chatbots.get_problem_from_edx_block",
         new_callable=AsyncMock,
         return_value=("problem_xml", "problem_set_xml"),
     )
+    mocker.patch.object(TutorBot, "get_latest_history", return_value=None)
+    mocker.patch("ai_chatbots.chatbots.message_tutor", side_effect=RuntimeError)
     chatbot = await sync_to_async(TutorBot)(
         "anonymous",
         mock_checkpointer,
@@ -530,9 +713,10 @@ async def test_edx_tutor_bot_callback_metadata_has_derived_run(
         block_siblings=["block1", "block2"],
     )
 
-    await chatbot.set_callbacks(properties=await chatbot.get_tool_metadata())
+    async for _ in chatbot.get_completion("hello"):
+        pass
 
-    metadata = mock_tracer.call_args.kwargs["metadata"]
+    metadata = traced_chat.call_args.kwargs["metadata"]
     assert metadata["run_readable_id"] == "course-v1:MITxT+3.012Sx+3T2024"
     assert metadata["edx_module_id"] == chatbot.edx_module_id
 
@@ -979,7 +1163,7 @@ async def test_get_llm_with_reasoning_effort(mocker, mock_checkpointer):
 
     # Create a model with reasoning_effort
     await sync_to_async(LLMModel.objects.update_or_create)(
-        litellm_id="test-reasoning-model",
+        litellm_id="openai/test-reasoning-model",
         defaults={
             "provider": "openai",
             "name": "test-reasoning",
@@ -992,7 +1176,7 @@ async def test_get_llm_with_reasoning_effort(mocker, mock_checkpointer):
     )
 
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="test-reasoning-model"
+        "user", mock_checkpointer, model="openai/test-reasoning-model"
     )
 
     assert chatbot.llm.model_kwargs == {"reasoning_effort": "high"}
@@ -1005,7 +1189,7 @@ async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
 
     # Create a model without reasoning_effort
     await sync_to_async(LLMModel.objects.update_or_create)(
-        litellm_id="test-no-reasoning-model",
+        litellm_id="openai/test-no-reasoning-model",
         defaults={
             "provider": "openai",
             "name": "test-no-reasoning",
@@ -1019,7 +1203,7 @@ async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
     )
 
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="test-no-reasoning-model"
+        "user", mock_checkpointer, model="openai/test-no-reasoning-model"
     )
 
     assert chatbot.llm.model_kwargs == {}
@@ -1035,7 +1219,7 @@ async def test_get_llm_model_not_found(mocker, mock_checkpointer):
 
     # Use a model that doesn't exist in the database
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="nonexistent-model"
+        "user", mock_checkpointer, model="openai/nonexistent-model"
     )
 
     assert chatbot.llm.temperature is None
@@ -1049,7 +1233,7 @@ async def test_get_llm_temperature_supported(mocker, mock_checkpointer, temp_val
     from ai_chatbots.models import LLMModel
 
     await sync_to_async(LLMModel.objects.update_or_create)(
-        litellm_id="temp-supported-model",
+        litellm_id="openai/temp-supported-model",
         defaults={
             "provider": "openai",
             "name": "temp-supported",
@@ -1063,7 +1247,10 @@ async def test_get_llm_temperature_supported(mocker, mock_checkpointer, temp_val
     )
 
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="temp-supported-model", temperature=temp_value
+        "user",
+        mock_checkpointer,
+        model="openai/temp-supported-model",
+        temperature=temp_value,
     )
 
     assert chatbot.llm.temperature == temp_value
@@ -1075,7 +1262,7 @@ async def test_get_llm_temperature_not_supported(mocker, mock_checkpointer):
     from ai_chatbots.models import LLMModel
 
     await sync_to_async(LLMModel.objects.update_or_create)(
-        litellm_id="temp-not-supported-model",
+        litellm_id="openai/temp-not-supported-model",
         defaults={
             "provider": "openai",
             "name": "temp-not-supported",
@@ -1088,7 +1275,10 @@ async def test_get_llm_temperature_not_supported(mocker, mock_checkpointer):
     )
 
     chatbot = await sync_to_async(ResourceRecommendationBot)(
-        "user", mock_checkpointer, model="temp-not-supported-model", temperature=0.8
+        "user",
+        mock_checkpointer,
+        model="openai/temp-not-supported-model",
+        temperature=0.8,
     )
 
     # Temperature should remain None since model_spec.temperature is None
