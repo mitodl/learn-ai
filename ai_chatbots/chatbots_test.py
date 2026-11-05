@@ -1199,6 +1199,17 @@ async def test_get_llm_azure_streams_with_token_provider(
 
 
 @pytest.mark.asyncio
+async def test_llm_with_tools_streams_through_litellm(mock_checkpointer):
+    """A real litellm call with tools bound returns a reply (litellm is not mocked)."""
+    chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
+    assert isinstance(chatbot.llm, RunnableBinding)
+
+    chunks = [chunk async for chunk in chatbot.llm.astream("hello", mock_response="ok")]
+
+    assert "".join(chunk.content for chunk in chunks) == "ok"
+
+
+@pytest.mark.asyncio
 async def test_get_llm_azure_no_endpoint(settings, mocker, mock_checkpointer):
     """An azure/ model without AZURE_OPENAI_ENDPOINT fails loudly."""
     settings.AZURE_OPENAI_ENDPOINT = ""
