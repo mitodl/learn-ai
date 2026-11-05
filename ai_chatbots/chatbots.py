@@ -1538,6 +1538,28 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     return "\n".join(lines)
 
 
+def _read_the_records(message: ToolMessage) -> bool:
+    """
+    Whether a tool call reached the learner's records, as opposed to reporting
+    that it could not.
+
+    Account tools swallow their own errors and return COULD_NOT_CHECK, so a
+    failed lookup still arrives as a ToolMessage and the prompt asks the model
+    to say it couldn't check. Counting that as a source would ship "I couldn't
+    check" as the answer and mark the turn answered - closing intake during the
+    outage that spikes ticket volume.
+    """
+    if not isinstance(message.content, str):
+        return True
+    try:
+        payload = json.loads(message.content)
+    except ValueError:
+        return True
+    return not (
+        isinstance(payload, dict) and payload.get("error") == tools.COULD_NOT_CHECK
+    )
+
+
 def _ticket_subject(description: str) -> str:
     """Build a subject from the learner's own words, no model involved."""
     subject = " ".join((description or "").split())
@@ -1758,8 +1780,12 @@ class SupportBot(TruncatingChatbot):
         model will still have produced text, and showing it would put an answer
         nothing stands behind in front of a learner who came here for help. A
         tool that fired and returned no records is the opposite case - "which
-        course did you mean?" is an answer - so the test is the tool call, not
-        the data. See the spec, 4.1.1.
+        course did you mean?" is an answer - so the test is the lookup, not the
+        data it found. See the spec, 4.1.1.
+
+        A lookup that failed is neither: it reached nothing, so it is not a
+        source, and an outage would otherwise answer every learner with "I
+        couldn't check" and count the turn answered.
         """
         if not self._answering_agent:
             return ""
@@ -1790,7 +1816,9 @@ class SupportBot(TruncatingChatbot):
             log.warning("Support answer attempt failed: %s", type(error).__name__)
             return ""
         messages = result.get("messages") or []
-        if not any(isinstance(msg, ToolMessage) for msg in messages):
+        if not any(
+            isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
+        ):
             return ""
         answer = next(
             (
