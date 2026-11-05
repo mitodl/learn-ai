@@ -67,6 +67,7 @@ from ai_chatbots.chatbots import (
     VideoGPTAgentState,
     VideoGPTBot,
     _closes_the_answer,
+    _support_description,
     _support_review,
     get_canvas_problem_set,
     get_problem_from_edx_block,
@@ -5055,6 +5056,49 @@ async def test_a_bot_that_cannot_answer_runs_todays_intake_unchanged(
     state = await _state_of(chatbot)
     assert state.get("answered", []) == []
     assert state.get("handed_off", []) == []
+
+
+def test_support_description_leaves_the_bots_own_words_out():
+    """
+    The learner's words are the description; the bot's are not. An answer can
+    quote grades, enrolments and certificates, so widening this filter past
+    HumanMessage puts the learner's records into a Zendesk body.
+    """
+    prior = [
+        HumanMessage("did I pass 18.01x?"),
+        AIMessage("You scored 94% and your certificate was issued on 3 May."),
+    ]
+
+    assert _support_description(prior, "and my refund?") == (
+        "did I pass 18.01x?\n\nand my refund?"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_ticket_filed_after_an_answer_carries_none_of_the_answer(
+    mocker, mock_checkpointer
+):
+    """
+    REGRESSION, privacy: the end-to-end guard behind the unit test above. An
+    answered turn leaves the records in the thread, and the ticket is filed off
+    that same thread, so the filter is the only thing keeping them out of what
+    support reads. Nothing else in this file fails if it is widened.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 91}),
+    )
+    answer = "You scored 94% in 18.01x and your certificate was issued on 3 May."
+    chatbot = await _answering_support_bot(mocker, mock_checkpointer, [answer])
+
+    answered = await _say(chatbot, "did I pass 18.01x?")
+    await _say(chatbot, "yes")
+    await _say(chatbot, "send")
+
+    # The learner did see their records; it is the ticket they stay out of.
+    assert "94%" in answered
+    description = mock_file.await_args.kwargs["description"]
+    assert description == "did I pass 18.01x?"
 
 
 @pytest.mark.asyncio
