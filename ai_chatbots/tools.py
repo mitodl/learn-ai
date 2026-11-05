@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
@@ -900,15 +901,37 @@ class AccountLookupStatus(StrEnum):
         }.get(self)
 
 
-def _empty_course_selection(
-    status: AccountLookupStatus, note: str | None = None
-) -> dict:
-    """Keep selection state separate from the instructions given to the model."""
-    return {
-        "enrollments": [],
-        "selection_status": status,
-        "note": note if note is not None else status.note,
-    }
+@dataclass
+class CourseSelection:
+    """
+    What a learner's question is about: the page's course or run, or a course
+    they named, as every run of it, before one run per course is picked.
+    """
+
+    status: AccountLookupStatus
+    # Every matching run, kept when a platform status withholds them
+    runs: list[dict] = field(default_factory=list)
+    page: dict = field(default_factory=dict)
+    # The page's course, asked about by default or under any of its names
+    on_page: bool = False
+    # Guidance for the model, when the status's own note isn't specific enough
+    note: str | None = None
+
+    def result(self, *, prefer_certificate: bool = False) -> dict:
+        """Start a tool's output: one run per course, the status and the note."""
+        result = {
+            "enrollments": _current_runs(
+                self.runs, prefer_certificate=prefer_certificate
+            )
+            if self.status == AccountLookupStatus.MATCHED
+            else [],
+            "selection_status": self.status,
+        }
+        if note := self.note or self.status.note:
+            result["note"] = note
+        if self.status == AccountLookupStatus.MATCHED and self.on_page:
+            result["page_resource_id"] = self.page["resource_id"]
+        return result
 
 
 # MITx Online's program ids, which xPRO's share, so it doesn't say the platform
@@ -918,63 +941,67 @@ PROGRAM_ID_PREFIX = "program-v1:"
 RUN_ID_REGEX = re.compile(r"course-v1:[^+]+\+[^+]+\+[^+]+")
 
 
+def _get_page_context(state: dict, summaries: list[dict] = ()) -> dict:
+    """
+    Read the page's resource id and platform from the agent state, keeping
+    course, run and program ids apart. A run page's course is only known from
+    the learner's enrollment in that run, so it needs their summaries. The
+    course_id and run_id keys let _matches_resource_query match the page.
+    """
+    state = state or {}
+    resource_id = (state.get("course_id") or [None])[-1]
+    run_id = resource_id if RUN_ID_REGEX.fullmatch(resource_id or "") else None
+    program_id = (
+        resource_id
+        if resource_id and resource_id.startswith(PROGRAM_ID_PREFIX)
+        else None
+    )
+    if run_id:
+        course_id = next(
+            (s["course_id"] for s in summaries if s["run_id"] == run_id), None
+        )
+    else:
+        course_id = None if program_id else resource_id
+    return {
+        "resource_id": resource_id,
+        "course_id": course_id,
+        "run_id": run_id,
+        "program_id": program_id,
+        "platform": (state.get("platform") or [None])[-1],
+    }
+
+
 async def _page_platform_status(
-    platform: str | None, resource_id: str
+    page: dict, resource_id: str
 ) -> AccountLookupStatus | None:
-    """Return a platform restriction on the page's course or program, or None."""
-    if not platform:
-        # A readable id can be shared by courses on two platforms, so without
-        # one the MITx Online records could be another platform's course. The
-        # catalog only knows courses, so look up the course, not the run.
-        platform = await _get_course_platform(resource_id)
-        if platform is None:
-            return AccountLookupStatus.PLATFORM_UNCLEAR
+    """
+    Say why the page's course or program can't be read here, or None. A
+    readable id can be shared by courses on two platforms, so without the
+    page's platform the catalog is asked; it only knows courses, not runs.
+    """
+    platform = page["platform"] or await _get_course_platform(resource_id)
+    if platform is None:
+        return AccountLookupStatus.PLATFORM_UNCLEAR
     if platform != MITXONLINE_PLATFORM:
         return AccountLookupStatus.NOT_ON_MITXONLINE
     return None
 
 
-def _get_page_context(
-    state: dict, summaries: list[dict] = ()
-) -> tuple[dict, str | None]:
-    """
-    Read the page's resource ID and platform from agent state. Keep course,
-    run and program IDs separate; a run's course comes from its enrollment.
-    """
-    state = state or {}
-    page_resource_id = (state.get("course_id") or [None])[-1]
-    run_id = (
-        page_resource_id if RUN_ID_REGEX.fullmatch(page_resource_id or "") else None
-    )
-    program_id = (
-        page_resource_id
-        if page_resource_id and page_resource_id.startswith(PROGRAM_ID_PREFIX)
-        else None
-    )
-    course_id = None if run_id or program_id else page_resource_id
-    if run_id:
-        course_id = next(
-            (s["course_id"] for s in summaries if s["run_id"] == run_id), None
-        )
-    page = {
-        "resource_id": page_resource_id,
-        "course_id": course_id,
-        "run_id": run_id,
-        "program_id": program_id,
-    }
-    return page, (state.get("platform") or [None])[-1]
-
-
 def _page_courses(page: dict, summaries: list[dict]) -> set[str]:
-    """Return the course ids that name the page's course, under any of its runs."""
-    page_resource_id = page["resource_id"]
-    if not page_resource_id:
+    """
+    Return the ids the page's course goes by in the records: the page's own
+    id, its course's, and the course of any enrollment the page's id names.
+    """
+    if not page["resource_id"]:
         return set()
-    return {page_resource_id, page["course_id"]} - {None} | {
-        summary["course_id"]
-        for summary in summaries
-        if page_resource_id in (summary["course_id"], summary["run_id"])
-    }
+    ids = {page["resource_id"], page["course_id"]}
+    ids.update(
+        s["course_id"]
+        for s in summaries
+        if page["resource_id"] in (s["course_id"], s["run_id"])
+    )
+    ids.discard(None)
+    return ids
 
 
 def _normalize_course_input(user_course_input: str | None) -> str | None:
@@ -1039,114 +1066,167 @@ def _named_programs(program_query: str, programs: list[dict]) -> list[dict]:
 
 
 async def _page_program_status(
-    state: dict, programs: list[dict]
+    page: dict, programs: list[dict]
 ) -> AccountLookupStatus | None:
     """Check the platform when a named program is also the page's program."""
-    page, platform = _get_page_context(state)
     if page["program_id"] and any(
         p["program_id"] == page["program_id"] for p in programs
     ):
-        return await _page_platform_status(platform, page["program_id"])
+        return await _page_platform_status(page, page["program_id"])
     return None
 
 
-def _names_only_the_page_course(
-    course_query: str, matches: list[dict], page_courses: set[str]
-) -> bool:
+async def _select_course(
+    state: dict,
+    user_course_input: str | None = None,
+    *,
+    summaries: list[dict] | None = None,
+) -> CourseSelection:
     """
-    Say whether the course a learner named, such as by its title, is the page's
-    course under another name. A run asked for by its id isn't: it keeps that run.
+    Resolve what the learner asks about: the page's course or run, by default
+    or under any of its names, else the course they named. The page's course
+    is checked against the page's platform, since its id could be another
+    platform's; another course is MITx Online's own record. Every run of the
+    course is returned, with a platform status too, so callers can pick or
+    list them or ask which course a name for several means.
+
+    Raises:
+        learner_api.LearnerAPIError: if the records can't be read
     """
-    return all(s["course_id"] in page_courses for s in matches) and (
-        course_query.casefold() not in {(s["run_id"] or "").casefold() for s in matches}
+    course_query = _normalize_course_input(user_course_input)
+    page = _get_page_context(state, summaries or ())
+    # By one of the page's ids; a title is only matched against the records
+    on_page = not course_query or _matches_resource_query(course_query, page)
+    if on_page and not page["resource_id"]:
+        return CourseSelection(AccountLookupStatus.NO_PAGE_COURSE, page=page)
+    if on_page and page["program_id"]:
+        status = await _page_platform_status(page, page["program_id"])
+        return CourseSelection(
+            status or AccountLookupStatus.ON_PROGRAM_PAGE, page=page, on_page=True
+        )
+    if on_page and page["platform"] and page["platform"] != MITXONLINE_PLATFORM:
+        return CourseSelection(
+            AccountLookupStatus.NOT_ON_MITXONLINE, page=page, on_page=True
+        )
+    if summaries is None:
+        summaries = await _summaries()
+        # A run page's course is known from the learner's enrollment in the run
+        page = _get_page_context(state, summaries)
+        on_page = on_page or _matches_resource_query(course_query, page)
+    page_courses = _page_courses(page, summaries)
+    named = (
+        [s for s in summaries if _matches_resource_query(course_query, s)]
+        if course_query
+        else []
     )
+    # A run asked for by its id keeps that run, even as the page's own run
+    asked_run = any(
+        (s["run_id"] or "").casefold() == course_query.casefold() for s in named
+    )
+    if named and not asked_run and all(s["course_id"] in page_courses for s in named):
+        # A title for the page's course is the page's course
+        on_page = True
+    if on_page and not asked_run:
+        # Every run of the page's course, the page's own run among them
+        runs = [
+            s
+            for s in summaries
+            if s["course_id"] in page_courses or s["run_id"] == page["resource_id"]
+        ]
+    else:
+        runs = named
+    if not runs:
+        status = (
+            AccountLookupStatus.NOT_ENROLLED_ON_PAGE
+            if on_page
+            else AccountLookupStatus.NOT_FOUND
+        )
+        return CourseSelection(status, page=page, on_page=on_page)
+    # Another course is MITx Online's own record, but the page's course, under
+    # any of its ids, could be another platform's course with the same id
+    page_course = next(
+        (s["course_id"] for s in runs if s["course_id"] in page_courses), None
+    )
+    status = AccountLookupStatus.MATCHED
+    if on_page or page_course:
+        status = (
+            await _page_platform_status(page, page_course or page["resource_id"])
+            or status
+        )
+    return CourseSelection(status, runs, page, on_page=on_page)
 
 
-async def _course_enrollments(  # noqa: C901, PLR0911, PLR0912
+async def _course_enrollments(
     state: dict,
     user_course_input: str | None = None,
     *,
     prefer_certificate: bool = False,
 ) -> dict:
     """
-    Select the named course's records, or default to the page's course or run.
-    Return a selection_status independently of any readable note. See
-    _matches_resource_query for how a named course is matched.
+    Start the output of a tool that reads one course: the selected course's
+    records, or the selection_status saying why there are none. A name for
+    more than one course selects none, so the model asks which.
 
     Raises:
         learner_api.LearnerAPIError: if the records can't be read
     """
-    course_query = _normalize_course_input(user_course_input)
-    use_page_context = not course_query
-    page_summary, platform = _get_page_context(state)
-    page_resource_id = page_summary["resource_id"]
-    summaries = None
-    if course_query and page_summary["run_id"] and not page_summary["course_id"]:
-        # A run's course, which the name could be, comes from its enrollment
-        summaries = await _summaries()
-        page_summary, _ = _get_page_context(state, summaries)
-    if (
-        course_query
-        and page_resource_id
-        and _matches_resource_query(course_query, page_summary)
-    ):
-        # A short name for the page's course must keep its platform check.
-        use_page_context = True
-    if use_page_context and not page_resource_id:
-        return _empty_course_selection(AccountLookupStatus.NO_PAGE_COURSE)
-    if use_page_context and platform and platform != MITXONLINE_PLATFORM:
-        return _empty_course_selection(AccountLookupStatus.NOT_ON_MITXONLINE)
-    if use_page_context and page_resource_id.startswith(PROGRAM_ID_PREFIX):
-        status = await _page_platform_status(platform, page_resource_id)
-        return _empty_course_selection(status or AccountLookupStatus.ON_PROGRAM_PAGE)
-    if summaries is None:
-        summaries = await _summaries()
-    matches = [
-        summary
-        for summary in summaries
-        if (
-            page_resource_id in (summary["course_id"], summary["run_id"])
-            if use_page_context
-            else _matches_resource_query(course_query, summary)
+    selection = await _select_course(state, user_course_input)
+    if selection.on_page and selection.page["run_id"]:
+        # The course on a run's page is that run
+        selection = replace(
+            selection,
+            runs=[s for s in selection.runs if s["run_id"] == selection.page["run_id"]],
         )
-    ]
-    if not matches and not use_page_context:
-        # Certificate lookup must also consider programs before reporting a miss.
-        return {"enrollments": [], "selection_status": AccountLookupStatus.NOT_FOUND}
-    if not matches:
-        return _empty_course_selection(AccountLookupStatus.NOT_ENROLLED_ON_PAGE)
-    named = {summary["course_id"] or summary["run_id"] for summary in matches}
-    if not use_page_context and len(named) > 1:
-        return _empty_course_selection(
+    courses = sorted({s["course_id"] or s["run_id"] for s in selection.runs})
+    if not selection.on_page and len(courses) > 1:
+        selection = CourseSelection(
             AccountLookupStatus.AMBIGUOUS,
-            f"{user_course_input} names more than one of the learner's courses: "
-            f"{', '.join(sorted(named))}. Ask which one they mean, then pass "
-            "its course_id as user_course_input.",
+            note=(
+                f"{user_course_input} names more than one of the learner's "
+                f"courses: {', '.join(courses)}. Ask which one they mean, then "
+                "pass its course_id as user_course_input."
+            ),
         )
-    page_courses = _page_courses(page_summary, summaries)
-    # Another course is MITx Online's own record, but the page's course, under
-    # any of its ids, could be a different platform's course with the same id.
-    if use_page_context or any(s["course_id"] in page_courses for s in matches):
-        status = await _page_platform_status(platform, matches[0]["course_id"])
-        if status:
-            return _empty_course_selection(status)
-    if not use_page_context and _names_only_the_page_course(
-        course_query, matches, page_courses
-    ):
-        # A title names the page's course; an explicit run ID keeps that run.
-        use_page_context = True
-        matches = [
-            s for s in summaries if page_resource_id in (s["course_id"], s["run_id"])
-        ]
-        if not matches:
-            return _empty_course_selection(AccountLookupStatus.NOT_ENROLLED_ON_PAGE)
-    result = {
-        "enrollments": _current_runs(matches, prefer_certificate=prefer_certificate),
-        "selection_status": AccountLookupStatus.MATCHED,
-    }
-    if use_page_context:
-        result["page_resource_id"] = page_resource_id
-    return result
+    return selection.result(prefer_certificate=prefer_certificate)
+
+
+def _page_course_note(selection: CourseSelection) -> str:
+    """Say whether the learner is in the page's course, or why it can't be read."""
+    if selection.status == AccountLookupStatus.MATCHED:
+        page_run = selection.page["run_id"]
+        run = (
+            next(s for s in selection.runs if s["run_id"] == page_run)
+            if page_run
+            else _current_runs(selection.runs)[0]
+        )
+        return (
+            "The learner is enrolled in the course on this page, "
+            f"{run['course_title']} ({run['course_id']}); its run is "
+            f"{run['status']}. Answer a question about this course from this, "
+            "not by listing their other courses."
+        )
+    if selection.status == AccountLookupStatus.NOT_ENROLLED_ON_PAGE:
+        return (
+            "The learner has no MITx Online enrollment in "
+            f"{selection.page['resource_id']}, the course or run on this page."
+        )
+    return selection.status.note
+
+
+def _page_program_note(page: dict, programs: list[dict], *, not_enrolled_hint=""):
+    """Say whether the learner is in the page's program, once it's MITx Online's."""
+    program_id = page["program_id"]
+    program = next((p for p in programs if p["program_id"] == program_id), None)
+    if program:
+        return (
+            "The learner is enrolled in the program on this page, "
+            f"{program['program_title']} ({program_id}); its entry in programs "
+            "says whether they earned its certificate."
+        )
+    return (
+        f"The learner has no MITx Online enrollment in {program_id}, the "
+        f"program on this page.{not_enrolled_hint}"
+    )
 
 
 def _could_not_check(operation: str) -> str:
@@ -1162,7 +1242,7 @@ def _only(summaries: list[dict], *fields: str) -> list[dict]:
 
 
 @tool(args_schema=EnrollmentsToolSchema)
-async def get_enrollments(  # noqa: C901
+async def get_enrollments(
     state: Annotated[dict, InjectedState], user_course_input: str | None = None
 ):
     """
@@ -1188,113 +1268,67 @@ async def get_enrollments(  # noqa: C901
         {k: v for k, v in p.items() if k != "certificate_uuid"}
         for p in map(_program_enrollment_summary, programs)
     ]
-    page, platform = _get_page_context(state, summaries)
     course_query = _normalize_course_input(user_course_input)
-    page_resource_id = page["resource_id"]
-    page_program = next(
-        (p for p in programs if p["program_id"] == page_resource_id), None
-    )
+    selection = await _select_course(state, user_course_input, summaries=summaries)
+    page = selection.page
+    if (
+        selection.status == AccountLookupStatus.NOT_ENROLLED_ON_PAGE
+        and page["course_id"]
+    ):
+        # This tool lists the learner's other courses, so a page course they
+        # aren't in is still checked: it may be another platform's
+        status = await _page_platform_status(page, page["course_id"])
+        selection = replace(selection, status=status or selection.status)
+    runs = summaries
     if course_query:
-        page_courses = _page_courses(page, summaries)
-        # A name for the page's course is the page's course, not another
-        # course with the same number
-        names_page = bool(page_resource_id) and _matches_resource_query(
-            course_query, page
-        )
-        summaries = [
-            s
-            for s in summaries
-            if _matches_resource_query(course_query, s)
-            and (not names_page or s["course_id"] in page_courses)
-        ]
-        # The page's course, under any of its names, could be another
-        # platform's with the same id
-        on_page = [s for s in summaries if s["course_id"] in page_courses]
-        # A run the learner isn't in has no known course to look up
-        page_id = (on_page[0] if on_page else page)["course_id"]
-        if (
-            (names_page or on_page)
-            and page_id
-            and (status := await _page_platform_status(platform, page_id))
+        if selection.status in (
+            AccountLookupStatus.NOT_ON_MITXONLINE,
+            AccountLookupStatus.PLATFORM_UNCLEAR,
         ):
-            return json.dumps(_empty_course_selection(status))
+            return json.dumps(selection.result())
+        runs = selection.runs
         programs = _named_programs(course_query, programs)
-        if status := await _page_program_status(state, programs):
-            return json.dumps(_empty_course_selection(status))
-    result = {"enrollments": _current_runs(summaries), "programs": programs}
-    if course_query and not summaries and not programs:
+        if status := await _page_program_status(page, programs):
+            return json.dumps(CourseSelection(status).result())
+    result = {
+        "enrollments": _only(
+            _current_runs(runs),
+            "start_date",
+            "end_date",
+            "status",
+            "self_paced",
+            "enrollment_mode",
+            "course_url",
+        ),
+        "programs": programs,
+    }
+    if course_query and not runs and not programs:
         result["selection_status"] = AccountLookupStatus.NOT_FOUND
         result["note"] = _not_in_records(user_course_input)
-    result["enrollments"] = _only(
-        result["enrollments"],
-        "start_date",
-        "end_date",
-        "status",
-        "self_paced",
-        "enrollment_mode",
-        "course_url",
-    )
     # From any run, since the one listed may not be the one that earned it
     certificates = {
         s["course_id"] or s["run_id"]: {
             "run_id": s["run_id"],
             "url": s["certificate_url"],
         }
-        for s in summaries
+        for s in runs
         if s["certificate_earned"]
     }
     for summary in result["enrollments"]:
         summary["certificate"] = certificates.get(
             summary["course_id"] or summary["run_id"]
         )
-    # From every run, since the one kept per course may not be the page's run
-    page_enrollment = next(
-        iter(
-            _current_runs(
-                [
-                    s
-                    for s in summaries
-                    if page_resource_id in (s["course_id"], s["run_id"])
-                ]
-            )
-        ),
-        None,
-    )
-    if page_enrollment:
-        # Small models otherwise confuse "this course" with the one in progress,
-        # or an ended run with no enrollment.
-        status = await _page_platform_status(platform, page_enrollment["course_id"])
-        result["page_course_note"] = (
-            status.note
-            if status
-            else "The learner is enrolled in the course on this page, "
-            f"{page_enrollment['course_title']} ({page_enrollment['course_id']}); "
-            f"its run is {page_enrollment['status']}. Answer a question about "
-            "this course from this, not by listing their other courses."
+    # Small models otherwise confuse "this course" with the one in progress,
+    # or an ended run with no enrollment.
+    if selection.on_page and page["program_id"]:
+        result["page_program_note"] = (
+            _page_program_note(page, programs)
+            if selection.status == AccountLookupStatus.ON_PROGRAM_PAGE
+            else selection.status.note
         )
-    if page_resource_id and not course_query and "page_course_note" not in result:
-        # Say so, rather than leave the model to read it from a missing key. A
-        # run the learner isn't in has no known course to look up a platform for.
-        status = None
-        platform_lookup_id = page["course_id"] or page["program_id"]
-        if platform or platform_lookup_id:
-            status = await _page_platform_status(platform, platform_lookup_id)
-        note = status.note if status else None
-        if page_resource_id.startswith(PROGRAM_ID_PREFIX):
-            result["program_on_page"] = note or (
-                "The learner is enrolled in the program on this page, "
-                f"{page_program['program_title']} ({page_resource_id})."
-                if page_program
-                else "The learner has no MITx Online enrollment in "
-                f"{page_resource_id}, the program on this page."
-            )
-        else:
-            result["page_course_note"] = note or (
-                f"The learner has no MITx Online enrollment in {page_resource_id}, "
-                "the course or run on this page."
-            )
-    if "page_course_note" in result:
-        result["page_resource_id"] = page_resource_id
+    elif selection.on_page and page["resource_id"]:
+        result["page_course_note"] = _page_course_note(selection)
+        result["page_resource_id"] = page["resource_id"]
     return json.dumps(result)
 
 
@@ -1481,6 +1515,7 @@ async def get_certificate_status(  # noqa: C901, PLR0912
     it couldn't be confirmed (send the learner to support for that one).
     """
     resource_query = _normalize_course_input(user_course_input)
+    page = _get_page_context(state)
     try:
         if all_courses:
             result = {
@@ -1488,7 +1523,7 @@ async def get_certificate_status(  # noqa: C901, PLR0912
                     await _summaries(), prefer_certificate=True
                 )
             }
-            page, platform = _get_page_context(state)
+            platform = page["platform"]
             if page["resource_id"] and platform and platform != MITXONLINE_PLATFORM:
                 # So a question about this page isn't answered from these
                 result["note"] = (
@@ -1524,11 +1559,11 @@ async def get_certificate_status(  # noqa: C901, PLR0912
         and not all_courses
         and (
             status := await _page_program_status(
-                state, _named_programs(resource_query, programs)
+                page, _named_programs(resource_query, programs)
             )
         )
     ):
-        return json.dumps(_empty_course_selection(status))
+        return json.dumps(CourseSelection(status).result())
     credentials = await asyncio.gather(
         *(
             _digital_credential(learner_api.get_course_certificate, summary)
@@ -1586,17 +1621,12 @@ async def get_certificate_status(  # noqa: C901, PLR0912
             result["note"] = _not_in_records(user_course_input) + LIST_COURSES_HINT
     if result.get("selection_status") == AccountLookupStatus.ON_PROGRAM_PAGE:
         # Only set once the page's program is known to be MITx Online's
-        page_program = _get_page_context(state)[0]["program_id"]
-        result["program_on_page"] = next(
-            (
-                f"The program on this page is {p['program_title']} "
-                f"({p['program_id']}); its entry in programs says whether the "
-                "learner earned its certificate."
-                for p in programs
-                if p["program_id"] == page_program
+        result["page_program_note"] = _page_program_note(
+            page,
+            programs,
+            not_enrolled_hint=(
+                " program_certificates can still list its certificate, by title."
             ),
-            "The learner has no MITx Online enrollment in the program on this "
-            "page. program_certificates can still list its certificate, by title.",
         )
     return json.dumps(result)
 

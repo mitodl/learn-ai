@@ -202,7 +202,7 @@ def test_page_context_keeps_resource_identifiers_distinct(
     page_resource_id, course_id, run_id, program_id
 ):
     """The raw page reference is not mislabeled as a course or run ID."""
-    context, platform = _get_page_context(
+    context = _get_page_context(
         {"course_id": [page_resource_id], "platform": [MITXONLINE_PLATFORM]},
         [{"course_id": CALCULUS, "run_id": f"{CALCULUS}+1T2020"}],
     )
@@ -212,8 +212,8 @@ def test_page_context_keeps_resource_identifiers_distinct(
         "course_id": course_id,
         "run_id": run_id,
         "program_id": program_id,
+        "platform": MITXONLINE_PLATFORM,
     }
-    assert platform == MITXONLINE_PLATFORM
 
 
 async def test_progress_is_for_the_page_course(records):
@@ -705,6 +705,9 @@ async def test_enrollments_by_the_page_course_name_on_mitxonline(
     )
 
     assert [e["run_id"] for e in result["enrollments"]] == runs
+    assert ("isn't in the learner's MITx Online records" in result.get("note", "")) is (
+        not runs
+    )
 
 
 @pytest.mark.parametrize("user_course_input", ["Physics I", "course-v1:8.01x+1T2026"])
@@ -798,6 +801,104 @@ async def test_enrollments_keep_an_earlier_runs_certificate(records):
     assert course["status"] == "in progress"
     assert course["end_date"] == "2099-01-01T00:00:00Z"
     assert course["certificate"]["run_id"] == f"{CALCULUS}+1T2020"
+
+
+@pytest.mark.parametrize("user_course_input", ["Calculus 1A", "18.01x"])
+async def test_enrollments_for_the_run_pages_course_keep_its_other_runs(
+    records, user_course_input
+):
+    """Naming a run page's course lists its current run and an older certificate."""
+    records["enrollments"].return_value = [
+        enrollment(
+            CALCULUS,
+            "1T2020",
+            "Calculus 1A",
+            end="2020-06-01T00:00:00Z",
+            certificate={"link": "/certificate/abc/", "uuid": "abc"},
+        ),
+        enrollment(CALCULUS, "3T2026", "Calculus 1A"),
+    ]
+
+    result = await call(
+        get_enrollments,
+        page_resource_id=f"{CALCULUS}+1T2020",
+        user_course_input=user_course_input,
+    )
+
+    (course,) = result["enrollments"]
+    assert course["run_id"] == f"{CALCULUS}+3T2026"
+    assert course["certificate"]["run_id"] == f"{CALCULUS}+1T2020"
+    assert "its run is ended" in result["page_course_note"]
+
+
+@pytest.mark.parametrize("page_first", [True, False])
+async def test_title_shared_with_the_page_course_checks_the_page_course(
+    mocker, records, page_first
+):
+    """The page course's platform is looked up, whichever match comes first."""
+    mocker.patch(
+        "ai_chatbots.tools._get_course_platform",
+        side_effect=lambda course: "xpro" if course == SHARED else MITXONLINE_PLATFORM,
+    )
+    runs = [
+        enrollment(SHARED, "1T2026", "AI Governance"),
+        enrollment("course-v1:OTHER+AIGE", "1T2026", "AI Governance"),
+    ]
+    records["enrollments"].return_value = runs if page_first else runs[::-1]
+
+    result = await call(
+        get_enrollments, page_resource_id=SHARED, user_course_input="AI Governance"
+    )
+
+    assert result["enrollments"] == []
+    assert result["selection_status"] == AccountLookupStatus.NOT_ON_MITXONLINE
+
+
+async def test_title_shared_with_the_page_course_asks_which_first(mocker, records):
+    """For one course's records, a name for two courses asks which before anything."""
+    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
+    records["enrollments"].return_value = [
+        enrollment(SHARED, "1T2026", "AI Governance"),
+        enrollment("course-v1:OTHER+AIGE", "1T2026", "AI Governance"),
+    ]
+
+    result = await call(
+        get_course_progress, page_resource_id=SHARED, user_course_input="AI Governance"
+    )
+
+    assert result["selection_status"] == AccountLookupStatus.AMBIGUOUS
+
+
+async def test_enrollments_for_the_page_run_by_its_id_keep_that_run(records):
+    """The page's own run id lists that run, not the course's current one."""
+    result = await call(
+        get_enrollments,
+        page_resource_id=f"{CALCULUS}+1T2020",
+        user_course_input=f"{CALCULUS}+1T2020",
+    )
+
+    assert [e["run_id"] for e in result["enrollments"]] == [f"{CALCULUS}+1T2020"]
+    assert "its run is ended" in result["page_course_note"]
+
+
+@pytest.mark.parametrize(
+    ("found", "status"),
+    [
+        ("xpro", AccountLookupStatus.NOT_ON_MITXONLINE),
+        (None, AccountLookupStatus.PLATFORM_UNCLEAR),
+    ],
+)
+async def test_enrollments_check_the_platform_of_an_unenrolled_page_course(
+    mocker, records, found, status
+):
+    """Listing other courses still says when the page's course is another platform's."""
+    lookup = mocker.patch("ai_chatbots.tools._get_course_platform", return_value=found)
+
+    result = await call(get_enrollments, page_resource_id=SHARED)
+
+    lookup.assert_called_once_with(SHARED)
+    assert len(result["enrollments"]) == 3
+    assert result["page_course_note"] == status.note
 
 
 async def test_enrollments_keep_only_answer_fields(records):
@@ -1145,7 +1246,17 @@ async def test_course_named_on_a_program_page(records):
 
 @pytest.mark.parametrize(
     ("page_resource_id", "expected"),
-    [(PROGRAM, PROGRAM), ("program-v1:MITx+SCM", "no MITx Online enrollment")],
+    [
+        (PROGRAM, PROGRAM),
+        (
+            "program-v1:MITx+SCM",
+            (
+                "no MITx Online enrollment in program-v1:MITx+SCM, the program on "
+                "this page. program_certificates can still list its certificate, "
+                "by title."
+            ),
+        ),
+    ],
 )
 async def test_certificate_status_names_the_page_program(
     records, page_resource_id, expected
@@ -1163,7 +1274,7 @@ async def test_certificate_status_names_the_page_program(
     )
 
     assert result["programs"][0]["certificate_earned"] is True
-    assert expected in result["program_on_page"]
+    assert expected in result["page_program_note"]
 
 
 @pytest.mark.parametrize(
@@ -1188,7 +1299,7 @@ async def test_program_page_keeps_its_platform_check(
         get_certificate_status, page_resource_id=PROGRAM, platform=platform
     )
 
-    assert ("program_on_page" in result) is on_page
+    assert ("page_program_note" in result) is on_page
     assert result["note"].startswith("The page is a program") is on_page
     assert lookup.called is (platform is None)
     # Another platform's program reads none of the learner's MITx Online ones
@@ -1343,7 +1454,7 @@ async def test_enrollments_say_whether_the_page_program_is_enrolled(
         get_enrollments, page_resource_id=page_resource_id, platform=platform
     )
 
-    assert expected in result["program_on_page"]
+    assert expected in result["page_program_note"]
     assert "page_course_note" not in result
 
 
@@ -1363,7 +1474,7 @@ async def test_program_page_without_platform_checks_its_program_id(
     result = await call(get_enrollments, page_resource_id=PROGRAM)
 
     lookup.assert_called_once_with(PROGRAM)
-    assert result["program_on_page"] == status.note
+    assert result["page_program_note"] == status.note
 
 
 @pytest.mark.parametrize(
