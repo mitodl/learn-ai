@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.11.5.2] - 2026-11-05
+
+### Changes
+
+- **Cap litellm below 1.106** (#159) by mrbertrand@gmail.com
+- **Update dependency prek to v0.5.7** (#122) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update dependency astral-sh/uv to v0.13.5** (#123) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update all non-major dev-dependencies** (#121) by 29139614+renovate[bot]@users.noreply.github.com
+- **Lock file maintenance** (#131) by 29139614+renovate[bot]@users.noreply.github.com
+
 ## [2026.11.3.1] - 2026-11-03
 
 ### Changes
