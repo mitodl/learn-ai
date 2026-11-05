@@ -2221,6 +2221,53 @@ async def test_try_to_answer_keeps_an_answer_that_has_no_records_behind_it(
     )
 
 
+@pytest.mark.asyncio
+async def test_try_to_answer_falls_through_when_every_tool_failed(
+    mocker, mock_checkpointer
+):
+    """
+    A tool that could not reach the records is not a source. The prompt tells
+    the model to say it couldn't check, so an outage produces a ToolMessage and
+    fluent text - which would ship as an answer and mark the turn answered,
+    putting intake out of reach exactly when ticket volume spikes.
+    """
+    chatbot = await _answering_bot(
+        mocker,
+        mock_checkpointer,
+        _answer_result(
+            HumanMessage("what's my grade?"),
+            _tool_message(json.dumps({"error": tools.COULD_NOT_CHECK})),
+            AIMessage("I couldn't check your records right now."),
+        ),
+    )
+
+    assert await chatbot._try_to_answer("what's my grade?", {}) == ""  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_try_to_answer_keeps_an_answer_when_only_some_tools_failed(
+    mocker, mock_checkpointer
+):
+    """
+    A partial outage still has records behind it. Falling through whenever any
+    tool failed would throw away an answer the learner's own data supports.
+    """
+    chatbot = await _answering_bot(
+        mocker,
+        mock_checkpointer,
+        _answer_result(
+            HumanMessage("what's my grade?"),
+            _tool_message(json.dumps({"error": tools.COULD_NOT_CHECK})),
+            _tool_message('{"enrollments": [{"course_id": "18.01x"}]}'),
+            AIMessage("You're in 18.01x; I couldn't read your grade."),
+        ),
+    )
+
+    assert await chatbot._try_to_answer("what's my grade?", {}) == (  # noqa: SLF001
+        "You're in 18.01x; I couldn't read your grade."
+    )
+
+
 @pytest.mark.parametrize(
     "final",
     [
