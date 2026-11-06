@@ -2442,6 +2442,11 @@ async def test_try_to_answer_keeps_the_review_block_out_of_the_attempt(
     is persisted like any other reply, so replaying the thread would feed that
     address to the model and into the PostHog and Opik traces the attempt
     writes - the same leak the no-exc_info rule avoids for Sentry.
+
+    Calls _try_to_answer directly, and deliberately so: get_completion has no
+    route that reaches an attempt with a review still in the slice, so this
+    pins the filter itself rather than a state the chain can currently reach.
+    See _quotes_the_reply_to for why it is kept anyway.
     """
     chatbot = await _answering_bot(
         mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))

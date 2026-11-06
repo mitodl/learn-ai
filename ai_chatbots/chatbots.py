@@ -1544,10 +1544,16 @@ def _quotes_the_reply_to(message: BaseMessage) -> bool:
     Whether a persisted reply is the scripted review, which quotes the
     learner's address back at them.
 
-    The two other scripted texts holding an address, SUPPORT_TICKET_FILED and
-    SUPPORT_TICKET_ALREADY_FILED, cannot reach an answer attempt: both mean the
-    thread already has a ticket reference, which get_completion answers from its
-    first branch without ever calling one.
+    Belt and braces: no route reaches an answer attempt with a review still in
+    the replayed slice. A review sets awaiting_send, which sends the next turn
+    to _send_edit_or_cancel, and every way out of there either pushes
+    cancelled_after past the review or lands in one of the branches ahead of
+    answering. Even without that, a message past cancelled_after makes
+    intake_started true, and answering is gated on it being false.
+
+    That is four invariants deep, spread over three functions, and the thing it
+    protects is the learner's address reaching a trace. The filter is cheaper
+    than the next person having to re-derive the argument.
     """
     return isinstance(message, AIMessage) and str(message.content).startswith(
         SUPPORT_TICKET_REVIEW_HEADER
