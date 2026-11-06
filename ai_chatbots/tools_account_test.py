@@ -412,6 +412,31 @@ async def test_course_name_keeps_meaningful_punctuation(records, user_course_inp
     assert [e["course_id"] for e in result["enrollments"]] == [CALCULUS]
 
 
+@pytest.mark.parametrize("user_course_input", ["this course", "This program?"])
+@pytest.mark.parametrize(
+    "tool",
+    [
+        get_enrollments,
+        get_course_progress,
+        get_certificate_status,
+        get_upcoming_assignments,
+    ],
+)
+async def test_unnamed_page_reference_reads_the_page_course(
+    records, tool, user_course_input
+):
+    """Passing "this course" as a name reads the page's course, not a missing one."""
+    result = await call(
+        tool,
+        page_resource_id=CALCULUS,
+        platform=MITXONLINE_PLATFORM,
+        user_course_input=user_course_input,
+    )
+
+    assert result["page_resource_id"] == CALCULUS
+    assert "isn't in the learner's MITx Online records" not in result.get("note", "")
+
+
 async def test_page_course_title_of_another_run_reads_the_page_run(records):
     """A title only an older run has still reads the page's run of that course."""
     runs = [
@@ -1493,3 +1518,26 @@ async def test_certificate_status_for_a_certificate_only_program(
     assert "is the learner's program Data, Economics" in result["note"]
     assert "isn't in the learner's MITx Online records" not in result["note"]
     assert result["selection_status"] == AccountLookupStatus.MATCHED
+
+
+async def test_certificate_status_for_a_name_of_two_programs_asks_which(records):
+    """A word two of the learner's programs share isn't read as either one."""
+    records["programs"].return_value.append(
+        {
+            "program": {
+                "title": "Statistics and Data Science",
+                "readable_id": "program-v1:MITx+SDS",
+            },
+            "certificate": None,
+            "enrollment_mode": "verified",
+        }
+    )
+
+    result = await call(
+        get_certificate_status, page_resource_id=CALCULUS, user_course_input="Data"
+    )
+
+    assert result["selection_status"] == AccountLookupStatus.AMBIGUOUS
+    assert "Data, Economics, Statistics and Data Science" in result["note"]
+    assert "Ask which one they mean" in result["note"]
+    assert "is the learner's program" not in result["note"]

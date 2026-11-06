@@ -738,8 +738,9 @@ class EnrollmentsToolSchema(AccountToolSchema):
             """
             The course the learner asks about, the one on this page included:
             as they named it, its number, id or title (such as "18.01x" or
-            "Calculus 1A"), exactly as they wrote it. Leave it out only when
-            they ask about all of their courses.
+            "Calculus 1A"), exactly as they wrote it. Leave it out when they
+            ask about all of their courses, or about the course on this page
+            without naming it ("this course").
             """
         ),
     )
@@ -1003,13 +1004,23 @@ def _page_courses(page: dict, summaries: list[dict]) -> set[str]:
     return ids
 
 
+# An unnamed reference to the page's course, which a model passes instead of
+# leaving user_course_input out
+PAGE_REFERENCE_REGEX = re.compile(r"(this|the|my) (course|program|class)", re.I)
+
+
 def _normalize_course_input(user_course_input: str | None) -> str | None:
-    """Strip whitespace, quotes and sentence punctuation from both ends."""
+    """
+    Strip whitespace, quotes and sentence punctuation from both ends. An
+    unnamed reference to the page's course ("this course") is None, like no input.
+    """
     if user_course_input is None:
         return None
     # A leading "." stays, for names like ".NET"; "+" is never stripped.
     quotes = " \t\n\"'\u201c\u201d\u2018\u2019"
     query = user_course_input.lstrip(quotes + "?!,;").rstrip(quotes + "?!.,;")
+    if PAGE_REFERENCE_REGEX.fullmatch(query):
+        return None
     # An unusable explicit name must not turn into a request for the page course.
     return query or user_course_input
 
@@ -1597,7 +1608,13 @@ async def get_certificate_status(  # noqa: C901, PLR0912
                 resource_query, programs + result["program_certificates"]
             )
         }
-        if named:
+        if len(named) > 1:
+            result["selection_status"] = AccountLookupStatus.AMBIGUOUS
+            result["note"] = (
+                f"{user_course_input} names more than one of the learner's "
+                f"programs: {', '.join(sorted(named))}. Ask which one they mean."
+            )
+        elif named:
             result["selection_status"] = AccountLookupStatus.MATCHED
             result["note"] = (
                 f"{user_course_input} is the learner's program "
