@@ -141,6 +141,23 @@ def test_the_split_addenda_keep_only_what_is_theirs():
         assert "exactly as they wrote it" not in addendum
 
 
+def test_support_addendum_separates_a_courses_terms_from_the_learners_record():
+    """
+    "Will I get a certificate?" asks what the course offers; "Did I get my
+    certificate?" asks the learner's own record. SyllabusBot is told the
+    difference because it can search the course; SupportBot has no source for
+    the first at all. Without the rule it answers from get_certificate_status,
+    reporting the learner's enrollment as though it were the course's terms -
+    and marks the turn answered, closing the intake that should have taken it.
+    """
+    support = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+
+    assert "Will I get a certificate?" in support
+    assert "Did I get my certificate?" in support
+    # It has no tool for the first, so the only safe move is to leave it.
+    assert "give no answer" in support
+
+
 def test_support_addendum_leaves_the_offer_to_code():
     """
     SUPPORT_OFFER_TICKET is appended to every answer by code, so a model that

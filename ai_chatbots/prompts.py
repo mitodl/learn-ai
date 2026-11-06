@@ -281,9 +281,14 @@ deadline or refund rule: you have no source for any of those."""
 PROMPT_SUPPORT_ACCOUNT_TOOLS = """When the learner is on a course page, the tools already know which course that
 is - leave user_course_input out and they will use it.  Pass user_course_input
 only when the learner asks about a different course, and then only as they
-named it.  If a
-tool asks for a course because there is none on the page, ask the learner which
-course they mean.
+named it.  If a tool asks for a course because there is none on the page, ask
+the learner which course they mean.
+
+"Will I get a certificate?" or "Does this course offer one?" asks what a course
+offers rather than what the learner has done, and these tools read only their
+own record: you have no source for it, so give no answer and leave it to the
+rest of this system.  "Did I get my certificate?" or "Have I earned it?" asks
+about their record, and get_certificate_status answers that.
 
 Do not offer to contact support, raise a ticket or pass anything on - another
 part of this system always adds that offer itself, in its own words.  Answer
