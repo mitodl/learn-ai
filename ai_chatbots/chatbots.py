@@ -11,11 +11,18 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 import posthog
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
@@ -46,6 +53,7 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.constants import AZURE_MODEL_PREFIX
+from ai_chatbots.learner_api import COURSE_KEY_RE
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
@@ -92,6 +100,11 @@ class BaseChatbot(ABC):
     # never reaches it.
     CALLS_THE_MODEL = True
 
+    # Whether the proxy budget is provisioned in __init__. False for a bot
+    # that only sometimes reaches a model, so the turns that short-circuit
+    # don't pay a blocking HTTP call for a model they never call.
+    PROVISIONS_PROXY_EAGERLY = True
+
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
@@ -123,7 +136,7 @@ class BaseChatbot(ABC):
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
-            if self.CALLS_THE_MODEL:
+            if self.CALLS_THE_MODEL and self.PROVISIONS_PROXY_EAGERLY:
                 self.proxy.create_proxy_user(self.user_id)
             self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
@@ -641,10 +654,11 @@ class SyllabusBot(TruncatingChatbot):
                 "about these courses."
             )
         if self.enable_account_tools and self.instructions:
-            account_prompt = get_system_prompt(
-                "syllabus_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
-            )
-            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
+            for prompt_name in ("account_tools_core", "syllabus_account_tools"):
+                account_prompt = get_system_prompt(
+                    prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
+                )
+                self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -1024,6 +1038,27 @@ class SupportAgentState(SummaryState):
     filing_uncertain: Annotated[list[bool], add]
     filing_blocked: Annotated[list[bool], add]
     cancelled_after: Annotated[list[int], add]
+    # The learner asked for a human, so this thread stops trying to answer.
+    handed_off: Annotated[list[bool], add]
+    # Whether the previous turn was an answer, which is what makes a bare
+    # "thanks" a close-out rather than an edit to a request under review.
+    answered: Annotated[list[bool], add]
+
+
+class SupportAnsweringState(SummaryState):
+    """
+    State for the support bot's answer attempt, which is a different graph from
+    the persisted intake thread and needs a different shape.
+
+    It declares the page's course because LangGraph silently drops input keys
+    the schema does not define, and the account tools read course_id and
+    platform out of state through InjectedState. None of the intake channels
+    belong here: the attempt is never checkpointed, and a course id that cannot
+    reach the support thread cannot reach a ticket.
+    """
+
+    course_id: Annotated[list[str], add]
+    platform: Annotated[list[str] | None, add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
@@ -1083,6 +1118,18 @@ SUPPORT_ASK_EMAIL_AGAIN = (
 SUPPORT_ASK_MORE = (
     "Thanks for letting us know. Is there anything else you'd like to add before I "
     "pass this on to the MIT Open Learning support team?"
+)
+# Appended by code to every answer, so the route to a person never depends on
+# the answer having been any good - the same reason filing is in code.
+# Deliberately a statement, not a question: "yes" to "did that help, or shall I
+# send it?" cannot be told apart from "yes, send it".
+SUPPORT_OFFER_TICKET = (
+    "If that didn't sort it out, tell me more and I'll pass it to the MIT Open "
+    "Learning support team."
+)
+SUPPORT_ANSWER_CLOSED = (
+    "Glad that helped. If something else comes up, just ask - and I can still "
+    "pass a request to the MIT Open Learning support team whenever you want."
 )
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
@@ -1197,6 +1244,24 @@ AFFIRMATIVE_OPENERS = frozenset(phrase.split()[0] for phrase in AFFIRMATIVE_PHRA
 # A plain no. Under the review, where the question is whether to send, these
 # mean do not send.
 DECLINE_PHRASES = frozenset({"no", "nope", "no thanks", "no thank you"})
+
+# Said to an answer: the learner is finished and there is nothing to file.
+# Narrow on purpose - see _closes_the_answer for why this is not FILLER_PHRASES.
+ANSWER_CLOSING_PHRASES = frozenset(
+    {
+        "thanks",
+        "thanks a lot",
+        "thank you",
+        "thank you very much",
+        "that helped",
+        "that helps",
+        "that's helpful",
+        "got it",
+        "perfect",
+        "great",
+        "cheers",
+    }
+)
 
 # Answers to "anything else to add?" that add nothing. Before the review they
 # move things along; under it they are ambiguous - "that's all" may mean "go
@@ -1336,6 +1401,23 @@ def _is_decline(message: str) -> bool:
     return _normalised(message) in DECLINE_PHRASES
 
 
+def _closes_the_answer(message: str) -> bool:
+    """
+    Report whether the learner is finished with an answer rather than asking
+    for more or for a person.
+
+    Not _is_filler: FILLER_PHRASES is the union used to keep chatter out of the
+    ticket body, and it contains every affirmative. Said to "tell me more and
+    I'll pass it on", "send it" and "file it" mean pass it on - reading them as
+    "glad that helped" files nothing and tells the learner it did. Ambiguous
+    replies fall through to the review instead, which the learner can read and
+    cancel; a wrong close-out is silent.
+    """
+    return _normalised(message) in (
+        ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
+    )
+
+
 def _is_unclear_go_ahead(message: str) -> bool:
     """
     Report whether a short reply to the review is one we cannot act on.
@@ -1457,6 +1539,50 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     return "\n".join(lines)
 
 
+def _quotes_the_reply_to(message: BaseMessage) -> bool:
+    """
+    Whether a persisted reply is the scripted review, which quotes the
+    learner's address back at them.
+
+    Belt and braces: no route reaches an answer attempt with a review still in
+    the replayed slice. A review sets awaiting_send, which sends the next turn
+    to _send_edit_or_cancel, and every way out of there either pushes
+    cancelled_after past the review or lands in one of the branches ahead of
+    answering. Even without that, intake_started is true for any message past
+    cancelled_after once answered is false - and producing a review clears
+    answered - so answering is gated off by the time a review could be read.
+
+    That is four invariants deep, spread over three functions, and the thing it
+    protects is the learner's address reaching a trace. The filter is cheaper
+    than the next person having to re-derive the argument.
+    """
+    return isinstance(message, AIMessage) and str(message.content).startswith(
+        SUPPORT_TICKET_REVIEW_HEADER
+    )
+
+
+def _read_the_records(message: ToolMessage) -> bool:
+    """
+    Whether a tool call reached the learner's records, as opposed to reporting
+    that it could not.
+
+    Account tools swallow their own errors and return COULD_NOT_CHECK, so a
+    failed lookup still arrives as a ToolMessage and the prompt asks the model
+    to say it couldn't check. Counting that as a source would ship "I couldn't
+    check" as the answer and mark the turn answered - closing intake during the
+    outage that spikes ticket volume.
+    """
+    if not isinstance(message.content, str):
+        return True
+    try:
+        payload = json.loads(message.content)
+    except ValueError:
+        return True
+    return not (
+        isinstance(payload, dict) and payload.get("error") == tools.COULD_NOT_CHECK
+    )
+
+
 def _ticket_subject(description: str) -> str:
     """Build a subject from the learner's own words, no model involved."""
     subject = " ".join((description or "").split())
@@ -1468,14 +1594,22 @@ def _ticket_subject(description: str) -> str:
 class SupportBot(TruncatingChatbot):
     """Service class for the support intake agent"""
 
-    # No prompt, because nothing here calls the model.
+    # Both are set per instance in __init__: only a bot with tools has a prompt
+    # worth loading or a token budget worth provisioning.
     PROMPT_TEMPLATE = None
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     STATE_CLASS = SupportAgentState
-    TRACE_STATE_KEYS = ("page_url",)
-    # Every branch of get_completion ends at _reply_without_the_model.
+    ANSWERING_STATE_CLASS = SupportAnsweringState
+    # No user_email, no verified_email, no user_name: a trace property is a
+    # PostHog event property, which is a different retention and a different
+    # access list from a Zendesk ticket.
+    TRACE_STATE_KEYS = ("page_url", "course_id", "platform")
     CALLS_THE_MODEL = False
+    # A bot is constructed on every request, including the ones that
+    # short-circuit before any model call. The budget is provisioned on the
+    # first attempt instead, so those turns don't pay a blocking HTTP call.
+    PROVISIONS_PROXY_EAGERLY = False
 
     def __init__(  # noqa: PLR0913
         self,
@@ -1488,7 +1622,16 @@ class SupportBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         user_agent: str = "",
+        enable_account_tools: bool = False,
     ):
+        # Before super().__init__(): it reads PROMPT_TEMPLATE and
+        # CALLS_THE_MODEL, then calls create_tools() and get_llm(), which binds
+        # whatever create_tools returned. A second tool set ORs into `answering`.
+        self.enable_account_tools = enable_account_tools
+        self._proxy_user_ready = False
+        answering = enable_account_tools
+        self.PROMPT_TEMPLATE = "support" if answering else None
+        self.CALLS_THE_MODEL = answering
         super().__init__(
             user_id,
             name=name,
@@ -1501,24 +1644,223 @@ class SupportBot(TruncatingChatbot):
         # Not graph state: the turn that files is itself a request, so this is
         # the live header rather than something accumulated over the thread.
         self.user_agent = user_agent
+        # Each tool set appends its own rules, so adding a set is an addendum
+        # rather than a rewrite. Before create_agent_graph, which captures
+        # self.instructions as it builds.
+        if self.enable_account_tools and self.instructions:
+            for prompt_name in ("account_tools_core", "support_account_tools"):
+                account_prompt = get_system_prompt(
+                    prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
+                )
+                self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
         self.agent = self.create_agent_graph()
+        # A second graph, deliberately without the checkpointer: an attempt
+        # that fails or times out must leave nothing behind, so falling back to
+        # the script is structural rather than cleanup that has to be right
+        # under every failure mode. The canonical thread stays the one
+        # _reply_without_the_model writes.
+        self._build_answering_agent()
+
+    def _build_answering_agent(self) -> None:
+        """
+        Build the unpersisted graph the answer attempt runs on.
+
+        ANSWERING_STATE_CLASS, not STATE_CLASS: LangGraph drops any input key
+        the state schema does not declare, so a schema without course_id means
+        the tools never see the page's course however carefully it is passed
+        in. Keeping it off the persisted class is also what keeps a course id
+        out of reach of the ticket path.
+        """
+        self._answering_agent = (
+            create_react_agent(
+                self.llm,
+                tools=self.tools,
+                state_schema=self.ANSWERING_STATE_CLASS,
+                prompt=self.instructions,
+            )
+            if self.answering_enabled
+            else None
+        )
+
+    @property
+    def answering_enabled(self) -> bool:
+        """
+        Whether this bot has anything to answer with.
+
+        Read off the tool list rather than off enable_account_tools, so a
+        second tool set turns answering on by existing.
+        """
+        return bool(self.tools)
 
     def create_tools(self):
         """
-        No tools: the bot takes the problem in, it does not answer it, and the
-        ticket is filed deterministically in get_completion. A second,
-        model-driven filing path could only disagree with that one.
+        Whatever tool sets this request enabled - and never a filing tool. The
+        ticket is filed deterministically in get_completion: a second,
+        model-driven filing path could only disagree with that one, and a model
+        that declines to call it leaves the learner believing a ticket exists.
         """
-        return []
+        bot_tools = []
+        if self.enable_account_tools:
+            bot_tools.extend(tools.ACCOUNT_TOOLS)
+        return bot_tools
 
     async def get_tool_metadata(self) -> str:
-        """Return no metadata - this agent has no tools"""
+        """
+        Return no metadata. Every reply goes out through
+        _reply_without_the_model, which writes its own, and the answering
+        graph's tool calls are not part of the thread the frontend reads back.
+        """
         return ""
 
     async def _prior_state(self) -> dict:
         """Return the graph state already accumulated on this thread."""
         state = await self.agent.aget_state(self.config)
         return (state.values if state else None) or {}
+
+    # Enough thread for a follow-up to make sense, without resending a long
+    # intake conversation to the model every turn.
+    ANSWER_HISTORY_MESSAGES = 10
+
+    async def _ensure_proxy_user(self) -> None:
+        """Provision this learner's model budget, once, on first use."""
+        if self._proxy_user_ready or not self.proxy:
+            return
+        # Synchronous HTTP: called bare it would block the event loop for every
+        # other request this worker is serving. thread_sensitive=False because
+        # it touches no ORM, and the default shared thread is where every other
+        # sync_to_async call in the worker queues - a call that can run for
+        # REQUESTS_TIMEOUT twice over has no business holding it.
+        await sync_to_async(self.proxy.create_proxy_user, thread_sensitive=False)(
+            self.user_id
+        )
+        self._proxy_user_ready = True
+
+    @staticmethod
+    def _page_course(page_url: str) -> tuple[str | None, str | None]:
+        """
+        Return the course run on this page and its platform, or (None, None).
+
+        page_url is browser-supplied. The host check is the only thing standing
+        between a crafted url and the tools reading a course the learner is not
+        looking at - though the tools still only ever read that learner's own
+        records, so the worst case is an answer about the wrong one of their
+        own courses.
+        """
+        openedx = settings.LEARNER_API_OPENEDX_BASE_URL
+        if not page_url or not page_url.startswith(openedx):
+            return None, None
+        found = COURSE_KEY_RE.search(page_url)
+        return (found.group(0), "mitxonline") if found else (None, None)
+
+    async def _run_the_attempt(
+        self,
+        message: str,
+        history: list,
+        course_id: str | None,
+        platform: str | None,
+        extra_state: dict | None,
+    ) -> dict:
+        """
+        Everything the answer timeout has to cover: provision, trace, answer.
+
+        Provisioning is in here rather than ahead of the timeout because it is
+        a synchronous HTTP call with a retry behind it, so it can run for
+        REQUESTS_TIMEOUT twice over - longer than the whole attempt is allowed
+        to take, on a learner who was never going to see an answer.
+        """
+        await self._ensure_proxy_user()
+        callbacks = await self.set_callbacks(
+            self.get_trace_properties(
+                # course_id and platform are derived in _try_to_answer rather
+                # than carried in extra_state, so they have to be handed over
+                # for TRACE_STATE_KEYS to find them.
+                {
+                    **(extra_state or {}),
+                    "course_id": [course_id],
+                    "platform": [platform],
+                }
+            )
+        )
+        return await self._answering_agent.ainvoke(
+            {
+                "messages": [*history, HumanMessage(message)],
+                "course_id": [course_id],
+                "platform": [platform],
+            },
+            # In this call's config, never on self.config: that one is the
+            # persisted support thread, and the attempt stays out of it.
+            config={"callbacks": callbacks},
+        )
+
+    async def _try_to_answer(
+        self, message: str, prior_state: dict, extra_state: dict | None = None
+    ) -> str:
+        """
+        Try to answer from the learner's own records. Return the answer, or ""
+        to hand the turn to the intake script.
+
+        A turn where no tool fired is not a question we have a source for: the
+        model will still have produced text, and showing it would put an answer
+        nothing stands behind in front of a learner who came here for help. A
+        tool that fired and returned no records is the opposite case - "which
+        course did you mean?" is an answer - so the test is the lookup, not the
+        data it found. See the spec, 4.1.1.
+
+        A lookup that failed is neither: it reached nothing, so it is not a
+        source, and an outage would otherwise answer every learner with "I
+        couldn't check" and count the turn answered.
+        """
+        if not self._answering_agent:
+            return ""
+        history = [
+            msg
+            # Sliced from the cancellation, like every other read of the thread:
+            # a learner who cancelled withdrew those words, and replaying them
+            # would hand them to the model and to the trace this attempt writes.
+            for msg in (prior_state.get("messages") or [])[
+                _cancelled_after(prior_state) :
+            ]
+            if isinstance(msg, (HumanMessage, AIMessage))
+            and msg.content
+            and not _quotes_the_reply_to(msg)
+        ][-self.ANSWER_HISTORY_MESSAGES :]
+        # This turn's page, not prior_state's: that one is still the page the
+        # learner was on last turn, and answering about the course they just
+        # left is the whole bug this guards against.
+        course_id, platform = self._page_course(
+            ((extra_state or {}).get("page_url") or [""])[-1]
+        )
+        try:
+            # Inside the try: anything that goes wrong before an answer owes
+            # the learner the same fallback as a model that won't answer.
+            result = await asyncio.wait_for(
+                self._run_the_attempt(
+                    message, history, course_id, platform, extra_state
+                ),
+                timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
+            )
+        except Exception as error:  # noqa: BLE001
+            # Type only, and no exc_info: Sentry scrubs frame locals from every
+            # frame of a matching event, and these frames hold the learner's
+            # session cookies and their records.
+            log.warning("Support answer attempt failed: %s", type(error).__name__)
+            return ""
+        messages = result.get("messages") or []
+        if not any(
+            isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
+        ):
+            return ""
+        answer = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                # Content blocks come back as a list for some models, and the
+                # repr of a list is not an answer.
+                if isinstance(msg, AIMessage) and isinstance(msg.content, str)
+            ),
+            "",
+        )
+        return answer.strip()
 
     async def _reply_without_the_model(
         self, message: str, reply: str, extra_state: dict
@@ -1712,6 +2054,63 @@ class SupportBot(TruncatingChatbot):
         # so a correction made on this turn has to land there.
         return reply, {"user_email": [email], **filing_updates}
 
+    async def _answer_or_collect(
+        self, message: str, *, extra_state: dict, prior_state: dict, escalated: bool
+    ) -> tuple[str, dict]:
+        """
+        Try to answer the learner's question; take their request in when we
+        can't, or when they have asked for a person.
+
+        Answering is the only part of this bot a model touches, and it sits in
+        front of the intake form rather than inside it: everything below this
+        point behaves exactly as it does for a learner who gets no answer.
+        """
+        handed_off = escalated or (prior_state.get("handed_off") or [False])[-1]
+        answered_before = (prior_state.get("answered") or [False])[-1]
+        # Intake is under way when a previous turn in this request produced a
+        # scripted reply rather than an answer. Both ways a request ends - a
+        # close-out and a cancel - already push cancelled_after past the whole
+        # thread, so each of them reopens answering without saying so here.
+        intake_started = not answered_before and len(
+            prior_state.get("messages") or []
+        ) > _cancelled_after(prior_state)
+        # The offer says "tell me more and I'll pass it on", so a bare "yes"
+        # after an answer accepts it. _closes_the_answer leaves affirmatives
+        # out by design, so without this they go back to the model, which
+        # answers again and re-appends the offer - and the learner who said
+        # yes never reaches a person. A bare affirmative is filler, so it
+        # stays out of the description either way.
+        took_up_the_offer = answered_before and _is_affirmative(message)
+        if (
+            self.answering_enabled
+            and not handed_off
+            and not intake_started
+            and not took_up_the_offer
+        ):
+            if answered_before and _closes_the_answer(message):
+                return SUPPORT_ANSWER_CLOSED, {
+                    "answered": [False],
+                    # This turn's own exchange is written alongside this update,
+                    # so a later request starts past both of those too.
+                    "cancelled_after": [len(prior_state.get("messages") or []) + 2],
+                }
+            answer = await self._try_to_answer(message, prior_state, extra_state)
+            if answer:
+                return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
+
+        reply, updates = self._collect_the_request(
+            # A button carries whatever words the widget put on it, and
+            # message is required and non-blank on the wire, so the escalate
+            # turn contributes nothing to the ticket - the same reason
+            # _send_edit_or_cancel files with "" after a Send press.
+            "" if escalated else message,
+            extra_state=extra_state,
+            prior_state=prior_state,
+        )
+        if answered_before:
+            updates = {**updates, "answered": [False]}
+        return reply, updates
+
     async def get_completion(
         self,
         message: str,
@@ -1729,6 +2128,9 @@ class SupportBot(TruncatingChatbot):
         # Popped, not stored: it is this turn's Send button, and a checkpointed
         # one would approve every turn after it.
         confirmed = any(extra_state.pop("confirm", None) or [])
+        # Same reason: this turn's "contact the support team" button. What
+        # sticks for the thread is handed_off, merged in below.
+        escalated = any(extra_state.pop("escalate", None) or [])
         session = await UserChatSession.objects.filter(
             thread_id=self.thread_id
         ).afirst()
@@ -1754,18 +2156,41 @@ class SupportBot(TruncatingChatbot):
         # whole list would let the send the learner called off come back.
         elif (prior_state.get("awaiting_send") or [False])[-1]:
             reply, updates = await self._send_edit_or_cancel(
-                message,
+                # Blanked for the same reason as the other two call sites: the
+                # press carries the button's label, and here anything that is
+                # not a send or a cancel reads as an edit, so the label would
+                # be shown back as the learner's words and then left out of
+                # what files. A blank re-shows the request unchanged.
+                "" if escalated else message,
                 extra_state=extra_state,
                 prior_state=prior_state,
                 session=session,
                 confirmed=confirmed,
             )
         else:
-            reply, updates = self._collect_the_request(
-                message, extra_state=extra_state, prior_state=prior_state
+            reply, updates = await self._answer_or_collect(
+                message,
+                extra_state=extra_state,
+                prior_state=prior_state,
+                escalated=escalated,
             )
 
+        if escalated:
+            # Merged after the chain, not inside the else: the press has to
+            # count whichever branch ran. handed_off makes exactly one promise,
+            # that a learner who asked for a person is never looped back into
+            # the assistant, and a press that only counts under one of five
+            # branches does not keep it.
+            updates = {**updates, "handed_off": [True]}
+
         async for chunk in self._reply_without_the_model(
-            message, reply, {**extra_state, **updates}
+            # Blanked here as well as in the description: this write is
+            # prior_messages on the next turn, and an edit after an escalate
+            # would otherwise file the button's label as the learner's problem.
+            # _support_description drops a blank HumanMessage, and the message
+            # still occupies a position, so cancelled_after's arithmetic holds.
+            "" if escalated else message,
+            reply,
+            {**extra_state, **updates},
         ):
             yield chunk

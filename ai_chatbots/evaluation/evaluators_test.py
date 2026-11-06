@@ -9,12 +9,31 @@ from langchain_core.messages import AIMessage, HumanMessage
 from ai_chatbots import learner_api
 from ai_chatbots.evaluation.base import TestCaseSpec
 from ai_chatbots.evaluation.evaluators import (
+    _RECORD_KEYS,
     BOT_EVALUATORS,
     RecommendationBotEvaluator,
+    SupportBotEvaluator,
     SyllabusBotEvaluator,
     TutorBotEvaluator,
     VideoGPTBotEvaluator,
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_learner_api():
+    """
+    Put learner_api back the way it was after every test in this file.
+
+    Loading cases that carry learner_records calls _serve_learner_records,
+    which replaces the module's functions for the rest of the process. Left
+    in place it fails every later test that calls one for real - which is
+    the whole of tools_account_test.py, and only when the two run in the
+    same session.
+    """
+    original = {name: getattr(learner_api, name) for name in _RECORD_KEYS}
+    yield
+    for name, func in original.items():
+        setattr(learner_api, name, func)
 
 
 class TestRecommendationBotEvaluator:
@@ -436,12 +455,110 @@ class TestTutorBotEvaluator:
         assert response["messages"][0].content == "Think about the problem."
 
 
+class TestSupportBotEvaluator:
+    """Test cases for SupportBotEvaluator."""
+
+    @pytest.fixture
+    def evaluator(self, mocker):
+        """Create evaluator for testing."""
+        return SupportBotEvaluator(mocker.Mock(), "support")
+
+    def test_load_test_cases(self, evaluator, mocker):
+        """Cases come from the file's "support" key, with its shared records."""
+        mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings",
+            return_value={
+                "learner_records": {"enrollments": []},
+                "syllabus": [{"question": "not this one"}],
+                "support": [
+                    {
+                        "question": "what's my grade?",
+                        "expected_output": "0%",
+                        "expected_tools": ["get_course_progress"],
+                        "extra_state": {"page_url": ["https://courses/c"]},
+                        "extra_init": {"enable_account_tools": True},
+                    }
+                ],
+            },
+        )
+
+        cases = evaluator.load_test_cases()
+
+        assert [case.question for case in cases] == ["what's my grade?"]
+        assert cases[0].expected_tools == ["get_course_progress"]
+        assert cases[0].metadata["extra_state"]["page_url"] == ["https://courses/c"]
+        assert cases[0].metadata["learner_records"] == {"enrollments": []}
+
+    async def test_the_evaluator_drives_the_answering_graph(self, evaluator, mocker):
+        """
+        The eval must run the graph that calls the model.
+
+        SupportBot has two. `agent` is the intake graph, which never reaches a
+        model and emits the scripted reply, so running it would let every
+        "calls no tool" case pass without proving anything and make every
+        "calls this tool" case fail for the wrong reason.
+        """
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot.agent.ainvoke = mocker.AsyncMock(return_value="intake")
+        chatbot._answering_agent.ainvoke = mocker.AsyncMock(return_value="answered")  # noqa: SLF001
+        case = TestCaseSpec(
+            question="what's my grade?",
+            metadata={
+                "extra_state": {"page_url": ["https://courses/c"]},
+                "extra_init": {},
+                "history": [],
+                "learner_records": None,
+            },
+        )
+
+        result = await evaluator.collect_response(chatbot, case)
+
+        assert result == "answered"
+        chatbot.agent.ainvoke.assert_not_called()
+        state = chatbot._answering_agent.ainvoke.call_args[0][0]  # noqa: SLF001
+        assert state["page_url"] == ["https://courses/c"]
+
+    @pytest.mark.parametrize(
+        ("extra_init", "valid"),
+        [({"enable_account_tools": True}, True), ({}, False)],
+    )
+    def test_a_case_without_tools_has_nothing_to_measure(
+        self, evaluator, extra_init, valid
+    ):
+        """
+        No tools means no answering graph at all, so the case would be scored
+        against a bot that cannot answer - a failure that says nothing about
+        the prompt.
+        """
+        case = TestCaseSpec(
+            question="q", metadata={"extra_state": {}, "extra_init": extra_init}
+        )
+
+        assert evaluator.validate_test_case(case) is valid
+
+    def test_no_course_id_is_needed(self, evaluator):
+        """
+        Unlike the syllabus bot, the support bot is never handed a course: it
+        reads one off page_url, so requiring course_id would reject every case
+        that tests exactly that.
+        """
+        case = TestCaseSpec(
+            question="q",
+            metadata={
+                "extra_state": {"page_url": ["https://courses/c"]},
+                "extra_init": {"enable_account_tools": True},
+            },
+        )
+
+        assert evaluator.validate_test_case(case) is True
+
+
 class TestBotEvaluatorRegistry:
     """Test cases for bot evaluator registry."""
 
     def test_bot_evaluators_registry(self):
         """Test that all expected bot evaluators are registered."""
-        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor"]
+        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor", "support"]
 
         # Test BOT_EVALUATORS registry
         assert set(BOT_EVALUATORS.keys()) == set(expected_bots)
@@ -459,6 +576,7 @@ class TestBotEvaluatorRegistry:
             "syllabus": SyllabusBotEvaluator,
             "video_gpt": VideoGPTBotEvaluator,
             "tutor": TutorBotEvaluator,
+            "support": SupportBotEvaluator,
         }
 
         for bot_name, (_, evaluator_class) in BOT_EVALUATORS.items():

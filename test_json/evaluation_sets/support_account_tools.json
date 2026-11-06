@@ -1,0 +1,260 @@
+{
+  "learner_records": {
+    "enrollments": [
+      {
+        "enrollment_mode": "verified",
+        "certificate": null,
+        "grades": [
+          {
+            "grade": 0.0,
+            "grade_percent": 0,
+            "letter_grade": null,
+            "passed": false
+          }
+        ],
+        "run": {
+          "courseware_id": "course-v1:MITxT+11.405x+3T2026",
+          "courseware_url": "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home",
+          "title": "Just Money: Banking as if Society Mattered",
+          "start_date": "2026-09-01T00:00:00Z",
+          "end_date": "2099-12-31T00:00:00Z",
+          "is_self_paced": false,
+          "course": {
+            "readable_id": "course-v1:MITxT+11.405x",
+            "title": "Just Money: Banking as if Society Mattered"
+          }
+        }
+      },
+      {
+        "enrollment_mode": "verified",
+        "certificate": {
+          "uuid": "8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01",
+          "link": "/certificate/8b1e9c52-0d7a-4f2e-9a43-1c5e2f6a7b01/"
+        },
+        "grades": [
+          {
+            "grade": 0.88,
+            "grade_percent": 88,
+            "letter_grade": "B",
+            "passed": true
+          }
+        ],
+        "run": {
+          "courseware_id": "course-v1:MITxT+18.01x+1T2025",
+          "courseware_url": "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+18.01x+1T2025/home",
+          "title": "Calculus 1A: Differentiation",
+          "start_date": "2025-02-01T00:00:00Z",
+          "end_date": "2025-05-30T00:00:00Z",
+          "is_self_paced": false,
+          "course": {
+            "readable_id": "course-v1:MITxT+18.01x",
+            "title": "Calculus 1A: Differentiation"
+          }
+        }
+      },
+      {
+        "enrollment_mode": "verified",
+        "certificate": null,
+        "grades": [
+          {
+            "grade": 0.52,
+            "grade_percent": 52,
+            "letter_grade": null,
+            "passed": false
+          }
+        ],
+        "run": {
+          "courseware_id": "course-v1:MITxT+18.01.2x+2T2026",
+          "courseware_url": "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+18.01.2x+2T2026/home",
+          "title": "Calculus 1B: Integration",
+          "start_date": "2026-04-01T00:00:00Z",
+          "end_date": "2099-12-31T00:00:00Z",
+          "is_self_paced": false,
+          "course": {
+            "readable_id": "course-v1:MITxT+18.01.2x",
+            "title": "Calculus 1B: Integration"
+          }
+        }
+      }
+    ],
+    "program_enrollments": [],
+    "program_certificates": [],
+    "program_certificate_details": {},
+    "course_dates": {
+      "course-v1:MITxT+11.405x+3T2026": {
+        "course_date_blocks": [
+          {
+            "assignment_type": "Homework",
+            "complete": false,
+            "date": "2099-01-15T23:59:00Z",
+            "date_type": "assignment-due-date",
+            "learner_has_access": true,
+            "link": "{{settings.LEARNER_API_OPENEDX_BASE_URL}}courses/course-v1:MITxT+11.405x+3T2026/jump_to/block-v1:MITxT+11.405x+3T2026+type@sequential+block@problemset2",
+            "title": "Problem Set 2"
+          }
+        ]
+      }
+    }
+  },
+  "support": [
+    {
+      "question": "what's my grade?",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": ["get_course_progress"],
+      "expected_output": "Their grade in Just Money: Banking as if Society Mattered, the course on this page: 0%, not passing so far. It doesn't give the grade of another course, and doesn't offer to raise a ticket or contact support - code appends that offer itself."
+    },
+    {
+      "question": "am I signed up for this one?",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+18.01x+1T2025/home"
+        ],
+        "course_id": ["course-v1:MITxT+18.01x+1T2025"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": ["get_enrollments"],
+      "expected_output": "Yes, in Calculus 1A: Differentiation, verified. It doesn't list their other courses, and doesn't offer to contact support."
+    },
+    {
+      "question": "did my certificate for 18.01x come through?",
+      "extra_state": {
+        "page_url": ["https://learn.mit.edu/dashboard"],
+        "course_id": [null],
+        "platform": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": ["get_certificate_status"],
+      "expected_output": "Yes, a certificate for Calculus 1A: Differentiation (18.01x), with a link to it. It asked about the course the learner named, not one from a page."
+    },
+    {
+      "question": "when is my next assignment due in Just Money?",
+      "extra_state": {
+        "page_url": ["https://learn.mit.edu/dashboard"],
+        "course_id": [null],
+        "platform": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": ["get_upcoming_assignments"],
+      "expected_output": "Problem Set 2, due January 15, 2099."
+    },
+    {
+      "question": "the week 3 video just spins forever",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": [],
+      "expected_output": "It calls no tool: the learner's records say nothing about a video that won't play. It says it can't tell them why from here. It doesn't offer to raise a ticket - code appends that offer, and this reply is what the learner reads before it."
+    },
+    {
+      "question": "my payment failed",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": [],
+      "expected_output": "It calls no tool and does not answer from the enrollment: a verified enrollment does not tell it whether a payment went through. It doesn't say the payment succeeded, and doesn't offer to raise a ticket."
+    },
+    {
+      "question": "I want to talk to someone",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": [],
+      "expected_output": "It calls no tool. It doesn't claim a ticket was raised, doesn't promise anyone will follow up, and doesn't offer to pass anything on - a human reaching the learner is something only the filing code can cause."
+    },
+    {
+      "question": "can you refund me?",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_tools": [],
+      "expected_output": "It calls no tool and does not say whether a refund will happen, since it cannot issue one. It doesn't quote a refund policy it wasn't given."
+    },
+    {
+      "question": "what's my grade in Calculus?",
+      "extra_state": {
+        "page_url": ["https://learn.mit.edu/dashboard"],
+        "course_id": [null],
+        "platform": [null]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Either it asks which Calculus course they mean, or it gives both: Calculus 1A: Differentiation 88%, a B, passing, and Calculus 1B: Integration 52%, not passing so far. It doesn't silently pick one of the two."
+    },
+    {
+      "question": "did I pass Calculus?",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "Either it asks which Calculus course they mean, or it answers for both (1A passed, 1B not yet). It doesn't answer about Just Money, the course on this page, and doesn't pick one Calculus course silently."
+    },
+    {
+      "question": "what's my grade?",
+      "extra_state": {
+        "page_url": [
+          "{{settings.LEARNER_API_OPENEDX_BASE_URL}}learn/course/course-v1:MITxT+11.405x+3T2026/home"
+        ],
+        "course_id": ["course-v1:MITxT+11.405x+3T2026"],
+        "platform": ["mitxonline"]
+      },
+      "extra_init": {
+        "enable_account_tools": true
+      },
+      "expected_output": "It couldn't check the learner's records right now, and doesn't say they have no grade or no enrollment.",
+      "learner_records": {
+        "error": true
+      }
+    }
+  ]
+}
