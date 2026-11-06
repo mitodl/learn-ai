@@ -455,7 +455,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), the course on this page, verified. It ended on May 30, 2025."
+      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), the course on this page, and its run has ended. If it gives the end date or the enrollment mode, they are May 30, 2025 and verified."
     },
     {
       "question": "Am I enrolled in this course?",
@@ -467,7 +467,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. It ended on May 30, 2025. It doesn't list or answer from their other courses."
+      "expected_output": "Yes, in Calculus 1A: Differentiation, and its run has ended. If it gives the end date or the enrollment mode, they are May 30, 2025 and verified. It doesn't list or answer from their other courses."
     },
     {
       "question": "Did I earn the certificate for this program?",
@@ -551,7 +551,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "Yes, in Calculus 1A: Differentiation (18.01x), verified. That run ended on May 30, 2025."
+      "expected_output": "Yes, in Calculus 1A: Differentiation, and that run has ended. If it gives the end date or the enrollment mode, they are May 30, 2025 and verified."
     },
     {
       "question": "What certificates have I earned?",

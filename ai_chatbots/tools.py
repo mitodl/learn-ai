@@ -702,11 +702,11 @@ class CourseAccountToolSchema(AccountToolSchema):
         default=None,
         description=(
             """
-            Only when the learner asks about a course other than the one on
-            this page: the course as they named it, its number, id or title
-            (such as "18.01x" or "Calculus 1A"), exactly as they wrote it.
-            Don't look it up or guess a number for a title. Leave it out for
-            the course on this page.
+            The course the learner names, the one on this page included: as
+            they named it, its number, id or title (such as "18.01x" or
+            "Calculus 1A"), exactly as they wrote it. Don't look it up or
+            guess a number for a title. Leave it out only when they don't
+            name a course ("this course", "my grade").
             """
         ),
     )
@@ -1427,8 +1427,9 @@ async def get_upcoming_assignments(
     a course, soonest first, with the run's start and end dates and a link to
     its Dates tab. Reads the page's course, or the user_course_input given. Only
     the next few due dates are listed; more_due_dates counts the rest, which
-    the Dates tab shows. With no upcoming_due_dates, or a due_dates_note saying
-    they couldn't be checked, send the learner to the Dates tab.
+    the Dates tab shows. Always link the Dates tab (dates_url), and with no
+    upcoming_due_dates, or a due_dates_note saying they couldn't be checked,
+    send the learner there for them.
     """
     try:
         result = await _course_enrollments(state, user_course_input)
@@ -1564,6 +1565,14 @@ async def get_certificate_status(  # noqa: C901, PLR0912
         )
     ):
         return json.dumps(CourseSelection(status).result())
+    program_certificates = [
+        _program_certificate_summary(c) for c in program_certificates
+    ]
+    if resource_query and not all_courses:
+        # Only the programs named, if any: a model lists any other certificate
+        # it is given, even under a note not to answer from them
+        programs = _named_programs(resource_query, programs)
+        program_certificates = _named_programs(resource_query, program_certificates)
     credentials = await asyncio.gather(
         *(
             _digital_credential(learner_api.get_course_certificate, summary)
@@ -1596,9 +1605,7 @@ async def get_certificate_status(  # noqa: C901, PLR0912
             "credential was issued. Don't say it wasn't issued or doesn't exist; "
             "send the learner to support for it."
         )
-    result["program_certificates"] = [
-        _program_certificate_summary(c) for c in program_certificates
-    ]
+    result["program_certificates"] = program_certificates
     if result.get("selection_status") == AccountLookupStatus.NOT_FOUND:
         # A program's title isn't a course; don't say it isn't in their records.
         # MIT Learn can hold a program certificate with no MITx Online enrollment.

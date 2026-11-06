@@ -1520,6 +1520,29 @@ async def test_certificate_status_for_a_certificate_only_program(
     assert result["selection_status"] == AccountLookupStatus.MATCHED
 
 
+@pytest.mark.parametrize(
+    ("user_course_input", "status"),
+    [
+        ("14.750x", AccountLookupStatus.MATCHED),
+        ("8.01x", AccountLookupStatus.NOT_FOUND),
+    ],
+)
+async def test_certificate_status_for_a_named_course_leaves_out_programs(
+    records, user_course_input, status
+):
+    """A named course's answer gets no program certificates to add to it."""
+    result = await call(
+        get_certificate_status,
+        page_resource_id=CALCULUS,
+        user_course_input=user_course_input,
+    )
+
+    assert result["selection_status"] == status
+    assert result["programs"] == []
+    assert result["program_certificates"] == []
+    records["program_certificate"].assert_not_called()
+
+
 async def test_certificate_status_for_a_name_of_two_programs_asks_which(records):
     """A word two of the learner's programs share isn't read as either one."""
     records["programs"].return_value.append(
