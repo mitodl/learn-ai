@@ -157,17 +157,12 @@ def records(mocker, settings):
     }
 
 
-async def call(
-    tool, page_resource_id=None, platform=None, user_course_input=None, **args
-):
+async def call(tool, page_resource_id=None, platform=None, **args):
     """Invoke a tool the way the agent does, and decode its JSON."""
     state = {"course_id": [page_resource_id]} if page_resource_id else {}
     if platform:
         state["platform"] = [platform]
-    args["state"] = state
-    if user_course_input:
-        args["user_course_input"] = user_course_input
-    return json.loads(await tool.ainvoke(args))
+    return json.loads(await tool.ainvoke({**args, "state": state}))
 
 
 def test_model_fills_in_only_the_course():
@@ -311,6 +306,10 @@ async def test_explicit_course_reference_reads_that_course(
         "MITxT",
         # A run tag ends many run ids, so it names none
         "3T2026",
+        # Unusable input must not answer from the page course instead
+        "?",
+        '""',
+        "   ",
     ],
 )
 async def test_unmatched_course_reference_lists_nothing(
@@ -413,21 +412,6 @@ async def test_course_name_keeps_meaningful_punctuation(records, user_course_inp
     assert [e["course_id"] for e in result["enrollments"]] == [CALCULUS]
 
 
-@pytest.mark.parametrize("user_course_input", ["?", '""', "   "])
-async def test_empty_course_name_does_not_match_or_default_to_page(
-    records, user_course_input
-):
-    """Unusable explicit input must not answer from the page course instead."""
-    result = await call(
-        get_course_progress,
-        page_resource_id=CALCULUS,
-        user_course_input=user_course_input,
-    )
-
-    assert result["enrollments"] == []
-    assert "isn't in the learner's MITx Online records" in result["note"]
-
-
 async def test_page_course_title_of_another_run_reads_the_page_run(records):
     """A title only an older run has still reads the page's run of that course."""
     runs = [
@@ -479,33 +463,6 @@ async def test_name_of_two_courses_asks_which(
     assert result["selection_status"] == AccountLookupStatus.AMBIGUOUS
 
 
-@pytest.mark.parametrize("tool", [get_course_progress, get_enrollments])
-@pytest.mark.parametrize("page_resource_id", [SHARED, f"{SHARED}+1T2020"])
-@pytest.mark.parametrize("platform", ["xpro", None])
-async def test_course_number_of_the_page_course_is_the_page_course(
-    mocker, records, tool, page_resource_id, platform
-):
-    """
-    The page course's number reads the page's course, not a MITx Online course
-    from another organization with the same number. A run page's course is
-    known from the learner's enrollment in that run.
-    """
-    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
-    records["enrollments"].return_value = [
-        enrollment("course-v1:OTHER+AIGE", "1T2026", "AI Governance"),
-        enrollment(SHARED, "1T2020", "AI Governance"),
-    ]
-
-    result = await call(
-        tool,
-        page_resource_id=page_resource_id,
-        platform=platform,
-        user_course_input="AIGE",
-    )
-
-    assert result["enrollments"] == []
-
-
 async def test_run_tag_on_a_run_page_names_nothing(records):
     """A bare run tag isn't read as the run page's course."""
     result = await call(
@@ -525,6 +482,14 @@ async def test_run_tag_on_a_run_page_names_nothing(records):
         (SHARED, SHARED, [(SHARED, "1T2026")]),
         # The page course's number
         (SHARED, "AIGE", [(SHARED, "1T2026")]),
+        # ...not another organization's course with the same number, on a
+        # course page or a run page, whose course is known from the enrollment
+        (SHARED, "AIGE", [("course-v1:OTHER+AIGE", "1T2026"), (SHARED, "1T2020")]),
+        (
+            f"{SHARED}+1T2020",
+            "AIGE",
+            [("course-v1:OTHER+AIGE", "1T2026"), (SHARED, "1T2020")],
+        ),
         # A run of a course page
         (SHARED, f"{SHARED}+1T2026", [(SHARED, "1T2026")]),
         # The course of a run page, whose current run isn't the page's
@@ -782,9 +747,9 @@ async def test_enrollments_list_certificates(settings, records):
     ]
 
 
-async def test_enrollments_keep_an_earlier_runs_certificate(records):
-    """A retaken course lists the current run, and the earlier run's certificate."""
-    records["enrollments"].return_value = [
+def retaken_calculus():
+    """Return an ended Calculus run with a certificate, then the current run."""
+    return [
         enrollment(
             CALCULUS,
             "1T2020",
@@ -794,6 +759,11 @@ async def test_enrollments_keep_an_earlier_runs_certificate(records):
         ),
         enrollment(CALCULUS, "3T2026", "Calculus 1A"),
     ]
+
+
+async def test_enrollments_keep_an_earlier_runs_certificate(records):
+    """A retaken course lists the current run, and the earlier run's certificate."""
+    records["enrollments"].return_value = retaken_calculus()
 
     (course,) = (await call(get_enrollments))["enrollments"]
 
@@ -808,16 +778,7 @@ async def test_enrollments_for_the_run_pages_course_keep_its_other_runs(
     records, user_course_input
 ):
     """Naming a run page's course lists its current run and an older certificate."""
-    records["enrollments"].return_value = [
-        enrollment(
-            CALCULUS,
-            "1T2020",
-            "Calculus 1A",
-            end="2020-06-01T00:00:00Z",
-            certificate={"link": "/certificate/abc/", "uuid": "abc"},
-        ),
-        enrollment(CALCULUS, "3T2026", "Calculus 1A"),
-    ]
+    records["enrollments"].return_value = retaken_calculus()
 
     result = await call(
         get_enrollments,
@@ -832,8 +793,16 @@ async def test_enrollments_for_the_run_pages_course_keep_its_other_runs(
 
 
 @pytest.mark.parametrize("page_first", [True, False])
-async def test_title_shared_with_the_page_course_checks_the_page_course(
-    mocker, records, page_first
+@pytest.mark.parametrize(
+    ("tool", "status"),
+    [
+        (get_enrollments, AccountLookupStatus.NOT_ON_MITXONLINE),
+        # For one course's records, a name for two courses asks which first
+        (get_course_progress, AccountLookupStatus.AMBIGUOUS),
+    ],
+)
+async def test_title_shared_with_the_page_course(
+    mocker, records, tool, status, page_first
 ):
     """The page course's platform is looked up, whichever match comes first."""
     mocker.patch(
@@ -847,26 +816,11 @@ async def test_title_shared_with_the_page_course_checks_the_page_course(
     records["enrollments"].return_value = runs if page_first else runs[::-1]
 
     result = await call(
-        get_enrollments, page_resource_id=SHARED, user_course_input="AI Governance"
+        tool, page_resource_id=SHARED, user_course_input="AI Governance"
     )
 
     assert result["enrollments"] == []
-    assert result["selection_status"] == AccountLookupStatus.NOT_ON_MITXONLINE
-
-
-async def test_title_shared_with_the_page_course_asks_which_first(mocker, records):
-    """For one course's records, a name for two courses asks which before anything."""
-    mocker.patch("ai_chatbots.tools._get_course_platform", return_value="xpro")
-    records["enrollments"].return_value = [
-        enrollment(SHARED, "1T2026", "AI Governance"),
-        enrollment("course-v1:OTHER+AIGE", "1T2026", "AI Governance"),
-    ]
-
-    result = await call(
-        get_course_progress, page_resource_id=SHARED, user_course_input="AI Governance"
-    )
-
-    assert result["selection_status"] == AccountLookupStatus.AMBIGUOUS
+    assert result["selection_status"] == status
 
 
 async def test_enrollments_for_the_page_run_by_its_id_keep_that_run(records):
@@ -1439,42 +1393,29 @@ async def test_enrollments_say_whether_the_page_run_is_enrolled(
 
 
 @pytest.mark.parametrize(
-    ("page_resource_id", "platform", "expected"),
+    ("page_resource_id", "platform", "found", "expected"),
     [
-        (PROGRAM, MITXONLINE_PLATFORM, "is enrolled in the program on this page"),
-        ("program-v1:MITx+SCM", MITXONLINE_PLATFORM, "no MITx Online enrollment"),
-        (PROGRAM, "xpro", "isn't on MITx Online"),
+        (PROGRAM, MITXONLINE_PLATFORM, None, "is enrolled in the program on this page"),
+        ("program-v1:MITx+SCM", MITXONLINE_PLATFORM, None, "no MITx Online enrollment"),
+        (PROGRAM, "xpro", None, "isn't on MITx Online"),
+        # Without the page's platform, the program id is looked up
+        (PROGRAM, None, "xpro", AccountLookupStatus.NOT_ON_MITXONLINE.note),
+        (PROGRAM, None, None, AccountLookupStatus.PLATFORM_UNCLEAR.note),
     ],
 )
-async def test_enrollments_say_whether_the_page_program_is_enrolled(
-    records, page_resource_id, platform, expected
+async def test_enrollments_say_whether_the_page_program_is_enrolled(  # noqa: PLR0913
+    mocker, records, page_resource_id, platform, found, expected
 ):
     """A program page says whether the learner is in it, not in a course."""
+    lookup = mocker.patch("ai_chatbots.tools._get_course_platform", return_value=found)
+
     result = await call(
         get_enrollments, page_resource_id=page_resource_id, platform=platform
     )
 
     assert expected in result["page_program_note"]
     assert "page_course_note" not in result
-
-
-@pytest.mark.parametrize(
-    ("found", "status"),
-    [
-        ("xpro", AccountLookupStatus.NOT_ON_MITXONLINE),
-        (None, AccountLookupStatus.PLATFORM_UNCLEAR),
-    ],
-)
-async def test_program_page_without_platform_checks_its_program_id(
-    mocker, records, found, status
-):
-    """Separating program IDs must not bypass the page's platform safeguard."""
-    lookup = mocker.patch("ai_chatbots.tools._get_course_platform", return_value=found)
-
-    result = await call(get_enrollments, page_resource_id=PROGRAM)
-
-    lookup.assert_called_once_with(PROGRAM)
-    assert result["page_program_note"] == status.note
+    assert lookup.call_args_list == ([] if platform else [mocker.call(PROGRAM)])
 
 
 @pytest.mark.parametrize(
@@ -1491,37 +1432,20 @@ async def test_enrollments_for_a_named_program(records, user_course_input):
     assert "note" not in result
 
 
-@pytest.mark.parametrize("user_course_input", ["DEDP", PROGRAM])
-async def test_enrollments_dont_name_another_platforms_page_program(
-    records, user_course_input
-):
-    """An xPRO program page's id names it, not a MITx Online program sharing it."""
-    result = await call(
-        get_enrollments,
-        page_resource_id=PROGRAM,
-        platform="xpro",
-        user_course_input=user_course_input,
-    )
-
-    assert result == {
-        "enrollments": [],
-        "selection_status": AccountLookupStatus.NOT_ON_MITXONLINE,
-        "note": result["note"],
-    }
-    assert "isn't on MITx Online" in result["note"]
-
-
+@pytest.mark.parametrize("user_course_input", ["DEDP", PROGRAM, "Data, Economics"])
 @pytest.mark.parametrize("tool", [get_enrollments, get_certificate_status])
-async def test_page_program_by_title_keeps_its_platform_check(records, tool):
+async def test_page_program_by_any_name_keeps_its_platform_check(
+    records, tool, user_course_input
+):
     """
-    An xPRO program page's title names it, not a MITx Online program sharing
-    its id.
+    An xPRO program page's id or title names it, not a MITx Online program
+    sharing its id.
     """
     result = await call(
         tool,
         page_resource_id=PROGRAM,
         platform="xpro",
-        user_course_input="Data, Economics",
+        user_course_input=user_course_input,
     )
 
     assert result == {
@@ -1553,11 +1477,10 @@ async def test_certificate_status_for_a_program_named_by_its_title(
     "user_course_input", ["Data, Economics", ' "Data, Economics"? ']
 )
 async def test_certificate_status_for_a_certificate_only_program(
-    mocker, records, user_course_input
+    records, user_course_input
 ):
     """A program certificate held only by MIT Learn isn't said to be missing."""
     records["programs"].return_value = []
-    missing_note = mocker.patch("ai_chatbots.tools._not_in_records")
 
     result = await call(
         get_certificate_status,
@@ -1570,4 +1493,3 @@ async def test_certificate_status_for_a_certificate_only_program(
     assert "is the learner's program Data, Economics" in result["note"]
     assert "isn't in the learner's MITx Online records" not in result["note"]
     assert result["selection_status"] == AccountLookupStatus.MATCHED
-    missing_note.assert_not_called()
