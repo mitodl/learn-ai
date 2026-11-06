@@ -2149,7 +2149,12 @@ class SupportBot(TruncatingChatbot):
         # whole list would let the send the learner called off come back.
         elif (prior_state.get("awaiting_send") or [False])[-1]:
             reply, updates = await self._send_edit_or_cancel(
-                message,
+                # Blanked for the same reason as the other two call sites: the
+                # press carries the button's label, and here anything that is
+                # not a send or a cancel reads as an edit, so the label would
+                # be shown back as the learner's words and then left out of
+                # what files. A blank re-shows the request unchanged.
+                "" if escalated else message,
                 extra_state=extra_state,
                 prior_state=prior_state,
                 session=session,
