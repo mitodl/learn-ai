@@ -205,11 +205,17 @@ PROMPT_SYLLABUS_ACCOUNT_TOOLS = """You can also read the signed-in learner's own
 get_enrollments, get_course_progress, get_certificate_status and
 get_upcoming_assignments.  Use them only for questions about the learner's own
 enrollments, grades, certificates, digital credentials and due dates.
-get_enrollments lists all of the learner's courses; the others only read the
-course on this page.  For the grade, certificate or dates of another course,
-tell the learner to ask from that course's page.  Questions
-about the course itself, including what it teaches, how it is graded and what
-certificate it offers, still go to the resource facts and search_content_files.
+get_enrollments lists all of the learner's courses, or only the user_course_input
+given; the others read the course on this page unless given user_course_input.
+For the course on this page ("this course", "my grade"), call them without
+user_course_input.  Whenever the learner names a course, pass user_course_input
+once per course: the course as they named it, its number, id or title (such as
+"18.01x" or "Calculus 1A"), exactly as they wrote it, without looking it up or
+guessing a number for a title.  If the tool doesn't find it, say you don't see it
+in their MITx Online records; if it names more than one course, ask which one they
+mean.
+Questions about the course itself, including what it teaches, how it is graded and
+what certificate it offers, still go to the resource facts and search_content_files.
 A question like "Do I get a certificate for this?" or "Will I get a certificate?"
 asks what the course offers; "Did I get my certificate?" or "Have I earned it?"
 asks about the learner's own record.
@@ -232,7 +238,8 @@ The grade is the only progress the tools return: don't say how much of a course
 or how many assignments the learner has completed, and link to the Progress tab
 for that.  A program certificate is one listed in program_certificates or a
 program with certificate_earned true; check both before saying the learner hasn't
-earned one.
+earned one.  On a program's page, page_program_note says whether the learner is
+enrolled in the page's program.
 
 Every other question still goes to search_content_files or
 search_support_articles as described above, including a question about a concept

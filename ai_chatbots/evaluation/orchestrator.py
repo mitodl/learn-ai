@@ -85,16 +85,30 @@ class EvaluationOrchestrator:
             metrics = [
                 GEval(
                     name="Correctness",
-                    criteria=(
-                        "Determine whether the actual output states the same "
-                        "facts as the expected output.  Numbers, prices, dates "
-                        "and names must match; extra detail is acceptable only "
-                        "if it does not contradict the expected output.  An "
-                        "answer about a different course, program or platform "
-                        "than the one asked about is incorrect, and so is "
-                        "saying no information could be found when the expected "
-                        "output supplies it."
-                    ),
+                    # Fixed steps, since GEval writes its own from criteria on
+                    # every run, and expected outputs are written as rubrics
+                    evaluation_steps=[
+                        "Read the expected output as a rubric for the answer, "
+                        "not as text the actual output must repeat. Wording, "
+                        "order and format don't matter.",
+                        "Check that every fact the expected output requires is "
+                        "in the actual output: numbers, grades, prices, dates, "
+                        "names and links must match.",
+                        "Find each thing the expected output says the answer "
+                        "doesn't or shouldn't do (such as 'It doesn't list "
+                        "other courses'), and check whether the actual output "
+                        "does it anyway. The actual output need not say it "
+                        "avoids it. Anything the expected output says the "
+                        "answer may do is optional.",
+                        "Extra detail that doesn't contradict the expected "
+                        "output is acceptable and must not lower the score.",
+                        "Score low if the actual output leaves out or gets "
+                        "wrong a required fact, does something the expected "
+                        "output says it doesn't, answers about a different "
+                        "course, program or platform than the one asked "
+                        "about, or says no information could be found when "
+                        "the expected output supplies it.",
+                    ],
                     evaluation_params=[
                         LLMTestCaseParams.INPUT,
                         LLMTestCaseParams.ACTUAL_OUTPUT,
