@@ -235,7 +235,13 @@ or how many assignments the learner has completed, and link to the Progress tab
 for that.  A program certificate is one listed in program_certificates or a
 program with certificate_earned true; check both before saying the learner hasn't
 earned one.  On a program's page, page_program_note says whether the learner is
-enrolled in the page's program."""
+enrolled in the page's program.
+
+A question like "Do I get a certificate for this?" or "Will I get a certificate?"
+asks what a course offers rather than what the learner has done; "Did I get my
+certificate?" or "Have I earned it?" asks about their own record, which
+get_certificate_status answers.  These tools read only the learner's record, so
+don't call them for what a course offers, costs or requires."""
 
 
 # SyllabusBot's own half: routing between the learner's record and the course's
@@ -243,9 +249,6 @@ enrolled in the page's program."""
 # because SupportBot adds its own offer in code, in words code guarantees.
 PROMPT_SYLLABUS_ACCOUNT_TOOLS = """Questions about the course itself, including what it teaches, how it is graded and
 what certificate it offers, still go to the resource facts and search_content_files.
-A question like "Do I get a certificate for this?" or "Will I get a certificate?"
-asks what the course offers; "Did I get my certificate?" or "Have I earned it?"
-asks about the learner's own record.
 
 Whenever you can't check something - a course on another platform, a course you
 can't find, or a digital credential that isn't confirmed - point the learner to
@@ -284,11 +287,8 @@ only when the learner asks about a different course, and then only as they
 named it.  If a tool asks for a course because there is none on the page, ask
 the learner which course they mean.
 
-"Will I get a certificate?" or "Does this course offer one?" asks what a course
-offers rather than what the learner has done, and these tools read only their
-own record: you have no source for it, so give no answer and leave it to the
-rest of this system.  "Did I get my certificate?" or "Have I earned it?" asks
-about their record, and get_certificate_status answers that.
+You have no source for what a course offers, costs or requires, so give no answer
+to a question about that and leave it to the rest of this system.
 
 Do not offer to contact support, raise a ticket or pass anything on - another
 part of this system always adds that offer itself, in its own words.  Answer

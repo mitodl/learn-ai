@@ -1548,8 +1548,9 @@ def _quotes_the_reply_to(message: BaseMessage) -> bool:
     the replayed slice. A review sets awaiting_send, which sends the next turn
     to _send_edit_or_cancel, and every way out of there either pushes
     cancelled_after past the review or lands in one of the branches ahead of
-    answering. Even without that, a message past cancelled_after makes
-    intake_started true, and answering is gated on it being false.
+    answering. Even without that, intake_started is true for any message past
+    cancelled_after once answered is false - and producing a review clears
+    answered - so answering is gated off by the time a review could be read.
 
     That is four invariants deep, spread over three functions, and the thing it
     protects is the learner's address reaching a trace. The filter is cheaper
