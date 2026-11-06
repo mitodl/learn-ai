@@ -105,12 +105,18 @@ def test_account_tools_core_holds_the_rules_both_bots_need():
     The core is what any bot with these tools must obey. A rule that lives in
     only one addendum is a rule the other bot silently doesn't have.
     """
-    core = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
+    core = " ".join(prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"].split())
 
     assert "user_course_input" in core
     assert "exactly as they wrote it" in core
     assert "couldn't check" in core
     assert "issued" in core
+    # Telling a course's terms from the learner's record is the same reading
+    # job for both bots; only what each does about it differs. It also has to
+    # say not to call the tools, because the answer gate is "a tool fired",
+    # not "the model answered" - a lookup followed by a refusal still ships.
+    assert "Will I get a certificate?" in core
+    assert "don't call them for what a course offers" in core
 
 
 def test_account_tools_core_names_no_bot_specific_tool():
@@ -139,23 +145,32 @@ def test_the_split_addenda_keep_only_what_is_theirs():
     assert "from that course's page" not in syllabus
     for addendum in (syllabus, support):
         assert "exactly as they wrote it" not in addendum
+        # Both bots need this distinction, so a copy in either addendum is a
+        # copy that can drift from the core's.
+        assert "Will I get a certificate?" not in addendum
 
 
-def test_support_addendum_separates_a_courses_terms_from_the_learners_record():
+def test_support_is_told_what_to_do_with_a_question_about_a_courses_terms():
     """
-    "Will I get a certificate?" asks what the course offers; "Did I get my
-    certificate?" asks the learner's own record. SyllabusBot is told the
-    difference because it can search the course; SupportBot has no source for
-    the first at all. Without the rule it answers from get_certificate_status,
-    reporting the learner's enrollment as though it were the course's terms -
-    and marks the turn answered, closing the intake that should have taken it.
+    "Will I get a certificate?" asks what a course offers; "Did I get my
+    certificate?" asks the learner's record. SyllabusBot can answer the first
+    from the course's own content. SupportBot has no source for it, so its
+    answer is to give none and let intake take the question - and the pair it
+    is actually given has to carry both halves, the distinction and that
+    resolution.
     """
-    support = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+    # Collapsed: these are sentences, and where the prompt happens to wrap them
+    # is not the thing under test.
+    composed = " ".join(
+        "\n\n".join(
+            prompts.SYSTEM_PROMPT_MAPPING[name]
+            for name in ("account_tools_core", "support_account_tools")
+        ).split()
+    )
 
-    assert "Will I get a certificate?" in support
-    assert "Did I get my certificate?" in support
-    # It has no tool for the first, so the only safe move is to leave it.
-    assert "give no answer" in support
+    assert "Will I get a certificate?" in composed
+    assert "Did I get my certificate?" in composed
+    assert "give no answer" in composed
 
 
 def test_support_addendum_leaves_the_offer_to_code():
