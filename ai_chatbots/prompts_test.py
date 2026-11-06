@@ -93,7 +93,7 @@ def test_support_account_tools_prompt_is_support_flavoured():
         for name in ("account_tools_core", "support_account_tools")
     )
 
-    assert "course_id" in composed
+    assert "user_course_input" in composed
     assert "couldn't check" in composed
     assert "search_content_files" not in composed
     assert "from that course's page" not in composed
@@ -107,7 +107,7 @@ def test_account_tools_core_holds_the_rules_both_bots_need():
     """
     core = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
 
-    assert "course_id" in core
+    assert "user_course_input" in core
     assert "exactly as they wrote it" in core
     assert "couldn't check" in core
     assert "issued" in core
