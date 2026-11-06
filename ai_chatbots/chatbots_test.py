@@ -2815,6 +2815,31 @@ async def test_escalate_itself_does_not_persist(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
+async def test_an_escalate_under_the_review_leaves_the_request_alone(
+    mocker, mock_checkpointer
+):
+    """
+    The press can land while the review is on screen, and that turn goes to
+    _send_edit_or_cancel, which reads anything that is not a send or a cancel
+    as an edit. The button's label is not an edit: it would be shown back as
+    part of the learner's problem and then dropped from what actually files,
+    so the learner approves a request that is not the one sent.
+    """
+    label = "Contact the support team"
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM), AIMessage("Here's what I'll send...")],
+        state={"user_email": ["learner@mit.edu"], "awaiting_send": [True]},
+    )
+
+    review = await _say(chatbot, label, escalate=[True])
+
+    assert SUPPORT_PROBLEM in review
+    assert label not in review
+
+
+@pytest.mark.asyncio
 async def test_support_bot_keeps_the_escalate_buttons_words_out_of_the_ticket(
     mocker, mock_checkpointer
 ):
