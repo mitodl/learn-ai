@@ -150,6 +150,24 @@ def test_the_split_addenda_keep_only_what_is_theirs():
         assert "Will I get a certificate?" not in addendum
 
 
+def test_only_the_core_says_when_to_pass_a_named_course():
+    """
+    REGRESSION guard on a rule that flipped: the tools used to want
+    user_course_input only for a course other than the page's, and now want it
+    whenever the learner names one.  An addendum is appended after the core, so
+    a leftover copy of the old rule is the one the model reads last - and the
+    two halves disagree with nothing failing.  The core owns this rule alone.
+
+    Pinning the core's own sentence is deliberate: if it is reworded again,
+    this test is what sends someone back to read both addenda.
+    """
+    core = " ".join(prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"].split())
+
+    assert "Whenever the learner names a course, pass user_course_input" in core
+    for name in ("syllabus_account_tools", "support_account_tools"):
+        assert "user_course_input" not in prompts.SYSTEM_PROMPT_MAPPING[name]
+
+
 def test_support_is_told_what_to_do_with_a_question_about_a_courses_terms():
     """
     "Will I get a certificate?" asks what a course offers; "Did I get my
