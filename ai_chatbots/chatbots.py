@@ -93,7 +93,8 @@ class BaseChatbot(ABC):
     # A bot that scripts every reply spends no tokens, so it has no budget to
     # provision. Setting this False skips that call, which is a blocking
     # request that would otherwise make the proxy a dependency of a bot that
-    # never reaches it.
+    # never reaches it. It skips the catalog check too, so retiring the
+    # configured model does not take down a bot that never calls it.
     CALLS_THE_MODEL = True
 
     def __init__(  # noqa: PLR0913
@@ -127,7 +128,8 @@ class BaseChatbot(ABC):
             profile="request",
             model=catalog_model_id(self.model),
         )
-        ol_llm.check_chat_model(self.use_case)
+        if self.CALLS_THE_MODEL:
+            ol_llm.check_chat_model(self.use_case)
         self.attribution = ol_llm.Attribution(
             user_id=self.user_id, thread_id=self.thread_id
         )

@@ -628,6 +628,20 @@ async def test_bot_with_a_retired_model_is_refused(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
+async def test_bot_that_never_calls_the_model_skips_the_catalog_check(
+    mocker, mock_checkpointer
+):
+    """SupportBot scripts every reply, so a retired model does not stop intake."""
+    check = mocker.patch.object(
+        ol_llm, "check_chat_model", side_effect=ValueError("retired")
+    )
+
+    await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
+
+    check.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_syllabus_bot_trace_properties(mock_checkpointer):
     """The syllabus bot should tag traces with the resource it was asked about."""
     chatbot = await sync_to_async(SyllabusBot)(
