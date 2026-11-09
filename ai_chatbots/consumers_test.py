@@ -428,6 +428,7 @@ async def test_syllabus_create_chatbot(
     mock_http_consumer_send, syllabus_consumer, async_user
 ):
     """SyllabusBotHttpConsumer create_chatbot function should return syllabus bot."""
+    async_user.is_staff = True
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "hello",
@@ -435,7 +436,8 @@ async def test_syllabus_create_chatbot(
             "collection_name": "vector512",
             "temperature": 0.7,
             "model": "gpt-3.5-turbo",
-        }
+        },
+        context={"user": async_user},
     )
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
@@ -632,10 +634,9 @@ async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
             "message": "test",
             "course_id": "MITx+6.00.1x",
             "platform": "mitxonline",
-            "model": "gpt-3.5-turbo",
         }
     )
-    serializer.is_valid()
+    serializer.is_valid(raise_exception=True)
     await canvas_syllabus_consumer.prepare_response(serializer)
     bot = await sync_to_async(canvas_syllabus_consumer.create_chatbot)(
         serializer, InMemorySaver()
@@ -1341,13 +1342,15 @@ async def test_video_gpt_create_chatbot(
     mock_http_consumer_send, video_gpt_consumer, async_user
 ):
     """VideoGPTBotHttpConsumer create_chatbot function should return VideoGPTBot."""
+    async_user.is_staff = True
     serializer = consumers.VideoGPTRequestSerializer(
         data={
             "message": "What is this video about?",
             "transcript_asset_id": "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
             "temperature": 0.7,
             "model": "gpt-3.5-turbo",
-        }
+        },
+        context={"user": async_user},
     )
     serializer.is_valid(raise_exception=True)
     await video_gpt_consumer.prepare_response(serializer)

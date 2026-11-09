@@ -36,6 +36,36 @@ def test_instructions_permissions(is_staff, is_super):
     assert serializer.is_valid() == (is_staff or is_super)
 
 
+@pytest.mark.parametrize(
+    ("is_staff", "is_super"),
+    [
+        (True, True),
+        (True, False),
+        (False, True),
+        (False, False),
+    ],
+)
+def test_model_permissions(is_staff, is_super):
+    """Only staff and superusers may choose the model."""
+    user = UserFactory.create(is_staff=is_staff, is_superuser=is_super)
+    serializer = ChatRequestSerializer(
+        data={"message": "Hello, world!", "model": "openai/gpt-4o"},
+        context={"user": user},
+    )
+    assert serializer.is_valid() == (is_staff or is_super)
+
+
+def test_model_max_length():
+    """A model id longer than LLMModel.litellm_id is refused, even for staff."""
+    user = UserFactory.create(is_staff=True)
+    serializer = ChatRequestSerializer(
+        data={"message": "Hello, world!", "model": "x" * 513},
+        context={"user": user},
+    )
+    assert not serializer.is_valid()
+    assert "model" in serializer.errors
+
+
 def test_message_truncation():
     """Test that the message field truncates correctly."""
     user = UserFactory.create(is_staff=True)
