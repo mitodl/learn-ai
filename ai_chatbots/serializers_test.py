@@ -23,24 +23,9 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.mark.parametrize(
-    ("is_staff", "is_super"),
-    [
-        (True, True),
-        (True, False),
-        (False, True),
-        (False, False),
-    ],
+    ("field", "value"),
+    [("instructions", "Do something"), ("model", "openai/not-in-llm-models")],
 )
-def test_instructions_permissions(is_staff, is_super):
-    """Test that the instructions validation works as expected"""
-    user = UserFactory.create(is_staff=is_staff, is_superuser=is_super)
-    serializer = ChatRequestSerializer(
-        data={"message": "Hello, world!", "instructions": "Do something"},
-        context={"user": user},
-    )
-    assert serializer.is_valid() == (is_staff or is_super)
-
-
 @pytest.mark.parametrize(
     ("is_staff", "is_super"),
     [
@@ -50,11 +35,11 @@ def test_instructions_permissions(is_staff, is_super):
         (False, False),
     ],
 )
-def test_model_permissions(is_staff, is_super):
-    """Only staff and superusers may choose a model outside LLMModel."""
+def test_staff_only_fields(field, value, is_staff, is_super):
+    """Only staff and superusers may set instructions or a model outside LLMModel"""
     user = UserFactory.create(is_staff=is_staff, is_superuser=is_super)
     serializer = ChatRequestSerializer(
-        data={"message": "Hello, world!", "model": "openai/not-in-llm-models"},
+        data={"message": "Hello, world!", field: value},
         context={"user": user},
     )
     assert serializer.is_valid() == (is_staff or is_super)
