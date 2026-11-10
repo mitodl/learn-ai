@@ -96,6 +96,9 @@ class BaseChatbot(ABC):
     # never reaches it. It skips the catalog check too, so retiring the
     # configured model does not take down a bot that never calls it.
     CALLS_THE_MODEL = True
+    # The setting naming the model used when a request names none. The
+    # ai_chatbots system check reads it to catch a retired default at deploy.
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_MODEL"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -110,7 +113,7 @@ class BaseChatbot(ABC):
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
-        self.model = model or settings.AI_DEFAULT_MODEL
+        self.model = model or getattr(settings, self.DEFAULT_MODEL_SETTING)
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = (
             instructions
@@ -122,12 +125,7 @@ class BaseChatbot(ABC):
         )
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
-        self.use_case = ol_llm.UseCase(
-            app=APP_NAME,
-            name=self.USE_CASE_NAME,
-            profile="request",
-            model=catalog_model_id(self.model),
-        )
+        self.use_case = self.chat_use_case(self.model)
         if self.CALLS_THE_MODEL:
             ol_llm.check_chat_model(self.use_case)
         self.attribution = ol_llm.Attribution(
@@ -148,6 +146,22 @@ class BaseChatbot(ABC):
         self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
+
+    @classmethod
+    def chat_use_case(cls, model: str) -> ol_llm.UseCase:
+        """
+        Return the ol-llm use case for this bot calling a litellm model id.
+
+        :param model: the litellm model id.
+        :returns: the use case, naming the model as the catalog does.
+        :rtype: ol_llm.UseCase
+        """
+        return ol_llm.UseCase(
+            app=APP_NAME,
+            name=cls.USE_CASE_NAME,
+            profile="request",
+            model=catalog_model_id(model),
+        )
 
     def create_tools(self):
         """Create any tools required by the agent"""
@@ -519,6 +533,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
     USE_CASE_NAME = "recommendation"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_RECOMMENDATION_MODEL"
     STATE_CLASS = RecommendationAgentState
 
     def __init__(  # noqa: PLR0913
@@ -537,7 +552,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_RECOMMENDATION_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -608,6 +623,7 @@ class SyllabusBot(TruncatingChatbot):
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
     USE_CASE_NAME = "syllabus"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_SYLLABUS_MODEL"
     STATE_CLASS = SyllabusAgentState
     TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses", "platform")
 
@@ -634,7 +650,7 @@ class SyllabusBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_SYLLABUS_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -700,6 +716,7 @@ class TutorBot(BaseChatbot):
     TASK_NAME = "TUTOR_TASK"
     JOB_ID = "TUTOR_JOB"
     USE_CASE_NAME = "tutor"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_TUTOR_MODEL"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -721,7 +738,7 @@ class TutorBot(BaseChatbot):
             checkpointer=checkpointer,
             temperature=temperature,
             thread_id=thread_id,
-            model=model or settings.AI_DEFAULT_TUTOR_MODEL,
+            model=model,
         )
 
         self.edx_module_id = edx_module_id
@@ -991,6 +1008,7 @@ class VideoGPTBot(TruncatingChatbot):
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
     USE_CASE_NAME = "video-gpt"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_VIDEO_GPT_MODEL"
     STATE_CLASS = VideoGPTAgentState
     TRACE_STATE_KEYS = ("transcript_asset_id",)
 
@@ -1024,7 +1042,7 @@ class VideoGPTBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_VIDEO_GPT_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -1507,6 +1525,7 @@ class SupportBot(TruncatingChatbot):
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     USE_CASE_NAME = "support"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_SUPPORT_MODEL"
     STATE_CLASS = SupportAgentState
     TRACE_STATE_KEYS = ("page_url",)
     # Every branch of get_completion ends at _reply_without_the_model.
@@ -1528,7 +1547,7 @@ class SupportBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_SUPPORT_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
