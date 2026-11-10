@@ -2,8 +2,13 @@
 
 import pytest
 from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
 
-from ai_chatbots.factories import ChatResponseRatingFactory, CheckpointFactory
+from ai_chatbots.factories import (
+    ChatResponseRatingFactory,
+    CheckpointFactory,
+    LLMModelFactory,
+)
 from ai_chatbots.models import ChatResponseRating
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
@@ -46,13 +51,25 @@ def test_instructions_permissions(is_staff, is_super):
     ],
 )
 def test_model_permissions(is_staff, is_super):
-    """Only staff and superusers may choose the model."""
+    """Only staff and superusers may choose a model outside LLMModel."""
     user = UserFactory.create(is_staff=is_staff, is_superuser=is_super)
     serializer = ChatRequestSerializer(
-        data={"message": "Hello, world!", "model": "openai/gpt-4o"},
+        data={"message": "Hello, world!", "model": "openai/not-in-llm-models"},
         context={"user": user},
     )
     assert serializer.is_valid() == (is_staff or is_super)
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+@pytest.mark.parametrize("anonymous", [True, False])
+def test_model_from_llm_models(enabled, anonymous):
+    """Anyone may choose an enabled LLMModel, and only an enabled one."""
+    model = LLMModelFactory.create(enabled=enabled)
+    serializer = ChatRequestSerializer(
+        data={"message": "Hello, world!", "model": model.litellm_id},
+        context={"user": AnonymousUser() if anonymous else UserFactory.create()},
+    )
+    assert serializer.is_valid() == enabled
 
 
 def test_model_max_length():

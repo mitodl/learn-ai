@@ -63,14 +63,16 @@ class ChatRequestSerializer(serializers.Serializer):
 
     def validate_model(self, value):
         """
-        Ensure that the user has permission.
+        Limit non-staff callers to the enabled models.
 
         ol-llm caches its catalog check per model id for the life of the
         worker, so an open field would let any caller grow that cache.
         """
         user = self.context.get("user")
-        if value and (not user or (not user.is_staff and not user.is_superuser)):
-            err_msg = "You do not have permission to choose the model."
+        if not value or (user and (user.is_staff or user.is_superuser)):
+            return value
+        if not LLMModel.objects.filter(litellm_id=value, enabled=True).exists():
+            err_msg = "Choose one of the available models."
             raise serializers.ValidationError(err_msg)
         return value
 

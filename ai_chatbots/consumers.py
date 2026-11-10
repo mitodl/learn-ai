@@ -449,7 +449,10 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
         try:
             self.check_origin()
             await self.check_throttles()
-            serializer = self.process_message(message, self.serializer_class)
+            # Validating the model queries LLMModel.
+            serializer = await sync_to_async(self.process_message)(
+                message, self.serializer_class
+            )
             thread_id, cookies = await self.prepare_response(serializer)
             message_text = serializer.validated_data["message"]
             checkpointer = await self.create_checkpointer(

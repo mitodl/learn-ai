@@ -24,7 +24,11 @@ from ai_chatbots.constants import (
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
 )
-from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
+from ai_chatbots.factories import (
+    LLMModelFactory,
+    SystemMessageFactory,
+    UserChatSessionFactory,
+)
 from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
@@ -228,6 +232,26 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
         more_body=True,
     )
     assert mock_http_consumer_send.send_headers.call_count == 1
+
+
+async def test_recommend_agent_handle_enabled_model_for_non_staff(
+    mocker, mock_http_consumer_send, recommendation_consumer
+):
+    """A non-staff user may choose an enabled model.
+
+    The serializer checks it against LLMModel from inside the async handle.
+    """
+    model = await sync_to_async(LLMModelFactory.create)(enabled=True)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=MockAsyncIterator(["hi"]),
+    )
+
+    await recommendation_consumer.handle(
+        json.dumps({"message": "hello", "model": model.litellm_id})
+    )
+
+    assert recommendation_consumer.bot.model == model.litellm_id
 
 
 @pytest.mark.parametrize("clear_history", [True, False])
