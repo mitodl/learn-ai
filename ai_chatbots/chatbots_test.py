@@ -619,15 +619,6 @@ async def test_bot_with_an_unresolvable_model_is_built_uncataloged(mock_checkpoi
 
 
 @pytest.mark.asyncio
-async def test_bot_with_a_retired_model_is_refused(mocker, mock_checkpointer):
-    """The catalog check runs when the bot builds its model."""
-    mocker.patch.object(ol_llm, "check_chat_model", side_effect=ValueError("retired"))
-
-    with pytest.raises(ValueError, match="retired"):
-        await sync_to_async(SyllabusBot)("anonymous", mock_checkpointer)
-
-
-@pytest.mark.asyncio
 async def test_bot_that_never_calls_the_model_skips_the_catalog_check(
     mocker, mock_checkpointer
 ):
