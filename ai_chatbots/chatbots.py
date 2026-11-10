@@ -342,17 +342,15 @@ class BaseChatbot(ABC):
 
     async def send_chunks(self, state) -> AsyncGenerator[str, None]:
         """Yield the response in chunks"""
-        response_generator = self.agent.astream(
-            state,
-            self.config,
-            stream_mode="messages",
-        )
-        async for chunk in response_generator:
-            if (
-                isinstance(chunk[0], AIMessage | AIMessageChunk)
-                and chunk[1].get("langgraph_node") != "pre_model_hook"
-            ):
-                yield chunk[0].content
+        async with aclosing(
+            self.agent.astream(state, self.config, stream_mode="messages")
+        ) as response_generator:
+            async for chunk in response_generator:
+                if (
+                    isinstance(chunk[0], AIMessage | AIMessageChunk)
+                    and chunk[1].get("langgraph_node") != "pre_model_hook"
+                ):
+                    yield chunk[0].content
 
     async def get_completion(
         self,
@@ -397,10 +395,13 @@ class BaseChatbot(ABC):
                     "messages": [HumanMessage(message)],
                     **(extra_state or {}),
                 }
+                # aclosing ends each stream in this task, inside the trace, when
+                # the consumer closes this completion early.
                 try:
-                    async for chunk in self.send_chunks(state):
-                        full_response += chunk
-                        yield chunk
+                    async with aclosing(self.send_chunks(state)) as chunks:
+                        async for chunk in chunks:
+                            full_response += chunk
+                            yield chunk
                 except ValueError:
                     # Validate and clean checkpoint, then try again
                     log.exception("Validation error, cleaning checkpoint")
@@ -413,9 +414,10 @@ class BaseChatbot(ABC):
                         )
                     )
                     # Try to answer the user's last question anyway
-                    async for chunk in self.send_chunks(state):
-                        full_response += chunk
-                        yield chunk
+                    async with aclosing(self.send_chunks(state)) as chunks:
+                        async for chunk in chunks:
+                            full_response += chunk
+                            yield chunk
                 chat.record(full_response)
         except BadRequestError as error:
             log.exception("Bad request error")
@@ -832,19 +834,23 @@ class TutorBot(BaseChatbot):
                     variant=self.variant,
                 )
 
-                async for chunk in generator:
-                    # the generator yields message chuncks for a streaming resopnse
-                    # then finally yields the full response as the last chunk
-                    if (
-                        chunk[0] == "messages"
-                        and chunk[1]
-                        and isinstance(chunk[1][0], AIMessage | AIMessageChunk)
-                    ):
-                        full_response += chunk[1][0].content
-                        yield chunk[1][0].content
+                async with aclosing(generator) as stream:
+                    async for chunk in stream:
+                        # the generator yields message chuncks for a streaming
+                        # resopnse then finally yields the full response as the
+                        # last chunk
+                        if (
+                            chunk[0] == "messages"
+                            and chunk[1]
+                            and isinstance(chunk[1][0], AIMessage | AIMessageChunk)
+                        ):
+                            full_response += chunk[1][0].content
+                            yield chunk[1][0].content
 
-                    elif chunk[0] == "values":
-                        new_history = filter_out_system_messages(chunk[1]["messages"])
+                        elif chunk[0] == "values":
+                            new_history = filter_out_system_messages(
+                                chunk[1]["messages"]
+                            )
                 chat.record(full_response)
             metadata = {
                 "edx_module_id": self.edx_module_id,

@@ -303,18 +303,14 @@ async def test_get_completion(
     )
     mock_stream = mocker.patch(
         "ai_chatbots.chatbots.CompiledStateGraph.astream",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(
-                    [
-                        (
-                            AIMessageChunkFactory.create(content=val),
-                            {"langgraph_node": "agent"},
-                        )
-                        for val in expected_return_value
-                    ]
+        return_value=MockAsyncIterator(
+            [
+                (
+                    AIMessageChunkFactory.create(content=val),
+                    {"langgraph_node": "agent"},
                 )
-            )
+                for val in expected_return_value
+            ]
         ),
     )
     chatbot.search_parameters = metadata["metadata"]["search_parameters"]
@@ -396,6 +392,31 @@ async def test_search_summary_bot_closes_the_completion_it_wraps(
 
     completion = chatbot.get_completion("physics")
     assert await anext(completion) == "summary"
+    await completion.aclose()
+
+    assert closed == [asyncio.current_task()]
+
+
+async def test_get_completion_closes_the_graph_stream(mocker, mock_checkpointer):
+    """Closing a completion early closes the agent graph's stream in the same
+    task, while the trace is still open.
+    """
+    closed = []
+
+    async def astream(*args, **kwargs):
+        try:
+            yield AIMessageChunkFactory.create(content="Here "), {}
+            yield AIMessageChunkFactory.create(content="more"), {}
+        finally:
+            closed.append(asyncio.current_task())
+
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer
+    )
+    mocker.patch.object(chatbot.agent, "astream", astream)
+
+    completion = chatbot.get_completion("physics")
+    assert await anext(completion) == "Here "
     await completion.aclose()
 
     assert closed == [asyncio.current_task()]
@@ -1536,9 +1557,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
         final_message,
     ]
 
-    mock_stream = mocker.Mock(
-        __aiter__=mocker.Mock(return_value=MockAsyncIterator(generator_return_values))
-    )
+    mock_stream = MockAsyncIterator(generator_return_values)
     intents = [
         [Intent.P_HYPOTHESIS],
     ]
