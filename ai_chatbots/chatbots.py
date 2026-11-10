@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from operator import add
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import posthog
@@ -1754,7 +1755,13 @@ class SupportBot(TruncatingChatbot):
         own courses.
         """
         openedx = settings.LEARNER_API_OPENEDX_BASE_URL
-        if not page_url or not page_url.startswith(openedx):
+        if not page_url or not openedx:
+            return None, None
+        base, page = urlsplit(openedx), urlsplit(page_url)
+        # Compared as a host, not as a string prefix: a prefix match leaves the
+        # check resting on the setting carrying its trailing slash, and without
+        # one courses.learn.mit.edu.evil.test matches it.
+        if (page.scheme, page.netloc.lower()) != (base.scheme, base.netloc.lower()):
             return None, None
         found = COURSE_KEY_RE.search(page_url)
         return (found.group(0), "mitxonline") if found else (None, None)

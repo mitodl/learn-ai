@@ -2099,6 +2099,28 @@ async def test_the_answer_attempt_gets_the_pages_course(
     assert state["platform"] == ["mitxonline" if expected else None]
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        pytest.param("https://courses.learn.test/", id="trailing slash"),
+        pytest.param("https://courses.learn.test", id="no trailing slash"),
+    ],
+)
+def test_page_course_rejects_a_lookalike_host(settings, base_url):
+    """
+    A host that merely starts with the courseware URL is not the courseware.
+    Matching on the string makes that invariant depend on an operator having
+    typed a trailing slash: without one, courses.learn.test.evil.example is a
+    prefix match and the tools answer about a course the learner is not on.
+    """
+    settings.LEARNER_API_OPENEDX_BASE_URL = base_url
+
+    assert SupportBot._page_course(  # noqa: SLF001
+        "https://courses.learn.test.evil.example"
+        "/learn/course/course-v1:MITx+18.01x+2T2025/home"
+    ) == (None, None)
+
+
 @pytest.mark.asyncio
 async def test_the_page_course_is_this_turns_not_the_last_turns(
     settings, mocker, mock_checkpointer
@@ -5244,8 +5266,10 @@ async def test_the_answering_graph_hands_the_tools_the_page_course(
         {},
         {
             "page_url": [
-                "https://courses.learn.test/learn/course/"
-                "course-v1:MITx+18.01x+2T2025/home"
+                (
+                    "https://courses.learn.test/learn/course/"
+                    "course-v1:MITx+18.01x+2T2025/home"
+                )
             ]
         },
     )
