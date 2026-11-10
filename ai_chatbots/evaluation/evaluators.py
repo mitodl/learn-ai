@@ -238,9 +238,9 @@ class SupportBotEvaluator(BaseBotEvaluator):
         Require the tools, and nothing else.
 
         No tools means no answering graph, so the case would be scored against
-        a bot that cannot answer. There is deliberately no course_id check: the
-        support bot reads its course off page_url, so requiring one would
-        reject the cases that test that.
+        a bot that cannot answer. course_id is not required on top of that: it
+        reaches the graph through extra_state like the rest of the state, so
+        there is nothing for the validator to insist on separately.
         """
         metadata = test_case.metadata or {}
 
@@ -269,6 +269,12 @@ class SupportBotEvaluator(BaseBotEvaluator):
         `agent` never reaches a model - it emits the scripted reply - so
         running it would let every "calls no tool" case pass without proving
         anything, and fail every other case for the wrong reason.
+
+        This measures the graph alone. Everything _try_to_answer wraps around
+        it - reading the course off page_url, checking that a tool actually
+        reached the records, and picking this turn's reply out of the result -
+        does not run here, so a regression in any of those is caught by the
+        unit tests and not by an eval score.
         """
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})

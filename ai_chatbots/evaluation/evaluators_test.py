@@ -538,9 +538,9 @@ class TestSupportBotEvaluator:
 
     def test_no_course_id_is_needed(self, evaluator):
         """
-        Unlike the syllabus bot, the support bot is never handed a course: it
-        reads one off page_url, so requiring course_id would reject every case
-        that tests exactly that.
+        Unlike the syllabus bot, the support bot takes no course argument of
+        its own: course_id reaches the graph through extra_state with the rest
+        of the state, so the validator has nothing to insist on separately.
         """
         case = TestCaseSpec(
             question="q",
