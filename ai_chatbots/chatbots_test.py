@@ -2247,6 +2247,40 @@ async def test_try_to_answer_falls_through_when_every_tool_failed(
 
 
 @pytest.mark.asyncio
+async def test_try_to_answer_falls_through_when_the_tool_call_errored(
+    mocker, mock_checkpointer
+):
+    """
+    A call langgraph could not run at all - a malformed argument, a tool that
+    isn't there - never reaches the tool body, so it cannot come back as the
+    tools' own COULD_NOT_CHECK JSON. It arrives as langgraph's plain-text error
+    template with status="error", which json.loads rejects and the gate then
+    reads as a successful lookup. Nothing was read either way.
+    """
+    chatbot = await _answering_bot(
+        mocker,
+        mock_checkpointer,
+        _answer_result(
+            ToolMessage(
+                content="Error: 1 validation error for get_certificate_status\n"
+                " Please fix your mistakes.",
+                tool_call_id="call-1",
+                name="get_certificate_status",
+                status="error",
+            ),
+            AIMessage("You haven't earned a certificate in that course."),
+        ),
+    )
+
+    assert (
+        await chatbot._try_to_answer(  # noqa: SLF001
+            "did I get my certificate?", {}
+        )
+        == ""
+    )
+
+
+@pytest.mark.asyncio
 async def test_try_to_answer_keeps_an_answer_when_only_some_tools_failed(
     mocker, mock_checkpointer
 ):

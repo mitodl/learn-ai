@@ -1571,7 +1571,14 @@ def _read_the_records(message: ToolMessage) -> bool:
     to say it couldn't check. Counting that as a source would ship "I couldn't
     check" as the answer and mark the turn answered - closing intake during the
     outage that spikes ticket volume.
+
+    A call that never reached the tool body is the same: langgraph writes that
+    ToolMessage itself, so it carries langgraph's error template rather than
+    anything a tool chose to return, and the json below would read it as a
+    lookup that worked.
     """
+    if message.status == "error":
+        return False
     if not isinstance(message.content, str):
         return True
     try:
