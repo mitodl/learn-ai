@@ -1098,6 +1098,13 @@ SUPPORT_TICKET_CANCELLED = (
     "No problem - I haven't sent anything, and I've put aside what you'd written "
     "so far. Tell me about it again whenever you're ready and we'll start fresh."
 )
+# Not SUPPORT_TICKET_CANCELLED: there is nothing written to have put aside, and
+# saying there is reads as a request going missing.
+SUPPORT_NOTHING_TO_SEND = (
+    "No problem - there was nothing to pass on, so I haven't sent anything. Tell "
+    "me what's going on whenever you'd like the MIT Open Learning support team to "
+    "take a look."
+)
 SUPPORT_SEND_UNCLEAR = (
     "I'm not sure whether that was a go-ahead or something to add, and I don't "
     'want to guess. Reply "send" on its own to pass on the request exactly as '
@@ -2000,14 +2007,36 @@ class SupportBot(TruncatingChatbot):
             return (
                 SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
             ), {}
-        if not prior_messages:
-            # An authenticated learner's address arrives with the opening
-            # message; invite more detail before showing the review.
+        description = _support_description(
+            prior_messages, message, since=_cancelled_after(prior_state)
+        )
+        # Nothing to show back yet. Either the thread is new - an authenticated
+        # learner's address arrives with the opening message, so ask for the
+        # problem before showing a review - or it starts past a close-out or a
+        # cancel and this turn added only a button press or a filler. A review
+        # with no problem in it still arms the send, and the turn after files a
+        # ticket support cannot act on, which spends the thread on it.
+        if not prior_messages or not description:
+            # Every reply "anything else to add?" invites is filler, so asking
+            # again is all it can do with one. The review this guard replaced
+            # armed the send, where _send_edit_or_cancel reads these as a cancel
+            # or as an unclear go-ahead naming "cancel"; without this the
+            # learner who answers the question has no way out of it.
+            #
+            # _closes_the_answer, not a narrower pair: it already unions the
+            # sets that end a request, and leaves affirmatives out, so "yes" -
+            # which means there is more coming - still asks.
+            if prior_messages and (
+                _is_cancellation(message) or _closes_the_answer(message)
+            ):
+                return SUPPORT_NOTHING_TO_SEND, {
+                    # This turn's own exchange is written alongside this update,
+                    # so the next request starts past both of those too.
+                    "cancelled_after": [len(prior_messages) + 2],
+                }
             return SUPPORT_ASK_MORE, {"user_email": [email]}
         return _support_review(
-            _support_description(
-                prior_messages, message, since=_cancelled_after(prior_state)
-            ),
+            description,
             _accumulated(prior_state, extra_state, "page_url"),
             email,
             # An address parsed out of this turn reaches state no other way,

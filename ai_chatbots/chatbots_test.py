@@ -40,15 +40,13 @@ from openai import BadRequestError
 from ai_chatbots import tools
 from ai_chatbots.chatbots import (
     AFFIRMATIVE_PHRASES,
-    ANSWER_CLOSING_PHRASES,
-    DECLINE_PHRASES,
-    NOTHING_MORE_PHRASES,
     PAUSE_PHRASES,
     SUPPORT_ANSWER_CLOSED,
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
     SUPPORT_ASK_MORE,
     SUPPORT_FILING_LOCK_PREFIX,
+    SUPPORT_NOTHING_TO_SEND,
     SUPPORT_OFFER_TICKET,
     SUPPORT_SEND_UNCLEAR,
     SUPPORT_TICKET_BAD_EMAIL,
@@ -1879,11 +1877,12 @@ def test_close_out_phrases_exclude_every_affirmative():
     """
     Pins the rule rather than the symptom: the table above only catches the
     affirmatives someone remembered to list, this catches the next one added.
-    """
-    closing = ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
 
-    assert not closing & AFFIRMATIVE_PHRASES
-    assert not closing & PAUSE_PHRASES
+    Asked of the function rather than of a copy of the union it builds, so a
+    fourth set added to _closes_the_answer is checked too.
+    """
+    assert not [phrase for phrase in AFFIRMATIVE_PHRASES if _closes_the_answer(phrase)]
+    assert not [phrase for phrase in PAUSE_PHRASES if _closes_the_answer(phrase)]
 
 
 def test_support_state_tracks_hand_off_and_answers():
@@ -2795,14 +2794,14 @@ async def test_send_it_after_an_answer_is_not_a_close_out(mocker, mock_checkpoin
 
 
 @pytest.mark.asyncio
-async def test_a_filler_after_a_close_out_still_shows_the_review(
+async def test_a_filler_after_a_close_out_asks_rather_than_showing_an_empty_review(
     mocker, mock_checkpointer
 ):
     """
-    REVIEW FOCUS 7, pinned not fixed. Past a close-out, since > 0, so
-    _support_description drops its first-message exemption and a filler leaves
-    the description empty. Pre-existing after a cancel; recorded here so a
-    future fix is a visible change rather than a surprise.
+    REVIEW FOCUS 7, previously pinned as the known-bad behaviour. Past a
+    close-out, since > 0, so _support_description drops its first-message
+    exemption and a filler leaves the description empty. Showing the review
+    anyway armed the send over nothing.
 
     The second attempt returns nothing because a filler is not a records
     question - an attempt that answered again would never reach intake, which
@@ -2816,7 +2815,91 @@ async def test_a_filler_after_a_close_out_still_shows_the_review(
 
     reply = await _say(chatbot, "ok")
 
-    assert "**Your message:** \n" in reply
+    assert SUPPORT_ASK_MORE in reply
+    assert "**Your message:**" not in reply
+    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+
+
+@pytest.mark.parametrize(
+    "reply_to_the_ask", ["no", "no thanks", "nothing else", "that's all", "cancel"]
+)
+@pytest.mark.asyncio
+async def test_an_answer_to_the_empty_ask_ends_it_rather_than_asking_again(
+    mocker, mock_checkpointer, reply_to_the_ask
+):
+    """
+    ASK_MORE asks "anything else to add before I pass this on?". Past a
+    close-out there is nothing to pass on, and every reply that question
+    invites is filler, so the description stays empty and the identical words
+    come back, forever.
+
+    The guard above took that learner's way out with it: before it, the empty
+    review armed the send, and the awaiting_send branch reads these as a cancel
+    or as an unclear go-ahead that names "cancel". Nothing arms the send now,
+    so that branch is never reached.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "", ""]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "thanks")
+    await _say(chatbot, "ok")
+
+    reply = await _say(chatbot, reply_to_the_ask)
+
+    assert SUPPORT_NOTHING_TO_SEND in reply
+    assert SUPPORT_ASK_MORE not in reply
+    assert "**Your message:**" not in reply
+    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+
+
+@pytest.mark.asyncio
+async def test_a_yes_to_the_empty_ask_still_asks(mocker, mock_checkpointer):
+    """
+    The other half of why the exit is _closes_the_answer and not _is_filler:
+    "yes" to "anything else to add?" means there is more coming. Ending on it
+    drops the learner who was about to describe the problem.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "", ""]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "thanks")
+    await _say(chatbot, "ok")
+
+    reply = await _say(chatbot, "yes")
+
+    assert SUPPORT_ASK_MORE in reply
+    assert SUPPORT_NOTHING_TO_SEND not in reply
+
+
+@pytest.mark.asyncio
+async def test_that_decline_reopens_answering_like_the_other_two_exits(
+    mocker, mock_checkpointer
+):
+    """
+    A third way a request ends, so it owes what the other two write. A
+    close-out and a cancel both push cancelled_after past the thread, which is
+    what intake_started reads to decide the bot is mid-form and must not try to
+    answer. Ending without it leaves the next question collected into a ticket
+    the bot could have answered.
+    """
+    # Three, not four: the decline is read before the answer attempt, so that
+    # turn never reaches one and the last entry is what the turn after it gets.
+    chatbot = await _answering_support_bot(
+        mocker,
+        mock_checkpointer,
+        ["You're enrolled in 18.01x.", "", "Your certificate is ready."],
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "thanks")
+    await _say(chatbot, "ok")
+    await _say(chatbot, "no")
+
+    reply = await _say(chatbot, "where's my certificate?")
+
+    assert "Your certificate is ready." in reply
+    assert "**Your message:**" not in reply
 
 
 @pytest.mark.asyncio
@@ -2957,6 +3040,31 @@ async def test_support_bot_keeps_the_escalate_buttons_words_out_of_the_ticket(
     assert label not in review
     assert label not in edited
     assert "It also happens on week 4." in edited
+
+
+@pytest.mark.asyncio
+async def test_an_escalate_after_a_close_out_asks_instead_of_filing_nothing(
+    mocker, mock_checkpointer
+):
+    """
+    The widget renders the button under the last message, so after a close-out
+    it sits under "Glad that helped" - one press away for a learner the bot did
+    help. That press contributes "" to a request starting past the close-out,
+    so nothing is left to describe; showing the review anyway arms the send,
+    and the turn after it files a description-less ticket and spends the thread
+    on it. Ask what the problem is instead.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", ""]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "thanks")
+
+    reply = await _say(chatbot, "Contact the support team", escalate=[True])
+
+    assert SUPPORT_ASK_MORE in reply
+    assert "**Your message:**" not in reply
+    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
 
 
 @pytest.mark.asyncio
