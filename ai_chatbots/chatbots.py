@@ -1857,17 +1857,17 @@ class SupportBot(TruncatingChatbot):
             isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
         ):
             return ""
-        answer = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                # Content blocks come back as a list for some models, and the
-                # repr of a list is not an answer.
-                if isinstance(msg, AIMessage) and isinstance(msg.content, str)
-            ),
-            "",
+        # The last AIMessage is this turn's reply. Taking the last one that also
+        # has string content would walk past an unusable reply into the history
+        # replayed above, and answer this question with a previous turn's answer.
+        reply = next(
+            (msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None
         )
-        return answer.strip()
+        # Content blocks come back as a list for some models, and the repr of a
+        # list is not an answer.
+        if reply is None or not isinstance(reply.content, str):
+            return ""
+        return reply.content.strip()
 
     async def _reply_without_the_model(
         self, message: str, reply: str, extra_state: dict

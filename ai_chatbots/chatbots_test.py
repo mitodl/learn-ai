@@ -2326,6 +2326,40 @@ async def test_try_to_answer_falls_through_on_unusable_content(
     assert await chatbot._try_to_answer("what's my grade?", {}) == ""  # noqa: SLF001
 
 
+@pytest.mark.asyncio
+async def test_try_to_answer_never_answers_with_an_earlier_turns_reply(
+    mocker, mock_checkpointer
+):
+    """
+    The attempt is invoked with the thread's history, and the graph returns that
+    history alongside what this turn produced. Searching backwards for the last
+    string-content AIMessage therefore walks straight past an unusable reply
+    into the previous turn's answer - showing a learner who asked about due
+    dates their grade from two turns ago, with a second ticket offer stapled on,
+    and marking the turn answered. An unusable reply is no answer, whatever is
+    behind it in the thread.
+    """
+    chatbot = await _answering_bot(
+        mocker,
+        mock_checkpointer,
+        _answer_result(
+            # What _try_to_answer replayed: an answered turn already in the thread.
+            HumanMessage("did I pass 18.01x?"),
+            AIMessage("You scored 94% in 18.01x."),
+            HumanMessage("when is my next assignment due?"),
+            _tool_message(),
+            AIMessage([{"type": "text", "text": "due 3 May"}]),
+        ),
+    )
+
+    assert (
+        await chatbot._try_to_answer(  # noqa: SLF001
+            "when is my next assignment due?", {}
+        )
+        == ""
+    )
+
+
 @pytest.mark.parametrize(
     "failure",
     [
