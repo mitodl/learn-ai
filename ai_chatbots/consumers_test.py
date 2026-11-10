@@ -24,7 +24,11 @@ from ai_chatbots.constants import (
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
 )
-from ai_chatbots.factories import SystemMessageFactory, UserChatSessionFactory
+from ai_chatbots.factories import (
+    LLMModelFactory,
+    SystemMessageFactory,
+    UserChatSessionFactory,
+)
 from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
 from ai_chatbots.models import UserChatSession
 from main.exceptions import AsyncThrottled
@@ -138,9 +142,7 @@ def mock_chatbot_completion(mocker):
     response = ["test", "response"]
     return mocker.patch(
         "ai_chatbots.chatbots.SyllabusBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(return_value=MockAsyncIterator(response))
-        ),
+        return_value=MockAsyncIterator(response),
     )
 
 
@@ -194,11 +196,7 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
     user.is_superuser = True
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(list(response.content.split(" ")))
-            )
-        ),
+        return_value=MockAsyncIterator(list(response.content.split(" "))),
     )
     data = {
         "message": message,
@@ -234,6 +232,26 @@ async def test_recommend_agent_handle(  # noqa: PLR0913
         more_body=True,
     )
     assert mock_http_consumer_send.send_headers.call_count == 1
+
+
+async def test_recommend_agent_handle_enabled_model_for_non_staff(
+    mocker, mock_http_consumer_send, recommendation_consumer
+):
+    """A non-staff user may choose an enabled model.
+
+    The serializer checks it against LLMModel from inside the async handle.
+    """
+    model = await sync_to_async(LLMModelFactory.create)(enabled=True)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=MockAsyncIterator(["hi"]),
+    )
+
+    await recommendation_consumer.handle(
+        json.dumps({"message": "hello", "model": model.litellm_id})
+    )
+
+    assert recommendation_consumer.bot.model == model.litellm_id
 
 
 @pytest.mark.parametrize("clear_history", [True, False])
@@ -318,9 +336,7 @@ async def test_search_summary_agent_handle(
     consumer.channel_name = "test_channel"
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.SearchSummaryBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(return_value=MockAsyncIterator(["summary"]))
-        ),
+        return_value=MockAsyncIterator(["summary"]),
     )
 
     assert consumer.ROOM_NAME == "SearchSummaryBot"
@@ -436,6 +452,7 @@ async def test_syllabus_create_chatbot(
     mock_http_consumer_send, syllabus_consumer, async_user
 ):
     """SyllabusBotHttpConsumer create_chatbot function should return syllabus bot."""
+    async_user.is_staff = True
     serializer = consumers.SyllabusChatRequestSerializer(
         data={
             "message": "hello",
@@ -443,7 +460,8 @@ async def test_syllabus_create_chatbot(
             "collection_name": "vector512",
             "temperature": 0.7,
             "model": "gpt-3.5-turbo",
-        }
+        },
+        context={"user": async_user},
     )
     serializer.is_valid(raise_exception=True)
     await syllabus_consumer.prepare_response(serializer)
@@ -640,10 +658,9 @@ async def test_canvas_syllabus_create_chatbot(mocker, canvas_syllabus_consumer):
             "message": "test",
             "course_id": "MITx+6.00.1x",
             "platform": "mitxonline",
-            "model": "gpt-3.5-turbo",
         }
     )
-    serializer.is_valid()
+    serializer.is_valid(raise_exception=True)
     await canvas_syllabus_consumer.prepare_response(serializer)
     bot = await sync_to_async(canvas_syllabus_consumer.create_chatbot)(
         serializer, InMemorySaver()
@@ -1008,9 +1025,7 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
     response = SystemMessageFactory.create().content.split(" ")
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.SyllabusBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
-        ),
+        return_value=MockAsyncIterator(list(response)),
     )
     payload = {
         "message": "what are the prerequisites",
@@ -1034,6 +1049,37 @@ async def test_consumer_handle(mocker, mock_http_consumer_send, syllabus_consume
     ).aexists()
 
 
+async def test_consumer_handle_closes_the_completion_when_a_send_fails(
+    mocker, mock_http_consumer_send, syllabus_consumer
+):
+    """A failed send closes the completion in the consumer's task, ending its trace."""
+    closed = []
+
+    async def completion(*_args, **_kwargs):
+        try:
+            yield "first"
+            yield "second"
+        finally:
+            closed.append(True)
+
+    mocker.patch(
+        "ai_chatbots.chatbots.SyllabusBot.get_completion", side_effect=completion
+    )
+
+    def send_chunk(chunk, *_args, **_kwargs):
+        if chunk == "first":
+            raise ConnectionResetError
+
+    mocker.patch.object(syllabus_consumer, "send_chunk", side_effect=send_chunk)
+    payload = {
+        "message": "what are the prerequisites",
+        "course_id": "MITx+6.00.1x",
+        "collection_name": "vector512",
+    }
+    await syllabus_consumer.handle(json.dumps(payload))
+    assert closed == [True]
+
+
 async def test_consumer_handle_traces_course_id(
     mocker, mock_http_consumer_send, syllabus_consumer
 ):
@@ -1041,9 +1087,7 @@ async def test_consumer_handle_traces_course_id(
     response = SystemMessageFactory.create().content.split(" ")
     mocker.patch(
         "ai_chatbots.chatbots.SyllabusBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
-        ),
+        return_value=MockAsyncIterator(list(response)),
     )
     mock_trace = mocker.patch("ai_chatbots.consumers.trace")
     payload = {
@@ -1176,11 +1220,7 @@ async def test_edx_tutor_handle_traces_edx_module_id(
     )
     mocker.patch(
         "ai_chatbots.chatbots.TutorBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(list(response.content.split(" ")))
-            )
-        ),
+        return_value=MockAsyncIterator(list(response.content.split(" "))),
     )
     mock_trace = mocker.patch("ai_chatbots.consumers.trace")
     data = {
@@ -1216,11 +1256,7 @@ async def test_tutor_agent_handle(
     )
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.TutorBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(list(response.content.split(" ")))
-            )
-        ),
+        return_value=MockAsyncIterator(list(response.content.split(" "))),
     )
     message = "What should i try next?"
     data = {
@@ -1258,11 +1294,7 @@ async def test_canvas_tutor_handle_traces_run_and_problem_set(
     )
     mocker.patch(
         "ai_chatbots.chatbots.TutorBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(list(response.content.split(" ")))
-            )
-        ),
+        return_value=MockAsyncIterator(list(response.content.split(" "))),
     )
     mock_trace = mocker.patch("ai_chatbots.consumers.trace")
     data = {
@@ -1294,11 +1326,7 @@ async def canvas_test_tutor_agent_handle(
     )
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.TutorBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(
-                return_value=MockAsyncIterator(list(response.content.split(" ")))
-            )
-        ),
+        return_value=MockAsyncIterator(list(response.content.split(" "))),
     )
     message = "What should i try next?"
     data = {
@@ -1338,13 +1366,15 @@ async def test_video_gpt_create_chatbot(
     mock_http_consumer_send, video_gpt_consumer, async_user
 ):
     """VideoGPTBotHttpConsumer create_chatbot function should return VideoGPTBot."""
+    async_user.is_staff = True
     serializer = consumers.VideoGPTRequestSerializer(
         data={
             "message": "What is this video about?",
             "transcript_asset_id": "asset-v1:xPRO+LASERxE3+R15+type@asset+block@469c03c4-581a-4687-a9ca-7a1c4047832d-en",
             "temperature": 0.7,
             "model": "gpt-3.5-turbo",
-        }
+        },
+        context={"user": async_user},
     )
     serializer.is_valid(raise_exception=True)
     await video_gpt_consumer.prepare_response(serializer)
@@ -1364,9 +1394,7 @@ async def test_video_gpt_handle_traces_asset_and_run(
     response = SystemMessageFactory.create().content.split(" ")
     mocker.patch(
         "ai_chatbots.chatbots.VideoGPTBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
-        ),
+        return_value=MockAsyncIterator(list(response)),
     )
     mock_trace = mocker.patch("ai_chatbots.consumers.trace")
     payload = {
@@ -1391,9 +1419,7 @@ async def test_video_agent_consumer_handle(
     response = SystemMessageFactory.create().content.split(" ")
     mock_completion = mocker.patch(
         "ai_chatbots.chatbots.VideoGPTBot.get_completion",
-        return_value=mocker.Mock(
-            __aiter__=mocker.Mock(return_value=MockAsyncIterator(list(response)))
-        ),
+        return_value=MockAsyncIterator(list(response)),
     )
     payload = {
         "message": "what is this video about?",

@@ -10,14 +10,19 @@ class MainConfig(AppConfig):
 
     def ready(self):
         """Initialize the app"""
-        # Initialize features
-        from main import features
-        from main.opik_keycloak_auth import configure_opik_keycloak_auth
+        import ol_llm
+        from django.conf import settings
 
+        from main import features
+
+        # Initialize features
         features.configure()
-        # Must run before any Opik client/tracer is created so SDK requests
-        # authenticate against the Keycloak-fronted Opik gateway.
-        configure_opik_keycloak_auth()
+        # Before anything uses the Opik SDK, which reads ol-llm's Keycloak auth
+        # hook only when it builds its client.
+        ol_llm.configure(ol_llm.Settings(environment=settings.OL_LLM_ENVIRONMENT))
+        ol_llm.configure_tracing(
+            None if settings.OPIK_URL_OVERRIDE else ol_llm.TracingConfig(enabled=False)
+        )
 
         # litellm's default aiohttp transport caches one ClientSession and,
         # when called from a different event loop than the one it was created

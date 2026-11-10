@@ -9,6 +9,7 @@ from enum import Enum
 from functools import cache
 
 import httpx
+import litellm
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from channels.db import database_sync_to_async
 from django.conf import settings
@@ -17,7 +18,11 @@ from django.core.exceptions import ImproperlyConfigured
 from langchain_core.messages import HumanMessage
 from named_enum import ExtendedEnum
 
-from ai_chatbots.constants import AZURE_COGNITIVE_SERVICES_SCOPE
+from ai_chatbots.constants import (
+    AZURE_COGNITIVE_SERVICES_SCOPE,
+    LITELLM_CATALOG_PROVIDERS,
+    UNRESOLVED_MODEL_PROVIDER,
+)
 from ai_chatbots.models import DjangoCheckpoint
 
 log = logging.getLogger(__name__)
@@ -164,6 +169,24 @@ def get_azure_openai_kwargs() -> dict:
             "azure_ad_token_provider": get_azure_ad_token_provider(),
         },
     }
+
+
+def catalog_model_id(model: str) -> str:
+    """
+    Return a litellm model id in the ol-llm model catalog's provider:model form.
+
+    The provider is the one litellm resolves the id to, under the catalog's name
+    for it, so the catalog checks the model litellm calls, e.g.
+    ``gemini/gemini-3-pro-preview`` -> ``google:gemini-3-pro-preview``. An id
+    litellm cannot resolve, e.g. a name only the proxy knows, goes under a
+    provider the catalog does not list, so the bot is built and traces the model
+    as uncataloged, and the completion fails or succeeds as litellm decides.
+    """
+    try:
+        name, provider, _api_key, _api_base = litellm.get_llm_provider(model=model)
+    except litellm.BadRequestError:
+        return f"{UNRESOLVED_MODEL_PROVIDER}:{model}"
+    return f"{LITELLM_CATALOG_PROVIDERS.get(provider, provider)}:{name}"
 
 
 def get_django_cache() -> BaseCache:

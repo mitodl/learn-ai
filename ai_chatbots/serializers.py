@@ -40,7 +40,8 @@ class ChatRequestSerializer(serializers.Serializer):
     message = TruncatedCharField(
         required=True, allow_blank=False, max_length=settings.AI_MAX_MESSAGE_LENGTH
     )
-    model = serializers.CharField(required=False, allow_blank=True)
+    # Matches LLMModel.litellm_id.
+    model = serializers.CharField(required=False, allow_blank=True, max_length=512)
     temperature = serializers.FloatField(
         min_value=0.0,
         max_value=1.0,
@@ -57,6 +58,21 @@ class ChatRequestSerializer(serializers.Serializer):
         user = self.context.get("user")
         if value and (not user or (not user.is_staff and not user.is_superuser)):
             err_msg = "You do not have permission to adjust the instructions."
+            raise serializers.ValidationError(err_msg)
+        return value
+
+    def validate_model(self, value):
+        """
+        Limit non-staff callers to the enabled models.
+
+        ol-llm caches its catalog check per model id for the life of the
+        worker, so an open field would let any caller grow that cache.
+        """
+        user = self.context.get("user")
+        if not value or (user and (user.is_staff or user.is_superuser)):
+            return value
+        if not LLMModel.objects.filter(litellm_id=value, enabled=True).exists():
+            err_msg = "Choose one of the available models."
             raise serializers.ValidationError(err_msg)
         return value
 
