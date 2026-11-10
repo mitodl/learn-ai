@@ -2804,7 +2804,7 @@ wheels = [
 
 [[package]]
 name = "learn-ai"
-version = "2026.11.5.2"
+version = "2026.11.10.1"
 source = { virtual = "." }
 default-groups = "all"
 dependencies = [
