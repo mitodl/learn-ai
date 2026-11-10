@@ -477,7 +477,7 @@ async def test_get_completion_traces_through_ol_llm(
         "user-1",
         mock_checkpointer,
         model="openai/gpt-4o-mini",
-        thread_id="12345678-1234-5678-9abc-123456789abc",
+        thread_id=uuid4().hex,
     )
     chatbot.llm = FakeMessagesListChatModel(
         responses=[
@@ -502,7 +502,7 @@ async def test_get_completion_traces_through_ol_llm(
     [trace] = opik_traces.trace_trees
     assert trace.name == "recommendation"
     assert trace.project_name == "learn-ai"
-    assert trace.thread_id == "12345678-1234-5678-9abc-123456789abc"
+    assert trace.thread_id == chatbot.thread_id
     assert sorted(trace.tags) == [
         "app:learn-ai",
         f"env:{settings.OL_LLM_ENVIRONMENT}",
