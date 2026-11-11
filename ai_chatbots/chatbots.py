@@ -1449,8 +1449,13 @@ def _is_unclear_go_ahead(message: str) -> bool:
 def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
     """
     Join everything the learner typed about the problem. An address they gave is
-    the reply-to, and a bare "send" is an answer to us, so neither belongs in
-    what support reads.
+    the reply-to, a bare "send" is an answer to us, and a bare "thanks" is them
+    finishing, so none of those belong in what support reads.
+
+    _closes_the_answer as well as _is_filler: the sets overlap but neither
+    contains the other, and a closing phrase left in here comes back as a
+    non-empty description, which skips the empty-ask exit in
+    _collect_the_request and arms a send whose whole body is that phrase.
 
     The thread's opening message is kept whatever it looks like. Nobody has
     been asked for an address at that point, so "I cannot log in as x@y.com" is
@@ -1485,7 +1490,10 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         and (
             (position == 0 and since == 0)
             or not (
-                _is_bare_reply_to(text) or _is_filler(text) or _is_cancellation(text)
+                _is_bare_reply_to(text)
+                or _is_filler(text)
+                or _closes_the_answer(text)
+                or _is_cancellation(text)
             )
         )
     )

@@ -2821,7 +2821,25 @@ async def test_a_filler_after_a_close_out_asks_rather_than_showing_an_empty_revi
 
 
 @pytest.mark.parametrize(
-    "reply_to_the_ask", ["no", "no thanks", "nothing else", "that's all", "cancel"]
+    "reply_to_the_ask",
+    [
+        "no",
+        "no thanks",
+        "nothing else",
+        "that's all",
+        "cancel",
+        # ANSWER_CLOSING_PHRASES. _closes_the_answer reads these as the end of a
+        # request but FILLER_PHRASES does not contain them, so until
+        # _support_description dropped them too the description came back as the
+        # closing phrase itself - which skipped this exit and armed a send whose
+        # whole body was "thanks".
+        "thanks",
+        "thank you",
+        "got it",
+        "perfect",
+        "cheers",
+        "that helped",
+    ],
 )
 @pytest.mark.asyncio
 async def test_an_answer_to_the_empty_ask_ends_it_rather_than_asking_again(
@@ -5300,6 +5318,25 @@ def test_support_description_leaves_the_bots_own_words_out():
     assert _support_description(prior, "and my refund?") == (
         "did I pass 18.01x?\n\nand my refund?"
     )
+
+
+@pytest.mark.parametrize(
+    "closing", ["thanks", "thank you", "got it", "perfect", "cheers", "that helped"]
+)
+def test_support_description_drops_a_closing_phrase(closing):
+    """
+    A phrase _closes_the_answer recognises is the learner finishing, not the
+    problem they want help with, so it is not a description. Leaving it in made
+    the empty-ask exit unreachable for the exact words it was written for: the
+    description came back non-empty, so the guard above it never fired and the
+    send armed over a one-word body.
+    """
+    prior = [
+        HumanMessage("did I pass 18.01x?"),
+        AIMessage("You scored 94%."),
+    ]
+
+    assert _support_description(prior, closing, since=2) == ""
 
 
 @pytest.mark.asyncio
