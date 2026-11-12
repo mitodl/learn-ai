@@ -304,8 +304,7 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 - `pairwise-only`: Judge only pairwise, with no other metric. For cases without expected answers.
 - `sample`: Judge a seeded random sample of this many cases per bot. Default: every case, or 30 with `baseline`.
 - `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
-- `tutor-rubric`: Judge tutor answers with TutoringQuality only, against the problem, its solution and the conversation so far. Needs `--bots tutor`.
-- `baseline`: Compare the other model with this one and give a verdict (see below). Needs exactly two `models` and `correctness-only`, `pairwise-only` or `tutor-rubric`.
+- `baseline`: Compare the other model with this one and give a verdict (see below). Needs exactly two `models` and `correctness-only` or `pairwise-only`, except for `--bots tutor` alone, which is judged on TutoringQuality: against the problem, its solution and the conversation so far.
 - `baseline-prompt`, `candidate-prompt`: Each side's prompt, by name in `prompts-file` (default: the bot's own). Need `baseline` and `prompts-file`.
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.
@@ -333,7 +332,7 @@ To compare prompts too, give each side its prompt from a prompts file. For tutor
 ```bash
 # prompts.json: {"tutor": [{"name": "production", "text": "..."}, {"name": "strict", "text": "..."}]}
 python manage.py rag_evaluation --bots tutor --models openai/gpt-4o,openai/gpt-5.4 \
-  --baseline openai/gpt-4o --tutor-rubric --prompts-file prompts.json \
+  --baseline openai/gpt-4o --eval_model gpt-5.5 --prompts-file prompts.json \
   --baseline-prompt production --candidate-prompt strict --data-file <tutor cases>
 ```
 

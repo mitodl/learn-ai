@@ -143,15 +143,10 @@ class Command(BaseCommand):
             help="Judge only pairwise, for cases without expected answers",
         )
         parser.add_argument(
-            "--tutor-rubric",
-            action="store_true",
-            help="Judge tutor answers with TutoringQuality only",
-        )
-        parser.add_argument(
             "--baseline",
             help=(
                 "Compare the other model with this one and give a verdict; needs "
-                "--correctness-only, --pairwise-only or --tutor-rubric"
+                "--correctness-only or --pairwise-only, except for --bots tutor"
             ),
         )
         parser.add_argument(
@@ -188,19 +183,10 @@ class Command(BaseCommand):
 
     def _check_options(self, options: dict, models: list[str]) -> None:
         """Refuse flag combinations without a meaningful result."""
-        modes = [
-            "pairwise_only",
-            "tutor_rubric",
-            "correctness_only",
-            "require_expected",
-        ]
-        chosen = [mode for mode in modes if options[mode]]
-        if len(chosen) > 1 and chosen[0] in modes[:2]:
-            msg = f"--{chosen[0].replace('_', '-')} can't be combined with other modes"
-            raise CommandError(msg)
-        bots = [b for b in (options["bots"] or "").split(",") if b]
-        if options["tutor_rubric"] and bots != ["tutor"]:
-            msg = "--tutor-rubric needs --bots tutor"
+        if options["pairwise_only"] and (
+            options["correctness_only"] or options["require_expected"]
+        ):
+            msg = "--pairwise-only can't be combined with other metric modes"
             raise CommandError(msg)
         side_prompts = options["baseline_prompt"] or options["candidate_prompt"]
         if side_prompts and not (options["baseline"] and options["prompts_file"]):
@@ -220,12 +206,9 @@ class Command(BaseCommand):
             if not (
                 options["correctness_only"]
                 or options["pairwise_only"]
-                or options["tutor_rubric"]
+                or self._tutor_rubric(options)
             ):
-                msg = (
-                    "--baseline needs --correctness-only, --pairwise-only "
-                    "or --tutor-rubric"
-                )
+                msg = "--baseline needs --correctness-only or --pairwise-only"
                 raise CommandError(msg)
             if options["prompts"] or (options["prompts_file"] and not side_prompts):
                 msg = (
@@ -233,6 +216,11 @@ class Command(BaseCommand):
                     "or --candidate-prompt instead of --prompts"
                 )
                 raise CommandError(msg)
+
+    def _tutor_rubric(self, options: dict) -> bool:
+        """Tutor alone, with no other metric mode, is judged on TutoringQuality."""
+        modes = ("pairwise_only", "correctness_only", "require_expected")
+        return options["bots"] == "tutor" and not any(options[m] for m in modes)
 
     def _model_settings(self, models: list[str]) -> str:
         """Describe each model's temperature and reasoning effort."""
@@ -317,7 +305,7 @@ class Command(BaseCommand):
                     require_expected=require_expected,
                     correctness_only=correctness_only,
                     pairwise_only=options["pairwise_only"],
-                    tutor_rubric=options["tutor_rubric"],
+                    tutor_rubric=self._tutor_rubric(options),
                 )
             except ValueError as error:
                 raise CommandError(str(error)) from error
