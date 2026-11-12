@@ -208,11 +208,7 @@ class BaseBotEvaluator(ABC):
         """Load test cases specific to this bot type from self.data_file."""
 
     def load_cases(self, *, require_reference: bool = False) -> list[TestCaseSpec]:
-        """
-        Load every data file's cases, tagged "<file>#<index>".  Drop, with a
-        count per reason, invalid cases and, if required, cases without a
-        reference answer.
-        """
+        """Load every data file's valid cases, tagged "<file>#<index>"."""
         cases = []
         dropped: dict[str, int] = {}
         for data_file in self.data_files:
@@ -283,16 +279,14 @@ class BaseBotEvaluator(ABC):
                     test_case.expected_tools,
                 )
 
-        # Every tool output, so the metrics see all evidence the bot had
-        context = response.get("extra_context", []) + [
-            m.content
-            for m in response.get("messages", [])
-            if getattr(m, "type", None) == "tool" and m.content
-        ]
         tool_messages = [
             m
             for m in response.get("messages", [])
             if getattr(m, "type", None) == "tool"
+        ]
+        # Every tool output, so the metrics see all evidence the bot had
+        context = response.get("extra_context", []) + [
+            m.content for m in tool_messages if m.content
         ]
         search_errors = [
             m.name

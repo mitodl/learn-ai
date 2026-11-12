@@ -139,67 +139,33 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--pairwise-only",
-            dest="pairwise_only",
             action="store_true",
-            help=(
-                "Judge only pairwise, with no other metric, for cases without "
-                "expected answers.  Needs two or more models."
-            ),
+            help="Judge only pairwise, for cases without expected answers",
         )
         parser.add_argument(
             "--tutor-rubric",
-            dest="tutor_rubric",
             action="store_true",
-            help=(
-                "Judge tutor answers with TutoringQuality only, against the "
-                "problem, its solution and the conversation.  Tutor only."
-            ),
+            help="Judge tutor answers with TutoringQuality only",
         )
         parser.add_argument(
             "--baseline",
-            dest="baseline",
-            default=None,
             help=(
-                "Compare the other model in --models with this one, case by "
-                "case, and give a verdict: regression found, no regression "
-                "found, or incomplete.  Needs exactly two models and "
-                "--correctness-only, --pairwise-only or --tutor-rubric; turns "
-                "on --pairwise."
+                "Compare the other model with this one and give a verdict; needs "
+                "--correctness-only, --pairwise-only or --tutor-rubric"
             ),
         )
         parser.add_argument(
-            "--baseline-prompt",
-            dest="baseline_prompt",
-            default=None,
-            help=(
-                "The baseline's prompt, by name in --prompts-file (default: "
-                "the bot's own).  For tutor, its tutor_problem template."
-            ),
+            "--baseline-prompt", help="The baseline's prompt, by name in --prompts-file"
         )
         parser.add_argument(
-            "--candidate-prompt",
-            dest="candidate_prompt",
-            default=None,
-            help="The candidate's prompt, like --baseline-prompt",
+            "--candidate-prompt", help="The candidate's prompt, like --baseline-prompt"
         )
         parser.add_argument(
             "--sample",
-            dest="sample",
             type=int,
-            default=None,
-            help=(
-                "Judge a seeded random sample of this many cases per bot "
-                f"(default: every case, or {BASELINE_SAMPLE} with --baseline; "
-                "0: every case)"
-            ),
+            help=f"Seeded cases per bot (all; {BASELINE_SAMPLE} with --baseline)",
         )
-        parser.add_argument(
-            "--seed",
-            dest="seed",
-            type=int,
-            default=SAMPLE_SEED,
-            help=f"The sample's seed (default: {SAMPLE_SEED})",
-        )
+        parser.add_argument("--seed", type=int, default=SAMPLE_SEED)
         parser.add_argument(
             "--max-retries",
             dest="max_retries",

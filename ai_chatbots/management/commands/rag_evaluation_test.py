@@ -54,10 +54,7 @@ def test_refused_flags(run_evaluation, args, message):
     ],
 )
 def test_defaults(run_evaluation, args, sample):
-    """
-    Comparisons sample 30 cases unless told otherwise, other runs use every
-    case, and the judge is gpt-5.4.
-    """
+    """Comparisons sample 30 cases, other runs every case; the judge is gpt-5.4."""
     call_command("rag_evaluation", "--models", "a,b", *args.split())
     kwargs = run_evaluation.call_args.kwargs
     assert kwargs["sample"] == sample

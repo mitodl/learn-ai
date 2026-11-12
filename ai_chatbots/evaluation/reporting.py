@@ -21,18 +21,6 @@ def _judged(df: pd.DataFrame) -> pd.DataFrame:
     return df[df["error"].isna()] if "error" in df.columns else df
 
 
-def _mean_scores(judged: pd.DataFrame, source: pd.DataFrame, by: str):
-    """Mean score per `by` value and metric; NaN where nothing was judged."""
-    return (
-        judged.groupby([by, "metric"])["score"]
-        .mean()
-        .unstack()
-        .reindex(
-            index=sorted(source[by].unique()), columns=sorted(source["metric"].unique())
-        )
-    )
-
-
 class DualOutputWrapper:
     """Wrapper that writes to both stdout and a file simultaneously."""
 
@@ -104,11 +92,7 @@ class EvaluationReporter:
         answer_records: list[dict] | None = None,
         run_info: dict | None = None,
     ) -> None:
-        """Generate a comprehensive evaluation report.
-
-        Judge errors are listed with the run's other failures and left out of
-        every score, mean and pass count.
-        """
+        """Generate a comprehensive evaluation report."""
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write("RAG EVALUATION REPORT")
         self.stdout.write("=" * 80)
@@ -131,9 +115,9 @@ class EvaluationReporter:
 
         # Generate report sections
         self.summarize_per_bot_model(df, models, bot_names, metric_thresholds)
-        self.model_comparison(judged, all_metrics=df)
+        self.model_comparison(df)
         if use_prompts:
-            self.prompt_comparison(judged, all_metrics=df)
+            self.prompt_comparison(df)
         self.overall_performance(judged)
         self.composite_leaderboard(judged, metric_weights=metric_weights)
         self.detailed_results(df, models, bot_names)
@@ -304,21 +288,19 @@ class EvaluationReporter:
                 self.stdout.write(f"\n🤖 {bot.upper()} BOT:")
                 self.stdout.write("  No test cases defined for this bot")
 
-    def model_comparison(
-        self, df: pd.DataFrame, *, all_metrics: pd.DataFrame | None = None
-    ) -> None:
-        """Compare models' mean scores; one with nothing judged is not ranked."""
+    def model_comparison(self, df: pd.DataFrame) -> None:
+        """Compare models based on their average scores."""
         self.stdout.write("\n\n🔄 MODEL COMPARISON")
         self.stdout.write("-" * 50)
 
-        source = df if all_metrics is None else all_metrics
-        if source.empty or not all(
-            col in source.columns for col in ["model", "metric", "score"]
+        if df.empty or not all(
+            col in df.columns for col in ["model", "metric", "score"]
         ):
             self.stdout.write("No data to compare")
             return
 
-        model_avg = _mean_scores(df, source, "model")
+        # Judge errors are NaN scores, so a mean is NaN when nothing was judged
+        model_avg = df.groupby(["model", "metric"])["score"].mean().unstack()
 
         for metric in model_avg.columns:
             self.stdout.write(f"\n📈 {metric}:")
@@ -329,21 +311,18 @@ class EvaluationReporter:
             for model in metric_scores[metric_scores.isna()].index:
                 self.stdout.write(f"  -  {model}: {NOT_JUDGED}")
 
-    def prompt_comparison(
-        self, df: pd.DataFrame, *, all_metrics: pd.DataFrame | None = None
-    ) -> None:
-        """Compare prompts' mean scores; one with nothing judged says so."""
+    def prompt_comparison(self, df: pd.DataFrame) -> None:
+        """Compare prompts based on their average scores."""
         self.stdout.write("\n\n🎯 PROMPT COMPARISON")
         self.stdout.write("-" * 50)
 
-        source = df if all_metrics is None else all_metrics
-        if source.empty or not all(
-            col in source.columns for col in ["prompt_label", "metric", "score"]
+        if df.empty or not all(
+            col in df.columns for col in ["prompt_label", "metric", "score"]
         ):
             self.stdout.write("No data to compare")
             return
 
-        prompt_avg = _mean_scores(df, source, "prompt_label")
+        prompt_avg = df.groupby(["prompt_label", "metric"])["score"].mean().unstack()
 
         for metric in prompt_avg.columns:
             self.stdout.write(f"\n📈 {metric}:")
