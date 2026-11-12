@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from deepeval.evaluate.types import EvaluationResult
 
+from ai_chatbots.evaluation.base import RunFailures
 from ai_chatbots.evaluation.reporting import (
     DualOutputWrapper,
     EvaluationReporter,
@@ -181,10 +182,12 @@ class TestEvaluationReporter:
             "prompt_label",
             "test_case",
             "question",
+            "case_id",
             "metric",
             "score",
             "success",
             "reason",
+            "error",
         ]
         assert list(df.columns) == expected_columns
 
@@ -725,3 +728,118 @@ class TestReportingIntegration:
 
         # Both should work without conflicts
         assert mock_stdout.write.call_count > 0
+
+
+def _metric(mocker, name, score, *, success=True, error=None):
+    metric = mocker.Mock(score=score, success=success, reason="", error=error)
+    metric.name = name
+    return metric
+
+
+def _result(mocker, model, metrics, question="Q1"):
+    result = mocker.Mock()
+    result.metadata = {
+        "bot_name": "syllabus",
+        "model": model,
+        "prompt_label": "default",
+        "question": question,
+        "case_id": "f#0",
+    }
+    result.name = f"syllabus-{model}"
+    result.metrics_data = metrics
+    return result
+
+
+def _output(stdout):
+    return "\n".join(str(c.args[0]) for c in stdout.write.call_args_list)
+
+
+def test_judge_error_is_not_a_score(reporter, mock_stdout, mocker):
+    """
+    A judge error is left out of means and pass counts, a model with nothing
+    judged for a metric shows "not judged" (not 0), and the error is shown.
+    """
+    results = mocker.Mock(spec=EvaluationResult)
+    results.test_results = [
+        _result(
+            mocker,
+            "model-a",
+            [
+                _metric(mocker, "Correctness", None, success=False, error="timed out"),
+                _metric(mocker, "Helpfulness", 0.8),
+            ],
+        ),
+        _result(
+            mocker,
+            "model-b",
+            [_metric(mocker, "Correctness", 0.9), _metric(mocker, "Helpfulness", 0.6)],
+        ),
+    ]
+
+    reporter.generate_report(
+        results, ["model-a", "model-b"], ["syllabus"], use_prompts=False
+    )
+
+    output = _output(mock_stdout)
+    assert "1/1 judged metric checks passed, 1 judge errors" in output
+    assert "Correctness: not judged" in output
+    assert "model-a: not judged" in output
+    assert "model-a: 0.000" not in output
+    assert "judge error: timed out" in output
+    # The composite for model-a uses only the metric it was judged on
+    assert "model-a / syllabus: 0.800" in output
+
+
+@pytest.mark.parametrize("failed", [True, False])
+def test_failures_section_and_banner(reporter, mock_stdout, mocker, failed):
+    """Every failure is listed and the run marked incomplete; a clean run isn't."""
+    failures = RunFailures()
+    if failed:
+        failures.add(
+            "syllabus",
+            "search tool returned an error",
+            question="How is this graded?",
+            case_id="f#3",
+            model="model-a",
+            prompt_label="default",
+            detail="search_content_files",
+        )
+    results = mocker.Mock(spec=EvaluationResult)
+    results.test_results = []
+
+    reporter.generate_report(
+        results, ["model-a"], ["syllabus"], use_prompts=False, failures=failures
+    )
+
+    output = _output(mock_stdout)
+    for text in (
+        "INCOMPLETE RUN: 1 things could not be measured",
+        "syllabus / model-a: search tool returned an error: 1",
+        "(search_content_files): f#3 How is this graded?",
+    ):
+        assert (text in output) is failed
+
+
+def test_code_checks_section(reporter, mock_stdout):
+    """Code check failures and no-tool answers are counted per model."""
+    records = [
+        {
+            "bot": "syllabus",
+            "model": "model-a",
+            "prompt_label": "default",
+            "checks": {"follow_up_offer": ["Want more?"], "bare_url": []},
+            "tool_call_count": 0,
+        },
+        {
+            "bot": "syllabus",
+            "model": "model-a",
+            "prompt_label": "default",
+            "checks": {"follow_up_offer": [], "bare_url": []},
+            "tool_call_count": 2,
+        },
+    ]
+    reporter.code_checks(records)
+    assert (
+        "syllabus / model-a: 2 answers; failed: bare_url 0, follow_up_offer 1; "
+        "no tool call: 1"
+    ) in _output(mock_stdout)

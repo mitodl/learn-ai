@@ -15,9 +15,24 @@ from main.test_utils import load_json_with_settings
 # the learner goes to the intake script instead.
 SUPPORT_NO_ANSWER = "No answer. The learner goes to the support intake."
 
-# The learner records of the case being evaluated. A context variable, so cases
-# run concurrently each see their own.
-_learner_records: ContextVar[dict | None] = ContextVar("learner_records", default=None)
+# Outside an eval case the account tools read the live APIs as usual
+_NOT_EVALUATING = object()
+
+# The case's learner records (None: it has none). Per context, so concurrent
+# cases each see their own.
+_learner_records: ContextVar[Any] = ContextVar(
+    "learner_records", default=_NOT_EVALUATING
+)
+# Account lookups the case tried without records. A list, so tool calls run in
+# a copied context still record into it.
+_blocked_calls: ContextVar[list | None] = ContextVar("blocked_calls", default=None)
+
+# What TutorBot.get_completion streams when it fails
+TUTOR_ERROR_MARKER = '<!-- {"error":'
+
+
+class LiveAccountCallBlockedError(RuntimeError):
+    """An eval case without learner records tried to read the live account APIs."""
 
 
 # learner_api function: the key of a case's learner_records that replaces it
@@ -33,22 +48,27 @@ _RECORD_KEYS = {
 
 def _serve_learner_records():
     """
-    Make the account tools read the learner_records of the case being
-    evaluated instead of the MIT Learn and MITx Online APIs. A case without
-    records still reads the live APIs. Lists default to empty, a certificate
-    not in the records has no digital credential, and {"error": true} makes
-    every lookup fail.
+    Make the account tools read the eval case's learner_records instead of the
+    MIT Learn and MITx Online APIs; a case without records is blocked and
+    recorded. Lists default to empty, a certificate not in the records has no
+    digital credential, and {"error": true} makes every lookup fail.
     """
     for name, key in _RECORD_KEYS.items():
         live = getattr(learner_api, name)
         if getattr(live, "serves_learner_records", False) is True:
             continue
 
-        def serve(*args, _live=live, _key=key):
+        # async like the originals, so patching one later still gives an AsyncMock
+        async def serve(*args, _live=live, _key=key, _name=name):
             records = _learner_records.get()
+            if records is _NOT_EVALUATING:
+                return await _live(*args)
             if records is None:
-                return _live(*args)
-            return _from_records(records, _key, *args)
+                blocked = _blocked_calls.get()
+                if blocked is not None:
+                    blocked.append(_name)
+                raise LiveAccountCallBlockedError(_name)
+            return await _from_records(records, _key, *args)
 
         serve.serves_learner_records = True
         setattr(learner_api, name, serve)
@@ -123,12 +143,17 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
 class SyllabusBotEvaluator(BaseBotEvaluator):
     """Evaluator for SyllabusBot."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _serve_learner_records()  # so no case can reach the live account APIs
+
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load syllabus bot test cases."""
+        _serve_learner_records()  # again, in case they were replaced since __init__
         test_data = load_json_with_settings(self.data_file)
         # Records shared by the file's cases; a case can bring its own
         default_records = test_data.get("learner_records")
-        cases = [
+        return [
             TestCaseSpec(
                 question=case_data["question"],
                 expected_output=case_data.get("expected_output"),
@@ -144,9 +169,6 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
             )
             for case_data in test_data.get("syllabus", [])
         ]
-        if any(case.metadata["learner_records"] is not None for case in cases):
-            _serve_learner_records()
-        return cases
 
     def validate_test_case(self, test_case: TestCaseSpec) -> bool:
         """Validate syllabus bot test case."""
@@ -183,6 +205,8 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
         token = _learner_records.set(metadata.get("learner_records"))
+        blocked: list[str] = []
+        blocked_token = _blocked_calls.set(blocked)
         try:
             response = await chatbot.agent.ainvoke(
                 {
@@ -197,6 +221,8 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
             )
         finally:
             _learner_records.reset(token)
+            _blocked_calls.reset(blocked_token)
+        response["blocked_account_calls"] = blocked
         # The resource facts reach the bot through its system prompt, not a tool.
         # The lookup is cached, but a failure only briefly, so use the facts only
         # if they made it into the prompt this bot was built with.
@@ -212,12 +238,17 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
 class SupportBotEvaluator(BaseBotEvaluator):
     """Evaluator for SupportBot's answering graph."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _serve_learner_records()  # so no case can reach the live account APIs
+
     def load_test_cases(self) -> list[TestCaseSpec]:
         """Load support bot test cases."""
+        _serve_learner_records()  # again, in case they were replaced since __init__
         test_data = load_json_with_settings(self.data_file)
         # Records shared by the file's cases; a case can bring its own
         default_records = test_data.get("learner_records")
-        cases = [
+        return [
             TestCaseSpec(
                 question=case_data["question"],
                 expected_output=case_data.get("expected_output"),
@@ -233,9 +264,6 @@ class SupportBotEvaluator(BaseBotEvaluator):
             )
             for case_data in test_data.get("support", [])
         ]
-        if any(case.metadata["learner_records"] is not None for case in cases):
-            _serve_learner_records()
-        return cases
 
     def validate_test_case(self, test_case: TestCaseSpec) -> bool:
         """Require the tools: without them there is no answering graph."""
@@ -264,6 +292,8 @@ class SupportBotEvaluator(BaseBotEvaluator):
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
         token = _learner_records.set(metadata.get("learner_records"))
+        blocked: list[str] = []
+        blocked_token = _blocked_calls.set(blocked)
         try:
             result = await chatbot._answering_agent.ainvoke(  # noqa: SLF001
                 {
@@ -278,6 +308,8 @@ class SupportBotEvaluator(BaseBotEvaluator):
             )
         finally:
             _learner_records.reset(token)
+            _blocked_calls.reset(blocked_token)
+        result["blocked_account_calls"] = blocked
         if not chatbots._the_answer_in(result):  # noqa: SLF001
             result["messages"].append(AIMessage(SUPPORT_NO_ANSWER))
         return result
@@ -389,8 +421,11 @@ class TutorBotEvaluator(BaseBotEvaluator):
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
     ) -> dict[str, Any]:
-        """Collect response from tutor bot (special async handling)."""
+        """Collect a tutor answer; its streamed error comment counts as a failure."""
         chunks = [chunk async for chunk in chatbot.get_completion(test_case.question)]
+        if any(TUTOR_ERROR_MARKER in chunk for chunk in chunks):
+            msg = "the tutor streamed an error instead of an answer"
+            raise RuntimeError(msg)
 
         return {"messages": [AIMessage(content="".join(chunks))]}
 
