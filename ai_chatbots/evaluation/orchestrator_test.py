@@ -445,13 +445,6 @@ class TestEvaluationOrchestrator:
         """A baseline run answers once per side, each with its own prompt."""
         from deepeval.evaluate.types import EvaluationResult
 
-        mock_load_json = mocker.patch(
-            "ai_chatbots.evaluation.orchestrator.load_json_with_settings"
-        )
-        mock_load_json.return_value = {
-            "tutor": [{"name": "alt_prompt", "text": "custom {problem_statement}"}]
-        }
-
         mock_evaluator = mocker.Mock()
         mock_evaluator.load_cases.return_value = []
         mock_evaluator.evaluate_model = AsyncMock(return_value=[])
@@ -475,9 +468,12 @@ class TestEvaluationOrchestrator:
         await orchestrator.run_evaluation(
             config,
             bot_names=["tutor"],
-            use_prompts=True,
+            use_prompts=False,
             baseline="gpt-4",
-            candidate_prompt="alt_prompt",
+            candidate_prompt={
+                "name": "alt_prompt",
+                "text": "custom {problem_statement}",
+            },
         )
 
         calls = mock_evaluator.evaluate_model.call_args_list

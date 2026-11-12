@@ -80,22 +80,6 @@ def _side(metadata: dict | None) -> str:
     return model if label in (None, "default") else f"{model} [{label}]"
 
 
-def find_prompt(prompts_data: dict, bot_name: str, name: str | None) -> dict | None:
-    """Find a bot's prompt entry by name; None for the bot's own prompt."""
-    if name is None:
-        return None
-    for prompt in prompts_data.get(bot_name, []):
-        if prompt.get("name") == name:
-            if bot_name == "tutor" and "{problem_statement}" not in (
-                prompt.get("text") or ""
-            ):
-                msg = f"tutor prompt '{name}' needs text with {{problem_statement}}"
-                raise ValueError(msg)
-            return prompt
-    msg = f"No prompt named '{name}' for {bot_name} in the prompts file"
-    raise ValueError(msg)
-
-
 TUTORING_QUALITY_STEPS = [
     "The input is the student's latest message; the retrieval context holds the "
     "problem, its solution if available, and the conversation so far.",
@@ -864,8 +848,8 @@ Started: {timestamp}
         sample: int | None = None,
         seed: int = SAMPLE_SEED,
         baseline: str | None = None,
-        baseline_prompt: str | None = None,
-        candidate_prompt: str | None = None,
+        baseline_prompt: dict | None = None,
+        candidate_prompt: dict | None = None,
         run_info: dict | None = None,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models.
@@ -898,18 +882,12 @@ Started: {timestamp}
 
         # Load alternative prompts if enabled
         prompts_data = self._load_prompts_data(prompts_file) if use_prompts else {}
-        # A baseline run's (model, prompt) sides per bot, looked up before any
-        # answer is generated so a bad prompt name fails fast
+        # A baseline run's (model, prompt) sides; a None prompt is the bot's own
         sides_by_bot = {}
         if baseline:
             candidate = next(m for m in config.models if m != baseline)
-            sides_by_bot = {
-                bot: [
-                    (baseline, find_prompt(prompts_data, bot, baseline_prompt)),
-                    (candidate, find_prompt(prompts_data, bot, candidate_prompt)),
-                ]
-                for bot in bot_names
-            }
+            sides = [(baseline, baseline_prompt), (candidate, candidate_prompt)]
+            sides_by_bot = dict.fromkeys(bot_names, sides)
 
         # Process each bot one at a time, accumulating results
         all_bot_results = []

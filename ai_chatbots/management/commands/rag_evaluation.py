@@ -1,9 +1,12 @@
 """Run RAG evaluations using the new evaluation framework."""
 
+from pathlib import Path
+
 from asgiref.sync import async_to_sync
 from django.core.management import BaseCommand, CommandError
 
 from ai_chatbots.evaluation.base import SAMPLE_SEED
+from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS
 from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
 from ai_chatbots.evaluation.reporting import DualOutputWrapper
 from ai_chatbots.models import LLMModel
@@ -144,16 +147,13 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--baseline",
-            help=(
-                "Compare the other model with this one and give a verdict; needs "
-                "--correctness-only or --pairwise-only, except for --bots tutor"
-            ),
+            help="Compare the other model in --models with this one; give a verdict",
         )
         parser.add_argument(
-            "--baseline-prompt", help="The baseline's prompt, by name in --prompts-file"
+            "--baseline-prompt", help="A text file with the baseline's prompt"
         )
         parser.add_argument(
-            "--candidate-prompt", help="The candidate's prompt, like --baseline-prompt"
+            "--candidate-prompt", help="A text file with the candidate's prompt"
         )
         parser.add_argument(
             "--sample",
@@ -189,28 +189,20 @@ class Command(BaseCommand):
             msg = "--pairwise-only can't be combined with other metric modes"
             raise CommandError(msg)
         side_prompts = options["baseline_prompt"] or options["candidate_prompt"]
-        if side_prompts and not (options["baseline"] and options["prompts_file"]):
-            msg = (
-                "--baseline-prompt and --candidate-prompt need --baseline "
-                "and --prompts-file"
-            )
+        if side_prompts and not (
+            options["baseline"] and options["bots"] in BOT_EVALUATORS
+        ):
+            msg = "--baseline-prompt and --candidate-prompt need --baseline and one bot"
             raise CommandError(msg)
         if options["pairwise_only"] and len(models) < 2:  # noqa: PLR2004
             msg = "--pairwise-only needs two or more models"
             raise CommandError(msg)
         baseline = options["baseline"]
         if baseline:
-            if len(models) != 2 or baseline not in models:  # noqa: PLR2004
-                msg = "--baseline must be one of exactly two --models"
+            if len(models) != 2:  # noqa: PLR2004
+                msg = "--baseline needs exactly one other model in --models"
                 raise CommandError(msg)
-            if not (
-                options["correctness_only"]
-                or options["pairwise_only"]
-                or self._tutor_rubric(options)
-            ):
-                msg = "--baseline needs --correctness-only or --pairwise-only"
-                raise CommandError(msg)
-            if options["prompts"] or (options["prompts_file"] and not side_prompts):
+            if options["prompts"] or options["prompts_file"]:
                 msg = (
                     "--baseline runs one prompt per side; use --baseline-prompt "
                     "or --candidate-prompt instead of --prompts"
@@ -221,6 +213,19 @@ class Command(BaseCommand):
         """Tutor alone, with no other metric mode, is judged on TutoringQuality."""
         modes = ("pairwise_only", "correctness_only", "require_expected")
         return options["bots"] == "tutor" and not any(options[m] for m in modes)
+
+    def _side_prompt(self, path: str | None, bot: str) -> dict | None:
+        """Read a side's prompt file; the file name labels it."""
+        if path is None:
+            return None
+        text = Path(path).read_text(encoding="utf-8")
+        if not text.strip():
+            msg = f"{path} is empty"
+            raise CommandError(msg)
+        if bot == "tutor" and "{problem_statement}" not in text:
+            msg = f"{path}: a tutor prompt needs {{problem_statement}}"
+            raise CommandError(msg)
+        return {"name": Path(path).stem, "text": text}
 
     def _model_settings(self, models: list[str]) -> str:
         """Describe each model's temperature and reasoning effort."""
@@ -250,7 +255,8 @@ class Command(BaseCommand):
             )
         )
         evaluation_model = options["eval_model"]
-        bot_names = options["bots"].split(",") if options["bots"] else None
+        bots = options["bots"]
+        bot_names = bots.split(",") if bots else None
         data_file = options["data_file"] if options["data_file"] else None
         use_prompts = options["prompts"] or options["prompts_file"] is not None
         prompts_file = options["prompts_file"]
@@ -264,7 +270,14 @@ class Command(BaseCommand):
         max_retries = options["max_retries"]
         retry_delay = options["retry_delay"]
         baseline = options["baseline"]
+        if baseline and baseline not in models:
+            models = [baseline, *models]
         self._check_options(options, models)
+        # A comparison needs no metric flag: pairwise, or TutoringQuality for tutor
+        tutor_rubric = self._tutor_rubric(options)
+        pairwise_only = options["pairwise_only"] or bool(
+            baseline and not (correctness_only or require_expected or tutor_rubric)
+        )
         sample = options["sample"]
         if sample is None and baseline:
             sample = BASELINE_SAMPLE
@@ -304,8 +317,8 @@ class Command(BaseCommand):
                     retry_delay=retry_delay,
                     require_expected=require_expected,
                     correctness_only=correctness_only,
-                    pairwise_only=options["pairwise_only"],
-                    tutor_rubric=self._tutor_rubric(options),
+                    pairwise_only=pairwise_only,
+                    tutor_rubric=tutor_rubric,
                 )
             except ValueError as error:
                 raise CommandError(str(error)) from error
@@ -327,12 +340,12 @@ class Command(BaseCommand):
                 max_concurrent=max_concurrent,
                 batch_size=batch_size,
                 error_log_file=error_log_file,
-                pairwise=options["pairwise"] or options["pairwise_only"],
+                pairwise=options["pairwise"] or pairwise_only,
                 sample=sample,
                 seed=options["seed"],
                 baseline=baseline,
-                baseline_prompt=options["baseline_prompt"],
-                candidate_prompt=options["candidate_prompt"],
+                baseline_prompt=self._side_prompt(options["baseline_prompt"], bots),
+                candidate_prompt=self._side_prompt(options["candidate_prompt"], bots),
                 run_info=run_info,
             )
         finally:
