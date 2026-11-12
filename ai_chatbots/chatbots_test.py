@@ -503,10 +503,15 @@ def opik_traces():
     """Trace through ol-llm into local storage instead of sending to Opik."""
     ol_llm.tracing.reset()
     ol_llm.configure_tracing(ol_llm.TracingConfig())
-    with opik.record_traces_locally() as storage:
-        yield storage
-    ol_llm.tracing.reset()
-    ol_llm.configure_tracing(ol_llm.TracingConfig(enabled=False))
+    # finally, because record_traces_locally builds an Opik client and can raise
+    # in setup. Leaving tracing on then makes every later test in the session
+    # reach for a client that isn't there.
+    try:
+        with opik.record_traces_locally() as storage:
+            yield storage
+    finally:
+        ol_llm.tracing.reset()
+        ol_llm.configure_tracing(ol_llm.TracingConfig(enabled=False))
 
 
 def opik_spans(span):
@@ -681,6 +686,30 @@ async def test_bot_that_never_calls_the_model_skips_the_catalog_check(
 
     await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
 
+    check.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_an_answering_bot_with_a_retired_model_still_builds(
+    mocker, mock_checkpointer
+):
+    """
+    And it still skips it once answering is on, where the bot reaches a model
+    on some turns and scripts the rest. traced_chat runs the same check inside
+    the answer attempt, so a retired model costs the learner the answer and
+    falls through to intake. Raising it from __init__ instead takes intake down
+    with it - on every turn, including the ones that were never going to call
+    a model.
+    """
+    check = mocker.patch.object(
+        ol_llm, "check_chat_model", side_effect=ValueError("retired")
+    )
+
+    chatbot = await sync_to_async(SupportBot)(
+        "learner", mock_checkpointer, enable_account_tools=True
+    )
+
+    assert chatbot.CALLS_THE_MODEL is True
     check.assert_not_called()
 
 
@@ -2396,7 +2425,9 @@ async def test_the_answer_attempt_is_traced(settings, mocker, mock_checkpointer)
     await chatbot._try_to_answer("my grade?", {}, {"page_url": [page]})  # noqa: SLF001
 
     config = chatbot._answering_agent.ainvoke.call_args.kwargs["config"]  # noqa: SLF001
-    assert config["callbacks"] == [handler]
+    # In, not equal to: traced_chat adds Opik's tracer alongside this one when
+    # tracing is on. The whole list is asserted in the test below.
+    assert handler in config["callbacks"]
     # The course is derived in the attempt, not carried in extra_state, so
     # naming it in TRACE_STATE_KEYS does nothing unless it is passed here too.
     assert callbacks.await_args[0][0] == {
@@ -2407,6 +2438,72 @@ async def test_the_answer_attempt_is_traced(settings, mocker, mock_checkpointer)
     # Not on the canonical graph's config: that one is the persisted thread,
     # and the attempt must stay outside it.
     assert "callbacks" not in chatbot.config
+
+
+@pytest.mark.parametrize("tracing", [True, False])
+@pytest.mark.asyncio
+async def test_the_answer_attempt_runs_inside_an_ol_llm_trace(
+    mocker, mock_checkpointer, tracing
+):
+    """
+    set_callbacks only carries PostHog. Opik's tracer, and with it the priced
+    model span, comes from ol_llm.traced_chat, which every other model call
+    enters through BaseChatbot.get_completion - and which this bot never
+    reaches, because every reply it sends goes out without the model.
+    """
+    mocker.patch.object(ol_llm.tracing, "enabled", return_value=tracing)
+    traced_chat = mocker.patch.object(ol_llm, "traced_chat")
+    chat = traced_chat.return_value.__enter__.return_value
+    chat.callbacks = [mocker.sentinel.tracer]
+    mocker.patch.object(
+        SupportBot, "set_callbacks", AsyncMock(return_value=[mocker.sentinel.posthog])
+    )
+    chatbot = await _answering_bot(
+        mocker,
+        mock_checkpointer,
+        _answer_result(_tool_message(), AIMessage("You're enrolled in 18.01x.")),
+    )
+    graph = mocker.Mock()
+    mocker.patch.object(chatbot._answering_agent, "get_graph", return_value=graph)  # noqa: SLF001
+
+    answer = await chatbot._try_to_answer("what am I enrolled in?", {})  # noqa: SLF001
+
+    traced_chat.assert_called_once_with(
+        chatbot.use_case,
+        "what am I enrolled in?",
+        attribution=chatbot.attribution,
+        graph=graph if tracing else None,
+    )
+    config = chatbot._answering_agent.ainvoke.call_args.kwargs["config"]  # noqa: SLF001
+    assert config["callbacks"] == [mocker.sentinel.posthog, mocker.sentinel.tracer]
+    # The answering graph's own graph, not self.agent's: the trace is of the
+    # attempt, and the persisted intake graph has no model call in it to draw.
+    assert chatbot._answering_agent.get_graph.called is tracing  # noqa: SLF001
+    # Recorded as the trace's output: the answer the learner is shown, not the
+    # raw result. A turn that found a tool message but no usable reply shows
+    # nothing, and so has nothing to record.
+    chat.record.assert_called_once_with(answer)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_answer_attempt_still_closes_its_trace(
+    mocker, mock_checkpointer
+):
+    """
+    The trace goes inside the timeout, so a slow or broken model leaves it
+    closed and hands the turn to intake - the one path this bot cannot lose.
+    """
+    traced_chat = mocker.patch.object(ol_llm, "traced_chat")
+    chat = traced_chat.return_value.__enter__.return_value
+    chat.callbacks = []
+    chatbot = await _answering_bot(
+        mocker, mock_checkpointer, RuntimeError("the model is down")
+    )
+
+    assert await chatbot._try_to_answer("what am I enrolled in?", {}) == ""  # noqa: SLF001
+
+    traced_chat.return_value.__exit__.assert_called_once()
+    chat.record.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -4510,20 +4607,6 @@ async def test_support_bot_marks_an_asserted_email_as_unverified(
     assert mock_file.call_args.kwargs["email_verified"] is False
 
 
-async def _checkpointed_support_bot(mock_checkpointer, prior_messages=()):
-    """Build a SupportBot on a real checkpointer, so state can be read back."""
-    thread_id = uuid4().hex
-    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
-    chatbot = await sync_to_async(SupportBot)(
-        "anonymous", mock_checkpointer, thread_id=thread_id
-    )
-    if prior_messages:
-        await chatbot.agent.aupdate_state(
-            chatbot.config, {"messages": list(prior_messages)}
-        )
-    return chatbot
-
-
 @pytest.mark.asyncio
 async def test_support_bot_checkpoints_the_filing_turn(mocker, mock_checkpointer):
     """
@@ -4536,8 +4619,8 @@ async def test_support_bot_checkpoints_the_filing_turn(mocker, mock_checkpointer
         "ai_chatbots.chatbots.file_support_ticket",
         AsyncMock(return_value={"reference": 4821}),
     )
-    chatbot = await _checkpointed_support_bot(
-        mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
     )
     async for _ in chatbot.get_completion(
         "learner@example.com", extra_state=_support_state()
@@ -4569,8 +4652,8 @@ async def test_support_bot_checkpoints_the_already_filed_turn(
         "ai_chatbots.chatbots.file_support_ticket",
         AsyncMock(return_value={"reference": 4821}),
     )
-    chatbot = await _checkpointed_support_bot(
-        mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)]
     )
     await UserChatSession.objects.filter(thread_id=chatbot.thread_id).aupdate(
         support_ticket_reference="4821", support_ticket_email="learner@example.com"

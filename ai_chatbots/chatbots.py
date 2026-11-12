@@ -109,10 +109,12 @@ class BaseChatbot(ABC):
     # ai_chatbots system check reads it to catch a retired default at deploy.
     DEFAULT_MODEL_SETTING = "AI_DEFAULT_MODEL"
 
-    # Whether the proxy budget is provisioned in __init__. False for a bot
-    # that only sometimes reaches a model, so the turns that short-circuit
-    # don't pay a blocking HTTP call for a model they never call.
-    PROVISIONS_PROXY_EAGERLY = True
+    # Whether the proxy budget and the catalog check happen in __init__. False
+    # for a bot that only sometimes reaches a model: the turns that
+    # short-circuit then pay neither a blocking HTTP call nor a build that
+    # raises, for a model they never call. Such a bot does both at the point it
+    # calls the model, where a failure costs that one call.
+    SETS_UP_THE_MODEL_EAGERLY = True
 
     def __init__(  # noqa: PLR0913
         self,
@@ -140,7 +142,7 @@ class BaseChatbot(ABC):
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
         self.use_case = self.chat_use_case(self.model)
-        if self.CALLS_THE_MODEL:
+        if self.CALLS_THE_MODEL and self.SETS_UP_THE_MODEL_EAGERLY:
             ol_llm.check_chat_model(self.use_case)
         self.attribution = ol_llm.Attribution(
             user_id=self.user_id, thread_id=self.thread_id
@@ -151,7 +153,7 @@ class BaseChatbot(ABC):
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
-            if self.CALLS_THE_MODEL and self.PROVISIONS_PROXY_EAGERLY:
+            if self.CALLS_THE_MODEL and self.SETS_UP_THE_MODEL_EAGERLY:
                 self.proxy.create_proxy_user(self.user_id)
             self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
@@ -1708,6 +1710,35 @@ def _read_the_records(message: ToolMessage) -> bool:
     )
 
 
+def _the_answer_in(result: dict) -> str:
+    """
+    Return the answer to show the learner, or "" to hand the turn to intake.
+
+    A turn where no lookup reached the records is not a question we have a
+    source for: the model will still have produced text, and showing it would
+    put an answer nothing stands behind in front of a learner who came here for
+    help. A lookup that reached the records and found none is the opposite case
+    - "which course did you mean?" is an answer - so the test is the lookup, not
+    the data it found. See the spec, 4.1.1.
+    """
+    messages = result.get("messages") or []
+    if not any(
+        isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
+    ):
+        return ""
+    # The last AIMessage is this turn's reply. Taking the last one that also has
+    # string content would walk past an unusable reply into the replayed
+    # history, and answer this question with a previous turn's answer.
+    reply = next(
+        (msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None
+    )
+    # Content blocks come back as a list for some models, and the repr of a list
+    # is not an answer.
+    if reply is None or not isinstance(reply.content, str):
+        return ""
+    return reply.content.strip()
+
+
 def _ticket_subject(description: str) -> str:
     """Build a subject from the learner's own words, no model involved."""
     subject = " ".join((description or "").split())
@@ -1734,14 +1765,14 @@ class SupportBot(TruncatingChatbot):
     TRACE_STATE_KEYS = ("page_url", "course_id", "platform")
     # True on the class purely so the deploy check in checks.py covers this
     # bot: it reads the attribute off the class, and __init__ overwrites it
-    # per instance with the answering flag below. With answering on the model
-    # check runs in __init__, so a retired AI_DEFAULT_SUPPORT_MODEL would 500
-    # the scripted intake too, not just the answer.
+    # per instance with the answering flag below.
     CALLS_THE_MODEL = True
     # A bot is constructed on every request, including the ones that
-    # short-circuit before any model call. The budget is provisioned on the
-    # first attempt instead, so those turns don't pay a blocking HTTP call.
-    PROVISIONS_PROXY_EAGERLY = False
+    # short-circuit before any model call. Both the budget and the catalog
+    # check happen on the first attempt instead, so those turns pay no blocking
+    # HTTP call, and a retired AI_DEFAULT_SUPPORT_MODEL costs the answer rather
+    # than 500ing the scripted intake with it.
+    SETS_UP_THE_MODEL_EAGERLY = False
 
     def __init__(  # noqa: PLR0913
         self,
@@ -1897,7 +1928,7 @@ class SupportBot(TruncatingChatbot):
         course_id: str | None,
         platform: str | None,
         extra_state: dict | None,
-    ) -> dict:
+    ) -> str:
         """
         Everything the answer timeout has to cover: provision, trace, answer.
 
@@ -1905,30 +1936,55 @@ class SupportBot(TruncatingChatbot):
         a synchronous HTTP call with a retry behind it, so it can run for
         REQUESTS_TIMEOUT twice over - longer than the whole attempt is allowed
         to take, on a learner who was never going to see an answer.
+
+        The trace is in here for the same reason it is inside the caller's
+        try: traced_chat runs the catalog check, which raises on an unlisted
+        model, and an answering bot that raises owes the learner intake.
         """
         await self._ensure_proxy_user()
-        callbacks = await self.set_callbacks(
-            self.get_trace_properties(
-                # course_id and platform are derived in _try_to_answer rather
-                # than carried in extra_state, so they have to be handed over
-                # for TRACE_STATE_KEYS to find them.
+        with ol_llm.traced_chat(
+            self.use_case,
+            message,
+            attribution=self.attribution,
+            # The answering graph's own graph, not self.agent's: the trace is of
+            # this attempt, and the persisted intake graph has no model call in
+            # it to draw.
+            graph=self._answering_agent.get_graph(xray=True)
+            if ol_llm.tracing.enabled()
+            else None,
+        ) as chat:
+            callbacks = [
+                *await self.set_callbacks(
+                    self.get_trace_properties(
+                        # course_id and platform are derived in _try_to_answer
+                        # rather than carried in extra_state, so they have to be
+                        # handed over for TRACE_STATE_KEYS to find them.
+                        {
+                            **(extra_state or {}),
+                            "course_id": [course_id],
+                            "platform": [platform],
+                        }
+                    )
+                ),
+                *chat.callbacks,
+            ]
+            result = await self._answering_agent.ainvoke(
                 {
-                    **(extra_state or {}),
+                    "messages": [*history, HumanMessage(message)],
                     "course_id": [course_id],
                     "platform": [platform],
-                }
+                },
+                # In this call's config, never on self.config: that one is the
+                # persisted support thread, and the attempt stays out of it.
+                config={"callbacks": callbacks},
             )
-        )
-        return await self._answering_agent.ainvoke(
-            {
-                "messages": [*history, HumanMessage(message)],
-                "course_id": [course_id],
-                "platform": [platform],
-            },
-            # In this call's config, never on self.config: that one is the
-            # persisted support thread, and the attempt stays out of it.
-            config={"callbacks": callbacks},
-        )
+            answer = _the_answer_in(result)
+            if answer:
+                # The answer the learner is shown, not the raw result. A turn
+                # that reached the records but produced no usable reply shows
+                # nothing, and so has nothing to record.
+                chat.record(answer)
+            return answer
 
     async def _try_to_answer(
         self, message: str, prior_state: dict, extra_state: dict | None = None
@@ -1937,16 +1993,9 @@ class SupportBot(TruncatingChatbot):
         Try to answer from the learner's own records. Return the answer, or ""
         to hand the turn to the intake script.
 
-        A turn where no tool fired is not a question we have a source for: the
-        model will still have produced text, and showing it would put an answer
-        nothing stands behind in front of a learner who came here for help. A
-        tool that fired and returned no records is the opposite case - "which
-        course did you mean?" is an answer - so the test is the lookup, not the
-        data it found. See the spec, 4.1.1.
-
-        A lookup that failed is neither: it reached nothing, so it is not a
-        source, and an outage would otherwise answer every learner with "I
-        couldn't check" and count the turn answered.
+        What counts as an answer is _the_answer_in; anything that goes wrong on
+        the way to one leaves the learner the same fallback as a model that
+        won't answer.
         """
         if not self._answering_agent:
             return ""
@@ -1969,9 +2018,7 @@ class SupportBot(TruncatingChatbot):
             ((extra_state or {}).get("page_url") or [""])[-1]
         )
         try:
-            # Inside the try: anything that goes wrong before an answer owes
-            # the learner the same fallback as a model that won't answer.
-            result = await asyncio.wait_for(
+            return await asyncio.wait_for(
                 self._run_the_attempt(
                     message, history, course_id, platform, extra_state
                 ),
@@ -1983,22 +2030,6 @@ class SupportBot(TruncatingChatbot):
             # session cookies and their records.
             log.warning("Support answer attempt failed: %s", type(error).__name__)
             return ""
-        messages = result.get("messages") or []
-        if not any(
-            isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
-        ):
-            return ""
-        # The last AIMessage is this turn's reply. Taking the last one that also
-        # has string content would walk past an unusable reply into the history
-        # replayed above, and answer this question with a previous turn's answer.
-        reply = next(
-            (msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None
-        )
-        # Content blocks come back as a list for some models, and the repr of a
-        # list is not an answer.
-        if reply is None or not isinstance(reply.content, str):
-            return ""
-        return reply.content.strip()
 
     async def _reply_without_the_model(
         self, message: str, reply: str, extra_state: dict
