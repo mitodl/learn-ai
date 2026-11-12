@@ -1334,6 +1334,7 @@ NOTHING_MORE_PHRASES = frozenset(
         "nothing else",
         "no that's everything",
         "no that's all",
+        "no that's it",
         "that's everything",
         "that's all",
         "that's it",
@@ -1942,10 +1943,23 @@ class SupportBot(TruncatingChatbot):
         model, and an answering bot that raises owes the learner intake.
         """
         await self._ensure_proxy_user()
+        properties = self.get_trace_properties(
+            # course_id and platform are derived in _try_to_answer rather than
+            # carried in extra_state, so they have to be handed over for
+            # TRACE_STATE_KEYS to find them.
+            {
+                **(extra_state or {}),
+                "course_id": [course_id],
+                "platform": [platform],
+            }
+        )
         with ol_llm.traced_chat(
             self.use_case,
             message,
             attribution=self.attribution,
+            # The same properties PostHog gets. Without them the one trace where
+            # "did it answer about the right course?" matters has no course on it.
+            metadata=properties,
             # The answering graph's own graph, not self.agent's: the trace is of
             # this attempt, and the persisted intake graph has no model call in
             # it to draw.
@@ -1953,21 +1967,7 @@ class SupportBot(TruncatingChatbot):
             if ol_llm.tracing.enabled()
             else None,
         ) as chat:
-            callbacks = [
-                *await self.set_callbacks(
-                    self.get_trace_properties(
-                        # course_id and platform are derived in _try_to_answer
-                        # rather than carried in extra_state, so they have to be
-                        # handed over for TRACE_STATE_KEYS to find them.
-                        {
-                            **(extra_state or {}),
-                            "course_id": [course_id],
-                            "platform": [platform],
-                        }
-                    )
-                ),
-                *chat.callbacks,
-            ]
+            callbacks = [*await self.set_callbacks(properties), *chat.callbacks]
             result = await self._answering_agent.ainvoke(
                 {
                     "messages": [*history, HumanMessage(message)],

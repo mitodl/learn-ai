@@ -2092,6 +2092,10 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
         ("no", True),
         ("nothing else", True),
         ("that's all", True),
+        # The "no ..." form existed for "all" and "everything" but not for
+        # "it", so this one close-out was missed and the words were filed as
+        # the learner's problem.
+        ("no that's it", True),
         # The same close-out typed out in full. The match is exact, so the
         # apostrophe is the whole difference between closing an answer and a
         # review armed to send the question that was just answered.
@@ -2443,7 +2447,7 @@ async def test_the_answer_attempt_is_traced(settings, mocker, mock_checkpointer)
 @pytest.mark.parametrize("tracing", [True, False])
 @pytest.mark.asyncio
 async def test_the_answer_attempt_runs_inside_an_ol_llm_trace(
-    mocker, mock_checkpointer, tracing
+    settings, mocker, mock_checkpointer, tracing
 ):
     """
     set_callbacks only carries PostHog. Opik's tracer, and with it the priced
@@ -2451,6 +2455,7 @@ async def test_the_answer_attempt_runs_inside_an_ol_llm_trace(
     enters through BaseChatbot.get_completion - and which this bot never
     reaches, because every reply it sends goes out without the model.
     """
+    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
     mocker.patch.object(ol_llm.tracing, "enabled", return_value=tracing)
     traced_chat = mocker.patch.object(ol_llm, "traced_chat")
     chat = traced_chat.return_value.__enter__.return_value
@@ -2465,13 +2470,24 @@ async def test_the_answer_attempt_runs_inside_an_ol_llm_trace(
     )
     graph = mocker.Mock()
     mocker.patch.object(chatbot._answering_agent, "get_graph", return_value=graph)  # noqa: SLF001
+    page = "https://courses.learn.test/course-v1:MITx+18.01x+2T2025"
 
-    answer = await chatbot._try_to_answer("what am I enrolled in?", {})  # noqa: SLF001
+    answer = await chatbot._try_to_answer(  # noqa: SLF001
+        "what am I enrolled in?", {}, {"page_url": [page]}
+    )
 
     traced_chat.assert_called_once_with(
         chatbot.use_case,
         "what am I enrolled in?",
         attribution=chatbot.attribution,
+        # The same properties set_callbacks gets. Without them the one trace
+        # where "did it answer about the right course?" matters has no course
+        # on it, and PostHog is the only place that can answer the question.
+        metadata={
+            "page_url": page,
+            "course_id": "course-v1:MITx+18.01x+2T2025",
+            "platform": "mitxonline",
+        },
         graph=graph if tracing else None,
     )
     config = chatbot._answering_agent.ainvoke.call_args.kwargs["config"]  # noqa: SLF001
