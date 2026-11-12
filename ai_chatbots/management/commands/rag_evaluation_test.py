@@ -24,15 +24,18 @@ def run_evaluation(mocker):
     ("args", "message"),
     [
         ("--models a,b --baseline c --pairwise-only", "one of exactly two --models"),
-        ("--models a,b --baseline a", "needs --correctness-only or --pairwise-only"),
+        ("--models a,b --baseline a", "needs --correctness-only, --pairwise-only"),
         (
             "--models a,b --baseline a --pairwise-only --prompts --bots syllabus",
-            "compares models, not prompts",
+            "one prompt per side",
+        ),
+        ("--models a,b --tutor-rubric --bots syllabus", "needs --bots tutor"),
+        (
+            "--models a,b --baseline a --pairwise-only --candidate-prompt x",
+            "need --baseline and --prompts-file",
         ),
         ("--models a,b --pairwise-only --correctness-only", "can't be combined"),
         ("--models a --pairwise-only", "--pairwise-only needs two"),
-        # Tutor comes with the default bot list
-        ("--models a,b --baseline a --pairwise-only", "pairwise can't judge tutor"),
     ],
 )
 def test_refused_flags(run_evaluation, args, message):

@@ -441,15 +441,15 @@ class TestEvaluationOrchestrator:
         assert call.kwargs["instructions"] == mock_get_langsmith.return_value
 
     @pytest.mark.asyncio
-    async def test_tutor_bot_skips_non_default_prompts(self, orchestrator, mocker):
-        """Test that TutorBot skips non-default prompts in prompt sweep."""
+    async def test_baseline_runs_one_prompt_per_side(self, orchestrator, mocker):
+        """A baseline run answers once per side, each with its own prompt."""
         from deepeval.evaluate.types import EvaluationResult
 
         mock_load_json = mocker.patch(
             "ai_chatbots.evaluation.orchestrator.load_json_with_settings"
         )
         mock_load_json.return_value = {
-            "tutor": [{"name": "alt_prompt", "text": "custom instructions"}]
+            "tutor": [{"name": "alt_prompt", "text": "custom {problem_statement}"}]
         }
 
         mock_evaluator = mocker.Mock()
@@ -468,20 +468,26 @@ class TestEvaluationOrchestrator:
         )
 
         config = orchestrator.create_evaluation_config(
-            models=["gpt-4"], evaluation_model="gpt-4o"
+            models=["gpt-4", "gpt-5"], evaluation_model="judge"
         )
         config.confident_api_key = None
 
-        await orchestrator.run_evaluation(config, bot_names=["tutor"], use_prompts=True)
+        await orchestrator.run_evaluation(
+            config,
+            bot_names=["tutor"],
+            use_prompts=True,
+            baseline="gpt-4",
+            candidate_prompt="alt_prompt",
+        )
 
-        # evaluate_model called only once (default prompt), not twice
         calls = mock_evaluator.evaluate_model.call_args_list
-        assert len(calls) == 1
-        assert calls[0].kwargs["prompt_label"] == "default"
-
-        # Verify skip message was logged
-        write_calls = [str(c) for c in orchestrator.stdout.write.call_args_list]
-        assert any("Skipping prompt" in s and "tutor" in s for s in write_calls)
+        assert [
+            (c.args[0], c.kwargs["prompt_label"], c.kwargs["instructions"])
+            for c in calls
+        ] == [
+            ("gpt-4", "default", None),
+            ("gpt-5", "alt_prompt", "custom {problem_statement}"),
+        ]
 
     @pytest.mark.asyncio
     async def test_run_evaluation_with_data_file(self, orchestrator, mocker):
@@ -807,29 +813,19 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "judge error: judge down" in output
 
-    @pytest.mark.parametrize(
-        ("bot_name", "models", "message"),
-        [
-            ("tutor", ["model-a", "model-b"], "Skipping pairwise for tutor"),
-            ("syllabus", ["model-a"], "--pairwise needs two or more models"),
-        ],
-    )
-    def test_run_pairwise_skipped(  # noqa: PLR0913
-        self, orchestrator, arena, mock_stdout, bot_name, models, message
-    ):
-        """Tutor answers (no problem context) and single-model runs are skipped."""
+    def test_run_pairwise_skipped(self, orchestrator, arena, mock_stdout):
+        """Single-model runs are skipped."""
         _, metric, _ = arena
         config = orchestrator.create_evaluation_config(
-            models=models, evaluation_model="judge"
+            models=["model-a"], evaluation_model="judge"
         )
-        cases = [_answer(m, "Q1") for m in models]
 
-        orchestrator._run_pairwise(bot_name, cases, config)  # noqa: SLF001
+        orchestrator._run_pairwise("syllabus", [_answer("model-a", "Q1")], config)  # noqa: SLF001
 
         metric.measure.assert_not_called()
         assert orchestrator.pairwise_wins == {}
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
-        assert message in output
+        assert "--pairwise needs two or more models" in output
 
     @pytest.mark.parametrize("pairwise", [True, False])
     @pytest.mark.asyncio
@@ -857,7 +853,7 @@ class TestPairwise:
         )
         orchestrator.reporter.generate_report = mocker.Mock()
 
-        def fake_pairwise(bot_name, _test_cases, _config):
+        def fake_pairwise(bot_name, _test_cases, _config, **_kwargs):
             orchestrator.pairwise_wins[bot_name] = {"model-a": 1, "model-b": 0}
 
         run_pairwise = mocker.patch.object(
@@ -871,7 +867,7 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         if pairwise:
             run_pairwise.assert_called_once_with(
-                "test_bot", list(cases.values()), config
+                "test_bot", list(cases.values()), config, by_side=False
             )
             assert "PAIRWISE WINS" in output
         else:
@@ -1093,7 +1089,7 @@ class TestFailuresAndBaseline:
             )
         )
 
-        def baseline_wins(bot_name, _cases, _config):
+        def baseline_wins(bot_name, _cases, _config, **_kwargs):
             for case_id in bot.answers.values():
                 orchestrator.pairwise_results[(bot_name, case_id, "default")] = (
                     "model-a"
