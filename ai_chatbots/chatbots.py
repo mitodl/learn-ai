@@ -1400,6 +1400,10 @@ CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
     "want",
 }
 NEGATIONS = frozenset({"dont", "don't", "no", "not"})
+# The ones that turn a cancellation word into its opposite. "no" is not one of
+# them: "no, cancel it" agrees with the offer to cancel, while "don't cancel"
+# asks for the opposite. Derived so the two cannot drift.
+TRIGGER_NEGATIONS = NEGATIONS - {"no"}
 # Past this a reply is carrying real detail, not answering the question we
 # asked, so it is read as an edit rather than a yes or a no.
 SHORT_REPLY_MAX_WORDS = 8
@@ -1437,7 +1441,10 @@ def _is_cancellation(message: str) -> bool:
         return False
     if not set(words) <= CANCELLATION_WORDS:
         return False
-    if set(words) & CANCELLATION_TRIGGERS:
+    # Falls through rather than returning False, because a negated send is a
+    # cancellation however it is worded: "cancel, don't send this" names a
+    # trigger and negates it, and still means stop.
+    if set(words) & CANCELLATION_TRIGGERS and not set(words) & TRIGGER_NEGATIONS:
         return True
     return "send" in words and bool(set(words) & NEGATIONS)
 

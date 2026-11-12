@@ -72,6 +72,7 @@ from ai_chatbots.chatbots import (
     VideoGPTAgentState,
     VideoGPTBot,
     _closes_the_answer,
+    _is_cancellation,
     _support_description,
     _support_review,
     get_canvas_problem_set,
@@ -4561,6 +4562,36 @@ async def test_support_bot_checkpoints_the_already_filed_turn(
     state = await chatbot.agent.aget_state(chatbot.config)
     contents = [message.content for message in state.values["messages"]]
     assert "any update?" in contents
+
+
+@pytest.mark.parametrize(
+    ("message", "cancels"),
+    [
+        # A cancellation word on its own, or with the send negated.
+        ("cancel", True),
+        ("stop", True),
+        ("actually, never mind", True),
+        ("wait, don't send it", True),
+        ("Cancel, don't send this", True),
+        # "no" before the word is agreement with the offer to cancel.
+        ("no, cancel it", True),
+        # Negated, so the learner is asking for the opposite. Cancelling here
+        # throws away every word they typed and tells them so.
+        ("i don't want to cancel", False),
+        ("don't cancel", False),
+        ("please don't cancel it", False),
+        ("not cancelling", False),
+        # Carrying detail, so it is an edit rather than an answer either way.
+        ("cancel the enrollment I never asked for", False),
+    ],
+)
+def test_is_cancellation(message, cancels):
+    """
+    A missed cancellation costs a turn; a wrongly read one discards the
+    request. So a negated cancellation word has to read as the opposite, while
+    a plain "no" in front of one still agrees with it.
+    """
+    assert _is_cancellation(message) is cancels
 
 
 @pytest.mark.parametrize(
