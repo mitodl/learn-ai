@@ -2186,19 +2186,31 @@ class SupportBot(TruncatingChatbot):
         # yes never reaches a person. A bare affirmative is filler, so it
         # stays out of the description either way.
         took_up_the_offer = answered_before and _is_affirmative(message)
+        # Outside the answering gate, unlike the attempt below it: closing out an
+        # answer only reads state, so it needs no tools. Inside the gate, a gate
+        # that goes off mid-thread - a flag rollback, or the cookie expiring on a
+        # thread the learner comes back to - drops the close-out and sends their
+        # "thanks" into a review of the question that was already answered.
+        # intake_started is left out rather than forgotten: it is defined as
+        # "not answered_before and ...", so it is always false here.
+        if (
+            answered_before
+            and not handed_off
+            and not took_up_the_offer
+            and _closes_the_answer(message)
+        ):
+            return SUPPORT_ANSWER_CLOSED, {
+                "answered": [False],
+                # This turn's own exchange is written alongside this update,
+                # so a later request starts past both of those too.
+                "cancelled_after": [len(prior_state.get("messages") or []) + 2],
+            }
         if (
             self.answering_enabled
             and not handed_off
             and not intake_started
             and not took_up_the_offer
         ):
-            if answered_before and _closes_the_answer(message):
-                return SUPPORT_ANSWER_CLOSED, {
-                    "answered": [False],
-                    # This turn's own exchange is written alongside this update,
-                    # so a later request starts past both of those too.
-                    "cancelled_after": [len(prior_state.get("messages") or []) + 2],
-                }
             answer = await self._try_to_answer(message, prior_state, extra_state)
             if answer:
                 return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}

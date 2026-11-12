@@ -2993,6 +2993,39 @@ async def test_support_bot_closes_out_an_answer_without_filing(
 
 
 @pytest.mark.asyncio
+async def test_a_close_out_still_lands_when_answering_goes_off_mid_thread(
+    mocker, mock_checkpointer
+):
+    """
+    A flag rollback, or the cookie expiring on a thread the learner comes back
+    to, turns answering off between turns. Their "thanks" still has to close the
+    answer out. Handled inside the answering gate it is skipped, and the turn
+    falls through to a review of the question already answered - which a "yes"
+    then files.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+    )
+    await _say(chatbot, "what am I enrolled in?")
+
+    # The gate is read off the tool list, so emptying it is the rollback.
+    chatbot.tools = []
+    assert chatbot.answering_enabled is False
+
+    reply = await _say(chatbot, "thanks")
+
+    assert SUPPORT_ANSWER_CLOSED in reply
+    mock_file.assert_not_called()
+    state = await _state_of(chatbot)
+    assert (state.get("awaiting_send") or [False])[-1] is False
+    assert state["answered"][-1] is False
+
+
+@pytest.mark.asyncio
 async def test_send_it_after_an_answer_is_not_a_close_out(mocker, mock_checkpointer):
     """
     The ship-blocker, end to end. Said to "tell me more and I'll pass it on",
