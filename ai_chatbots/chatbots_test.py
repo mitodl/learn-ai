@@ -3335,6 +3335,44 @@ async def test_an_escalate_after_a_close_out_asks_instead_of_filing_nothing(
 
 
 @pytest.mark.asyncio
+async def test_an_escalate_on_a_new_thread_does_not_make_filler_the_request(
+    mocker, mock_checkpointer
+):
+    """
+    Same empty request as the close-out case above, but from the other end of
+    the thread, and it survives the fix for that one: there, the press lands
+    past a close-out, so `since` is non-zero and the opening-message exemption
+    is already off. On a brand-new thread `since` is zero, and the press's
+    blank HumanMessage used to be dropped from the position count - which
+    handed the exemption to the next thing typed, filler or not. "thanks" then
+    described the request, the review armed, and the next turn filed a ticket
+    whose subject and body were that one word.
+
+    Answering is off here on purpose: the escalate field is read before the
+    gate, so this reaches a learner the flag never let in.
+    """
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    await _say(chatbot, "Contact the support team", escalate=[True])
+    reply = await _say(chatbot, "thanks")
+
+    # The close-out exit from the ask, not the review: there is nothing to
+    # pass on, and the learner is told so rather than shown their own "thanks"
+    # as the request.
+    assert SUPPORT_NOTHING_TO_SEND in reply
+    assert "**Your message:**" not in reply
+    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+
+    await _say(chatbot, "yes")
+
+    mock_file.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_a_scripted_support_bot_never_attempts_an_answer(
     mocker, mock_checkpointer
 ):

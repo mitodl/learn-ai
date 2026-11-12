@@ -1516,6 +1516,12 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
     already been asked and answered, so the exemption does not apply and a
     stray "ok" would otherwise lead the ticket.
 
+    A blank message holds its place below and is dropped at the join, which
+    already tests for text. Filtering it out earlier moved that exemption onto
+    whatever came next: an escalate press writes a blank, so a press on a new
+    thread made the learner's following "thanks" the exempt opening message,
+    and that one word became the ticket body.
+
     ``since`` is where the current request starts: a cancellation withdraws
     every word before it, so those are not this request's to file.
     """
@@ -1524,7 +1530,6 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         msg.content
         for position, msg in enumerate(prior_messages)
         if isinstance(msg, HumanMessage)
-        and msg.content
         # Dropped only where we came back and asked what it meant, so the
         # chatter we could not read stays out while the same words typed
         # anywhere else are still the learner's problem.
