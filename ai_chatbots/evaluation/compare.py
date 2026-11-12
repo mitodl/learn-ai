@@ -36,14 +36,7 @@ def measure_outcomes(  # noqa: PLR0913
     candidate: str,
     skip: set[str],
 ) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
-    """
-    Give each measure's outcome for the candidate (better, worse or same) on
-    every case both sides answered, leaving out the cases in skip.
-
-    records are the answers' records (case_id, side, question, checks), scores
-    each judged metric's scores by (case_id, side), and winners the pairwise
-    winner per case.  Returns {measure: {case_id: outcome}} and the questions.
-    """
+    """Give the candidate's outcome per measure and case both sides answered."""
     by_case: dict[str, dict[str, dict]] = {}
     for record in records:
         by_case.setdefault(record["case_id"], {})[record["side"]] = record
@@ -94,11 +87,7 @@ def print_comparison(
     *,
     failed: bool,
 ) -> list[str]:
-    """
-    Print each measure's better/worse/same counts and whether the candidate is
-    clearly worse on it: worse more often than better, with sign test p below
-    SIGNIFICANCE.  Returns the measures flagged.
-    """
+    """Print each measure's counts and flag; return the measures flagged."""
     flagged = []
     for name, by_case in outcomes.items():
         results = list(by_case.values())

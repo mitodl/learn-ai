@@ -96,6 +96,23 @@ def find_prompt(prompts_data: dict, bot_name: str, name: str | None) -> dict | N
     raise ValueError(msg)
 
 
+TUTORING_QUALITY_STEPS = [
+    "The input is the student's latest message; the retrieval context holds the "
+    "problem, its solution if available, and the conversation so far.",
+    "If the actual output gives away a final answer the student has not yet reached, "
+    "or does the remaining work for them, the score must be low no matter how "
+    "accurate it is, even when the student asks for the answer directly: a tutor must "
+    "not hand it over.",
+    "Check that every hint, explanation and claim is correct for this problem; "
+    "penalize any error heavily.",
+    "Check that it responds to what the student actually said, including correcting a "
+    "misconception they stated or confirming an answer they got right.",
+    "Check that it moves the student forward with a concrete next step, hint or "
+    "guiding question, rather than generic encouragement.",
+    "Check that it is clear and appropriately short for a chat.",
+]
+
+
 TUTOR_PAIRWISE_CRITERIA = (
     "The input is a student's latest message to a tutor; the retrieval "
     "context holds the problem, its solution if available, and the "
@@ -157,60 +174,23 @@ class EvaluationOrchestrator:
                 answer against the retrieval context, which makes them
                 unusable for comparing two versions of the code that reach the
                 same answer through different tools, or through none at all.
-            pairwise_only: If True, no deepeval metrics at all; the run is
-                judged only pairwise.
-            tutor_rubric: If True, judge tutor answers with TutoringQuality
-                only, against the problem, solution and conversation.
-
-        Raises:
-            ValueError: if the judge is one of the models under test.
         """
         check_judge_not_under_test(evaluation_model, models)
         if pairwise_only:
             metric_thresholds = metric_thresholds or {}
             metrics = []
-        elif tutor_rubric:
-            metric_thresholds = metric_thresholds or {"TutoringQuality": 0.7}
-            metrics = [
-                GEval(
-                    name="TutoringQuality",
-                    evaluation_steps=[
-                        "The input is the student's latest message; the "
-                        "retrieval context holds the problem, its solution if "
-                        "available, and the conversation so far.",
-                        "If the actual output gives away a final answer the "
-                        "student has not yet reached, or does the remaining "
-                        "work for them, the score must be low no matter how "
-                        "accurate it is, even when the student asks for the "
-                        "answer directly: a tutor must not hand it over.",
-                        "Check that every hint, explanation and claim is "
-                        "correct for this problem; penalize any error heavily.",
-                        "Check that it responds to what the student actually "
-                        "said, including correcting a misconception they stated "
-                        "or confirming an answer they got right.",
-                        "Check that it moves the student forward with a "
-                        "concrete next step, hint or guiding question, rather "
-                        "than generic encouragement.",
-                        "Check that it is clear and appropriately short for a chat.",
-                    ],
-                    evaluation_params=[
-                        LLMTestCaseParams.INPUT,
-                        LLMTestCaseParams.ACTUAL_OUTPUT,
-                        LLMTestCaseParams.RETRIEVAL_CONTEXT,
-                    ],
-                    model=evaluation_model,
-                    threshold=metric_thresholds["TutoringQuality"],
-                ),
-            ]
-        elif correctness_only:
+        elif correctness_only or tutor_rubric:
+            name = "TutoringQuality" if tutor_rubric else "Correctness"
             if metric_thresholds is None:
-                metric_thresholds = {"Correctness": 0.7}
+                metric_thresholds = {name: 0.7}
             metrics = [
                 GEval(
-                    name="Correctness",
+                    name=name,
                     # Fixed steps, since GEval writes its own from criteria on
                     # every run, and expected outputs are written as rubrics
-                    evaluation_steps=[
+                    evaluation_steps=TUTORING_QUALITY_STEPS
+                    if tutor_rubric
+                    else [
                         "Read the expected output as a rubric for the answer, "
                         "not as text the actual output must repeat. Wording, "
                         "order and format don't matter.",
@@ -235,10 +215,13 @@ class EvaluationOrchestrator:
                     evaluation_params=[
                         LLMTestCaseParams.INPUT,
                         LLMTestCaseParams.ACTUAL_OUTPUT,
-                        LLMTestCaseParams.EXPECTED_OUTPUT,
+                        # The tutor is judged against the problem and conversation
+                        LLMTestCaseParams.RETRIEVAL_CONTEXT
+                        if tutor_rubric
+                        else LLMTestCaseParams.EXPECTED_OUTPUT,
                     ],
                     model=evaluation_model,
-                    threshold=metric_thresholds["Correctness"],
+                    threshold=metric_thresholds[name],
                 ),
             ]
         elif require_expected:
@@ -433,9 +416,6 @@ class EvaluationOrchestrator:
     ) -> EvaluationResult:
         """Collect test cases for a bot and evaluate them immediately.
 
-        sides, in a baseline run: the only (model, prompt) pairs to run.
-        Otherwise every model runs with every prompt.
-
         This processes one bot at a time, generating responses and evaluating them
         in batches to avoid memory issues from collecting all test cases upfront.
         """
@@ -589,7 +569,7 @@ class EvaluationOrchestrator:
 
         return bot_result
 
-    def _run_deepeval_evaluation(
+    def _run_deepeval_evaluation(  # noqa: C901
         self,
         test_cases: list,
         config: EvaluationConfig,
@@ -657,11 +637,16 @@ class EvaluationOrchestrator:
             if test_result is None:
                 self.failures.add(bot, "deepeval returned no result", case)
                 continue
-            for metric_data in getattr(test_result, "metrics_data", None) or []:
+            metrics_data = getattr(test_result, "metrics_data", None) or []
+            for metric_data in metrics_data:
                 if error := judge_error(metric_data):
                     self.failures.add(
                         bot, "judge error", case, detail=f"{metric_data.name}: {error}"
                     )
+            for name in {m.__name__ for m in config.metrics} - {
+                m.name for m in metrics_data
+            }:
+                self.failures.add(bot, "judge returned no score", case, detail=name)
         return result
 
     def _run_pairwise(
@@ -676,7 +661,6 @@ class EvaluationOrchestrator:
 
         No expected answer is involved.  deepeval shows the judge the answers in
         random order and under fake names, which reduces position and name bias.
-        by_side: a baseline run's two sides compete, whatever their prompts.
         """
         if len(config.models) < MIN_CONTESTANTS:
             self.stdout.write("⚠️  --pairwise needs two or more models; skipping")
@@ -865,26 +849,7 @@ Started: {timestamp}
             failed=bool(self.failures.for_bot(bot_name)),
         )
 
-    def _baseline_sides(  # noqa: PLR0913
-        self,
-        config,
-        bot_names,
-        prompts_data,
-        baseline,
-        baseline_prompt,
-        candidate_prompt,
-    ) -> dict[str, list]:
-        """Find each bot's (model, prompt) sides for a baseline run."""
-        candidate = next(m for m in config.models if m != baseline)
-        return {
-            bot: [
-                (baseline, find_prompt(prompts_data, bot, baseline_prompt)),
-                (candidate, find_prompt(prompts_data, bot, candidate_prompt)),
-            ]
-            for bot in bot_names
-        }
-
-    async def run_evaluation(  # noqa: C901, PLR0913
+    async def run_evaluation(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         config: EvaluationConfig,
         *,
@@ -912,18 +877,12 @@ Started: {timestamp}
         Args:
             config: Evaluation configuration with models and metrics
             bot_names: List of bot names to evaluate (default: all bots)
-            data_file: Data file(s) with test cases; a list or comma-separated
+            data_file: Path to custom data file with test cases
             use_prompts: Whether to use alternative prompts
             prompts_file: Path to prompts file
             max_concurrent: Maximum concurrent bot response generations
             batch_size: Number of test cases per batch (0 = no batching)
             error_log_file: Path to error log file (default: rag_evaluation_errors.log)
-            pairwise: Also ask the judge which model answered each question best
-            sample: Cases per bot, seeded (0 or None: all); seed: its seed
-            baseline: Also compare the other model with this one, case by case
-            baseline_prompt, candidate_prompt: each side's prompt, by name in
-                the prompts file (None: the bot's own)
-            run_info: Extra lines for the report's run configuration
         """
         # Initialize error log file
         error_log_file = error_log_file or "rag_evaluation_errors.log"
@@ -939,19 +898,18 @@ Started: {timestamp}
 
         # Load alternative prompts if enabled
         prompts_data = self._load_prompts_data(prompts_file) if use_prompts else {}
-        # Looked up before any answer is generated, so a bad prompt name fails fast
-        sides_by_bot = (
-            self._baseline_sides(
-                config,
-                bot_names,
-                prompts_data,
-                baseline,
-                baseline_prompt,
-                candidate_prompt,
-            )
-            if baseline
-            else {}
-        )
+        # A baseline run's (model, prompt) sides per bot, looked up before any
+        # answer is generated so a bad prompt name fails fast
+        sides_by_bot = {}
+        if baseline:
+            candidate = next(m for m in config.models if m != baseline)
+            sides_by_bot = {
+                bot: [
+                    (baseline, find_prompt(prompts_data, bot, baseline_prompt)),
+                    (candidate, find_prompt(prompts_data, bot, candidate_prompt)),
+                ]
+                for bot in bot_names
+            }
 
         # Process each bot one at a time, accumulating results
         all_bot_results = []

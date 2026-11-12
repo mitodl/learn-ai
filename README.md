@@ -318,24 +318,15 @@ Every run reports what it could not measure instead of dropping it: answers that
 
 "No regression found" does not mean the candidate is as good: a sample of 30 misses small losses. To see how repeatable a flag is, rerun with the same `--seed` (same cases, fresh answers and judging); another `--seed` also changes the cases. Neither shows what caused a flag.
 
-One comparison is one run per eval group:
+One comparison is one run per eval group (data files), for example:
 
 ```bash
-B=openai/gpt-4o-mini; C=openai/gpt-5.4-mini
-S=test_json/evaluation_sets
-# Syllabus, curated cases (references only)
-python manage.py rag_evaluation --bots syllabus --models $B,$C --baseline $B --correctness-only \
-  --data-file $S/qa_15_010.json,$S/qa_15_280.json,$S/qa_15_311.json,$S/qa_15_515.json,test_json/syllabus_answer_eval.json
-# Syllabus, account questions (made-up learner records)
-python manage.py rag_evaluation --bots syllabus --models $B,$C --baseline $B --correctness-only \
-  --data-file $S/account_tools.json
-# Recommendation
-python manage.py rag_evaluation --bots recommendation --models $B,$C --baseline $B --pairwise-only \
-  --data-file $S/recommendation_questions.json,test_json/rag_evaluation.json
-# Video (one case, so it can't flag anything yet)
-python manage.py rag_evaluation --bots video_gpt --models $B,$C --baseline $B --pairwise-only \
-  --data-file test_json/rag_evaluation.json
+python manage.py rag_evaluation --bots syllabus --models openai/gpt-4o-mini,openai/gpt-5.4-mini \
+  --baseline openai/gpt-4o-mini --correctness-only --data-file test_json/evaluation_sets/account_tools.json \
+  --batch-size 8 --max-concurrent 4 --output-file report.txt
 ```
+
+A chatbot has a regression when any of its runs reports one.
 
 To compare prompts too, give each side its prompt from a prompts file. For tutor, the text replaces the `tutor_problem` template and must contain `{problem_statement}`:
 
@@ -347,7 +338,3 @@ python manage.py rag_evaluation --bots tutor --models openai/gpt-4o,openai/gpt-5
 ```
 
 Tutor cases can carry the saved conversation before the turn (`history`) and a Canvas problem set (`run_readable_id` and `problem_set_title` in `extra_init`) instead of an edX problem. Without a prompt, a side uses the bot's own prompt, which locally is the one in code or in `open-learning-ai-tutor` and may differ from production's LangSmith prompts; to compare with production, put production's text in the prompts file. The report prints each side's prompt source and a hash of its text. Only `tutor_problem` is replaced: with `LANGSMITH_API_KEY` set, the tutor's other prompts still come from LangSmith, as in the app. TutoringQuality penalizes giving away the final answer, not hints that describe the method.
-
-Add `--batch-size 8 --max-concurrent 4 --output-file <file>` for a real run. A chatbot has a regression when any of its runs reports one.
-
-To answer from the production catalog (read-only searches), point the Learn content and search URLs at production and set a production `LEARN_ACCESS_TOKEN` for the run: `AI_MIT_SEARCH_URL`, `AI_MIT_SEARCH_VECTOR_URL`, `AI_MIT_SEARCH_ELASTIC_URL`, `AI_MIT_SYLLABUS_URL`, `AI_MIT_CONTENTFILE_URL`, `AI_MIT_LEARNING_RESOURCES_URL`, `AI_MIT_VIDEO_TRANSCRIPT_URL` and `AI_MIT_SEARCH_DETAIL_URL`. Use a separate Redis database (`CELERY_BROKER_URL=redis://redis:6379/9`) so cached results from another environment aren't reused.

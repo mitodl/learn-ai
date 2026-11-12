@@ -641,7 +641,6 @@ async def test_search_support_articles_warns_on_empty_category(
     )
 
     assert results["results"] == []
-    # A search that found nothing is not an error
     assert "error" not in results["metadata"]
     # A stale category id looks exactly like this, so it should not pass silently
     assert mock_log.call_count == 1
@@ -697,11 +696,7 @@ async def test_search_support_articles_no_portal(settings, mock_support_requests
 
 @pytest.mark.usefixtures("_no_retry_sleep")
 async def test_search_support_articles_portal_error(mocker, mock_support_requests):
-    """
-    An empty result with the support center url is returned if the support
-    portal is unavailable, marked as an error so it can be told from a search
-    that found nothing.
-    """
+    """An empty result is returned if the support portal is unavailable."""
     mock_client = mock_support_requests()
     mock_client.get = mocker.AsyncMock(side_effect=RequestError("Connection error"))
 

@@ -525,10 +525,7 @@ class TestEvaluatorIntegration:
 
 
 def test_qa_15_515_loads_for_correctness(mocker):
-    """
-    With Correctness judged, the 15.515 set drops its no-reference cases,
-    the disputed one among them.
-    """
+    """With Correctness judged, 15.515 drops its no-reference cases."""
     evaluator = SyllabusBotEvaluator(
         mocker.Mock(),
         "syllabus",

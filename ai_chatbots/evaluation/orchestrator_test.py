@@ -789,7 +789,7 @@ class TestPairwise:
         the run.
         """
         _, metric, _ = arena
-        outcomes = iter([None, "model-a"])
+        outcomes = iter([None, "model-a", "model-b"])
 
         def measure(_arena):
             # The wrapper returns 0.0 and sets error once its retries run out
@@ -798,18 +798,30 @@ class TestPairwise:
             return winner or 0.0
 
         metric.measure.side_effect = measure
+        reprompted = [_answer(m, "Q2") for m in ("model-a", "model-b")]
+        for case in reprompted:
+            case.metadata["prompt_label"] = "#1"
         cases = [
             _answer("model-a", "Q1"),
             _answer("model-b", "Q1"),
             _answer("model-a", "Q2"),
             _answer("model-b", "Q2"),
+            *reprompted,
             _answer("model-a", "Only one"),
         ]
 
         orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
 
-        assert metric.measure.call_count == 2
-        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 0}}
+        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 1}}
+        assert orchestrator.pairwise_results == {
+            ("syllabus", "f.json#Q1", "default"): None,
+            ("syllabus", "f.json#Q2", "default"): "model-a",
+            ("syllabus", "f.json#Q2", "#1"): "model-b",
+        }
+        assert [(f.kind, f.case_id) for f in orchestrator.failures.items] == [
+            ("pairwise judge error", "f.json#Q1"),
+            ("pairwise skipped: an answer is missing", "f.json#Only one"),
+        ]
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "judge error: judge down" in output
 
@@ -1008,78 +1020,31 @@ class TestFailuresAndBaseline:
         assert set(orchestrator.answer_records[0]["checks"]) == {"follow_up_offer"}
 
     @pytest.mark.parametrize(
-        ("score", "error", "kinds"),
+        ("metric", "kinds"),
         [
-            (0.9, None, ["deepeval returned no result"]),  # model-b's result is lost
-            (None, "timed out", ["judge error", "deepeval returned no result"]),
-            (0.0, "timed out", ["judge error", "deepeval returned no result"]),
-            (None, None, ["judge error", "deepeval returned no result"]),
+            ((0.9, None), ["deepeval returned no result"]),  # model-b's is lost
+            ((None, "timed out"), ["judge error", "deepeval returned no result"]),
+            ((0.0, "timed out"), ["judge error", "deepeval returned no result"]),
+            ((None, None), ["judge error", "deepeval returned no result"]),
+            (None, ["judge returned no score", "deepeval returned no result"]),
         ],
     )
-    def test_deepeval_failures_recorded(  # noqa: PLR0913
-        self, orchestrator, deepeval_returns, mocker, score, error, kinds
+    def test_deepeval_failures_recorded(
+        self, orchestrator, deepeval_returns, mocker, metric, kinds
     ):
-        """
-        A missing result is found though both answers share the case id, and a
-        metric the judge failed to score is a failure, not a score.
-        """
+        """A missing result or score and a judge error are failures, not scores."""
         config = self._config(orchestrator, correctness_only=True)
         cases = [_answer(model) for model in self.MODELS]
-        deepeval_returns((cases[0], [self._metric(mocker, score, error)]))
+        deepeval_returns((cases[0], [self._metric(mocker, *metric)] if metric else []))
 
         orchestrator._run_deepeval_evaluation(cases, config, 2, bot_name="test_bot")  # noqa: SLF001
 
         assert [f.kind for f in orchestrator.failures.items] == kinds
 
-    def test_pairwise_records_skips_and_errors(self, orchestrator, mocker):
-        """
-        A case one model didn't answer and a judge error are recorded, not
-        counted as wins; case ids and prompts each get their own judgement.
-        """
-        config = self._config(orchestrator)
-        mocker.patch("ai_chatbots.evaluation.orchestrator.ArenaGEval")
-        metric = mocker.Mock(reason="because", error=None)
-        mocker.patch(
-            "ai_chatbots.evaluation.orchestrator.TimeoutMetricWrapper",
-            return_value=metric,
-        )
-        outcomes = iter(["model-b", None, "model-a"])
-
-        def measure(_arena):
-            winner = next(outcomes)
-            metric.error = None if winner else "judge down"
-            return winner or 0.0
-
-        metric.measure.side_effect = measure
-        reprompted = [_answer(m, case_id="f#0") for m in self.MODELS]
-        for case in reprompted:
-            case.metadata["prompt_label"] = "#1"
-        cases = [
-            *(_answer(m, case_id=c) for c in ("f#0", "g#0") for m in self.MODELS),
-            *reprompted,
-            _answer("model-a", case_id="f#9"),  # only one answer
-        ]
-
-        orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
-
-        assert orchestrator.pairwise_wins["syllabus"] == {"model-a": 1, "model-b": 1}
-        assert orchestrator.pairwise_results == {
-            ("syllabus", "f#0", "default"): "model-b",
-            ("syllabus", "g#0", "default"): None,
-            ("syllabus", "f#0", "#1"): "model-a",
-        }
-        assert [(f.kind, f.case_id, f.model) for f in orchestrator.failures.items] == [
-            ("pairwise judge error", "g#0", None),
-            ("pairwise skipped: an answer is missing", "f#9", None),
-        ]
-
     async def test_baseline_comparison(
         self, orchestrator, bot, deepeval_returns, mock_stdout, mocker
     ):
-        """
-        With a baseline the report ends with each bot's comparison, from the
-        pairwise winners and deepeval's "Correctness [GEval]" scores.
-        """
+        """With a baseline the report ends with each bot's comparison."""
         bot.answers = {f"Q{i}": f"f#{i}" for i in range(8)}
         deepeval_returns(
             *(
