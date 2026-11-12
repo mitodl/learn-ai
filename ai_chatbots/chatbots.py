@@ -1412,8 +1412,15 @@ def _normalised(message: str) -> str:
     Digits and non-ASCII letters are kept rather than stripped: dropping them
     leaves "yes, 18.01" as a bare "yes", which every caller here reads as
     permission to file the draft - discarding what the learner just typed.
+
+    A curly apostrophe is folded to a straight one first. Phones substitute it
+    as the learner types, and it is not a word character, so without this
+    "that's all" and "don't send it" arrive as "that s all" and "don t send
+    it" and match nothing - closing out and cancelling both stop working on a
+    phone.
     """
-    return " ".join(re.sub(r"[^\w' ]", " ", (message or "").lower()).split())
+    straightened = (message or "").replace("\u2018", "'").replace("\u2019", "'")
+    return " ".join(re.sub(r"[^\w' ]", " ", straightened.lower()).split())
 
 
 def _is_cancellation(message: str) -> bool:
@@ -1847,7 +1854,7 @@ class SupportBot(TruncatingChatbot):
         if (page.scheme, page.netloc.lower()) != (base.scheme, base.netloc.lower()):
             return None, None
         found = COURSE_KEY_RE.search(page_url)
-        return (found.group(0), "mitxonline") if found else (None, None)
+        return (found.group(0), tools.MITXONLINE_PLATFORM) if found else (None, None)
 
     async def _run_the_attempt(
         self,

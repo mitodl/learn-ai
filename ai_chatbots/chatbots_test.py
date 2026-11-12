@@ -2068,6 +2068,11 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
         ("that is all", True),
         ("that is everything", True),
         ("that is it", True),
+        # iOS and macOS substitute a curly apostrophe as the learner types, so
+        # this is what "that's all" from a phone actually arrives as.
+        ("that\u2019s all", True),
+        ("that\u2019s helpful", True),
+        ("no that\u2019s everything", True),
         # Affirmatives. Said to "tell me more and I'll pass it on", these mean
         # PASS IT ON. Reading them as "glad that helped" files nothing and
         # tells the learner it did - the worst outcome this bot has.
@@ -4560,6 +4565,8 @@ async def test_support_bot_checkpoints_the_already_filed_turn(
         "Cancel, don't send this",
         "cancel",
         "wait, don't send it",
+        # The same words with the apostrophe a phone keyboard produces.
+        "wait, don\u2019t send it",
         "actually, never mind",
         "stop",
     ],
