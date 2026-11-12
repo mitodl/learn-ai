@@ -1687,7 +1687,12 @@ class SupportBot(TruncatingChatbot):
     # PostHog event property, which is a different retention and a different
     # access list from a Zendesk ticket.
     TRACE_STATE_KEYS = ("page_url", "course_id", "platform")
-    CALLS_THE_MODEL = False
+    # True on the class purely so the deploy check in checks.py covers this
+    # bot: it reads the attribute off the class, and __init__ overwrites it
+    # per instance with the answering flag below. With answering on the model
+    # check runs in __init__, so a retired AI_DEFAULT_SUPPORT_MODEL would 500
+    # the scripted intake too, not just the answer.
+    CALLS_THE_MODEL = True
     # A bot is constructed on every request, including the ones that
     # short-circuit before any model call. The budget is provisioned on the
     # first attempt instead, so those turns don't pay a blocking HTTP call.
