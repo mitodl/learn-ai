@@ -2073,6 +2073,10 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
         ("that\u2019s all", True),
         ("that\u2019s helpful", True),
         ("no that\u2019s everything", True),
+        # Curly quotes around a word, as opposed to inside one, must still come
+        # off: the review tells the learner to reply "send" or "cancel", and a
+        # phone turns the quotes it suggests curly too.
+        ("\u2018thanks\u2019", True),
         # Affirmatives. Said to "tell me more and I'll pass it on", these mean
         # PASS IT ON. Reading them as "glad that helped" files nothing and
         # tells the learner it did - the worst outcome this bot has.
@@ -4567,6 +4571,8 @@ async def test_support_bot_checkpoints_the_already_filed_turn(
         "wait, don't send it",
         # The same words with the apostrophe a phone keyboard produces.
         "wait, don\u2019t send it",
+        # The review's own word, quoted back, with the quotes a phone makes.
+        "\u2018cancel\u2019",
         "actually, never mind",
         "stop",
     ],

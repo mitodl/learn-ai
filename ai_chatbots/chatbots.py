@@ -1404,6 +1404,9 @@ NEGATIONS = frozenset({"dont", "don't", "no", "not"})
 # asked, so it is read as an edit rather than a yes or a no.
 SHORT_REPLY_MAX_WORDS = 8
 
+# A phone's apostrophe, but only where a straight one would have been typed.
+CURLY_APOSTROPHE_IN_WORD = re.compile(r"(?<=\w)[\u2018\u2019](?=\w)")
+
 
 def _normalised(message: str) -> str:
     """
@@ -1413,13 +1416,17 @@ def _normalised(message: str) -> str:
     leaves "yes, 18.01" as a bare "yes", which every caller here reads as
     permission to file the draft - discarding what the learner just typed.
 
-    A curly apostrophe is folded to a straight one first. Phones substitute it
-    as the learner types, and it is not a word character, so without this
-    "that's all" and "don't send it" arrive as "that s all" and "don t send
-    it" and match nothing - closing out and cancelling both stop working on a
-    phone.
+    A curly apostrophe inside a word is folded to a straight one first. Phones
+    substitute it as the learner types, and it is not a word character, so
+    without this "that's all" and "don't send it" arrive as "that s all" and
+    "don t send it" and match nothing - closing out and cancelling both stop
+    working on a phone.
+
+    Only inside a word: a curly quote around one keeps falling through to the
+    strip below, so the learner who mirrors the review's own 'cancel' back
+    still cancels.
     """
-    straightened = (message or "").replace("\u2018", "'").replace("\u2019", "'")
+    straightened = CURLY_APOSTROPHE_IN_WORD.sub("'", message or "")
     return " ".join(re.sub(r"[^\w' ]", " ", straightened.lower()).split())
 
 
