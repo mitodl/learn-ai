@@ -247,6 +247,30 @@ class TestEvaluationReporter:
         assert "gpt-4" in output_text
         assert "gpt-3.5" in output_text
 
+    def test_summary_threshold_ignores_geval_suffix(self, reporter, mock_stdout):
+        """A GEval score is held to its metric's threshold, despite the suffix."""
+        df = pd.DataFrame(
+            [
+                {
+                    "bot": "tutor",
+                    "model": "gpt-4",
+                    "prompt_label": "default",
+                    "metric": "TutoringQuality [GEval]",
+                    "score": 0.6,
+                    "success": False,
+                    "reason": "",
+                }
+            ]
+        )
+
+        reporter.summarize_per_bot_model(
+            df, ["gpt-4"], ["tutor"], {"TutoringQuality": 0.7}
+        )
+
+        output = " ".join(c[0][0] for c in mock_stdout.write.call_args_list)
+        assert "FAIL" in output
+        assert "PASS" not in output
+
     def test_model_comparison(self, reporter, mock_stdout):
         """Test model comparison functionality."""
         data = [

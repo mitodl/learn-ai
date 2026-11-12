@@ -147,6 +147,15 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--tutor-rubric",
+            dest="tutor_rubric",
+            action="store_true",
+            help=(
+                "Judge tutor answers with TutoringQuality only, against the "
+                "problem, its solution and the conversation.  Tutor only."
+            ),
+        )
+        parser.add_argument(
             "--baseline",
             dest="baseline",
             default=None,
@@ -154,8 +163,24 @@ class Command(BaseCommand):
                 "Compare the other model in --models with this one, case by "
                 "case, and give a verdict: regression found, no regression "
                 "found, or incomplete.  Needs exactly two models and "
-                "--correctness-only or --pairwise-only; turns on --pairwise."
+                "--correctness-only, --pairwise-only or --tutor-rubric; turns "
+                "on --pairwise."
             ),
+        )
+        parser.add_argument(
+            "--baseline-prompt",
+            dest="baseline_prompt",
+            default=None,
+            help=(
+                "The baseline's prompt, by name in --prompts-file (default: "
+                "the bot's own).  For tutor, its tutor_problem template."
+            ),
+        )
+        parser.add_argument(
+            "--candidate-prompt",
+            dest="candidate_prompt",
+            default=None,
+            help="The candidate's prompt, like --baseline-prompt",
         )
         parser.add_argument(
             "--sample",
@@ -197,10 +222,26 @@ class Command(BaseCommand):
 
     def _check_options(self, options: dict, models: list[str]) -> None:
         """Refuse flag combinations without a meaningful result."""
-        if options["pairwise_only"] and (
-            options["correctness_only"] or options["require_expected"]
-        ):
-            msg = "--pairwise-only can't be combined with other metric modes"
+        modes = [
+            "pairwise_only",
+            "tutor_rubric",
+            "correctness_only",
+            "require_expected",
+        ]
+        chosen = [mode for mode in modes if options[mode]]
+        if len(chosen) > 1 and chosen[0] in modes[:2]:
+            msg = f"--{chosen[0].replace('_', '-')} can't be combined with other modes"
+            raise CommandError(msg)
+        bots = [b for b in (options["bots"] or "").split(",") if b]
+        if options["tutor_rubric"] and bots != ["tutor"]:
+            msg = "--tutor-rubric needs --bots tutor"
+            raise CommandError(msg)
+        side_prompts = options["baseline_prompt"] or options["candidate_prompt"]
+        if side_prompts and not (options["baseline"] and options["prompts_file"]):
+            msg = (
+                "--baseline-prompt and --candidate-prompt need --baseline "
+                "and --prompts-file"
+            )
             raise CommandError(msg)
         if options["pairwise_only"] and len(models) < 2:  # noqa: PLR2004
             msg = "--pairwise-only needs two or more models"
@@ -210,17 +251,22 @@ class Command(BaseCommand):
             if len(models) != 2 or baseline not in models:  # noqa: PLR2004
                 msg = "--baseline must be one of exactly two --models"
                 raise CommandError(msg)
-            if not (options["correctness_only"] or options["pairwise_only"]):
-                msg = "--baseline needs --correctness-only or --pairwise-only"
+            if not (
+                options["correctness_only"]
+                or options["pairwise_only"]
+                or options["tutor_rubric"]
+            ):
+                msg = (
+                    "--baseline needs --correctness-only, --pairwise-only "
+                    "or --tutor-rubric"
+                )
                 raise CommandError(msg)
-            if options["prompts"] or options["prompts_file"]:
-                msg = "--baseline compares models, not prompts; drop --prompts"
+            if options["prompts"] or (options["prompts_file"] and not side_prompts):
+                msg = (
+                    "--baseline runs one prompt per side; use --baseline-prompt "
+                    "or --candidate-prompt instead of --prompts"
+                )
                 raise CommandError(msg)
-        bots = [b for b in (options["bots"] or "").split(",") if b]
-        if (baseline or options["pairwise_only"]) and (not bots or "tutor" in bots):
-            # Pairwise can't judge tutor answers, so nothing would be measured
-            msg = "pairwise can't judge tutor; name the --bots, without tutor"
-            raise CommandError(msg)
 
     def _model_settings(self, models: list[str]) -> str:
         """Describe each model's temperature and reasoning effort."""
@@ -278,7 +324,10 @@ class Command(BaseCommand):
             ),
         }
         if baseline:
-            run_info["Baseline"] = baseline
+            run_info["Baseline"] = (
+                f"{baseline}, prompt {options['baseline_prompt'] or 'default'}"
+            )
+            run_info["Candidate prompt"] = options["candidate_prompt"] or "default"
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:
@@ -302,6 +351,7 @@ class Command(BaseCommand):
                     require_expected=require_expected,
                     correctness_only=correctness_only,
                     pairwise_only=options["pairwise_only"],
+                    tutor_rubric=options["tutor_rubric"],
                 )
             except ValueError as error:
                 raise CommandError(str(error)) from error
@@ -327,6 +377,8 @@ class Command(BaseCommand):
                 sample=sample,
                 seed=options["seed"],
                 baseline=baseline,
+                baseline_prompt=options["baseline_prompt"],
+                candidate_prompt=options["candidate_prompt"],
                 run_info=run_info,
             )
         finally:
