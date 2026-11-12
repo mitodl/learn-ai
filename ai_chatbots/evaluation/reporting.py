@@ -90,7 +90,6 @@ class EvaluationReporter:
         metric_names: list[str] | None = None,
         failures=None,
         answer_records: list[dict] | None = None,
-        run_info: dict | None = None,
     ) -> None:
         """Generate a comprehensive evaluation report."""
         self.stdout.write("\n" + "=" * 80)
@@ -106,7 +105,6 @@ class EvaluationReporter:
             metric_names=metric_names or [],
             metric_thresholds=metric_thresholds,
             use_prompts=use_prompts,
-            run_info=run_info,
         )
 
         # Create DataFrame for easier analysis
@@ -400,7 +398,6 @@ class EvaluationReporter:
         metric_names: list[str],
         metric_thresholds: dict[str, float] | None = None,
         use_prompts: bool = True,
-        run_info: dict | None = None,
     ) -> None:
         """Display run configuration at the top of the report."""
         self.stdout.write("\n📝 RUN CONFIGURATION")
@@ -418,8 +415,6 @@ class EvaluationReporter:
             threshold_strs = [f"{k}={v}" for k, v in sorted(metric_thresholds.items())]
             self.stdout.write(f"  Thresholds: {', '.join(threshold_strs)}")
         self.stdout.write(f"  Prompt sweep: {'enabled' if use_prompts else 'disabled'}")
-        for label, value in (run_info or {}).items():
-            self.stdout.write(f"  {label}: {value}")
 
     def composite_leaderboard(
         self,

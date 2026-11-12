@@ -33,6 +33,8 @@ def run_evaluation(mocker):
             "need --baseline and one bot",
         ),
         ("--models a,b --pairwise-only --correctness-only", "can't be combined"),
+        ("--models a,a --baseline a", "exactly one other model"),
+        ("--models a,b --data-file x/c.json,y/c.json", "names must differ"),
         ("--models a --pairwise-only", "--pairwise-only needs two"),
     ],
 )
@@ -59,7 +61,6 @@ def test_defaults(run_evaluation, args, sample):
     assert kwargs["sample"] == sample
     # A baseline run always judges pairwise
     assert kwargs["pairwise"] or kwargs["baseline"]
-    assert "Model settings" in kwargs["run_info"]
     config = run_evaluation.call_args.args[0]
     assert config.evaluation_model == "gpt-5.5"
     assert ("TutoringQuality" in config.metric_thresholds) == ("tutor" in args)

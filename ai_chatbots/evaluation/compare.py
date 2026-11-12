@@ -29,7 +29,6 @@ def _outcome(baseline_failed, candidate_failed) -> str | None:
 
 def measure_outcomes(  # noqa: PLR0913
     records: list[dict],
-    scores: dict[str, dict[tuple, float]],
     thresholds: dict[str, float],
     winners: dict[str, str | None],
     baseline: str,
@@ -48,7 +47,7 @@ def measure_outcomes(  # noqa: PLR0913
 
     def below(metric):
         def fails(case_id, side):
-            score = scores[metric].get((case_id, side))
+            score = by_case[case_id][side]["scores"].get(metric)
             return None if score is None else score < thresholds[metric]
 
         return fails
@@ -61,7 +60,7 @@ def measure_outcomes(  # noqa: PLR0913
             None if winners.get(case_id) is None else winners[case_id] != side
         )
     }
-    measures.update({metric: below(metric) for metric in scores})
+    measures.update({metric: below(metric) for metric in thresholds})
     checks = {
         name for case_id in cases for name in by_case[case_id][baseline]["checks"]
     }

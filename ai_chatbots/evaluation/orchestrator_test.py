@@ -218,8 +218,7 @@ class TestEvaluationOrchestrator:
             evaluation_model="gpt-4o",
             metric_names=mocker.ANY,
             failures=orchestrator.failures,
-            answer_records=orchestrator.answer_records,
-            run_info=mocker.ANY,
+            answer_records=list(orchestrator.answer_records.values()),
         )
         assert result == mock_results
 
@@ -439,51 +438,6 @@ class TestEvaluationOrchestrator:
             c for c in calls if c.kwargs["prompt_label"] == mock_prompts_data[1]["name"]
         )
         assert call.kwargs["instructions"] == mock_get_langsmith.return_value
-
-    @pytest.mark.asyncio
-    async def test_baseline_runs_one_prompt_per_side(self, orchestrator, mocker):
-        """A baseline run answers once per side, each with its own prompt."""
-        from deepeval.evaluate.types import EvaluationResult
-
-        mock_evaluator = mocker.Mock()
-        mock_evaluator.load_cases.return_value = []
-        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
-
-        orchestrator.reporter.generate_report = mocker.Mock()
-
-        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
-        mock_deepeval.evaluate.return_value = EvaluationResult(
-            test_results=[], confident_link=None, test_run_id=None
-        )
-        mocker.patch(
-            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
-            {"tutor": (mocker.Mock(), mocker.Mock(return_value=mock_evaluator))},
-        )
-
-        config = orchestrator.create_evaluation_config(
-            models=["gpt-4", "gpt-5"], evaluation_model="judge"
-        )
-        config.confident_api_key = None
-
-        await orchestrator.run_evaluation(
-            config,
-            bot_names=["tutor"],
-            use_prompts=False,
-            baseline="gpt-4",
-            candidate_prompt={
-                "name": "alt_prompt",
-                "text": "custom {problem_statement}",
-            },
-        )
-
-        calls = mock_evaluator.evaluate_model.call_args_list
-        assert [
-            (c.args[0], c.kwargs["prompt_label"], c.kwargs["instructions"])
-            for c in calls
-        ] == [
-            ("gpt-4", "default", None),
-            ("gpt-5", "alt_prompt", "custom {problem_statement}"),
-        ]
 
     @pytest.mark.asyncio
     async def test_run_evaluation_with_data_file(self, orchestrator, mocker):
@@ -928,11 +882,14 @@ class TestFailuresAndBaseline:
         evaluator.load_cases.side_effect = lambda **_: (
             [mocker.Mock()] * len(evaluator.answers)
         )
-        evaluator.evaluate_model = AsyncMock(
-            side_effect=lambda model, *_a, **_k: [
-                _answer(model, q, case_id) for q, case_id in evaluator.answers.items()
-            ]
-        )
+
+        def answers(model, *_args, prompt_label="default", **_kwargs):
+            found = [_answer(model, q, c) for q, c in evaluator.answers.items()]
+            for answer in found:
+                answer.metadata["prompt_label"] = prompt_label
+            return found
+
+        evaluator.evaluate_model = AsyncMock(side_effect=answers)
         mocker.patch(
             "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
             {"test_bot": (mocker.Mock(), mocker.Mock(return_value=evaluator))},
@@ -1013,7 +970,8 @@ class TestFailuresAndBaseline:
             ("search tool returned an error", "f#1"),
             ("account tool called without made-up records", "f#2"),
         ]
-        assert set(orchestrator.answer_records[0]["checks"]) == {"follow_up_offer"}
+        record = next(iter(orchestrator.answer_records.values()))
+        assert set(record["checks"]) == {"follow_up_offer"}
 
     @pytest.mark.parametrize(
         ("metric", "kinds"),
@@ -1040,13 +998,14 @@ class TestFailuresAndBaseline:
     async def test_baseline_comparison(
         self, orchestrator, bot, deepeval_returns, mock_stdout, mocker
     ):
-        """With a baseline the report ends with each bot's comparison."""
+        """A baseline run answers once per side, with its prompt, then compares."""
         bot.answers = {f"Q{i}": f"f#{i}" for i in range(8)}
+        sides = [("model-a", "default", 0.9), ("model-b", "short", 0.4)]
         deepeval_returns(
             *(
-                (_answer(model, question, case_id), [self._metric(mocker, score)])
-                for model, score in zip(self.MODELS, (0.9, 0.4), strict=True)
-                for question, case_id in bot.answers.items()
+                (answer, [self._metric(mocker, score)])
+                for model, label, score in sides
+                for answer in bot.evaluate_model.side_effect(model, prompt_label=label)
             )
         )
 
@@ -1063,12 +1022,18 @@ class TestFailuresAndBaseline:
             self._config(orchestrator, correctness_only=True),
             bot_names=["test_bot"],
             baseline="model-a",
+            candidate_prompt={"name": "short", "text": "Be short."},
             sample=0,
         )
 
+        calls = bot.evaluate_model.call_args_list
+        assert [(c.args[0], c.kwargs["instructions"]) for c in calls] == [
+            ("model-a", None),
+            ("model-b", "Be short."),
+        ]
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         for text in (
-            "model-b versus baseline model-a, on 8 cases",
+            "model-b [short] versus baseline model-a, on 8 cases",
             "pairwise: better 0, worse 8, same 0; p=0.008; 🚩 CLEARLY WORSE",
             "Correctness: better 0, worse 8, same 0",
             "↳ worse: f#0: Q0",

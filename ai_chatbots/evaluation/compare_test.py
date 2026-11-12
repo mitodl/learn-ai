@@ -24,6 +24,7 @@ def _records(n, candidate_offers=()):
                 if model == CAND and i in candidate_offers
                 else []
             },
+            "scores": {},
         }
         for i in range(n)
         for model in (BASE, CAND)
@@ -52,11 +53,13 @@ def test_measure_outcomes():
         ("f#2", CAND): 0.9,  # same
         ("f#3", BASE): 0.9,  # the candidate's score is a judge error
     }
-    scores = {"Correctness": scores}
     winners = {"f#0": BASE, "f#1": CAND, "f#2": None}
     records = _records(6, candidate_offers={0})[:-1]  # f#5: baseline only
+    for record in records:
+        if (key := (record["case_id"], record["side"])) in scores:
+            record["scores"]["Correctness"] = scores[key]
     outcomes, questions = measure_outcomes(
-        records, scores, {"Correctness": 0.7}, winners, BASE, CAND, skip={"f#4"}
+        records, {"Correctness": 0.7}, winners, BASE, CAND, skip={"f#4"}
     )
     assert outcomes == {
         "pairwise": {"f#0": "worse", "f#1": "better"},
