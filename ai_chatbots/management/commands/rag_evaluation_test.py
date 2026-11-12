@@ -54,7 +54,7 @@ def test_refused_flags(run_evaluation, args, message):
     ],
 )
 def test_defaults(run_evaluation, args, sample):
-    """Comparisons sample 30 cases, other runs every case; the judge is gpt-5.4."""
+    """Comparisons sample 30 cases, other runs every case; the judge is gpt-5.5."""
     call_command("rag_evaluation", "--models", "a,b", *args.split())
     kwargs = run_evaluation.call_args.kwargs
     assert kwargs["sample"] == sample
@@ -62,5 +62,5 @@ def test_defaults(run_evaluation, args, sample):
     assert kwargs["pairwise"] or kwargs["baseline"]
     assert "Model settings" in kwargs["run_info"]
     config = run_evaluation.call_args.args[0]
-    assert config.evaluation_model == "gpt-5.4"
+    assert config.evaluation_model == "gpt-5.5"
     assert ("TutoringQuality" in config.metric_thresholds) == ("tutor" in args)
