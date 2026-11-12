@@ -17,7 +17,7 @@ def _records(n, candidate_offers=()):
     return [
         {
             "case_id": f"f#{i}",
-            "model": model,
+            "side": model,
             "question": f"Question {i}",
             "checks": {
                 "follow_up_offer": ["offer"]
@@ -55,10 +55,11 @@ def test_measure_outcomes():
         ("f#2", CAND): 0.9,  # same
         ("f#3", BASE): 0.9,  # the candidate's score is a judge error
     }
+    scores = {"Correctness": scores}
     winners = {"f#0": BASE, "f#1": CAND, "f#2": None}
     records = _records(6, candidate_offers={0})[:-1]  # f#5: baseline only
     outcomes, questions = measure_outcomes(
-        records, scores, winners, BASE, CAND, skip={"f#4"}
+        records, scores, {"Correctness": 0.7}, winners, BASE, CAND, skip={"f#4"}
     )
     assert outcomes == {
         "pairwise": {"f#0": "worse", "f#1": "better"},

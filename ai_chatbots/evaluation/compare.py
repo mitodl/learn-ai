@@ -3,7 +3,7 @@
 from math import comb
 
 SIGNIFICANCE = 0.05
-CORRECTNESS_THRESHOLD = 0.7
+JUDGED_SCORES = ("Correctness", "TutoringQuality")
 # The fewest differing cases that can ever be flagged: 6 worse, none better
 MIN_FLAGGABLE = 6
 BETTER, WORSE, SAME = "better", "worse", "same"
@@ -29,7 +29,8 @@ def _outcome(baseline_failed, candidate_failed) -> str | None:
 
 def measure_outcomes(  # noqa: PLR0913
     records: list[dict],
-    scores: dict[tuple, float],
+    scores: dict[str, dict[tuple, float]],
+    thresholds: dict[str, float],
     winners: dict[str, str | None],
     baseline: str,
     candidate: str,
@@ -37,35 +38,37 @@ def measure_outcomes(  # noqa: PLR0913
 ) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
     """
     Give each measure's outcome for the candidate (better, worse or same) on
-    every case both models answered, leaving out the cases in skip.
+    every case both sides answered, leaving out the cases in skip.
 
-    records are the answers' records (case_id, model, question, checks), scores
-    the judged Correctness scores by (case_id, model), and winners the pairwise
+    records are the answers' records (case_id, side, question, checks), scores
+    each judged metric's scores by (case_id, side), and winners the pairwise
     winner per case.  Returns {measure: {case_id: outcome}} and the questions.
     """
     by_case: dict[str, dict[str, dict]] = {}
     for record in records:
-        by_case.setdefault(record["case_id"], {})[record["model"]] = record
+        by_case.setdefault(record["case_id"], {})[record["side"]] = record
     cases = [
         case_id
-        for case_id, by_model in by_case.items()
-        if case_id not in skip and {baseline, candidate} <= set(by_model)
+        for case_id, by_side in by_case.items()
+        if case_id not in skip and {baseline, candidate} <= set(by_side)
     ]
 
-    def below(case_id, model):
-        score = scores.get((case_id, model))
-        return None if score is None else score < CORRECTNESS_THRESHOLD
+    def below(metric):
+        def fails(case_id, side):
+            score = scores[metric].get((case_id, side))
+            return None if score is None else score < thresholds[metric]
+
+        return fails
 
     def failed(name):
-        return lambda case_id, model: bool(by_case[case_id][model]["checks"].get(name))
+        return lambda case_id, side: bool(by_case[case_id][side]["checks"].get(name))
 
     measures = {
-        "pairwise": lambda case_id, model: (
-            None if winners.get(case_id) is None else winners[case_id] != model
+        "pairwise": lambda case_id, side: (
+            None if winners.get(case_id) is None else winners[case_id] != side
         )
     }
-    if scores:
-        measures["Correctness"] = below
+    measures.update({metric: below(metric) for metric in scores})
     checks = {
         name for case_id in cases for name in by_case[case_id][baseline]["checks"]
     }
@@ -112,8 +115,8 @@ def print_comparison(
             f"  {name}: better {better}, worse {worse}, same {results.count(SAME)}; "
             f"p={p_value:.3f}; {flag}"
         )
-        # The cases to read: a flagged code check's, and every Correctness loss
-        if name != "pairwise" and (name in flagged or name == "Correctness"):
+        # The cases to read: a flagged code check's, and every judged score loss
+        if name != "pairwise" and (name in flagged or name in JUDGED_SCORES):
             for case_id, outcome in by_case.items():
                 if outcome == WORSE:
                     write(f"     ↳ worse: {case_id}: {questions.get(case_id, '')[:80]}")

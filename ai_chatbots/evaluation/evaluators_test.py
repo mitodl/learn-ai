@@ -15,6 +15,8 @@ from ai_chatbots.evaluation.evaluators import (
     SyllabusBotEvaluator,
     TutorBotEvaluator,
     VideoGPTBotEvaluator,
+    _serve_tutor_problem_template,
+    _tutor_problem_template,
 )
 
 
@@ -551,3 +553,30 @@ async def test_tutor_streamed_error_is_a_failure(mocker):
     evaluator = TutorBotEvaluator(mocker.Mock(), "tutor")
     with pytest.raises(RuntimeError, match="streamed an error"):
         await evaluator.collect_response(chatbot, TestCaseSpec(question="Help"))
+
+
+@pytest.mark.asyncio
+async def test_tutor_problem_template_per_case(monkeypatch):
+    """Concurrent cases each build the tutor prompt from their own template."""
+    from open_learning_ai_tutor import prompts
+    from open_learning_ai_tutor.constants import Intent
+
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    _serve_tutor_problem_template()
+
+    async def system_prompt(template):
+        _tutor_problem_template.set(template)
+        await asyncio.sleep(0)  # let the other case set its template
+        messages = await asyncio.to_thread(
+            prompts.get_tutor_prompt, "p", "ps", [], [Intent.S_STRATEGY], "edx"
+        )
+        return messages[0].content
+
+    first, second, default = await asyncio.gather(
+        system_prompt("A {problem_statement}"),
+        system_prompt("B {problem_statement}"),
+        system_prompt(None),
+    )
+    assert first.startswith("A ")
+    assert second.startswith("B ")
+    assert not default.startswith(("A ", "B "))

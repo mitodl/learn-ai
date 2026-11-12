@@ -304,7 +304,9 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 - `pairwise-only`: Judge only pairwise, with no other metric. For cases without expected answers.
 - `sample`: Judge a seeded random sample of this many cases per bot. Default: every case, or 30 with `baseline`.
 - `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
-- `baseline`: Compare the other model with this one and give a verdict (see below). Needs exactly two `models`, `correctness-only` or `pairwise-only`, and `bots` without tutor (pairwise can't judge tutor answers).
+- `tutor-rubric`: Judge tutor answers with TutoringQuality only, against the problem, its solution and the conversation so far. Needs `--bots tutor`.
+- `baseline`: Compare the other model with this one and give a verdict (see below). Needs exactly two `models` and `correctness-only`, `pairwise-only` or `tutor-rubric`.
+- `baseline-prompt`, `candidate-prompt`: Each side's prompt, by name in `prompts-file` (default: the bot's own). Need `baseline` and `prompts-file`.
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.
 
@@ -312,7 +314,7 @@ Every run reports what it could not measure instead of dropping it: answers that
 
 ### Comparing a candidate with the baseline
 
-`--baseline` compares two models case by case. For each measure (pairwise preference, Correctness when judged, and each code check: follow-up offers for every bot, unlinked resources and bare URLs for recommendation) every case comes out candidate better, worse or the same. A measure is flagged "clearly worse" when the candidate is worse more often than better and an exact sign test gives p < 0.05; 6 worse and none better is the smallest result that can be flagged. The section ends with **Incomplete** if anything failed, else **Regression found** or **No regression found**.
+`--baseline` compares two sides, each a model and a prompt, case by case. For each measure (pairwise preference, Correctness or TutoringQuality when judged, and each code check: follow-up offers for recommendation, syllabus and video, unlinked resources and bare URLs for recommendation) every case comes out candidate better, worse or the same. A measure is flagged "clearly worse" when the candidate is worse more often than better and an exact sign test gives p < 0.05; 6 worse and none better is the smallest result that can be flagged. The section ends with **Incomplete** if anything failed, else **Regression found** or **No regression found**.
 
 "No regression found" does not mean the candidate is as good: a sample of 30 misses small losses. To see how repeatable a flag is, rerun with the same `--seed` (same cases, fresh answers and judging); another `--seed` also changes the cases. Neither shows what caused a flag.
 
@@ -334,6 +336,17 @@ python manage.py rag_evaluation --bots recommendation --models $B,$C --baseline 
 python manage.py rag_evaluation --bots video_gpt --models $B,$C --baseline $B --pairwise-only \
   --data-file test_json/rag_evaluation.json
 ```
+
+To compare prompts too, give each side its prompt from a prompts file. For tutor, the text replaces the `tutor_problem` template and must contain `{problem_statement}`:
+
+```bash
+# prompts.json: {"tutor": [{"name": "production", "text": "..."}, {"name": "strict", "text": "..."}]}
+python manage.py rag_evaluation --bots tutor --models openai/gpt-4o,openai/gpt-5.4 \
+  --baseline openai/gpt-4o --tutor-rubric --prompts-file prompts.json \
+  --baseline-prompt production --candidate-prompt strict --data-file <tutor cases>
+```
+
+Tutor cases can carry the saved conversation before the turn (`history`) and a Canvas problem set (`run_readable_id` and `problem_set_title` in `extra_init`) instead of an edX problem. Without a prompt, a side uses the bot's own prompt, which locally is the one in code or in `open-learning-ai-tutor` and may differ from production's LangSmith prompts; to compare with production, put production's text in the prompts file. The report prints each side's prompt source and a hash of its text. Only `tutor_problem` is replaced: with `LANGSMITH_API_KEY` set, the tutor's other prompts still come from LangSmith, as in the app. TutoringQuality penalizes giving away the final answer, not hints that describe the method.
 
 Add `--batch-size 8 --max-concurrent 4 --output-file <file>` for a real run. A chatbot has a regression when any of its runs reports one.
 

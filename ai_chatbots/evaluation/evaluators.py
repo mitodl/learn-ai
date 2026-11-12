@@ -1,14 +1,18 @@
 """Bot-specific evaluators for RAG evaluation."""
 
+import json
 from contextvars import ContextVar
+from types import SimpleNamespace
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from langchain_core.messages import AIMessage
+from open_learning_ai_tutor import prompts as tutor_prompts
 
 from ai_chatbots import chatbots, learner_api
 from ai_chatbots.api import get_resource_facts
 from ai_chatbots.evaluation.base import BaseBotEvaluator, TestCaseSpec
+from ai_chatbots.evaluation.checks import HTML_COMMENT
 from main.test_utils import load_json_with_settings
 
 # Outside an eval case the account tools read the live APIs as usual
@@ -25,6 +29,28 @@ _blocked_calls: ContextVar[list | None] = ContextVar("blocked_calls", default=No
 
 # What TutorBot.get_completion streams when it fails
 TUTOR_ERROR_MARKER = '<!-- {"error":'
+
+# The tutor_problem template of the case being evaluated (None: the package's).
+# Per context: asyncio.to_thread copies it into the thread that builds the prompt.
+_tutor_problem_template: ContextVar[str | None] = ContextVar(
+    "tutor_problem_template", default=None
+)
+
+
+def _serve_tutor_problem_template():
+    """Make the tutor package use the case's tutor_problem template, if any."""
+    original = tutor_prompts.get_system_prompt
+    if getattr(original, "serves_eval_template", False):
+        return
+
+    def get_system_prompt(prompt_name, mapping, cache_func):
+        template = _tutor_problem_template.get()
+        if prompt_name == "tutor_problem" and template is not None:
+            return template
+        return original(prompt_name, mapping, cache_func)
+
+    get_system_prompt.serves_eval_template = True
+    tutor_prompts.get_system_prompt = get_system_prompt
 
 
 class LiveAccountCallBlockedError(RuntimeError):
@@ -303,47 +329,78 @@ class TutorBotEvaluator(BaseBotEvaluator):
                 metadata={
                     "extra_state": case_data.get("extra_state", {}),
                     "extra_init": case_data.get("extra_init", {}),
+                    # Saved tutor state before this turn, to replay mid-conversation
+                    "history": case_data.get("history"),
                 },
             )
             for case_data in test_data.get("tutor", [])
         ]
 
     def validate_test_case(self, test_case: TestCaseSpec) -> bool:
-        """Validate tutor bot test case."""
-        metadata = test_case.metadata or {}
-        extra_init = metadata.get("extra_init", {})
-
-        # Tutor bot requires edx_module_id in extra_init
-        return "edx_module_id" in extra_init
+        """EdX problems need edx_module_id; Canvas ones a run and problem set."""
+        extra_init = (test_case.metadata or {}).get("extra_init", {})
+        return (
+            "edx_module_id" in extra_init
+            or {
+                "run_readable_id",
+                "problem_set_title",
+            }
+            <= extra_init.keys()
+        )
 
     def create_bot_instance(
-        self,
-        model: str,
-        test_case: TestCaseSpec,
-        instructions: str | None = None,  # noqa: ARG002
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
-        """Create tutor bot instance."""
-        metadata = test_case.metadata or {}
-        extra_init = metadata.get("extra_init", {})
-
-        # TutorBot doesn't accept instructions parameter, so we ignore it
-        return self.bot_class(
-            "eval",
-            checkpointer=None,
-            model=model,
-            **extra_init,
-        )
+        """Create tutor bot instance; instructions replace its tutor_problem prompt."""
+        extra_init = (test_case.metadata or {}).get("extra_init", {})
+        bot = self.bot_class("eval", checkpointer=None, model=model, **extra_init)
+        bot.eval_problem_template = instructions
+        return bot
 
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
     ) -> dict[str, Any]:
-        """Collect a tutor answer; its streamed error comment counts as a failure."""
-        chunks = [chunk async for chunk in chatbot.get_completion(test_case.question)]
+        """Collect a tutor answer, with the problem and conversation as evidence."""
+        history = (test_case.metadata or {}).get("history")
+        if history:
+            saved = SimpleNamespace(chat_json=json.dumps(history))
+
+            async def latest_history():
+                return saved
+
+            chatbot.get_latest_history = latest_history
+
+        _serve_tutor_problem_template()
+        token = _tutor_problem_template.set(chatbot.eval_problem_template)
+        try:
+            chunks = [
+                chunk async for chunk in chatbot.get_completion(test_case.question)
+            ]
+        finally:
+            _tutor_problem_template.reset(token)
         if any(TUTOR_ERROR_MARKER in chunk for chunk in chunks):
             msg = "the tutor streamed an error instead of an answer"
             raise RuntimeError(msg)
+        # Drop the trailing <!-- metadata --> comment the tutor appends
+        answer = HTML_COMMENT.sub("", "".join(chunks)).strip()
 
-        return {"messages": [AIMessage(content="".join(chunks))]}
+        problem_set = chatbot.problem_set
+        if isinstance(problem_set, dict):
+            problem_set = "\n\n".join(
+                f"[{kind}] {f.get('file_name', '')}\n{f.get('content', '')}"
+                for kind, files in problem_set.items()
+                for f in files
+            )
+        evidence = [f"Problem:\n{chatbot.problem}"] if chatbot.problem else []
+        if problem_set and problem_set != chatbot.problem:
+            evidence.append(f"Problem set and solutions:\n{problem_set}")
+        turns = [
+            f"{'Student' if m['type'] == 'HumanMessage' else 'Tutor'}: {m['content']}"
+            for m in (history or {}).get("chat_history", [])
+        ]
+        if turns:
+            evidence.append("Conversation so far:\n" + "\n\n".join(turns))
+        return {"messages": [AIMessage(content=answer)], "extra_context": evidence}
 
 
 # Bot evaluator registry
