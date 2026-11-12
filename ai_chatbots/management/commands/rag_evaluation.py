@@ -194,6 +194,10 @@ class Command(BaseCommand):
         ):
             msg = "--baseline-prompt and --candidate-prompt need --baseline and one bot"
             raise CommandError(msg)
+        names = [Path(f).name for f in (options["data_file"] or "").split(",") if f]
+        if len(names) != len(set(names)):
+            msg = "--data-file names must differ: eval cases are named by file"
+            raise CommandError(msg)
         if options["pairwise_only"] and len(models) < 2:  # noqa: PLR2004
             msg = "--pairwise-only needs two or more models"
             raise CommandError(msg)
@@ -227,21 +231,6 @@ class Command(BaseCommand):
             raise CommandError(msg)
         return {"name": Path(path).stem, "text": text}
 
-    def _model_settings(self, models: list[str]) -> str:
-        """Describe each model's temperature and reasoning effort."""
-        rows = {r.litellm_id: r for r in LLMModel.objects.filter(litellm_id__in=models)}
-
-        def describe(model):
-            row = rows.get(model)
-            default = "provider default"
-            temp = (
-                default if row is None or row.temperature is None else row.temperature
-            )
-            effort = (row.reasoning_effort if row else "") or default
-            return f"{model} (temperature {temp}, reasoning effort {effort})"
-
-        return "; ".join(describe(model) for model in models)
-
     def handle(self, **options):
         """Run the command using the new evaluation framework."""
         # Parse command line arguments
@@ -270,8 +259,8 @@ class Command(BaseCommand):
         max_retries = options["max_retries"]
         retry_delay = options["retry_delay"]
         baseline = options["baseline"]
-        if baseline and baseline not in models:
-            models = [baseline, *models]
+        if baseline:
+            models = list(dict.fromkeys([baseline, *models]))
         self._check_options(options, models)
         # A comparison needs no metric flag: pairwise, or TutoringQuality for tutor
         tutor_rubric = self._tutor_rubric(options)
@@ -281,20 +270,6 @@ class Command(BaseCommand):
         sample = options["sample"]
         if sample is None and baseline:
             sample = BASELINE_SAMPLE
-        run_info = {
-            "Data files": data_file or "test_json/rag_evaluation.json",
-            "Model settings": self._model_settings(models),
-            "Sample": (
-                f"up to {sample} cases per bot, seed {options['seed']}"
-                if sample
-                else "every case"
-            ),
-        }
-        if baseline:
-            run_info["Baseline"] = (
-                f"{baseline}, prompt {options['baseline_prompt'] or 'default'}"
-            )
-            run_info["Candidate prompt"] = options["candidate_prompt"] or "default"
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:
@@ -346,7 +321,6 @@ class Command(BaseCommand):
                 baseline=baseline,
                 baseline_prompt=self._side_prompt(options["baseline_prompt"], bots),
                 candidate_prompt=self._side_prompt(options["candidate_prompt"], bots),
-                run_info=run_info,
             )
         finally:
             # Clean up file resources if using DualOutputWrapper
