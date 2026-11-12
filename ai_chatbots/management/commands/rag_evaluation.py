@@ -1,11 +1,15 @@
 """Run RAG evaluations using the new evaluation framework."""
 
 from asgiref.sync import async_to_sync
-from django.core.management import BaseCommand
+from django.core.management import BaseCommand, CommandError
 
+from ai_chatbots.evaluation.base import SAMPLE_SEED
 from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
 from ai_chatbots.evaluation.reporting import DualOutputWrapper
 from ai_chatbots.models import LLMModel
+
+# Cases judged per run when comparing with a baseline, unless --sample says
+BASELINE_SAMPLE = 30
 
 
 class Command(BaseCommand):
@@ -26,8 +30,11 @@ class Command(BaseCommand):
             "--eval_model",
             dest="eval_model",
             required=False,
-            help="Specify the eval_model to test with",
-            default="gpt-4o-mini",
+            help=(
+                "The judge model (default: gpt-5.4). It must not be one of "
+                "the models under test."
+            ),
+            default="gpt-5.4",
         )
         parser.add_argument(
             "--bots",
@@ -40,7 +47,7 @@ class Command(BaseCommand):
             "--data-file",
             dest="data_file",
             required=False,
-            help="Specify the data file to use",
+            help="The data file to use, or several separated by commas",
             default=None,
         )
         parser.add_argument(
@@ -131,6 +138,44 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--pairwise-only",
+            dest="pairwise_only",
+            action="store_true",
+            help=(
+                "Judge only pairwise, with no other metric, for cases without "
+                "expected answers.  Needs two or more models."
+            ),
+        )
+        parser.add_argument(
+            "--baseline",
+            dest="baseline",
+            default=None,
+            help=(
+                "Compare the other model in --models with this one, case by "
+                "case, and give a verdict: regression found, no regression "
+                "found, or incomplete.  Needs exactly two models and "
+                "--correctness-only or --pairwise-only; turns on --pairwise."
+            ),
+        )
+        parser.add_argument(
+            "--sample",
+            dest="sample",
+            type=int,
+            default=None,
+            help=(
+                "Judge a seeded random sample of this many cases per bot "
+                f"(default: every case, or {BASELINE_SAMPLE} with --baseline; "
+                "0: every case)"
+            ),
+        )
+        parser.add_argument(
+            "--seed",
+            dest="seed",
+            type=int,
+            default=SAMPLE_SEED,
+            help=f"The sample's seed (default: {SAMPLE_SEED})",
+        )
+        parser.add_argument(
             "--max-retries",
             dest="max_retries",
             required=False,
@@ -149,6 +194,48 @@ class Command(BaseCommand):
             ),
             default=5.0,
         )
+
+    def _check_options(self, options: dict, models: list[str]) -> None:
+        """Refuse flag combinations without a meaningful result."""
+        if options["pairwise_only"] and (
+            options["correctness_only"] or options["require_expected"]
+        ):
+            msg = "--pairwise-only can't be combined with other metric modes"
+            raise CommandError(msg)
+        if options["pairwise_only"] and len(models) < 2:  # noqa: PLR2004
+            msg = "--pairwise-only needs two or more models"
+            raise CommandError(msg)
+        baseline = options["baseline"]
+        if baseline:
+            if len(models) != 2 or baseline not in models:  # noqa: PLR2004
+                msg = "--baseline must be one of exactly two --models"
+                raise CommandError(msg)
+            if not (options["correctness_only"] or options["pairwise_only"]):
+                msg = "--baseline needs --correctness-only or --pairwise-only"
+                raise CommandError(msg)
+            if options["prompts"] or options["prompts_file"]:
+                msg = "--baseline compares models, not prompts; drop --prompts"
+                raise CommandError(msg)
+        bots = [b for b in (options["bots"] or "").split(",") if b]
+        if (baseline or options["pairwise_only"]) and (not bots or "tutor" in bots):
+            # Pairwise can't judge tutor answers, so nothing would be measured
+            msg = "pairwise can't judge tutor; name the --bots, without tutor"
+            raise CommandError(msg)
+
+    def _model_settings(self, models: list[str]) -> str:
+        """Describe each model's temperature and reasoning effort."""
+        rows = {r.litellm_id: r for r in LLMModel.objects.filter(litellm_id__in=models)}
+
+        def describe(model):
+            row = rows.get(model)
+            default = "provider default"
+            temp = (
+                default if row is None or row.temperature is None else row.temperature
+            )
+            effort = (row.reasoning_effort if row else "") or default
+            return f"{model} (temperature {temp}, reasoning effort {effort})"
+
+        return "; ".join(describe(model) for model in models)
 
     def handle(self, **options):
         """Run the command using the new evaluation framework."""
@@ -176,6 +263,22 @@ class Command(BaseCommand):
         correctness_only = options["correctness_only"]
         max_retries = options["max_retries"]
         retry_delay = options["retry_delay"]
+        baseline = options["baseline"]
+        self._check_options(options, models)
+        sample = options["sample"]
+        if sample is None and baseline:
+            sample = BASELINE_SAMPLE
+        run_info = {
+            "Data files": data_file or "test_json/rag_evaluation.json",
+            "Model settings": self._model_settings(models),
+            "Sample": (
+                f"up to {sample} cases per bot, seed {options['seed']}"
+                if sample
+                else "every case"
+            ),
+        }
+        if baseline:
+            run_info["Baseline"] = baseline
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:
@@ -189,15 +292,19 @@ class Command(BaseCommand):
             orchestrator = EvaluationOrchestrator(output_wrapper)
 
             # Create evaluation configuration
-            config = orchestrator.create_evaluation_config(
-                models=models,
-                evaluation_model=evaluation_model,
-                timeout_seconds=timeout_seconds,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-                require_expected=require_expected,
-                correctness_only=correctness_only,
-            )
+            try:
+                config = orchestrator.create_evaluation_config(
+                    models=models,
+                    evaluation_model=evaluation_model,
+                    timeout_seconds=timeout_seconds,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    require_expected=require_expected,
+                    correctness_only=correctness_only,
+                    pairwise_only=options["pairwise_only"],
+                )
+            except ValueError as error:
+                raise CommandError(str(error)) from error
 
             # Validate bot names if provided
             if bot_names:
@@ -216,7 +323,11 @@ class Command(BaseCommand):
                 max_concurrent=max_concurrent,
                 batch_size=batch_size,
                 error_log_file=error_log_file,
-                pairwise=options["pairwise"],
+                pairwise=options["pairwise"] or options["pairwise_only"],
+                sample=sample,
+                seed=options["seed"],
+                baseline=baseline,
+                run_info=run_info,
             )
         finally:
             # Clean up file resources if using DualOutputWrapper
