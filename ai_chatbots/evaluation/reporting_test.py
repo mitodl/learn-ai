@@ -760,14 +760,12 @@ def _metric(mocker, name, score, *, success=True, error=None):
     return metric
 
 
-def _result(mocker, model, metrics, question="Q1"):
+def _result(mocker, model, metrics):
     result = mocker.Mock()
     result.metadata = {
         "bot_name": "syllabus",
         "model": model,
         "prompt_label": "default",
-        "question": question,
-        "case_id": "f#0",
     }
     result.name = f"syllabus-{model}"
     result.metrics_data = metrics
@@ -779,10 +777,7 @@ def _output(stdout):
 
 
 def test_judge_error_is_not_a_score(reporter, mock_stdout, mocker):
-    """
-    A judge error is left out of means and pass counts, a model with nothing
-    judged for a metric shows "not judged" (not 0), and the error is shown.
-    """
+    """A judge error is left out of scores; nothing judged shows "not judged"."""
     results = mocker.Mock(spec=EvaluationResult)
     results.test_results = [
         _result(

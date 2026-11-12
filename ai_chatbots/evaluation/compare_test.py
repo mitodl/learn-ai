@@ -42,10 +42,7 @@ def test_sign_test_p():
 
 
 def test_measure_outcomes():
-    """
-    Each measure gives better, worse or same per case.  Unjudged cases, skipped
-    ones and one only the baseline answered are left out.
-    """
+    """Each measure gives better, worse or same per comparable case."""
     scores = {
         ("f#0", BASE): 0.9,
         ("f#0", CAND): 0.5,  # worse
