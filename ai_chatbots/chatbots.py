@@ -6,11 +6,13 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
+from contextlib import aclosing
 from operator import add
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+import ol_llm
 import posthog
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -53,7 +55,7 @@ from ai_chatbots.api import (
     get_search_tool_metadata,
     query_tutorbot_output,
 )
-from ai_chatbots.constants import AZURE_MODEL_PREFIX
+from ai_chatbots.constants import APP_NAME, AZURE_MODEL_PREFIX
 from ai_chatbots.learner_api import COURSE_KEY_RE
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
@@ -63,6 +65,7 @@ from ai_chatbots.prompts import (
     SYSTEM_PROMPT_MAPPING,
 )
 from ai_chatbots.utils import (
+    catalog_model_id,
     comment_safe_json,
     get_azure_openai_kwargs,
     get_django_cache,
@@ -76,7 +79,6 @@ from ai_chatbots.zendesk import (
     file_support_ticket,
     max_filing_seconds,
 )
-from main.opik_keycloak_auth import is_opik_configured
 
 log = logging.getLogger(__name__)
 
@@ -92,14 +94,20 @@ class BaseChatbot(ABC):
     TASK_NAME = "BASE_TASK"
     JOB_ID = "BASECHAT_JOB"
     STATE_CLASS = AgentState
+    # The ol-llm use case: names the bot's Opik traces and its spend.
+    USE_CASE_NAME: str
 
     TRACE_STATE_KEYS: tuple[str, ...] = ()
 
     # A bot that scripts every reply spends no tokens, so it has no budget to
     # provision. Setting this False skips that call, which is a blocking
     # request that would otherwise make the proxy a dependency of a bot that
-    # never reaches it.
+    # never reaches it. It skips the catalog check too, so retiring the
+    # configured model does not take down a bot that never calls it.
     CALLS_THE_MODEL = True
+    # The setting naming the model used when a request names none. The
+    # ai_chatbots system check reads it to catch a retired default at deploy.
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_MODEL"
 
     # Whether the proxy budget is provisioned in __init__. False for a bot
     # that only sometimes reaches a model, so the turns that short-circuit
@@ -119,7 +127,7 @@ class BaseChatbot(ABC):
     ):
         """Initialize the AI chat agent service"""
         self.bot_name = name
-        self.model = model or settings.AI_DEFAULT_MODEL
+        self.model = model or getattr(settings, self.DEFAULT_MODEL_SETTING)
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = (
             instructions
@@ -131,6 +139,12 @@ class BaseChatbot(ABC):
         )
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
+        self.use_case = self.chat_use_case(self.model)
+        if self.CALLS_THE_MODEL:
+            ol_llm.check_chat_model(self.use_case)
+        self.attribution = ol_llm.Attribution(
+            user_id=self.user_id, thread_id=self.thread_id
+        )
         self.config = {"configurable": {"thread_id": self.thread_id}}
         self.checkpointer = checkpointer
         if settings.AI_PROXY_CLASS:
@@ -146,6 +160,22 @@ class BaseChatbot(ABC):
         self.tools = self.create_tools()
         self.llm = self.get_llm()
         self.agent = None
+
+    @classmethod
+    def chat_use_case(cls, model: str) -> ol_llm.UseCase:
+        """
+        Return the ol-llm use case for this bot calling a litellm model id.
+
+        :param model: the litellm model id.
+        :returns: the use case, naming the model as the catalog does.
+        :rtype: ol_llm.UseCase
+        """
+        return ol_llm.UseCase(
+            app=APP_NAME,
+            name=cls.USE_CASE_NAME,
+            profile="request",
+            model=catalog_model_id(model),
+        )
 
     def create_tools(self):
         """Create any tools required by the agent"""
@@ -336,41 +366,19 @@ class BaseChatbot(ABC):
                 },
             )
             callbacks.append(callback_handler)
-        if is_opik_configured():
-            from ai_chatbots.opik_tracing import CostTrackingOpikTracer
-
-            callbacks.append(
-                CostTrackingOpikTracer(
-                    # Log the agent graph so Opik can render it in the trace
-                    # sidebar ("Show Agent Graph"). xray=True expands nested
-                    # subgraphs (e.g. ToolNode internals) for full visibility.
-                    graph=self.agent.get_graph(xray=True) if self.agent else None,
-                    project_name=settings.OPIK_PROJECT_NAME,
-                    thread_id=self.thread_id,
-                    tags=[self.JOB_ID],
-                    metadata={
-                        "botName": self.JOB_ID,
-                        "model": self.model,
-                        "user": self.user_id,
-                        **extra_props,
-                    },
-                )
-            )
         return callbacks
 
     async def send_chunks(self, state) -> AsyncGenerator[str, None]:
         """Yield the response in chunks"""
-        response_generator = self.agent.astream(
-            state,
-            self.config,
-            stream_mode="messages",
-        )
-        async for chunk in response_generator:
-            if (
-                isinstance(chunk[0], AIMessage | AIMessageChunk)
-                and chunk[1].get("langgraph_node") != "pre_model_hook"
-            ):
-                yield chunk[0].content
+        async with aclosing(
+            self.agent.astream(state, self.config, stream_mode="messages")
+        ) as response_generator:
+            async for chunk in response_generator:
+                if (
+                    isinstance(chunk[0], AIMessage | AIMessageChunk)
+                    and chunk[1].get("langgraph_node") != "pre_model_hook"
+                ):
+                    yield chunk[0].content
 
     async def get_completion(
         self,
@@ -396,32 +404,49 @@ class BaseChatbot(ABC):
                 **self.config.get("metadata", {}),
                 **trace_properties,
             }
-            self.config["callbacks"] = await self.set_callbacks(
-                properties=trace_properties
-            )
-            state = {
-                "messages": [HumanMessage(message)],
-                **(extra_state or {}),
-            }
-            try:
-                async for chunk in self.send_chunks(state):
-                    full_response += chunk
-                    yield chunk
-            except ValueError:
-                # Validate and clean checkpoint, then try again
-                log.exception("Validation error, cleaning checkpoint")
-                await self.validate_and_clean_checkpoint()
-                # Add a system message to notify the user about lost context
-                state["messages"].append(
-                    SystemMessage(
-                        content=CONTEXT_LOST_PROMPT,
-                        id=str(uuid4()),
+            with ol_llm.traced_chat(
+                self.use_case,
+                message,
+                attribution=self.attribution,
+                # Opik draws the agent graph in the trace sidebar ("Show Agent
+                # Graph"); xray=True expands nested subgraphs such as ToolNode's.
+                # Drawn only for a trace, since it is rebuilt every turn.
+                graph=self.agent.get_graph(xray=True)
+                if ol_llm.tracing.enabled()
+                else None,
+            ) as chat:
+                self.config["callbacks"] = [
+                    *await self.set_callbacks(properties=trace_properties),
+                    *chat.callbacks,
+                ]
+                state = {
+                    "messages": [HumanMessage(message)],
+                    **(extra_state or {}),
+                }
+                # aclosing ends each stream in this task, inside the trace, when
+                # the consumer closes this completion early.
+                try:
+                    async with aclosing(self.send_chunks(state)) as chunks:
+                        async for chunk in chunks:
+                            full_response += chunk
+                            yield chunk
+                except ValueError:
+                    # Validate and clean checkpoint, then try again
+                    log.exception("Validation error, cleaning checkpoint")
+                    await self.validate_and_clean_checkpoint()
+                    # Add a system message to notify the user about lost context
+                    state["messages"].append(
+                        SystemMessage(
+                            content=CONTEXT_LOST_PROMPT,
+                            id=str(uuid4()),
+                        )
                     )
-                )
-                # Try to answer the user's last question anyway
-                async for chunk in self.send_chunks(state):
-                    full_response += chunk
-                    yield chunk
+                    # Try to answer the user's last question anyway
+                    async with aclosing(self.send_chunks(state)) as chunks:
+                        async for chunk in chunks:
+                            full_response += chunk
+                            yield chunk
+                chat.record(full_response)
         except BadRequestError as error:
             log.exception("Bad request error")
             # Format and yield an error message inside a hidden comment
@@ -521,6 +546,8 @@ class ResourceRecommendationBot(TruncatingChatbot):
     PROMPT_TEMPLATE = "recommendation"
     TASK_NAME = "RECOMMENDATION_TASK"
     JOB_ID = "RECOMMENDATION_JOB"
+    USE_CASE_NAME = "recommendation"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_RECOMMENDATION_MODEL"
     STATE_CLASS = RecommendationAgentState
 
     def __init__(  # noqa: PLR0913
@@ -539,7 +566,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_RECOMMENDATION_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -567,6 +594,7 @@ class SearchSummaryBot(ResourceRecommendationBot):
 
     TASK_NAME = "SEARCH_SUMMARY_TASK"
     JOB_ID = "SEARCH_SUMMARY_JOB"
+    USE_CASE_NAME = "search-summary"
 
     async def get_completion(
         self,
@@ -580,8 +608,11 @@ class SearchSummaryBot(ResourceRecommendationBot):
             # anything that could close the <search_query> tag in the prompt.
             query = " ".join(message.split())[:200].replace("<", "").replace(">", "")
             message = PROMPT_SEARCH_SUMMARY_QUERY.format(query=query)
-        async for chunk in super().get_completion(message, **kwargs):
-            yield chunk
+        # Closing this completion has to close the one that holds the trace too,
+        # in the same task, or the loop's finalizer ends the trace elsewhere.
+        async with aclosing(super().get_completion(message, **kwargs)) as completion:
+            async for chunk in completion:
+                yield chunk
 
 
 class SyllabusAgentState(SummaryState):
@@ -605,6 +636,8 @@ class SyllabusBot(TruncatingChatbot):
     PROMPT_TEMPLATE = "syllabus"
     TASK_NAME = "SYLLABUS_TASK"
     JOB_ID = "SYLLABUS_JOB"
+    USE_CASE_NAME = "syllabus"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_SYLLABUS_MODEL"
     STATE_CLASS = SyllabusAgentState
     TRACE_STATE_KEYS = ("course_id", "collection_name", "related_courses", "platform")
 
@@ -631,7 +664,7 @@ class SyllabusBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_SYLLABUS_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -685,6 +718,7 @@ class CanvasSyllabusBot(SyllabusBot):
     PROMPT_TEMPLATE = "syllabus_canvas"
     TASK_NAME = "CANVAS_SYLLABUS_TASK"
     JOB_ID = "CANVAS_SYLLABUS_JOB"
+    USE_CASE_NAME = "canvas-syllabus"
     STATE_CLASS = SyllabusAgentState
 
 
@@ -696,6 +730,8 @@ class TutorBot(BaseChatbot):
     PROMPT_TEMPLATE = None
     TASK_NAME = "TUTOR_TASK"
     JOB_ID = "TUTOR_JOB"
+    USE_CASE_NAME = "tutor"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_TUTOR_MODEL"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -717,7 +753,7 @@ class TutorBot(BaseChatbot):
             checkpointer=checkpointer,
             temperature=temperature,
             thread_id=thread_id,
-            model=model or settings.AI_DEFAULT_TUTOR_MODEL,
+            model=model,
         )
 
         self.edx_module_id = edx_module_id
@@ -797,43 +833,57 @@ class TutorBot(BaseChatbot):
             chat_history = [HumanMessage(content=message, id=message_id)]
             intent_history = []
             assessment_history = []
-        self.llm.callbacks = await self.set_callbacks(
+        posthog_callbacks = await self.set_callbacks(
             properties=await self.get_tool_metadata()
         )
 
         full_response = ""
         new_history = []
         try:
-            (
-                generator,
-                new_intent_history,
-                new_assessment_history,
-            ) = await asyncio.to_thread(
-                message_tutor,
-                self.problem,
-                self.problem_set,
-                self.llm,
-                [HumanMessage(content=message, id=message_id)],
-                chat_history,
-                assessment_history,
-                intent_history,
-                tools=tutor_tools,
-                variant=self.variant,
-            )
+            with ol_llm.traced_chat(
+                self.use_case,
+                message,
+                attribution=self.attribution,
+                metadata=self.get_trace_properties(),
+            ) as chat:
+                # Set on the model, not the graph: message_tutor builds and runs
+                # its own graph.
+                self.llm.callbacks = [*posthog_callbacks, *chat.callbacks]
+                (
+                    generator,
+                    new_intent_history,
+                    new_assessment_history,
+                ) = await asyncio.to_thread(
+                    message_tutor,
+                    self.problem,
+                    self.problem_set,
+                    self.llm,
+                    [HumanMessage(content=message, id=message_id)],
+                    chat_history,
+                    assessment_history,
+                    intent_history,
+                    tools=tutor_tools,
+                    variant=self.variant,
+                )
 
-            async for chunk in generator:
-                # the generator yields message chuncks for a streaming resopnse
-                # then finally yields the full response as the last chunk
-                if (
-                    chunk[0] == "messages"
-                    and chunk[1]
-                    and isinstance(chunk[1][0], AIMessage | AIMessageChunk)
-                ):
-                    full_response += chunk[1][0].content
-                    yield chunk[1][0].content
+                async with aclosing(generator) as stream:
+                    async for chunk in stream:
+                        # the generator yields message chuncks for a streaming
+                        # resopnse then finally yields the full response as the
+                        # last chunk
+                        if (
+                            chunk[0] == "messages"
+                            and chunk[1]
+                            and isinstance(chunk[1][0], AIMessage | AIMessageChunk)
+                        ):
+                            full_response += chunk[1][0].content
+                            yield chunk[1][0].content
 
-                elif chunk[0] == "values":
-                    new_history = filter_out_system_messages(chunk[1]["messages"])
+                        elif chunk[0] == "values":
+                            new_history = filter_out_system_messages(
+                                chunk[1]["messages"]
+                            )
+                chat.record(full_response)
             metadata = {
                 "edx_module_id": self.edx_module_id,
                 "tutor_model": self.model,
@@ -972,6 +1022,8 @@ class VideoGPTBot(TruncatingChatbot):
     PROMPT_TEMPLATE = "video_gpt"
     TASK_NAME = "VIDEO_GPT_TASK"
     JOB_ID = "VIDEO_GPT_JOB"
+    USE_CASE_NAME = "video-gpt"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_VIDEO_GPT_MODEL"
     STATE_CLASS = VideoGPTAgentState
     TRACE_STATE_KEYS = ("transcript_asset_id",)
 
@@ -1005,7 +1057,7 @@ class VideoGPTBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_VIDEO_GPT_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
@@ -1622,6 +1674,8 @@ class SupportBot(TruncatingChatbot):
     PROMPT_TEMPLATE = None
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
+    USE_CASE_NAME = "support"
+    DEFAULT_MODEL_SETTING = "AI_DEFAULT_SUPPORT_MODEL"
     STATE_CLASS = SupportAgentState
     ANSWERING_STATE_CLASS = SupportAnsweringState
     # No user_email, no verified_email, no user_name: a trace property is a
@@ -1659,7 +1713,7 @@ class SupportBot(TruncatingChatbot):
             user_id,
             name=name,
             checkpointer=checkpointer,
-            model=model or settings.AI_DEFAULT_SUPPORT_MODEL,
+            model=model,
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,

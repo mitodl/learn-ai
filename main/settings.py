@@ -31,7 +31,7 @@ from main.envs import (
 from main.sentry import init_sentry
 from openapi.settings_spectacular import open_spectacular_settings
 
-VERSION = "2026.11.5.2"
+VERSION = "2026.11.10.1"
 
 log = logging.getLogger()
 
@@ -558,17 +558,12 @@ POSTHOG_PROJECT_ID = get_int(
     default=None,
 )
 
-# Opik settings (LLM tracing via Keycloak-fronted Opik, see main/opik_keycloak_auth.py)
+# Chatbot runs are traced to Opik through ol-llm, which reads the Opik SDK's own
+# variables and OPIK_KEYCLOAK_* from the environment. OL_LLM_ENVIRONMENT goes on
+# every trace. Tracing is off unless OPIK_URL_OVERRIDE names an Opik instance, since
+# the SDK would otherwise send to Comet's hosted Opik.
+OL_LLM_ENVIRONMENT = get_string(name="OL_LLM_ENVIRONMENT", default=ENVIRONMENT)
 OPIK_URL_OVERRIDE = get_string(name="OPIK_URL_OVERRIDE", default=None)
-OPIK_WORKSPACE = get_string(name="OPIK_WORKSPACE", default="default")
-OPIK_PROJECT_NAME = get_string(name="OPIK_PROJECT_NAME", default="learn-ai")
-OPIK_KEYCLOAK_TOKEN_URL = get_string(name="OPIK_KEYCLOAK_TOKEN_URL", default=None)
-# One client per environment (opik-learn-ai-<env>), so there is no default.
-OPIK_KEYCLOAK_CLIENT_ID = get_string(name="OPIK_KEYCLOAK_CLIENT_ID", default=None)
-OPIK_KEYCLOAK_CLIENT_SECRET = get_string(
-    name="OPIK_KEYCLOAK_CLIENT_SECRET", default=None
-)
-OPIK_KEYCLOAK_SCOPE = get_string(name="OPIK_KEYCLOAK_SCOPE", default=None)
 
 # Keycloak API settings
 KEYCLOAK_ADMIN_CLIENT_ID = get_string("KEYCLOAK_ADMIN_CLIENT_ID", False)  # noqa: FBT003

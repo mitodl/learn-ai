@@ -39,6 +39,17 @@ AI_THREAD_COOKIE_KEY = "ai_thread_auth"
 AI_THREADS_ANONYMOUS_COOKIE_KEY = "ai_threads_anon"
 AI_SESSION_COOKIE_KEY = "ai_odl_unique_id"
 AZURE_MODEL_PREFIX = "azure/"
+# The application, as ol-llm and Opik name it.
+APP_NAME = "learn-ai"
+# litellm's names for providers that ol-llm and its model catalog name otherwise.
+LITELLM_CATALOG_PROVIDERS = {
+    "gemini": "google",
+    "vertex_ai": "google-cloud",
+    "together_ai": "together",
+}
+# The provider ol-llm sees for a model id litellm resolves to no provider, e.g. a
+# name only the proxy knows. The catalog lists nothing under it.
+UNRESOLVED_MODEL_PROVIDER = "unresolved"
 AZURE_COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 

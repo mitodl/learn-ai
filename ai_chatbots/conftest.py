@@ -133,6 +133,10 @@ class MockAsyncIterator:
         except StopIteration:
             raise StopAsyncIteration from StopIteration
 
+    async def aclose(self):
+        """Close like an async generator, so callers can use contextlib.aclosing."""
+        self.iter = iter(())
+
 
 @pytest.fixture
 def search_results():

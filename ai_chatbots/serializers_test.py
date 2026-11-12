@@ -2,8 +2,13 @@
 
 import pytest
 from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
 
-from ai_chatbots.factories import ChatResponseRatingFactory, CheckpointFactory
+from ai_chatbots.factories import (
+    ChatResponseRatingFactory,
+    CheckpointFactory,
+    LLMModelFactory,
+)
 from ai_chatbots.models import ChatResponseRating
 from ai_chatbots.serializers import (
     ChatMessageSerializer,
@@ -18,6 +23,10 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [("instructions", "Do something"), ("model", "openai/not-in-llm-models")],
+)
+@pytest.mark.parametrize(
     ("is_staff", "is_super"),
     [
         (True, True),
@@ -26,14 +35,37 @@ pytestmark = pytest.mark.django_db
         (False, False),
     ],
 )
-def test_instructions_permissions(is_staff, is_super):
-    """Test that the instructions validation works as expected"""
+def test_staff_only_fields(field, value, is_staff, is_super):
+    """Only staff and superusers may set instructions or a model outside LLMModel"""
     user = UserFactory.create(is_staff=is_staff, is_superuser=is_super)
     serializer = ChatRequestSerializer(
-        data={"message": "Hello, world!", "instructions": "Do something"},
+        data={"message": "Hello, world!", field: value},
         context={"user": user},
     )
     assert serializer.is_valid() == (is_staff or is_super)
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+@pytest.mark.parametrize("anonymous", [True, False])
+def test_model_from_llm_models(enabled, anonymous):
+    """Anyone may choose an enabled LLMModel, and only an enabled one."""
+    model = LLMModelFactory.create(enabled=enabled)
+    serializer = ChatRequestSerializer(
+        data={"message": "Hello, world!", "model": model.litellm_id},
+        context={"user": AnonymousUser() if anonymous else UserFactory.create()},
+    )
+    assert serializer.is_valid() == enabled
+
+
+def test_model_max_length():
+    """A model id longer than LLMModel.litellm_id is refused, even for staff."""
+    user = UserFactory.create(is_staff=True)
+    serializer = ChatRequestSerializer(
+        data={"message": "Hello, world!", "model": "x" * 513},
+        context={"user": user},
+    )
+    assert not serializer.is_valid()
+    assert "model" in serializer.errors
 
 
 def test_message_truncation():
