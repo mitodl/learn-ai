@@ -26,11 +26,12 @@ def test_retired_default_model_is_an_error(settings):
 
 def test_retired_support_default_is_an_error(settings):
     """
-    SupportBot scripts most of its replies, but with answering on it calls the
-    model from __init__ - before any of that scripting - so a retired default
-    fails the whole Contact Us request for every learner the flag lets in,
-    intake included. The check reads CALLS_THE_MODEL off the class, where the
-    per-request value is not visible, so this bot has to opt in unconditionally.
+    SupportBot scripts most of its replies, so SETS_UP_THE_MODEL_EAGERLY is
+    False and a retired default costs a learner the answer and drops them into
+    intake rather than failing the request. That silence is why the deploy check
+    has to cover this bot: with intake still working, nothing else reports it.
+    The check reads CALLS_THE_MODEL off the class, where the per-request value
+    is not visible, so this bot has to opt in unconditionally.
     """
     settings.AI_DEFAULT_SUPPORT_MODEL = RETIRED_MODEL
 
