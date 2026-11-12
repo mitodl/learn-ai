@@ -24,12 +24,11 @@ def run_evaluation(mocker):
     ("args", "message"),
     [
         ("--models a,b --baseline c --pairwise-only", "one of exactly two --models"),
-        ("--models a,b --baseline a", "needs --correctness-only, --pairwise-only"),
+        ("--models a,b --baseline a", "needs --correctness-only or --pairwise-only"),
         (
             "--models a,b --baseline a --pairwise-only --prompts --bots syllabus",
             "one prompt per side",
         ),
-        ("--models a,b --tutor-rubric --bots syllabus", "needs --bots tutor"),
         (
             "--models a,b --baseline a --pairwise-only --candidate-prompt x",
             "need --baseline and --prompts-file",
@@ -51,6 +50,7 @@ def test_refused_flags(run_evaluation, args, message):
         ("--baseline a --pairwise-only --bots syllabus", 30),
         ("--baseline a --pairwise-only --bots syllabus --sample 0", 0),
         ("--pairwise", None),
+        ("--baseline a --bots tutor", 30),
     ],
 )
 def test_defaults(run_evaluation, args, sample):
@@ -58,6 +58,9 @@ def test_defaults(run_evaluation, args, sample):
     call_command("rag_evaluation", "--models", "a,b", *args.split())
     kwargs = run_evaluation.call_args.kwargs
     assert kwargs["sample"] == sample
-    assert kwargs["pairwise"] is True
+    # A baseline run always judges pairwise
+    assert kwargs["pairwise"] or kwargs["baseline"]
     assert "Model settings" in kwargs["run_info"]
-    assert run_evaluation.call_args.args[0].evaluation_model == "gpt-5.4"
+    config = run_evaluation.call_args.args[0]
+    assert config.evaluation_model == "gpt-5.4"
+    assert ("TutoringQuality" in config.metric_thresholds) == ("tutor" in args)
