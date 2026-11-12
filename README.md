@@ -291,7 +291,7 @@ The default prompts used for each chatbot are specified either in Langsmith if e
 A management command (`rag_evaluation`) has been provided to calculate various evaluation metrics on the chatbots. The command takes the following optional parameters:
 
 - `models`: Comma-delimited list of models that the chatbots will use to answer questions. If none are provided, it will use all the enabled `ai_chatbots.models.LLMModel` objects in the database, so make sure have all the necessary API keys in your environment.
-- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-5.4`. The command refuses a judge that is also one of the `models` under test.
+- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-5.5`. The command refuses a judge that is also one of the `models` under test.
 - `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated.
 - `data-file`: Input data file containing questions and expected answers, or several separated by commas. See test_json/rag_evaluation.json for the required format.
 - `prompts`: If true, include alternative prompts to test against in addition to the default prompt per chatbot.
@@ -332,7 +332,7 @@ To compare prompts too, give each side its prompt from a prompts file. For tutor
 ```bash
 # prompts.json: {"tutor": [{"name": "production", "text": "..."}, {"name": "strict", "text": "..."}]}
 python manage.py rag_evaluation --bots tutor --models openai/gpt-4o,openai/gpt-5.4 \
-  --baseline openai/gpt-4o --eval_model gpt-5.5 --prompts-file prompts.json \
+  --baseline openai/gpt-4o --prompts-file prompts.json \
   --baseline-prompt production --candidate-prompt strict --data-file <tutor cases>
 ```
 

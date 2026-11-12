@@ -31,10 +31,10 @@ class Command(BaseCommand):
             dest="eval_model",
             required=False,
             help=(
-                "The judge model (default: gpt-5.4). It must not be one of "
+                "The judge model (default: gpt-5.5). It must not be one of "
                 "the models under test."
             ),
-            default="gpt-5.4",
+            default="gpt-5.5",
         )
         parser.add_argument(
             "--bots",
