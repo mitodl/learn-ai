@@ -7,9 +7,12 @@ from deepeval.test_case import LLMTestCase
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from ai_chatbots.evaluation.base import (
+    SAMPLE_SEED,
     BaseBotEvaluator,
     EvaluationConfig,
+    RunFailures,
     TestCaseSpec,
+    sample_cases,
 )
 
 
@@ -463,3 +466,122 @@ class TestConcreteBotEvaluator:
         # Should only process valid test cases
         assert len(llm_test_cases) == 2
         assert all(isinstance(case, LLMTestCase) for case in llm_test_cases)
+
+
+@pytest.fixture
+def evaluator(mocker):
+    """Create a concrete evaluator, for the module-level tests below."""
+    return ConcreteBotEvaluator(mocker.Mock(), "test_bot", mocker=mocker)
+
+
+# question, reference, metadata per data file
+FILES = {
+    "a.json": [("A0", "ref", {}), ("A1", None, {}), (None, "ref", {})],
+    "b.json": [("B0", "ref", {}), ("B1", None, {})],
+}
+
+
+@pytest.mark.parametrize(
+    ("require_reference", "expected"),
+    [
+        (
+            False,
+            [
+                ("A0", "a.json#0"),
+                ("A1", "a.json#1"),
+                ("B0", "b.json#0"),
+                ("B1", "b.json#1"),
+            ],
+        ),
+        (True, [("A0", "a.json#0"), ("B0", "b.json#0")]),
+    ],
+)
+def test_load_cases_pools_files_and_drops(mocker, require_reference, expected):
+    """Cases from every file are pooled and tagged; dropped ones are counted."""
+    evaluator = ConcreteBotEvaluator(
+        mocker.Mock(), "test_bot", data_file="a.json,b.json"
+    )
+    evaluator.stdout = mocker.Mock()
+    mocker.patch.object(
+        evaluator,
+        "load_test_cases",
+        side_effect=lambda: [
+            TestCaseSpec(question=q, expected_output=ref, metadata=dict(meta))
+            for q, ref, meta in FILES[evaluator.data_file]
+        ],
+    )
+
+    cases = evaluator.load_cases(require_reference=require_reference)
+
+    assert [(c.question, c.metadata["case_id"]) for c in cases] == expected
+    output = " ".join(str(c.args[0]) for c in evaluator.stdout.write.call_args_list)
+    assert "Skipped 1 test_bot cases: invalid for this bot" in output
+    assert ("Skipped 2 test_bot cases: no reference answer" in output) is (
+        require_reference
+    )
+
+
+def test_sample_cases_is_repeatable():
+    """The same seed picks the same cases, in order; another seed differs."""
+    cases = list(range(100))
+    first = sample_cases(cases, 30)
+    assert first == sample_cases(cases, 30)
+    assert first == sorted(first)
+    assert len(first) == 30
+    assert sample_cases(cases, 30, seed=SAMPLE_SEED + 1) != first
+    assert sample_cases(cases, 0) == cases
+
+
+@pytest.mark.asyncio
+async def test_evaluate_model_records_generation_failures(evaluator, mocker):
+    """A case that fails to generate is recorded, not just dropped."""
+    failures = RunFailures()
+    mocker.patch.object(
+        evaluator, "collect_response", side_effect=[RuntimeError("boom"), None]
+    )
+    mocker.patch.object(evaluator, "create_llm_test_case", return_value="answer")
+    cases = [
+        TestCaseSpec(question="Q1", metadata={"case_id": "f#0"}),
+        TestCaseSpec(question="Q2", metadata={"case_id": "f#1"}),
+    ]
+
+    answers = await evaluator.evaluate_model("m", cases, failures=failures)
+
+    assert answers == ["answer"]
+    assert [(f.kind, f.case_id, f.model, f.detail) for f in failures.items] == [
+        ("answer failed to generate", "f#0", "m", "boom")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "is_error"),
+    [
+        ("search_courses", '{"error": "An error occurred", "results": []}', True),
+        ("search_content_files", '{"results": [], "metadata": {}}', False),
+        (
+            "search_support_articles",
+            '{"results": [], "metadata": {"error": "An error occurred"}}',
+            True,
+        ),
+        ("get_video_transcript_chunk", '{"error": "An error occurred"}', True),
+        # A planted account error is what some account cases test
+        ("get_enrollments", '{"error": "could not check"}', False),
+        ("search_courses", "not json", False),
+    ],
+)
+def test_create_llm_test_case_search_errors(evaluator, name, content, is_error):
+    """Only search tools that returned their error result are recorded."""
+    response = {
+        "messages": [
+            ToolMessage(content=content, name=name, tool_call_id="1"),
+            AIMessage(content="Answer"),
+        ],
+        "blocked_account_calls": ["get_enrollments"],
+    }
+    case = evaluator.create_llm_test_case(
+        TestCaseSpec(question="Q", metadata={"case_id": "f#0"}), response, "m"
+    )
+    assert case.metadata["search_errors"] == ([name] if is_error else [])
+    assert case.metadata["case_id"] == "f#0"
+    assert case.metadata["tool_call_count"] == 1
+    assert case.metadata["blocked_account_calls"] == ["get_enrollments"]

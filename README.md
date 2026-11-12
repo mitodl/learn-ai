@@ -291,13 +291,50 @@ The default prompts used for each chatbot are specified either in Langsmith if e
 A management command (`rag_evaluation`) has been provided to calculate various evaluation metrics on the chatbots. The command takes the following optional parameters:
 
 - `models`: Comma-delimited list of models that the chatbots will use to answer questions. If none are provided, it will use all the enabled `ai_chatbots.models.LLMModel` objects in the database, so make sure have all the necessary API keys in your environment.
-- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-4o-mini`.
+- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-5.4`. The command refuses a judge that is also one of the `models` under test.
 - `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated.
-- `data-file`: Input data file containing questions and expected answers. See test_json/rag_evaluation.json for the required format.
+- `data-file`: Input data file containing questions and expected answers, or several separated by commas. See test_json/rag_evaluation.json for the required format.
 - `prompts`: If true, include alternative prompts to test against in addition to the default prompt per chatbot.
 - `prompts-file`: The file containing alternative prompts to test. See `test_json/rag_evaluation_prompts.json` for the required format.
 - `output-file`: The file to write results to. If not specified, results will only be sent to stdout.
 - `timeout`: The max amount of seconds to wait before aborting a test case and moving on to the next. Default is 360.
 - `max-concurrent`: The max number of test cases to run concurrently. Default is 1.
+- `correctness-only`: Judge answers only against their expected answers. Cases without one are skipped, with a count.
+- `pairwise`: Also ask the judge which model answered each question best.
+- `pairwise-only`: Judge only pairwise, with no other metric. For cases without expected answers.
+- `sample`: Judge a seeded random sample of this many cases per bot. Default: every case, or 30 with `baseline`.
+- `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
+- `baseline`: Compare the other model with this one and give a verdict (see below). Needs exactly two `models`, `correctness-only` or `pairwise-only`, and `bots` without tutor (pairwise can't judge tutor answers).
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.
+
+Every run reports what it could not measure instead of dropping it: answers that failed or came back empty, search tools that returned their error result, account tools called for a case without made-up learner records (the live account APIs are never called), results deepeval did not return, judge errors, and pairwise judgements skipped for a missing answer. The report lists each one and says `INCOMPLETE RUN` at the top and bottom. A judge error is never shown as a score: it is left out of means and pass counts ("passed/judged"), and a metric with nothing judged shows "not judged".
+
+### Comparing a candidate with the baseline
+
+`--baseline` compares two models case by case. For each measure (pairwise preference, Correctness when judged, and each code check: follow-up offers for every bot, unlinked resources and bare URLs for recommendation) every case comes out candidate better, worse or the same. A measure is flagged "clearly worse" when the candidate is worse more often than better and an exact sign test gives p < 0.05; 6 worse and none better is the smallest result that can be flagged. The section ends with **Incomplete** if anything failed, else **Regression found** or **No regression found**.
+
+"No regression found" does not mean the candidate is as good: a sample of 30 misses small losses. To see how repeatable a flag is, rerun with the same `--seed` (same cases, fresh answers and judging); another `--seed` also changes the cases. Neither shows what caused a flag.
+
+One comparison is one run per eval group:
+
+```bash
+B=openai/gpt-4o-mini; C=openai/gpt-5.4-mini
+S=test_json/evaluation_sets
+# Syllabus, curated cases (references only)
+python manage.py rag_evaluation --bots syllabus --models $B,$C --baseline $B --correctness-only \
+  --data-file $S/qa_15_010.json,$S/qa_15_280.json,$S/qa_15_311.json,$S/qa_15_515.json,test_json/syllabus_answer_eval.json
+# Syllabus, account questions (made-up learner records)
+python manage.py rag_evaluation --bots syllabus --models $B,$C --baseline $B --correctness-only \
+  --data-file $S/account_tools.json
+# Recommendation
+python manage.py rag_evaluation --bots recommendation --models $B,$C --baseline $B --pairwise-only \
+  --data-file $S/recommendation_questions.json,test_json/rag_evaluation.json
+# Video (one case, so it can't flag anything yet)
+python manage.py rag_evaluation --bots video_gpt --models $B,$C --baseline $B --pairwise-only \
+  --data-file test_json/rag_evaluation.json
+```
+
+Add `--batch-size 8 --max-concurrent 4 --output-file <file>` for a real run. A chatbot has a regression when any of its runs reports one.
+
+To answer from the production catalog (read-only searches), point the Learn content and search URLs at production and set a production `LEARN_ACCESS_TOKEN` for the run: `AI_MIT_SEARCH_URL`, `AI_MIT_SEARCH_VECTOR_URL`, `AI_MIT_SEARCH_ELASTIC_URL`, `AI_MIT_SYLLABUS_URL`, `AI_MIT_CONTENTFILE_URL`, `AI_MIT_LEARNING_RESOURCES_URL`, `AI_MIT_VIDEO_TRANSCRIPT_URL` and `AI_MIT_SEARCH_DETAIL_URL`. Use a separate Redis database (`CELERY_BROKER_URL=redis://redis:6379/9`) so cached results from another environment aren't reused.
