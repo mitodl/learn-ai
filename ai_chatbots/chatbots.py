@@ -1335,6 +1335,10 @@ NOTHING_MORE_PHRASES = frozenset(
         "that's everything",
         "that's all",
         "that's it",
+        # Spelled out. The match is exact, so both spellings have to be here.
+        "that is everything",
+        "that is all",
+        "that is it",
         "done",
     }
 )

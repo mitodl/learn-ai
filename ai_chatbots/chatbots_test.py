@@ -2062,6 +2062,12 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
         ("no", True),
         ("nothing else", True),
         ("that's all", True),
+        # The same close-out typed out in full. The match is exact, so the
+        # apostrophe is the whole difference between closing an answer and a
+        # review armed to send the question that was just answered.
+        ("that is all", True),
+        ("that is everything", True),
+        ("that is it", True),
         # Affirmatives. Said to "tell me more and I'll pass it on", these mean
         # PASS IT ON. Reading them as "glad that helped" files nothing and
         # tells the learner it did - the worst outcome this bot has.
