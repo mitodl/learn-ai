@@ -1434,19 +1434,38 @@ def _normalised(message: str) -> str:
     return " ".join(re.sub(r"[^\w' ]", " ", straightened.lower()).split())
 
 
-def _is_cancellation(message: str) -> bool:
-    """Report whether the learner is calling the send off."""
+def _cancellation_vocabulary(message: str) -> set[str] | None:
+    """Return the words of a message made of nothing but CANCELLATION_WORDS."""
     words = _normalised(message).replace("never mind", "nevermind").split()
     if not words or len(words) > SHORT_REPLY_MAX_WORDS:
-        return False
-    if not set(words) <= CANCELLATION_WORDS:
+        return None
+    return set(words) if set(words) <= CANCELLATION_WORDS else None
+
+
+def _is_cancellation(message: str) -> bool:
+    """Report whether the learner is calling the send off."""
+    words = _cancellation_vocabulary(message)
+    if words is None:
         return False
     # Falls through rather than returning False, because a negated send is a
     # cancellation however it is worded: "cancel, don't send this" names a
     # trigger and negates it, and still means stop.
-    if set(words) & CANCELLATION_TRIGGERS and not set(words) & TRIGGER_NEGATIONS:
+    if words & CANCELLATION_TRIGGERS and not words & TRIGGER_NEGATIONS:
         return True
-    return "send" in words and bool(set(words) & NEGATIONS)
+    return "send" in words and bool(words & NEGATIONS)
+
+
+def _calls_off_a_cancellation(message: str) -> bool:
+    """
+    Report whether the learner is calling a cancellation off - "don't cancel".
+
+    Neither a cancellation nor a problem to file: support cannot act on it, so
+    it stays out of the request rather than becoming one. Only when the message
+    is made of nothing else, so "don't cancel, my name is wrong" keeps the part
+    that is the problem.
+    """
+    words = _cancellation_vocabulary(message)
+    return bool(words and words & CANCELLATION_TRIGGERS and words & TRIGGER_NEGATIONS)
 
 
 def _first(values: list[str]) -> str:
@@ -1576,6 +1595,7 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
                 or _is_filler(text)
                 or _closes_the_answer(text)
                 or _is_cancellation(text)
+                or _calls_off_a_cancellation(text)
             )
         )
     )
@@ -2124,7 +2144,9 @@ class SupportBot(TruncatingChatbot):
             # sets that end a request, and leaves affirmatives out, so "yes" -
             # which means there is more coming - still asks.
             if prior_messages and (
-                _is_cancellation(message) or _closes_the_answer(message)
+                _is_cancellation(message)
+                or _closes_the_answer(message)
+                or _calls_off_a_cancellation(message)
             ):
                 return SUPPORT_NOTHING_TO_SEND, {
                     # This turn's own exchange is written alongside this update,

@@ -3136,6 +3136,33 @@ async def test_an_answer_to_the_empty_ask_ends_it_rather_than_asking_again(
     assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
 
 
+@pytest.mark.parametrize(
+    "called_off",
+    ["don't cancel", "wait, don't cancel", "i don't want to cancel"],
+)
+@pytest.mark.asyncio
+async def test_calling_off_a_cancel_does_not_become_the_request(
+    mocker, mock_checkpointer, called_off
+):
+    """
+    Negating a cancellation is not a cancellation, but it is not the problem
+    either - so it cannot be the whole request. Letting it through arms the
+    send on a body reading "don't cancel", and the turn after files that as
+    what the learner wants help with.
+    """
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "", ""]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "thanks")
+    await _say(chatbot, "ok")
+
+    reply = await _say(chatbot, called_off)
+
+    assert "**Your message:**" not in reply
+    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+
+
 @pytest.mark.asyncio
 async def test_a_yes_to_the_empty_ask_still_asks(mocker, mock_checkpointer):
     """
