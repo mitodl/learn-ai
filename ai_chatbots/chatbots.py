@@ -1183,7 +1183,7 @@ SUPPORT_ASK_PROBLEM = (
 # Appended in code so the route to a person never depends on the answer. A
 # statement, not a question: "yes" to "did that help?" reads like "yes, send it".
 SUPPORT_OFFER_TICKET = (
-    "If that didn't sort it out, tell me more and I'll pass it to the MIT Open "
+    "If that didn't sort it out, reply \"send\" and I'll pass it to the MIT Open "
     "Learning support team."
 )
 SUPPORT_ANSWER_CLOSED = (
@@ -1334,10 +1334,13 @@ NOTHING_MORE_PHRASES = frozenset(
         "that's everything",
         "that's all",
         "that's it",
-        # The match is exact, so both spellings are listed.
+        # The match is exact, so every spelling is listed.
         "that is everything",
         "that is all",
         "that is it",
+        "thats everything",
+        "thats all",
+        "thats it",
         "done",
     }
 )
@@ -1354,7 +1357,12 @@ FILLER_PHRASES = (
 )
 # Not FILLER_PHRASES: said to the offer, "send it" means pass it on, so no
 # affirmatives here.
-ANSWER_END_PHRASES = ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
+ANSWER_END_PHRASES = ANSWER_CLOSING_PHRASES | NOTHING_MORE_PHRASES
+# What a close-out may be padded with ("ok thanks so much!"). Any other word
+# makes the reply a follow-up.
+ANSWER_END_WORDS = frozenset(
+    word for phrase in ANSWER_END_PHRASES | DECLINE_PHRASES for word in phrase.split()
+) | {"ok", "okay", "so", "for", "the", "info"}
 
 
 # A word here on its own calls the send off.
@@ -1493,8 +1501,21 @@ def _is_decline(message: str) -> bool:
 
 
 def _closes_the_answer(message: str) -> bool:
-    """Report whether the learner is finished with an answer."""
-    return _normalised(message) in ANSWER_END_PHRASES
+    """
+    Report whether the learner is finished with an answer. A plain no counts
+    only on its own, so "no help" is not read as a thanks.
+    """
+    # "is that all?" asks for more.
+    if "?" in (message or ""):
+        return False
+    normalised = _normalised(message)
+    if normalised in DECLINE_PHRASES:
+        return True
+    words = normalised.split()
+    if len(words) > SHORT_REPLY_MAX_WORDS or not set(words) <= ANSWER_END_WORDS:
+        return False
+    padded = f" {normalised} "
+    return any(f" {phrase} " in padded for phrase in ANSWER_END_PHRASES)
 
 
 def _is_unclear_go_ahead(message: str) -> bool:
@@ -1739,14 +1760,9 @@ class SupportBot(TruncatingChatbot):
                 state_schema=self.ANSWERING_STATE_CLASS,
                 prompt=self.instructions,
             )
-            if self.answering_enabled
+            if self.tools
             else None
         )
-
-    @property
-    def answering_enabled(self) -> bool:
-        """Whether this bot has any tools to answer with."""
-        return bool(self.tools)
 
     def create_tools(self):
         """
@@ -1846,8 +1862,6 @@ class SupportBot(TruncatingChatbot):
         Try to answer from the learner's own records. Return the answer, or ""
         to hand the turn to the intake script.
         """
-        if not self._answering_agent:
-            return ""
         history = [
             msg
             # From the cancellation on: cancelled words are withdrawn.
@@ -2094,7 +2108,7 @@ class SupportBot(TruncatingChatbot):
         ) > _cancelled_after(prior_state)
         # A "yes" after an answer accepts the offer to pass it on.
         took_up_the_offer = answered_before and _is_affirmative(message)
-        # Not gated on answering_enabled, so a flag turned off mid-thread still
+        # Not gated on _answering_agent, so a flag turned off mid-thread still
         # closes out.
         if (
             answered_before
@@ -2107,7 +2121,7 @@ class SupportBot(TruncatingChatbot):
                 "cancelled_after": [len(prior_state.get("messages") or []) + 2],
             }
         if (
-            self.answering_enabled
+            self._answering_agent
             and not handed_off
             and not intake_started
             and not took_up_the_offer

@@ -62,6 +62,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_TICKET_FAILED,
     SUPPORT_TICKET_MAYBE_FILED,
     SUPPORT_TICKET_REJECTED,
+    SUPPORT_TICKET_REVIEW_HEADER,
     SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
     SearchSummaryBot,
@@ -76,6 +77,7 @@ from ai_chatbots.chatbots import (
     _is_cancellation,
     _support_description,
     _support_review,
+    _the_answer_in,
     get_canvas_problem_set,
     get_problem_from_edx_block,
 )
@@ -90,6 +92,7 @@ from ai_chatbots.factories import (
 )
 from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
 from ai_chatbots.prompts import (
+    PROMPT_ACCOUNT_TOOLS_CORE,
     PROMPT_SEARCH_SUMMARY_QUERY,
     PROMPT_SYLLABUS_ACCOUNT_TOOLS,
     SYSTEM_PROMPT_MAPPING,
@@ -961,9 +964,8 @@ async def test_syllabus_bot_account_tools(
     ]
     tool_names = [tool.name for tool in chatbot.create_tools()]
     assert (tool_names[-4:] == account_tools) is enable_account_tools
-    assert (
-        PROMPT_SYLLABUS_ACCOUNT_TOOLS in chatbot.instructions
-    ) is enable_account_tools
+    for prompt in (PROMPT_ACCOUNT_TOOLS_CORE, PROMPT_SYLLABUS_ACCOUNT_TOOLS):
+        assert (prompt in chatbot.instructions) is enable_account_tools
 
 
 @pytest.mark.parametrize("default_model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o"])
@@ -1966,33 +1968,20 @@ async def test_validate_and_clean_checkpoint(mocker, mock_checkpointer, is_valid
     assert mock_truncate.call_count == (0 if is_valid else 1)
 
 
+@pytest.mark.parametrize("enable_account_tools", [False, True])
 @pytest.mark.asyncio
-async def test_support_bot_has_no_tools_by_default(mock_checkpointer):
-    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
-
-    assert chatbot.create_tools() == []
-    assert chatbot.answering_enabled is False
-
-
-@pytest.mark.asyncio
-async def test_support_bot_takes_the_account_tools_when_asked(mock_checkpointer):
+async def test_support_bot_answers_only_with_the_account_tools(
+    mock_checkpointer, enable_account_tools
+):
     """Matt's account tools, as they are, and only those."""
     chatbot = await sync_to_async(SupportBot)(
-        "learner", mock_checkpointer, enable_account_tools=True
+        "learner", mock_checkpointer, enable_account_tools=enable_account_tools
     )
 
-    assert chatbot.create_tools() == list(tools.ACCOUNT_TOOLS)
-    assert chatbot.answering_enabled is True
-
-
-@pytest.mark.asyncio
-async def test_answering_enabled_follows_the_tool_list(mock_checkpointer):
-    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
-    assert chatbot.answering_enabled is False
-
-    chatbot.tools = [tools.ACCOUNT_TOOLS[0]]
-
-    assert chatbot.answering_enabled is True
+    assert chatbot.create_tools() == (
+        list(tools.ACCOUNT_TOOLS) if enable_account_tools else []
+    )
+    assert (chatbot._answering_agent is not None) is enable_account_tools  # noqa: SLF001
 
 
 @pytest.mark.asyncio
@@ -2029,26 +2018,29 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
 ):
     """create_proxy_user is blocking HTTP, and a scripted bot spends no tokens."""
     _with_a_proxy(settings)
-    mock_create_proxy_user = mocker.patch(
-        "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
-    )
-
+    proxy = mocker.patch("ai_chatbots.proxies.LiteLLMProxy.create_proxy_user")
+    thread_id = uuid4().hex
+    await UserChatSession.objects.acreate(thread_id=thread_id, agent="SupportBot")
     chatbot = await sync_to_async(SupportBot)(
-        "anonymous", mock_checkpointer, enable_account_tools=answering
+        "learner",
+        mock_checkpointer,
+        thread_id=thread_id,
+        enable_account_tools=answering,
     )
+    assert proxy.call_count == 0
     if answering:
         mocker.patch.object(
             chatbot._answering_agent,  # noqa: SLF001
             "ainvoke",
             AsyncMock(return_value=_answer_result(_tool_message(), AIMessage("ok"))),
         )
-    await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
 
-    assert mock_create_proxy_user.called is answering
+    await _say(chatbot, "my grade?")
+
+    assert proxy.called is answering
     # Either way get_llm needs the proxy's prefix and kwargs.
     assert isinstance(chatbot.proxy, LiteLLMProxy)
     assert chatbot.proxy_prefix == LiteLLMProxy.PROXY_MODEL_PREFIX
-    assert chatbot.agent is not None
 
 
 @pytest.mark.parametrize(
@@ -2084,6 +2076,20 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
         ("my certificate still isn't showing", False),
         ("what about 18.02?", False),
         ("", False),
+        # Padded with words from the phrases, or a few fillers.
+        ("ok thanks!", True),
+        ("thanks so much", True),
+        ("thats it", True),
+        ("ok, got it", True),
+        ("thanks for the info", True),
+        ("no that's all, thanks", True),
+        # One word outside the set makes it a follow-up.
+        ("thanks, but that's not right", False),
+        ("that's not right, I submitted all my assignments last week", False),
+        # A plain no only counts on its own.
+        ("no help", False),
+        ("is that all?", False),
+        ("is that all", False),
     ],
 )
 def test_closes_the_answer(message, closes):
@@ -2119,8 +2125,14 @@ class _FakeToolCallingModel(GenericFakeChatModel):
         return self
 
 
-async def _answering_bot(mocker, mock_checkpointer, result):
-    """Build a SupportBot with answering on, whose answering graph returns result."""
+async def _answering_bot(mocker, mock_checkpointer, result=None):
+    """
+    Build a SupportBot with answering on, whose answering graph returns result:
+    by default a lookup followed by "ok". Not a fixture, since the proxy tests
+    change settings before the bot is built.
+    """
+    if result is None:
+        result = _answer_result(_tool_message(), AIMessage("ok"))
     chatbot = await sync_to_async(SupportBot)(
         "learner", mock_checkpointer, enable_account_tools=True
     )
@@ -2142,21 +2154,6 @@ def _with_a_proxy(settings):
 
 
 @pytest.mark.asyncio
-async def test_a_support_bot_provisions_no_budget_until_it_answers(
-    settings, mocker, mock_checkpointer
-):
-    _with_a_proxy(settings)
-    proxy = mocker.patch("ai_chatbots.proxies.LiteLLMProxy.create_proxy_user")
-
-    chatbot = await sync_to_async(SupportBot)(
-        "learner", mock_checkpointer, enable_account_tools=True
-    )
-
-    assert proxy.call_count == 0
-    assert chatbot.CALLS_THE_MODEL is True
-
-
-@pytest.mark.asyncio
 async def test_a_dead_proxy_hands_the_turn_to_intake(
     settings, mocker, mock_checkpointer
 ):
@@ -2166,9 +2163,7 @@ async def test_a_dead_proxy_hands_the_turn_to_intake(
         "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user",
         side_effect=RuntimeError("proxy is down"),
     )
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
 
     assert await chatbot._try_to_answer("my grade?", {}, {}) == ""  # noqa: SLF001
 
@@ -2184,9 +2179,7 @@ async def test_a_slow_proxy_does_not_hold_the_learner(
         "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user",
         side_effect=lambda *args, **kwargs: time.sleep(0.5),  # noqa: ARG005
     )
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
 
     started = time.monotonic()
     answer = await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
@@ -2208,9 +2201,7 @@ async def test_provisioning_stays_off_the_shared_executor(
             "proxy", threading.current_thread()
         ),
     )
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
 
     await chatbot._try_to_answer("my grade?", {}, {})  # noqa: SLF001
     await sync_to_async(
@@ -2220,29 +2211,43 @@ async def test_provisioning_stays_off_the_shared_executor(
     assert threads["proxy"] is not threads["shared"]
 
 
+LOOKALIKE_HOST_PAGE = (
+    "https://courses.learn.test.evil.example"
+    "/learn/course/course-v1:MITx+18.01x+2T2025/home"
+)
+
+
 @pytest.mark.parametrize(
-    ("page_url", "expected"),
+    ("base_url", "page_url", "expected"),
     [
         (
+            "https://courses.learn.test/",
             "https://courses.learn.test/learn/course/course-v1:MITx+18.01x+2T2025/home",
             "course-v1:MITx+18.01x+2T2025",
         ),
-        ("https://evil.example/course-v1:MITx+18.01x+2T2025", None),
-        ("https://learn.mit.edu/dashboard", None),
-        ("", None),
+        (
+            "https://courses.learn.test/",
+            "https://evil.example/course-v1:MITx+18.01x+2T2025",
+            None,
+        ),
+        ("https://courses.learn.test/", LOOKALIKE_HOST_PAGE, None),
+        ("https://courses.learn.test", LOOKALIKE_HOST_PAGE, None),
+        ("https://courses.learn.test/", "https://learn.mit.edu/dashboard", None),
+        ("https://courses.learn.test/", "", None),
     ],
 )
 @pytest.mark.asyncio
-async def test_the_answer_attempt_gets_the_pages_course(
-    settings, mocker, mock_checkpointer, page_url, expected
+async def test_the_answer_attempt_gets_this_turns_page_course(  # noqa: PLR0913
+    settings, mocker, mock_checkpointer, base_url, page_url, expected
 ):
-    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    """prior_state still holds last turn's page, which must not leak through."""
+    settings.LEARNER_API_OPENEDX_BASE_URL = base_url
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
 
     await chatbot._try_to_answer(  # noqa: SLF001
-        "what's my grade?", {}, {"page_url": [page_url]}
+        "what's my grade?",
+        {"page_url": ["https://courses.learn.test/course-v1:MITx+6.00x+1T2025"]},
+        {"page_url": [page_url]},
     )
 
     state = chatbot._answering_agent.ainvoke.call_args[0][0]  # noqa: SLF001
@@ -2250,47 +2255,10 @@ async def test_the_answer_attempt_gets_the_pages_course(
     assert state["platform"] == ["mitxonline" if expected else None]
 
 
-@pytest.mark.parametrize(
-    "base_url",
-    [
-        pytest.param("https://courses.learn.test/", id="trailing slash"),
-        pytest.param("https://courses.learn.test", id="no trailing slash"),
-    ],
-)
-def test_page_course_rejects_a_lookalike_host(settings, base_url):
-    settings.LEARNER_API_OPENEDX_BASE_URL = base_url
-
-    assert SupportBot._page_course(  # noqa: SLF001
-        "https://courses.learn.test.evil.example"
-        "/learn/course/course-v1:MITx+18.01x+2T2025/home"
-    ) == (None, None)
-
-
-@pytest.mark.asyncio
-async def test_the_page_course_is_this_turns_not_the_last_turns(
-    settings, mocker, mock_checkpointer
-):
-    settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
-    course_a = "https://courses.learn.test/course-v1:MITx+6.00x+1T2025"
-    course_b = "https://courses.learn.test/course-v1:MITx+18.01x+2T2025"
-
-    await chatbot._try_to_answer(  # noqa: SLF001
-        "my grade?", {"page_url": [course_a]}, {"page_url": [course_b]}
-    )
-
-    state = chatbot._answering_agent.ainvoke.call_args[0][0]  # noqa: SLF001
-    assert state["course_id"] == ["course-v1:MITx+18.01x+2T2025"]
-
-
 @pytest.mark.asyncio
 async def test_the_answer_attempt_is_traced(settings, mocker, mock_checkpointer):
     settings.LEARNER_API_OPENEDX_BASE_URL = "https://courses.learn.test/"
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
     handler = object()
     callbacks = mocker.patch.object(
         SupportBot, "set_callbacks", AsyncMock(return_value=[handler])
@@ -2371,172 +2339,94 @@ async def test_a_failed_answer_attempt_still_closes_its_trace(
     chat.record.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_try_to_answer_returns_the_answer_when_a_tool_fired(
-    mocker, mock_checkpointer
-):
-    """The learner asked about their records and a tool answered it."""
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            HumanMessage("what am I enrolled in?"),
-            _tool_message(),
-            AIMessage("You're enrolled in 18.01x."),
-        ),
-    )
-
-    assert await chatbot._try_to_answer("what am I enrolled in?", {}) == (  # noqa: SLF001
-        "You're enrolled in 18.01x."
-    )
-
-
-@pytest.mark.asyncio
-async def test_try_to_answer_falls_through_when_no_tool_fired(
-    mocker, mock_checkpointer
-):
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            HumanMessage("why was I charged twice?"),
-            AIMessage("I'm sorry to hear that."),
-        ),
-    )
-
-    assert await chatbot._try_to_answer("why was I charged twice?", {}) == ""  # noqa: SLF001
-
-
-@pytest.mark.asyncio
-async def test_try_to_answer_keeps_an_answer_that_has_no_records_behind_it(
-    mocker, mock_checkpointer
-):
-    """A lookup that found nothing still reached the records."""
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            HumanMessage("what's my grade?"),
-            _tool_message(
-                '{"enrollments": [], "note": "There is no course on this page."}'
-            ),
-            AIMessage("Which course did you mean?"),
-        ),
-    )
-
-    assert await chatbot._try_to_answer("what's my grade?", {}) == (  # noqa: SLF001
-        "Which course did you mean?"
-    )
-
-
-@pytest.mark.asyncio
-async def test_try_to_answer_falls_through_when_every_tool_failed(
-    mocker, mock_checkpointer
-):
-    """COULD_NOT_CHECK isn't a source, or an outage would close intake."""
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            HumanMessage("what's my grade?"),
-            _tool_message(json.dumps({"error": tools.COULD_NOT_CHECK})),
-            AIMessage("I couldn't check your records right now."),
-        ),
-    )
-
-    assert await chatbot._try_to_answer("what's my grade?", {}) == ""  # noqa: SLF001
-
-
-@pytest.mark.asyncio
-async def test_try_to_answer_falls_through_when_the_tool_call_errored(
-    mocker, mock_checkpointer
-):
-    """Langgraph's plain-text error isn't JSON, so the status has to catch it."""
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            ToolMessage(
-                content="Error: 1 validation error for get_certificate_status\n"
-                " Please fix your mistakes.",
-                tool_call_id="call-1",
-                name="get_certificate_status",
-                status="error",
-            ),
-            AIMessage("You haven't earned a certificate in that course."),
-        ),
-    )
-
-    assert (
-        await chatbot._try_to_answer(  # noqa: SLF001
-            "did I get my certificate?", {}
-        )
-        == ""
-    )
-
-
-@pytest.mark.asyncio
-async def test_try_to_answer_keeps_an_answer_when_only_some_tools_failed(
-    mocker, mock_checkpointer
-):
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            HumanMessage("what's my grade?"),
-            _tool_message(json.dumps({"error": tools.COULD_NOT_CHECK})),
-            _tool_message('{"enrollments": [{"course_id": "18.01x"}]}'),
-            AIMessage("You're in 18.01x; I couldn't read your grade."),
-        ),
-    )
-
-    assert await chatbot._try_to_answer("what's my grade?", {}) == (  # noqa: SLF001
-        "You're in 18.01x; I couldn't read your grade."
-    )
-
-
 @pytest.mark.parametrize(
-    "final",
+    ("messages", "expected"),
     [
-        pytest.param(AIMessage(""), id="empty content"),
-        pytest.param(AIMessage([{"type": "text", "text": "hi"}]), id="content blocks"),
+        pytest.param(
+            [
+                HumanMessage("what am I enrolled in?"),
+                _tool_message(),
+                AIMessage("You're enrolled in 18.01x."),
+            ],
+            "You're enrolled in 18.01x.",
+            id="a tool reached the records",
+        ),
+        pytest.param(
+            [
+                HumanMessage("why was I charged twice?"),
+                AIMessage("I'm sorry to hear that."),
+            ],
+            "",
+            id="no tool fired",
+        ),
+        pytest.param(
+            [
+                HumanMessage("what's my grade?"),
+                _tool_message(
+                    '{"enrollments": [], "note": "There is no course on this page."}'
+                ),
+                AIMessage("Which course did you mean?"),
+            ],
+            "Which course did you mean?",
+            id="a lookup that found nothing still reached the records",
+        ),
+        pytest.param(
+            [
+                HumanMessage("what's my grade?"),
+                _tool_message(json.dumps({"error": tools.COULD_NOT_CHECK})),
+                AIMessage("I couldn't check your records right now."),
+            ],
+            "",
+            id="every tool failed",
+        ),
+        pytest.param(
+            [
+                # Plain text, not JSON, so only the status catches it.
+                ToolMessage(
+                    content="Error: 1 validation error for get_certificate_status\n"
+                    " Please fix your mistakes.",
+                    tool_call_id="call-1",
+                    name="get_certificate_status",
+                    status="error",
+                ),
+                AIMessage("You haven't earned a certificate in that course."),
+            ],
+            "",
+            id="langgraph's error ToolMessage",
+        ),
+        pytest.param(
+            [
+                HumanMessage("what's my grade?"),
+                _tool_message(json.dumps({"error": tools.COULD_NOT_CHECK})),
+                _tool_message('{"enrollments": [{"course_id": "18.01x"}]}'),
+                AIMessage("You're in 18.01x; I couldn't read your grade."),
+            ],
+            "You're in 18.01x; I couldn't read your grade.",
+            id="only some tools failed",
+        ),
+        pytest.param([_tool_message(), AIMessage("")], "", id="empty content"),
+        pytest.param(
+            [_tool_message(), AIMessage([{"type": "text", "text": "hi"}])],
+            "",
+            id="content blocks",
+        ),
+        pytest.param(
+            [
+                # The result includes history, which must not stand in for an
+                # unusable reply.
+                HumanMessage("did I pass 18.01x?"),
+                AIMessage("You scored 94% in 18.01x."),
+                HumanMessage("when is my next assignment due?"),
+                _tool_message(),
+                AIMessage([{"type": "text", "text": "due 3 May"}]),
+            ],
+            "",
+            id="never an earlier turn's reply",
+        ),
     ],
 )
-@pytest.mark.asyncio
-async def test_try_to_answer_falls_through_on_unusable_content(
-    mocker, mock_checkpointer, final
-):
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), final)
-    )
-
-    assert await chatbot._try_to_answer("what's my grade?", {}) == ""  # noqa: SLF001
-
-
-@pytest.mark.asyncio
-async def test_try_to_answer_never_answers_with_an_earlier_turns_reply(
-    mocker, mock_checkpointer
-):
-    """The result includes history, so an unusable reply mustn't fall back to it."""
-    chatbot = await _answering_bot(
-        mocker,
-        mock_checkpointer,
-        _answer_result(
-            # What _try_to_answer replayed: an answered turn already in the thread.
-            HumanMessage("did I pass 18.01x?"),
-            AIMessage("You scored 94% in 18.01x."),
-            HumanMessage("when is my next assignment due?"),
-            _tool_message(),
-            AIMessage([{"type": "text", "text": "due 3 May"}]),
-        ),
-    )
-
-    assert (
-        await chatbot._try_to_answer(  # noqa: SLF001
-            "when is my next assignment due?", {}
-        )
-        == ""
-    )
+def test_the_answer_in(messages, expected):
+    assert _the_answer_in(_answer_result(*messages)) == expected
 
 
 @pytest.mark.parametrize(
@@ -2588,15 +2478,6 @@ async def test_the_answering_graph_is_separate_and_unpersisted(mock_checkpointer
 
 
 @pytest.mark.asyncio
-async def test_a_scripted_bot_builds_no_answering_graph(mock_checkpointer):
-    """No tools, nothing to answer with, so nothing to build or call."""
-    chatbot = await sync_to_async(SupportBot)("anonymous", mock_checkpointer)
-
-    assert chatbot._answering_agent is None  # noqa: SLF001
-    assert await chatbot._try_to_answer("what's my grade?", {}) == ""  # noqa: SLF001
-
-
-@pytest.mark.asyncio
 async def test_a_failed_answer_attempt_logs_no_exception_detail(
     mocker, mock_checkpointer
 ):
@@ -2617,9 +2498,7 @@ async def test_a_failed_answer_attempt_logs_no_exception_detail(
 async def test_try_to_answer_sends_a_bounded_slice_of_the_thread(
     mocker, mock_checkpointer
 ):
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
     history = [HumanMessage(f"message {index}") for index in range(30)]
 
     await chatbot._try_to_answer("and now?", {"messages": history})  # noqa: SLF001
@@ -2634,9 +2513,7 @@ async def test_try_to_answer_sends_a_bounded_slice_of_the_thread(
 async def test_try_to_answer_leaves_withdrawn_messages_out_of_the_attempt(
     mocker, mock_checkpointer
 ):
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
     history = [
         HumanMessage("withdrawn problem"),
         AIMessage("cancelled"),
@@ -2656,9 +2533,7 @@ async def test_try_to_answer_keeps_the_review_block_out_of_the_attempt(
     mocker, mock_checkpointer
 ):
     """The review quotes the reply-to. Called directly: no path reaches it today."""
-    chatbot = await _answering_bot(
-        mocker, mock_checkpointer, _answer_result(_tool_message(), AIMessage("ok"))
-    )
+    chatbot = await _answering_bot(mocker, mock_checkpointer)
     history = [
         HumanMessage("I can't log in"),
         AIMessage(_support_review("I can't log in", "", "learner@example.com")),
@@ -2742,6 +2617,10 @@ async def _say(chatbot, message, **extra):
 
 async def _state_of(chatbot):
     return (await chatbot.agent.aget_state(chatbot.config)).values
+
+
+async def _awaiting_send(chatbot):
+    return ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1]
 
 
 @pytest.mark.asyncio
@@ -2833,19 +2712,28 @@ async def test_support_bot_collects_when_it_cannot_answer(mocker, mock_checkpoin
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("close_out", ["thanks", "ok thanks!", "thanks so much"])
+@pytest.mark.parametrize("answering_goes_off", [False, True])
 async def test_support_bot_closes_out_an_answer_without_filing(
-    mocker, mock_checkpointer
+    mocker, mock_checkpointer, close_out, answering_goes_off
 ):
+    """
+    A second attempt would find nothing and show a review, so only the close-out
+    keeps this from filing. answering_goes_off is a flag rollback or an expired
+    cookie between turns.
+    """
     mock_file = mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",
         AsyncMock(return_value={"reference": 912}),
     )
     chatbot = await _answering_support_bot(
-        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", ""]
     )
     await _say(chatbot, "what am I enrolled in?")
+    if answering_goes_off:
+        chatbot._answering_agent = None  # noqa: SLF001
 
-    reply = await _say(chatbot, "thanks")
+    reply = await _say(chatbot, close_out)
 
     assert SUPPORT_ANSWER_CLOSED in reply
     mock_file.assert_not_called()
@@ -2856,29 +2744,30 @@ async def test_support_bot_closes_out_an_answer_without_filing(
 
 
 @pytest.mark.asyncio
-async def test_a_close_out_still_lands_when_answering_goes_off_mid_thread(
+async def test_send_after_disagreeing_with_an_answer_files_both(
     mocker, mock_checkpointer
 ):
-    """A flag rollback or expired cookie turns answering off between turns."""
-    mock_file = mocker.patch(
-        "ai_chatbots.chatbots.file_support_ticket",
-        AsyncMock(return_value={"reference": 912}),
-    )
+    """
+    Disagreeing is a follow-up, so it gets another answer; the offer's "send"
+    then takes the learner's question and their disagreement to the review.
+    """
     chatbot = await _answering_support_bot(
-        mocker, mock_checkpointer, "You're enrolled in 18.01x."
+        mocker,
+        mock_checkpointer,
+        ["Your grade in AT.101x is 90.0%.", "Your grade in AT.101x is still 90.0%."],
     )
-    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "What's my grade in AT.101x?")
+    disagreement = "That's not right, I submitted all my assignments last week."
 
-    chatbot.tools = []
-    assert chatbot.answering_enabled is False
+    again = await _say(chatbot, disagreement)
+    review = await _say(chatbot, "send")
 
-    reply = await _say(chatbot, "thanks")
-
-    assert SUPPORT_ANSWER_CLOSED in reply
-    mock_file.assert_not_called()
-    state = await _state_of(chatbot)
-    assert (state.get("awaiting_send") or [False])[-1] is False
-    assert state["answered"][-1] is False
+    assert "still 90.0%" in again
+    assert SUPPORT_OFFER_TICKET in again
+    assert SUPPORT_TICKET_REVIEW_HEADER in review
+    assert "What's my grade in AT.101x?" in review
+    assert disagreement in review
+    assert (await _state_of(chatbot))["awaiting_send"][-1] is True
 
 
 @pytest.mark.asyncio
@@ -2908,29 +2797,35 @@ async def test_a_filler_after_a_close_out_asks_rather_than_showing_an_empty_revi
 
     assert SUPPORT_ASK_PROBLEM in reply
     assert "**Your message:**" not in reply
-    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+    assert await _awaiting_send(chatbot) is False
 
 
 @pytest.mark.parametrize(
-    "reply_to_the_ask",
+    ("reply_to_the_ask", "expected"),
     [
-        "no",
-        "no thanks",
-        "nothing else",
-        "that's all",
-        "cancel",
+        ("no", SUPPORT_NOTHING_TO_SEND),
+        ("no thanks", SUPPORT_NOTHING_TO_SEND),
+        ("nothing else", SUPPORT_NOTHING_TO_SEND),
+        ("that's all", SUPPORT_NOTHING_TO_SEND),
+        ("cancel", SUPPORT_NOTHING_TO_SEND),
         # ANSWER_CLOSING_PHRASES, which FILLER_PHRASES doesn't contain.
-        "thanks",
-        "thank you",
-        "got it",
-        "perfect",
-        "cheers",
-        "that helped",
+        ("thanks", SUPPORT_NOTHING_TO_SEND),
+        ("thank you", SUPPORT_NOTHING_TO_SEND),
+        ("got it", SUPPORT_NOTHING_TO_SEND),
+        ("perfect", SUPPORT_NOTHING_TO_SEND),
+        ("cheers", SUPPORT_NOTHING_TO_SEND),
+        ("that helped", SUPPORT_NOTHING_TO_SEND),
+        # Calling off a cancel isn't a request either.
+        ("don't cancel", SUPPORT_NOTHING_TO_SEND),
+        ("wait, don't cancel", SUPPORT_NOTHING_TO_SEND),
+        ("i don't want to cancel", SUPPORT_NOTHING_TO_SEND),
+        # A "yes" means more is coming.
+        ("yes", SUPPORT_ASK_PROBLEM),
     ],
 )
 @pytest.mark.asyncio
-async def test_an_answer_to_the_empty_ask_ends_it_rather_than_asking_again(
-    mocker, mock_checkpointer, reply_to_the_ask
+async def test_a_reply_to_the_empty_ask(
+    mocker, mock_checkpointer, reply_to_the_ask, expected
 ):
     chatbot = await _answering_support_bot(
         mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "", ""]
@@ -2941,47 +2836,12 @@ async def test_an_answer_to_the_empty_ask_ends_it_rather_than_asking_again(
 
     reply = await _say(chatbot, reply_to_the_ask)
 
-    assert SUPPORT_NOTHING_TO_SEND in reply
-    assert SUPPORT_ASK_PROBLEM not in reply
+    assert expected in reply
+    assert (
+        {SUPPORT_ASK_PROBLEM, SUPPORT_NOTHING_TO_SEND} - {expected}
+    ).pop() not in reply
     assert "**Your message:**" not in reply
-    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
-
-
-@pytest.mark.parametrize(
-    "called_off",
-    ["don't cancel", "wait, don't cancel", "i don't want to cancel"],
-)
-@pytest.mark.asyncio
-async def test_calling_off_a_cancel_does_not_become_the_request(
-    mocker, mock_checkpointer, called_off
-):
-    chatbot = await _answering_support_bot(
-        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "", ""]
-    )
-    await _say(chatbot, "what am I enrolled in?")
-    await _say(chatbot, "thanks")
-    await _say(chatbot, "ok")
-
-    reply = await _say(chatbot, called_off)
-
-    assert "**Your message:**" not in reply
-    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
-
-
-@pytest.mark.asyncio
-async def test_a_yes_to_the_empty_ask_still_asks(mocker, mock_checkpointer):
-    """A "yes" means more is coming."""
-    chatbot = await _answering_support_bot(
-        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "", ""]
-    )
-    await _say(chatbot, "what am I enrolled in?")
-    await _say(chatbot, "thanks")
-    await _say(chatbot, "ok")
-
-    reply = await _say(chatbot, "yes")
-
-    assert SUPPORT_ASK_PROBLEM in reply
-    assert SUPPORT_NOTHING_TO_SEND not in reply
+    assert await _awaiting_send(chatbot) is False
 
 
 @pytest.mark.asyncio
@@ -3034,7 +2894,10 @@ async def test_support_bot_escalates_to_the_intake_script(mocker, mock_checkpoin
     assert SUPPORT_ASK_PROBLEM in reply
     assert SUPPORT_OFFER_TICKET not in reply
     SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
-    assert (await _state_of(chatbot))["handed_off"][-1] is True
+    state = await _state_of(chatbot)
+    assert state["handed_off"][-1] is True
+    # A checkpointed escalate would re-escalate every later turn.
+    assert "escalate" not in state
 
 
 @pytest.mark.asyncio
@@ -3060,18 +2923,6 @@ async def test_support_bot_never_answers_again_after_a_hand_off(
     await _say(chatbot, "what's my grade?")
 
     SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
-
-
-@pytest.mark.asyncio
-async def test_escalate_itself_does_not_persist(mocker, mock_checkpointer):
-    """A checkpointed escalate would re-escalate every later turn."""
-    chatbot = await _answering_support_bot(mocker, mock_checkpointer, "")
-
-    await _say(chatbot, "the video won't load", escalate=[True])
-
-    state = await _state_of(chatbot)
-    assert "escalate" not in state
-    assert state["handed_off"][-1] is True
 
 
 @pytest.mark.asyncio
@@ -3126,7 +2977,7 @@ async def test_an_escalate_after_a_close_out_asks_instead_of_filing_nothing(
 
     assert SUPPORT_ASK_PROBLEM in reply
     assert "**Your message:**" not in reply
-    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+    assert await _awaiting_send(chatbot) is False
 
 
 @pytest.mark.asyncio
@@ -3146,7 +2997,7 @@ async def test_an_escalate_on_a_new_thread_does_not_make_filler_the_request(
     assert SUPPORT_ASK_PROBLEM in asked
     assert SUPPORT_NOTHING_TO_SEND in reply
     assert "**Your message:**" not in reply
-    assert ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1] is False
+    assert await _awaiting_send(chatbot) is False
 
     await _say(chatbot, "yes")
 

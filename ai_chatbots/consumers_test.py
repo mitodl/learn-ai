@@ -1930,7 +1930,7 @@ async def test_support_create_chatbot_gates_answering(  # noqa: PLR0913
     )
 
     assert chatbot.enable_account_tools is expected
-    assert chatbot.answering_enabled is expected
+    assert (chatbot._answering_agent is not None) is expected  # noqa: SLF001
     # No session short-circuits before the flag is read.
     assert flag.called is session
     if session:
