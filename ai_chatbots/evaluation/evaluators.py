@@ -193,6 +193,7 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
                     ),
                 },
             )
+            # The Canvas bot answers the same questions about one resource
             for case_data in test_data.get("syllabus", [])
         ]
 
@@ -491,6 +492,7 @@ class TutorBotEvaluator(BaseBotEvaluator):
 BOT_EVALUATORS = {
     "recommendation": (chatbots.ResourceRecommendationBot, RecommendationBotEvaluator),
     "syllabus": (chatbots.SyllabusBot, SyllabusBotEvaluator),
+    "syllabus_canvas": (chatbots.CanvasSyllabusBot, SyllabusBotEvaluator),
     "video_gpt": (chatbots.VideoGPTBot, VideoGPTBotEvaluator),
     "tutor": (chatbots.TutorBot, TutorBotEvaluator),
     "support": (chatbots.SupportBot, SupportBotEvaluator),
