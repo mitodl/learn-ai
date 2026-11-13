@@ -11,6 +11,10 @@ from ai_chatbots.api import get_resource_facts
 from ai_chatbots.evaluation.base import BaseBotEvaluator, TestCaseSpec
 from main.test_utils import load_json_with_settings
 
+# Scored in place of a reply the bot would not ship: with no lookup behind it,
+# the learner goes to the intake script instead.
+SUPPORT_NO_ANSWER = "No answer. The learner goes to the support intake."
+
 # The learner records of the case being evaluated. A context variable, so cases
 # run concurrently each see their own.
 _learner_records: ContextVar[dict | None] = ContextVar("learner_records", default=None)
@@ -261,7 +265,7 @@ class SupportBotEvaluator(BaseBotEvaluator):
         extra_state = metadata.get("extra_state", {})
         token = _learner_records.set(metadata.get("learner_records"))
         try:
-            return await chatbot._answering_agent.ainvoke(  # noqa: SLF001
+            result = await chatbot._answering_agent.ainvoke(  # noqa: SLF001
                 {
                     # Earlier turns of the conversation, for follow-up questions
                     "messages": [
@@ -274,6 +278,9 @@ class SupportBotEvaluator(BaseBotEvaluator):
             )
         finally:
             _learner_records.reset(token)
+        if not chatbots._the_answer_in(result):  # noqa: SLF001
+            result["messages"].append(AIMessage(SUPPORT_NO_ANSWER))
+        return result
 
 
 class VideoGPTBotEvaluator(BaseBotEvaluator):

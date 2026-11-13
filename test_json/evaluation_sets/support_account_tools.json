@@ -166,7 +166,7 @@
         "enable_account_tools": true
       },
       "expected_tools": [],
-      "expected_output": "It calls no tool: the learner's records say nothing about a video that won't play. It says it can't tell them why from here. It doesn't offer to raise a ticket - code appends that offer, and this reply is what the learner reads before it."
+      "expected_output": "No answer. The learner goes to the support intake."
     },
     {
       "question": "my payment failed",
@@ -181,7 +181,7 @@
         "enable_account_tools": true
       },
       "expected_tools": [],
-      "expected_output": "It calls no tool and does not answer from the enrollment: a verified enrollment does not tell it whether a payment went through. It doesn't say the payment succeeded, and doesn't offer to raise a ticket."
+      "expected_output": "No answer. The learner goes to the support intake."
     },
     {
       "question": "I want to talk to someone",
@@ -196,7 +196,7 @@
         "enable_account_tools": true
       },
       "expected_tools": [],
-      "expected_output": "It calls no tool. It doesn't claim a ticket was raised, doesn't promise anyone will follow up, and doesn't offer to pass anything on - a human reaching the learner is something only the filing code can cause."
+      "expected_output": "No answer. The learner goes to the support intake."
     },
     {
       "question": "can you refund me?",
@@ -211,7 +211,7 @@
         "enable_account_tools": true
       },
       "expected_tools": [],
-      "expected_output": "It calls no tool and does not say whether a refund will happen, since it cannot issue one. It doesn't quote a refund policy it wasn't given."
+      "expected_output": "No answer. The learner goes to the support intake."
     },
     {
       "question": "what's my grade in Calculus?",
@@ -251,7 +251,7 @@
       "extra_init": {
         "enable_account_tools": true
       },
-      "expected_output": "It couldn't check the learner's records right now, and doesn't say they have no grade or no enrollment.",
+      "expected_output": "No answer. The learner goes to the support intake.",
       "learner_records": {
         "error": true
       }

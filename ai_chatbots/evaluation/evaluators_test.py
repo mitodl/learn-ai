@@ -4,13 +4,14 @@ import asyncio
 import inspect
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from ai_chatbots import learner_api
 from ai_chatbots.evaluation.base import TestCaseSpec
 from ai_chatbots.evaluation.evaluators import (
     _RECORD_KEYS,
     BOT_EVALUATORS,
+    SUPPORT_NO_ANSWER,
     RecommendationBotEvaluator,
     SupportBotEvaluator,
     SyllabusBotEvaluator,
@@ -489,7 +490,31 @@ class TestSupportBotEvaluator:
         assert cases[0].metadata["extra_state"]["page_url"] == ["https://courses/c"]
         assert cases[0].metadata["learner_records"] == {"enrollments": []}
 
-    async def test_the_evaluator_drives_the_answering_graph(self, evaluator, mocker):
+    @pytest.mark.parametrize(
+        ("messages", "scored"),
+        [
+            pytest.param(
+                [
+                    ToolMessage(
+                        content='{"enrollments": []}',
+                        tool_call_id="call-1",
+                        name="get_enrollments",
+                    ),
+                    AIMessage("0%"),
+                ],
+                "0%",
+                id="a lookup reached the records",
+            ),
+            pytest.param(
+                [AIMessage("I can't tell why the video won't play.")],
+                SUPPORT_NO_ANSWER,
+                id="no lookup, so the learner never sees it",
+            ),
+        ],
+    )
+    async def test_the_evaluator_drives_the_answering_graph(
+        self, evaluator, mocker, messages, scored
+    ):
         """
         The eval must run the graph that calls the model.
 
@@ -500,7 +525,9 @@ class TestSupportBotEvaluator:
         """
         chatbot = mocker.Mock(config={"configurable": {}})
         chatbot.agent.ainvoke = mocker.AsyncMock(return_value="intake")
-        chatbot._answering_agent.ainvoke = mocker.AsyncMock(return_value="answered")  # noqa: SLF001
+        chatbot._answering_agent.ainvoke = mocker.AsyncMock(  # noqa: SLF001
+            return_value={"messages": list(messages)}
+        )
         case = TestCaseSpec(
             question="what's my grade?",
             metadata={
@@ -513,7 +540,7 @@ class TestSupportBotEvaluator:
 
         result = await evaluator.collect_response(chatbot, case)
 
-        assert result == "answered"
+        assert result["messages"][-1].content == scored
         chatbot.agent.ainvoke.assert_not_called()
         state = chatbot._answering_agent.ainvoke.call_args[0][0]  # noqa: SLF001
         assert state["page_url"] == ["https://courses/c"]
