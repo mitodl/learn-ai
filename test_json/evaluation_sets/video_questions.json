@@ -1,0 +1,314 @@
+{
+  "video_gpt": [
+    {
+      "question": "What is the water-diamond paradox?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "Adam Smith's puzzle: water is essential to life yet nearly free, while diamonds are frivolous yet expensive. The reason is that water is plentiful and diamonds are rare; price depends on both demand and supply together.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Why does the demand curve slope downward?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "Because of opportunity cost: the more expensive a good is, the more you give up to buy it, so consumers want less of it. This is the law of demand.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Why does the supply curve slope upward?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "Because of opportunity cost: the more money producers can make selling a good, the more they are willing to produce it instead of other things, so higher prices lead to greater quantities supplied.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the equilibrium in a market?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "The point where the supply and demand curves intersect: the price at which consumers' willingness to pay equals producers' willingness to supply, so both are happy to trade.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "In the roses example, what are the equilibrium price and quantity?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "$3 per rose and 600 roses.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What goes on each axis of a supply and demand graph?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "Quantity of the good (roses) on the horizontal x-axis and price on the vertical y-axis.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Who said all models are wrong, and what was the point?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "The statistician George Box: \"All models are wrong, but some are useful.\" Economic models are useful approximations, not exact descriptions of reality.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Who was Adam Smith?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "Considered the father of economics; his 1776 book The Wealth of Nations lays out the core concepts of modern economics.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "How is price elasticity of demand calculated?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+14.01x+2T2026+type@asset+block@0efa6a4a-8bab-4654-8ef3-b51fd0a65c74-en.srt"
+        ]
+      },
+      "expected_output": "The video does not cover this. A good answer says it could not find it in the video instead of answering from general knowledge.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What does unit 3 cover?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+6.86x+1T2027+type@asset+block@b480df96-b994-417e-8fc5-2de8826c7840-en.srt"
+        ]
+      },
+      "expected_output": "Neural networks: how they are built from simple units like linear classification or regression methods, and several kinds, from feed-forward to recurrent networks.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What kinds of neural networks will be introduced?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+6.86x+1T2027+type@asset+block@b480df96-b994-417e-8fc5-2de8826c7840-en.srt"
+        ]
+      },
+      "expected_output": "Simple feed-forward networks and recurrent neural networks, which model sequences and can map sequences to class labels or to other sequences, as in machine translation; also convolutional networks for the project.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the project for this unit?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+6.86x+1T2027+type@asset+block@b480df96-b994-417e-8fc5-2de8826c7840-en.srt"
+        ]
+      },
+      "expected_output": "Image classification, using a convolutional neural network, an architecture designed for processing images.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "How does backpropagation work?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+6.86x+1T2027+type@asset+block@b480df96-b994-417e-8fc5-2de8826c7840-en.srt"
+        ]
+      },
+      "expected_output": "The video does not cover this. A good answer says it could not find it in the video instead of answering from general knowledge.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the density of a uniform distribution?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "Constant, 1/(b - a), on the interval from a to b and 0 otherwise, so that it integrates to 1.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What parameters does the triangular distribution have?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "Three: it runs from a to b and has its maximum at c.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the exponential distribution used for?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "Very often to represent the time until some event occurs, such as a customer arriving in a queue. It is mathematically convenient and close to the geometric distribution, but for continuous time.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What does memoryless mean for the exponential distribution?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "P(T > t + x | T > x) = P(T > t): if the event hasn't happened by time x, the remaining wait has the same exponential distribution as from time 0, so the process has no memory of when it started.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What does the Poisson distribution give?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "The probability that x events happen in a time interval from 0 to t, when events are independent and the times between them are exponentially distributed with parameter lambda. It is discrete.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Why can't a computer generate truly random numbers?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "Computers are deterministic: the same input always gives the same output. So they generate pseudo-random numbers that only look random.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the seed of a random number generator, and why does it matter?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "x0, which determines the whole sequence. The same seed gives the same sequence, which helps when debugging; different seeds give completely different sequences, even if close together.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is simulation used for in factory design?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "To show the movement of materials and how machine failures and policies affect it, and, run fast without the video, to count events and estimate performance measures such as production rate, lead time and inventory.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "How do you estimate the production rate from a simulation?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "Run the simulation for a very long time, count the number of parts produced, and divide by that time.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the variance of the exponential distribution?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+2.854.1x+2T2026+type@asset+block@b7772775-e083-46ae-b0b8-0ba762aa7185-en.srt"
+        ]
+      },
+      "expected_output": "The video does not cover this. A good answer says it could not find it in the video instead of answering from general knowledge.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "How do gases, liquids and solids differ?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "Gases expand to fill their container with atoms far apart; liquids have a set volume but take the container's shape; solids have a defined volume and shape.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What happens to the force between two atoms as they get closer?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "Far apart the force is attractive; very close they repel. At one distance, r naught, the attractive and repulsive forces balance and the net force is zero.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is r naught, and how big is it typically?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "The equilibrium distance between two atoms, where the force is zero and the energy is at its minimum. In typical materials it is between 0.2 and 0.3 nanometers.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "How does bond strength relate to melting temperature?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "The stronger the bonds, the higher the melting temperature: ionic crystals have high bonding energy and high melting points, van der Waals bonds low energy and low melting points.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is the difference between crystalline and amorphous materials?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "Crystalline materials have periodic atomic packing, typical of most metals and many ceramics and polymers; amorphous materials are noncrystalline and nonperiodic.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Can metals be amorphous?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "Yes. Depending on processing, for example rapid cooling, metals can be amorphous as well as crystalline.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "Why can a disordered material be stable if its energy isn't at the minimum?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "Stability is governed by the Gibbs free energy, which accounts for both the bonding energy and the disorder; this is covered in thermodynamics.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    },
+    {
+      "question": "What is a unit cell?",
+      "extra_state": {
+        "transcript_asset_id": [
+          "asset-v1:MITxT+3.012Sx+3T2024+type@asset+block@df9493c5-4765-4b0c-a7bb-7ea732fea90e-en.srt"
+        ]
+      },
+      "expected_output": "The video does not cover this. A good answer says it could not find it in the video instead of answering from general knowledge.",
+      "expected_tools": ["get_video_transcript_chunk"]
+    }
+  ]
+}
