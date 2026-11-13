@@ -828,7 +828,8 @@ Started: {timestamp}
         )
         self.stdout.write(
             f"\n⚖️  {bot_name.upper()}: {candidate} versus baseline {baseline}, "
-            f"on {len(questions)} cases ({self.sample_info.get(bot_name, '')})"
+            f"{len(questions)} cases compared "
+            f"(loaded {self.sample_info.get(bot_name, '')})"
         )
         print_comparison(
             self.stdout.write,
