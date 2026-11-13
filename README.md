@@ -292,7 +292,7 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 
 - `models`: Comma-delimited list of models that the chatbots will use to answer questions. If none are provided, it will use all the enabled `ai_chatbots.models.LLMModel` objects in the database, so make sure have all the necessary API keys in your environment.
 - `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-5.5`. The command refuses a judge that is also one of the `models` under test.
-- `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated.
+- `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated. `syllabus_canvas` is the Canvas syllabus bot, judged on the same `syllabus` cases with its own prompt.
 - `data-file`: Input data file containing questions and expected answers, or several separated by commas. See test_json/rag_evaluation.json for the required format.
 - `prompts`: If true, include alternative prompts to test against in addition to the default prompt per chatbot.
 - `prompts-file`: The file containing alternative prompts to test. See `test_json/rag_evaluation_prompts.json` for the required format.

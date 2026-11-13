@@ -99,6 +99,7 @@ def test_bare_urls(answer, found):
     [
         ("recommendation", {"follow_up_offer", "unlinked_resource", "bare_url"}),
         ("syllabus", {"follow_up_offer"}),
+        ("syllabus_canvas", {"follow_up_offer"}),
         ("video_gpt", {"follow_up_offer"}),
         ("tutor", set()),
     ],

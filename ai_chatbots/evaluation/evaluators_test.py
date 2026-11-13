@@ -450,7 +450,13 @@ class TestBotEvaluatorRegistry:
 
     def test_bot_evaluators_registry(self):
         """Test that all expected bot evaluators are registered."""
-        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor"]
+        expected_bots = [
+            "recommendation",
+            "syllabus",
+            "syllabus_canvas",
+            "video_gpt",
+            "tutor",
+        ]
 
         # Test BOT_EVALUATORS registry
         assert set(BOT_EVALUATORS.keys()) == set(expected_bots)
@@ -466,6 +472,7 @@ class TestBotEvaluatorRegistry:
         expected_classes = {
             "recommendation": RecommendationBotEvaluator,
             "syllabus": SyllabusBotEvaluator,
+            "syllabus_canvas": SyllabusBotEvaluator,
             "video_gpt": VideoGPTBotEvaluator,
             "tutor": TutorBotEvaluator,
         }
@@ -577,3 +584,17 @@ async def test_tutor_problem_template_per_case(monkeypatch):
     assert first.startswith("A ")
     assert second.startswith("B ")
     assert not default.startswith(("A ", "B "))
+
+
+def test_syllabus_canvas_uses_the_syllabus_cases(mocker):
+    """The Canvas bot is judged on the same syllabus cases, with its own bot class."""
+    from ai_chatbots.chatbots import CanvasSyllabusBot
+
+    bot_class, evaluator_class = BOT_EVALUATORS["syllabus_canvas"]
+    assert bot_class is CanvasSyllabusBot
+    evaluator = evaluator_class(
+        bot_class,
+        "syllabus_canvas",
+        data_file="test_json/evaluation_sets/qa_15_515.json",
+    )
+    assert len(evaluator.load_cases()) == 84
