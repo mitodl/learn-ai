@@ -93,3 +93,42 @@ def test_get_trace_ident_returns_global_id_for_authenticated_user(mocker, user):
 
     assert consumer.get_trace_ident() == user.global_id
     assert consumer.get_trace_ident() == consumer.get_ident()
+
+
+def _anon_consumer(*, client_ip, forwarded_for=None):
+    """Build a consumer for an anonymous request arriving through the gateway."""
+    consumer = BaseThrottledAsyncConsumer()
+    headers = [(b"x-forwarded-for", forwarded_for.encode())] if forwarded_for else []
+    consumer.scope = {
+        "user": AnonymousUser(),
+        "client": (client_ip, 54321),
+        "headers": headers,
+    }
+    return consumer
+
+
+def test_get_throttle_ident_uses_rightmost_trusted_forwarded_address(settings):
+    """Only the entry APISIX appended is trusted; the client controls the rest."""
+    settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
+    consumer = _anon_consumer(
+        client_ip="10.0.0.2", forwarded_for="9.9.9.9, 203.0.113.5"
+    )
+
+    assert consumer.get_throttle_ident() == "203.0.113.5"
+
+
+def test_get_throttle_ident_falls_back_to_peer_address(settings):
+    """With no X-Forwarded-For, the peer address is the client."""
+    settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
+    consumer = _anon_consumer(client_ip="203.0.113.5")
+
+    assert consumer.get_throttle_ident() == "203.0.113.5"
+
+
+@pytest.mark.django_db
+def test_get_throttle_ident_authenticated_uses_global_id(mocker, user):
+    """Signed-in users are throttled per user, wherever they connect from."""
+    consumer = _consumer_for(mocker, user=user, session_key="abc123def456")
+    consumer.scope["client"] = ("203.0.113.5", 54321)
+
+    assert consumer.get_throttle_ident() == user.global_id

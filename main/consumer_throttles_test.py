@@ -1,12 +1,16 @@
 """Tests for consumer throttle classes."""
 
+from importlib import import_module
 from pathlib import Path
 from time import time
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.conf import settings as django_settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from freezegun import freeze_time
+from rest_framework import exceptions
 
 import main
 from ai_chatbots.consumers import BaseBotHttpConsumer
@@ -108,3 +112,91 @@ def test_every_bot_consumer_has_a_seeded_throttle_limit():
     )
 
     assert {scope for scope in scopes if f'"{scope}"' not in sources} == set()
+
+
+def _anon_consumer(throttle_key, *, forwarded_for, client_ip="10.0.0.2"):
+    """
+    Build an anonymous consumer the way a live request arrives: through APISIX,
+    with a fresh, empty signed-cookie session (no sessionid ever reaches the
+    browser on these routes), not conftest's stable mock session.
+    """
+    session = import_module(django_settings.SESSION_ENGINE).SessionStore()
+    consumer = BaseThrottledAsyncConsumer()
+    consumer.scope = {
+        "user": AnonymousUser(),
+        "session": session,
+        "client": (client_ip, 54321),
+        "headers": [(b"x-forwarded-for", forwarded_for.encode())],
+    }
+    consumer.throttle_scope = throttle_key
+    return consumer
+
+
+@pytest.fixture
+async def anon_limit_two(db, settings):
+    """Return a day-long throttle row allowing two anonymous requests."""
+    settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
+    # Created through sync_to_async so the throttle's own sync_to_async read
+    # runs on the same DB connection and sees the row.
+    return await sync_to_async(ConsumerThrottleLimitFactory.create)(
+        anon_limit=2, interval="day"
+    )
+
+
+@pytest.fixture
+def rotating_session_clock():
+    """
+    Advance the clock past a second on every read, so each request's empty
+    signed-cookie session gets a new key, as it does in production.
+    """
+    with freeze_time(auto_tick_seconds=1.1):
+        yield
+
+
+async def test_anonymous_throttle_holds_across_rotating_sessions(
+    anon_limit_two, rotating_session_clock
+):
+    """The session key changes every second; the throttle must not."""
+    consumers = [
+        _anon_consumer(anon_limit_two.throttle_key, forwarded_for="203.0.113.5")
+        for _ in range(3)
+    ]
+    for consumer in consumers[:2]:
+        await consumer.check_throttles()
+
+    with pytest.raises(exceptions.Throttled):
+        await consumers[2].check_throttles()
+    assert len({consumer.get_session_key() for consumer in consumers}) == 3
+
+
+async def test_anonymous_throttle_is_per_address(
+    anon_limit_two, rotating_session_clock
+):
+    """A caller at another address is not blocked by someone else's usage."""
+    for _ in range(2):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
+        ).check_throttles()
+    with pytest.raises(exceptions.Throttled):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
+        ).check_throttles()
+
+    await _anon_consumer(
+        anon_limit_two.throttle_key, forwarded_for="198.51.100.7"
+    ).check_throttles()
+
+
+async def test_anonymous_throttle_ignores_spoofed_forwarded_for(
+    anon_limit_two, rotating_session_clock
+):
+    """A client-supplied X-Forwarded-For entry does not buy a fresh bucket."""
+    for spoof in ("1.1.1.1", "2.2.2.2"):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for=f"{spoof}, 203.0.113.5"
+        ).check_throttles()
+
+    with pytest.raises(exceptions.Throttled):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for="3.3.3.3, 203.0.113.5"
+        ).check_throttles()

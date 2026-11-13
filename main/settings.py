@@ -499,6 +499,10 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.NamespaceVersioning",
     "ALLOWED_VERSIONS": ["v0"],
     "ORDERING_PARAM": "sortby",
+    # Trusted proxy hops in front of the app, counted from the right of
+    # X-Forwarded-For; the client controls everything to their left. Only
+    # APISIX sits in front of Granian. Anonymous chat throttles key on this.
+    "NUM_PROXIES": get_int("NUM_PROXIES", 1),
 }
 
 

@@ -216,4 +216,7 @@ class UserScopedRateThrottle(AsyncSimpleRateThrottle):
         Otherwise generate the unique cache key by concatenating the user id
         with the `.throttle_scope` property of the consumer.
         """
-        return self.cache_format % {"scope": self.scope, "ident": consumer.get_ident()}
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": consumer.get_throttle_ident(),
+        }
