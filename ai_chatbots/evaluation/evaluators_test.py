@@ -10,10 +10,13 @@ from ai_chatbots import learner_api
 from ai_chatbots.evaluation.base import TestCaseSpec
 from ai_chatbots.evaluation.evaluators import (
     BOT_EVALUATORS,
+    LiveAccountCallBlockedError,
     RecommendationBotEvaluator,
     SyllabusBotEvaluator,
     TutorBotEvaluator,
     VideoGPTBotEvaluator,
+    _serve_tutor_problem_template,
+    _tutor_problem_template,
 )
 
 
@@ -182,8 +185,9 @@ class TestSyllabusBotEvaluator:
     @pytest.mark.parametrize(
         ("shared", "expected"),
         [
-            # no shared records: a case without its own reads the live API
-            (None, ["live", [{"id": "own"}], "error", []]),
+            # no shared records: a case without its own is blocked from the
+            # live API
+            (None, ["blocked", [{"id": "own"}], "error", []]),
             (
                 {"enrollments": [{"id": "shared"}]},
                 [[{"id": "shared"}], [{"id": "own"}], "error", []],
@@ -202,9 +206,8 @@ class TestSyllabusBotEvaluator:
             "get_course_dates",
         ):
             mocker.patch.object(learner_api, name, getattr(learner_api, name))
-        mocker.patch.object(
-            learner_api, "get_enrollments", mocker.AsyncMock(return_value="live")
-        )
+        live = mocker.AsyncMock(return_value="live")
+        mocker.patch.object(learner_api, "get_enrollments", live)
         own = [
             {"enrollments": [{"id": "own"}]},
             {"error": True},
@@ -236,6 +239,8 @@ class TestSyllabusBotEvaluator:
                 return {"records": await learner_api.get_enrollments()}
             except learner_api.LearnerAPIError:
                 return {"records": "error"}
+            except LiveAccountCallBlockedError:
+                return {"records": "blocked"}
 
         chatbot = mocker.Mock(config={"configurable": {}})
         chatbot.agent.ainvoke = ainvoke
@@ -244,6 +249,10 @@ class TestSyllabusBotEvaluator:
         )
 
         assert [result["records"] for result in results] == expected
+        # A blocked lookup is recorded on its case and never reaches the live API
+        blocked = ["get_enrollments"] if shared is None else []
+        assert [r["blocked_account_calls"] for r in results] == [blocked, [], [], []]
+        live.assert_not_called()
 
     async def test_history_comes_before_the_question(self, evaluator, mocker):
         """A follow-up case sends the earlier turns, then the question."""
@@ -441,7 +450,13 @@ class TestBotEvaluatorRegistry:
 
     def test_bot_evaluators_registry(self):
         """Test that all expected bot evaluators are registered."""
-        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor"]
+        expected_bots = [
+            "recommendation",
+            "syllabus",
+            "syllabus_canvas",
+            "video_gpt",
+            "tutor",
+        ]
 
         # Test BOT_EVALUATORS registry
         assert set(BOT_EVALUATORS.keys()) == set(expected_bots)
@@ -457,6 +472,7 @@ class TestBotEvaluatorRegistry:
         expected_classes = {
             "recommendation": RecommendationBotEvaluator,
             "syllabus": SyllabusBotEvaluator,
+            "syllabus_canvas": SyllabusBotEvaluator,
             "video_gpt": VideoGPTBotEvaluator,
             "tutor": TutorBotEvaluator,
         }
@@ -513,3 +529,72 @@ class TestEvaluatorIntegration:
         assert llm_test_case.name == "recommendation-gpt-4-default"
         assert llm_test_case.input == "Test question"
         assert llm_test_case.actual_output == "Bot response"
+
+
+def test_qa_15_515_loads_for_correctness(mocker):
+    """With Correctness judged, 15.515 drops its no-reference cases."""
+    evaluator = SyllabusBotEvaluator(
+        mocker.Mock(),
+        "syllabus",
+        data_file="test_json/evaluation_sets/qa_15_515.json",
+    )
+    everything = evaluator.load_cases()
+    referenced = evaluator.load_cases(require_reference=True)
+    assert len(everything) == 84
+    assert len(referenced) == 52
+    assert all(case.expected_output for case in referenced)
+    assert len({case.metadata["case_id"] for case in referenced}) == 52
+
+
+async def test_tutor_streamed_error_is_a_failure(mocker):
+    """The tutor's streamed error comment is raised, so the answer counts as failed."""
+
+    async def get_completion(_question):
+        yield "Let's start with"
+        yield '<!-- {"error":{"message":"An error occurred"}} -->'
+
+    chatbot = mocker.Mock(get_completion=get_completion)
+    evaluator = TutorBotEvaluator(mocker.Mock(), "tutor")
+    with pytest.raises(RuntimeError, match="streamed an error"):
+        await evaluator.collect_response(chatbot, TestCaseSpec(question="Help"))
+
+
+@pytest.mark.asyncio
+async def test_tutor_problem_template_per_case(monkeypatch):
+    """Concurrent cases each build the tutor prompt from their own template."""
+    from open_learning_ai_tutor import prompts
+    from open_learning_ai_tutor.constants import Intent
+
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    _serve_tutor_problem_template()
+
+    async def system_prompt(template):
+        _tutor_problem_template.set(template)
+        await asyncio.sleep(0)  # let the other case set its template
+        messages = await asyncio.to_thread(
+            prompts.get_tutor_prompt, "p", "ps", [], [Intent.S_STRATEGY], "edx"
+        )
+        return messages[0].content
+
+    first, second, default = await asyncio.gather(
+        system_prompt("A {problem_statement}"),
+        system_prompt("B {problem_statement}"),
+        system_prompt(None),
+    )
+    assert first.startswith("A ")
+    assert second.startswith("B ")
+    assert not default.startswith(("A ", "B "))
+
+
+def test_syllabus_canvas_uses_the_syllabus_cases(mocker):
+    """The Canvas bot is judged on the same syllabus cases, with its own bot class."""
+    from ai_chatbots.chatbots import CanvasSyllabusBot
+
+    bot_class, evaluator_class = BOT_EVALUATORS["syllabus_canvas"]
+    assert bot_class is CanvasSyllabusBot
+    evaluator = evaluator_class(
+        bot_class,
+        "syllabus_canvas",
+        data_file="test_json/evaluation_sets/qa_15_515.json",
+    )
+    assert len(evaluator.load_cases()) == 84

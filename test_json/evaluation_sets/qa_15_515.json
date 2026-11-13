@@ -1,16 +1,6 @@
 {
   "syllabus": [
     {
-      "question": "Original flagged questions",
-      "extra_state": {
-        "course_id": ["28751-15.515_FA24"],
-        "collection_name": [null],
-        "exclude_canvas": [false]
-      },
-      "expected_output": "",
-      "expected_tools": ["search_content_files"]
-    },
-    {
       "question": "What is the definition of accrual accounting?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
@@ -131,13 +121,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How does inventory valuation affect COGS?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "How does inventory valuation affect COGS?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -161,13 +152,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "Does recognizing revenue increase cash?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "Does recognizing revenue increase cash?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -181,23 +173,25 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How does a lease affect a company's balance sheet under ASC 842?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "How does a lease affect a company's balance sheet under ASC 842?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "Under ASC 842, leases significantly impact a company's balance sheet and income statement. Here’s a summary of how leases are treated:\n\nBalance Sheet\nRight-of-Use Asset: Both finance and operating leases require the lessee to recognize a right-of-use asset on the balance sheet. This asset is measured at the present value of the lease payments.\nLease Liability: Correspondingly, a lease liability is also recorded, which represents the obligation to make future lease payments, also measured at the present value of those payments.\n\nIncome Statement\nFinance Leases: The right-of-use asset is amortized over the lease term, leading to an amortization expense. Interest expense is recorded on the lease liability, calculated as the interest rate applied to the outstanding lease liability. This results in higher expenses in the earlier periods of the lease due to the combination of amortization and interest expenses.\nOperating Leases:The lease expense is typically recognized on a straight-line basis over the lease term, resulting in a single lease expense amount each period.\nThere is no separate amortization or interest expense recorded, which leads to a smoother expense recognition pattern compared to finance leases.\n\nKey Differences\nFinance Leases: Higher expenses in the early years due to amortization and interest, leading to a decreasing asset value over time.\nOperating Leases: Consistent lease expense recognized each period, resulting in a relatively higher asset value on the balance sheet throughout the lease term compared to finance leases.\nOverall, both types of leases are now \"on-balance sheet,\" meaning they are recorded as assets and liabilities, which enhances transparency in financial reporting.",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How are deferred tax liabilities created?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "How are deferred tax liabilities created?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -211,13 +205,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How would you record an equipment purchase using accrual accounting?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "How would you record an equipment purchase using accrual accounting?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -251,13 +246,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How would you classify operating vs. financing cash flows?\n\nNote from Joe: I am not sure what the answer is and wonder what the bot will say",
+      "question": "How would you classify operating vs. financing cash flows?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "Operating and financing cash flows are two distinct categories of cash flows reported in a company's statement of cash flows. Here's a summary of each:\n\nOperating Cash Flows (OCF): These are cash flows from ongoing, regular, core business activities. Examples include cash received from the sale of goods and services, payments for inventory, salaries and wages paid, loan interest payments, and income tax payments. Operating cash flow is crucial as it is the primary source of cash to meet recurring financial obligations, such as paying debts and dividends.\n\nFinancing Cash Flows:These cash flows relate to activities that involve external sources of financing. Examples include cash received from issuing stock or bonds, cash paid for dividends, and repayments of debt.Financing cash flows reflect how a company raises capital and returns value to its shareholders.\n\nIn summary, operating cash flows are essential for day-to-day operations and sustainability, while financing cash flows are related to how a company funds its operations and growth through external financing.",
+      "notes": "Note from Joe: I am not sure what the answer is and wonder what the bot will say",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -271,23 +267,25 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How do you apply the equity method to an investment in a 30% owned affiliate?\n\nNote from Joe:\nWe do not cover in class - curious what the bot will say.",
+      "question": "How do you apply the equity method to an investment in a 30% owned affiliate?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "To apply the equity method to an investment in a 30% owned affiliate, follow these key steps:\n\nSignificant Influence: Since owning 30% of the affiliate typically indicates significant influence, you will account for the investment using the equity method.\n\nInitial Investment: Record the initial investment at cost. For example, if you purchase shares for $1,000,000, you would make the following journal entry:\n\nDebit: Investment in Affiliate (+A) $1,000,000\nCredit: Cash (-A) $1,000,000\nRecognizing Income: Each period, recognize your share of the affiliate's net income. If the affiliate reports a net income of $100,000, your share (30%) would be $30,000. Record this as:\n\nDebit: Investment in Affiliate (+A) $30,000\nCredit: Investment Income (+R, +SE) $30,000\nDividends Received: If the affiliate pays dividends, reduce the investment account by the amount received. For instance, if you receive $40,000 in dividends, the entry would be:\n\nDebit: Cash (+A) $12,000 (30% of $40,000)\nCredit: Investment in Affiliate (-A) $12,000\nEnding Balance Calculation: At the end of the period, calculate the ending balance of the investment account. For example:\n\nBeginning balance: $1,000,000\nPlus: Share of income: $30,000\nMinus: Dividends received: $12,000\nEnding balance: $1,018,000\nThis method ensures that the investment reflects your share of the affiliate's performance and adjusts for any dividends received.",
+      "notes": "Note from Joe:\nWe do not cover in class - curious what the bot will say.",
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How should a long-term lease be recorded under the new accounting rules?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "How should a long-term lease be recorded under the new accounting rules?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "Under the new accounting rules, specifically ASC 842 for US GAAP, long-term leases are classified into two main types: finance leases (also known as ownership leases) and operating leases (rental leases).\n\nFinance Leases\nRecognition: A finance lease is recorded on the balance sheet as both an asset and a liability. The asset is recognized as a \"right-of-use\" asset, and the liability is recorded as a lease obligation.\nMeasurement: Both the asset and liability are measured at the present value of the lease payments or the fair value of the asset, whichever is lower.\n\nAmortization: The lease asset is amortized over time, similar to property, plant, and equipment (PPE). The amortization expense is recognized in the income statement.\n\nInterest Expense: The lease liability incurs interest, which is also recorded as an expense in the income statement.\n\nOperating Leases\nRecognition: Operating leases are also recorded on the balance sheet as a right-of-use asset and a lease liability.\n\nExpense Recognition: Lease expense is generally recognized on a straight-line basis over the lease term, which creates a smoother impact on earnings compared to finance leases.\n\nAmortization of Incentives: Any lease incentives received are amortized on a straight-line basis over the lease term.\n\nKey Differences\nFinance leases typically result in higher expenses in the early years due to the combination of interest and amortization, while operating leases have a consistent expense each period. Under IFRS, all leases are treated as finance leases, whereas US GAAP allows for both finance and operating lease classifications.\n\nIn summary, both types of leases are now recognized on the balance sheet, reflecting a significant change from previous standards where many leases could remain off-balance-sheet.",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -301,13 +299,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "If a company sells a long-lived asset, what happens to the financial statements?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "If a company sells a long-lived asset, what happens to the financial statements?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -321,13 +320,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "How does the choice between FIFO and LIFO impact net income and inventory?\n\nFrom Joe: most likely to be \"it depends\"",
+      "question": "How does the choice between FIFO and LIFO impact net income and inventory?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "The choice between FIFO (First-In-First-Out) and LIFO (Last-In-First-Out) significantly impacts both net income and inventory valuation, especially in an environment of rising prices. Here's a summary of the key differences:\nCost of Goods Sold (COGS):\nFIFO: Under FIFO, the oldest inventory costs are used first when calculating COGS. This typically results in a lower COGS during periods of inflation, as older, cheaper costs are matched against current revenues.   LIFO: Conversely, LIFO uses the most recent inventory costs first, leading to a higher COGS in inflationary times. This is because newer, more expensive inventory is recognized as sold first.\n\nGross Profit:\nFIFO: Since COGS is lower, FIFO generally results in a higher gross profit.    LIFO: With a higher COGS, LIFO results in lower gross profit.\n\nNet Income:\nFIFO: Higher gross profit leads to higher net income under FIFO.     LIFO: Lower gross profit results in lower net income under LIFO.\n\nEnding Inventory:\nFIFO: The ending inventory on the balance sheet is valued higher under FIFO because it reflects the costs of the most recent purchases, which are typically higher in an inflationary environment.\nLIFO: The ending inventory is valued lower under LIFO, as it reflects older, cheaper costs.\n\nTax Implications:\nCompanies often prefer LIFO for tax purposes because it reduces taxable income due to the higher COGS, thus lowering tax liabilities. However, this can also lead to lower reported earnings, which may affect investor perceptions.\n\nComparability:\nThe choice of inventory accounting method can affect financial ratios and comparability with other firms, especially those using different methods (e.g., FIFO vs. LIFO).\nIn summary, FIFO generally results in higher net income and inventory values during inflation, while LIFO can provide tax advantages but results in lower reported earnings and inventory values.",
+      "notes": "From Joe: most likely to be \"it depends\"",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -411,33 +411,36 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "Should leases always be capitalized for transparency?\n\nFrom Joe: I am not sure what the answer is and wonder what the bot will say",
+      "question": "Should leases always be capitalized for transparency?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "Leases should be capitalized for transparency, especially under the new accounting standards that require all leases to be recorded on the balance sheet as both an asset and a liability. This change aims to provide a clearer picture of a company's financial obligations and overall financial health.\n\nHistorically, many leases were treated as off-balance-sheet items, which meant that companies did not have to report them as liabilities. This could mislead investors and lenders about the true financial position of a company. By capitalizing leases, firms can present a more accurate representation of their financial commitments, which is crucial for stakeholders who rely on financial statements for decision-making.\n\nThe new rules create a more predictable impact on earnings by ensuring that lease expenses are recognized consistently over time. This approach enhances comparability across firms and helps investors better assess a company's leverage and risk profile. Overall, capitalizing leases contributes to greater transparency in financial reporting.",
+      "notes": "From Joe: I am not sure what the answer is and wonder what the bot will say",
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "Is using goodwill impairment a reliable signal of firm performance?\n\nFrom Joe: I am not sure what the answer is and wonder what the bot will say",
+      "question": "Is using goodwill impairment a reliable signal of firm performance?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "Goodwill impairment can serve as a significant indicator of a firm's performance, but it has its limitations and implications that need to be understood.\n\nDefinition and Process: Goodwill impairment occurs when the fair value of goodwill falls below its book value. Companies are required to review goodwill for impairment at least annually or when triggering events occur. This involves comparing the fair value of reporting units (where goodwill is allocated) to their carrying value, often using discounted cash flow models or market multiples.\n\nImpact on Financial Statements: When goodwill is impaired, the company must write down the value of goodwill, which results in a loss recognized on the income statement. This can significantly affect reported earnings, often leading to a negative market reaction. For instance, large write-downs, such as Microsoft's $5.3 billion impairment related to aQuantive, can lead to substantial declines in stock prices and calls for management accountability.\n\nMarket Interpretation: Investors often interpret goodwill impairments as a signal that the market value of the acquired segment has fallen below its book value. This can indicate poor acquisition decisions or operational challenges, which may limit future growth prospects and raise concerns about management's effectiveness.\n\nCorrelation with Performance: While goodwill impairment can indicate declining firm performance, it is not always a direct reflection of operational issues. For example, impairments can coincide with broader market downturns or industry-specific challenges, making it essential to consider the context in which impairments occur.\n\nLimitations: The assessment of goodwill impairment relies heavily on management's estimates of future cash flows and market conditions, which can be subjective and prone to error. This subjectivity can lead to variability in impairment recognition across firms and industries.\n\nIn summary, while goodwill impairment can be a reliable signal of firm performance, it should be analyzed in conjunction with other financial metrics and contextual factors to gain a comprehensive understanding of a company's health.",
+      "notes": "From Joe: I am not sure what the answer is and wonder what the bot will say",
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "Should investors favor companies with high asset turnover or high profit margin?\n\nFrom Joe: I am not sure what the answer is and wonder what the bot will say",
+      "question": "Should investors favor companies with high asset turnover or high profit margin?",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "Investors should consider both asset turnover and profit margin when evaluating companies, as both metrics provide valuable insights into financial performance.\n\nAsset Turnover: This measures how efficiently a company generates revenue from its assets. A higher asset turnover indicates that a company is using its assets more effectively to produce sales. It is generally desirable for companies to have a higher asset turnover, as it reflects productivity and can enhance shareholder value.\n\nProfit Margin: This indicates how much profit a company makes for each dollar of sales. A higher profit margin suggests that a company retains more profit from its sales, which can be a sign of strong pricing power or cost management.\n\nBalancing Both Metrics: The relationship between asset turnover and profit margin can vary by industry and business model. Some industries may favor high asset turnover (like retail), while others may prioritize high profit margins (like software). Companies can achieve the same return on assets (ROA) through different combinations of profit margin and asset turnover, so the best choice depends on the specific context of the company and its industry.\n\nIn summary, investors should not favor one metric over the other universally; instead, they should analyze both in conjunction with the company's business model and industry standards to make informed investment decisions.",
+      "notes": "From Joe: I am not sure what the answer is and wonder what the bot will say",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -511,13 +514,14 @@
       "expected_tools": ["search_content_files"]
     },
     {
-      "question": "Draft a journal entry for acquiring a building with both cash and debt financing.\n\nFrom Joe: we do not cover journals in class - curious what the bot will say.",
+      "question": "Draft a journal entry for acquiring a building with both cash and debt financing.",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
         "exclude_canvas": [false]
       },
       "expected_output": "",
+      "notes": "From Joe: we do not cover journals in class - curious what the bot will say.",
       "expected_tools": ["search_content_files"]
     },
     {
@@ -602,16 +606,6 @@
     },
     {
       "question": "Synthesize data from Tesla's equity structure and propose changes to optimize capital costs.",
-      "extra_state": {
-        "course_id": ["28751-15.515_FA24"],
-        "collection_name": [null],
-        "exclude_canvas": [false]
-      },
-      "expected_output": "",
-      "expected_tools": ["search_content_files"]
-    },
-    {
-      "question": "Questions from Joe",
       "extra_state": {
         "course_id": ["28751-15.515_FA24"],
         "collection_name": [null],
@@ -857,7 +851,8 @@
         "collection_name": [null],
         "exclude_canvas": [false]
       },
-      "expected_output": "When you sell a financial security classified as a trading security, you need to record the transaction as follows:\n\nTransaction Recording for Trading Securities:\n\nSince the security was purchased for $10,000 and has appreciated to a selling price of $13,000, you will recognize a realized gain of $3,000 on the income statement. This is because changes in market value for trading securities are reflected in the income statement.\nThe journal entry would typically involve debiting cash for $13,000, crediting the trading security account for $10,000, and recognizing the gain of $3,000 in the income statement.\nIf the Security Were Classified as Available for Sale:\n\nFor available-for-sale securities, the unrealized gains or losses are recorded in Other Comprehensive Income (OCI) and do not affect the income statement until the security is sold.\nUpon selling the security, you would still recognize the gain of $3,000, but the accounting treatment would involve transferring any unrealized gains from OCI to retained earnings upon realization. The journal entry would debit cash for $13,000, credit the available-for-sale security account for $10,000, and recognize the gain in the income statement, while also adjusting the OCI accordingly.\nIn summary, the key difference lies in how unrealized gains are treated: they affect the income statement for trading securities but are recorded in OCI for available-for-sale securities until realized.",
+      "expected_output": "",
+      "notes": "Reference answer removed: it is disputed and needs an accounting expert. See git history for the old text.",
       "expected_tools": ["search_content_files"]
     }
   ]

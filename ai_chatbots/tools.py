@@ -648,7 +648,11 @@ async def search_support_articles(q: str, state: Annotated[dict, InjectedState])
         ]
     except Exception:
         log.exception("Error querying the support portal at %s", search_url)
-        return _support_output(portal_url)
+        # Marked, so a failed search can be told from one that found nothing
+        return _support_output(
+            portal_url,
+            metadata={"error": "An error occurred while searching the support center"},
+        )
 
     if categories and not articles:
         # A stale category id is not an error: zendesk answers 200 with an

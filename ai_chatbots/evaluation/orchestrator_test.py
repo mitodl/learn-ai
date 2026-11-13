@@ -8,10 +8,29 @@ from deepeval.test_case import LLMTestCaseParams
 
 from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
-from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
+from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator, _bot_metrics
 from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 
 NUM_METRICS = 5
+
+
+def _answer(model, question="Q1", case_id=None):
+    """Build an answer shaped like the ones evaluate_model returns."""
+    from deepeval.test_case import LLMTestCase
+
+    case_id = case_id or f"f.json#{question}"
+    return LLMTestCase(
+        input=question,
+        actual_output=f"{model} answer",
+        retrieval_context=["evidence"],
+        metadata={
+            "bot_name": "test_bot",
+            "model": model,
+            "prompt_label": "default",
+            "case_id": case_id,
+            "metadata": {"case_id": case_id},
+        },
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -25,8 +44,10 @@ def mock_evaluator(mocker):
     """Create a mock evaluator with standard behavior."""
     mock_evaluator_class = mocker.Mock()
     mock_evaluator = mocker.Mock()
-    mock_evaluator.load_test_cases.return_value = [mocker.Mock()]
-    mock_evaluator.evaluate_model = AsyncMock(return_value=[mocker.Mock()])
+    mock_evaluator.load_cases.return_value = [mocker.Mock()]
+    mock_evaluator.evaluate_model = AsyncMock(
+        side_effect=lambda model, *_args, **_kwargs: [_answer(model)]
+    )
     mock_evaluator_class.return_value = mock_evaluator
     return mock_evaluator_class, mock_evaluator
 
@@ -47,7 +68,7 @@ class TestEvaluationOrchestrator:
     def test_create_evaluation_config_default_thresholds(self, orchestrator):
         """Test evaluation config creation with default thresholds."""
         models = ["gpt-4o", "gpt-3.5-turbo"]
-        evaluation_model = "gpt-4o"
+        evaluation_model = "judge-model"
 
         config = orchestrator.create_evaluation_config(models, evaluation_model)
 
@@ -64,7 +85,7 @@ class TestEvaluationOrchestrator:
     def test_create_evaluation_config_custom_thresholds(self, orchestrator):
         """Test evaluation config creation with custom thresholds."""
         models = ["gpt-4o"]
-        evaluation_model = "gpt-4o"
+        evaluation_model = "judge-model"
         custom_thresholds = {
             "Faithfulness": 0.9,
             "ContextualRelevancy": 0.8,
@@ -84,7 +105,7 @@ class TestEvaluationOrchestrator:
     def test_create_evaluation_config_require_expected(self, orchestrator):
         """Test evaluation config creation with require_expected=True."""
         models = ["gpt-4o"]
-        evaluation_model = "gpt-4o"
+        evaluation_model = "judge-model"
 
         config = orchestrator.create_evaluation_config(
             models, evaluation_model, require_expected=True
@@ -99,12 +120,12 @@ class TestEvaluationOrchestrator:
         assert "ContextualRecallMetric" in underlying_metric_names
 
     def test_create_evaluation_config_correctness_only(self, orchestrator):
-        """correctness_only should score against the expected answer alone."""
+        """correctness_only scores against the expected answer, plus Faithfulness."""
         config = orchestrator.create_evaluation_config(
-            ["gpt-4o"], "gpt-4o", correctness_only=True
+            ["gpt-4o"], "judge-model", correctness_only=True
         )
-        assert len(config.metrics) == 1
-        metric = config.metrics[0]
+        assert len(config.metrics) == 2
+        metric, faithfulness = config.metrics
         assert isinstance(metric, TimeoutMetricWrapper)
         assert metric.base_metric.name == "Correctness"
         assert metric.base_metric.threshold == 0.7
@@ -113,11 +134,35 @@ class TestEvaluationOrchestrator:
             LLMTestCaseParams.ACTUAL_OUTPUT,
             LLMTestCaseParams.EXPECTED_OUTPUT,
         ]
+        # A claim the material doesn't back fails, not only one it contradicts
+        assert faithfulness.__name__ == "Faithfulness"
+        assert faithfulness.base_metric.penalize_ambiguous_claims is True
+        assert config.metric_thresholds == {"Correctness": 0.7, "Faithfulness": 0.7}
+
+    @pytest.mark.parametrize(
+        ("bot", "correctness_only", "faithfulness"),
+        [
+            ("syllabus", True, True),
+            ("syllabus_canvas", True, True),
+            ("video_gpt", True, True),
+            # Its two sides can search differently
+            ("recommendation", True, False),
+            # Without correctness_only, every bot gets the default metrics
+            ("recommendation", False, True),
+        ],
+    )
+    def test_bot_metrics(self, orchestrator, bot, correctness_only, faithfulness):
+        """Faithfulness is scored only for bots whose sides search alike."""
+        config = orchestrator.create_evaluation_config(
+            ["gpt-4o"], "judge-model", correctness_only=correctness_only
+        )
+        names = {m.__name__ for m in _bot_metrics(config, bot)}
+        assert ("Faithfulness" in names) is faithfulness
 
     @patch.dict(os.environ, {"CONFIDENT_AI_API_KEY": "test-api-key"})
     def test_create_evaluation_config_with_api_key(self, orchestrator):
         """Test evaluation config creation with API key from environment."""
-        config = orchestrator.create_evaluation_config(["gpt-4o"], "gpt-4o")
+        config = orchestrator.create_evaluation_config(["gpt-4o"], "judge-model")
 
         assert config.confident_api_key == "test-api-key"
 
@@ -125,7 +170,13 @@ class TestEvaluationOrchestrator:
         """Test getting available bot names."""
         available_bots = orchestrator.get_available_bots()
 
-        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor"]
+        expected_bots = [
+            "recommendation",
+            "syllabus",
+            "syllabus_canvas",
+            "video_gpt",
+            "tutor",
+        ]
         assert set(available_bots) == set(expected_bots)
 
     def test_validate_bot_names_valid(self, orchestrator):
@@ -196,6 +247,8 @@ class TestEvaluationOrchestrator:
             metric_thresholds=config.metric_thresholds,
             evaluation_model="gpt-4o",
             metric_names=mocker.ANY,
+            failures=orchestrator.failures,
+            answer_records=list(orchestrator.answer_records.values()),
         )
         assert result == mock_results
 
@@ -210,7 +263,7 @@ class TestEvaluationOrchestrator:
         config.confident_api_key = None
 
         mock_evaluator_class, mock_evaluator_instance = mock_evaluator
-        mock_evaluator_instance.load_test_cases.return_value = []
+        mock_evaluator_instance.load_cases.return_value = []
         mock_evaluator_instance.evaluate_model = AsyncMock(return_value=[])
 
         mock_evaluators = {}
@@ -293,18 +346,18 @@ class TestEvaluationOrchestrator:
         # Track which models were called and return unique test cases for each
         model_calls = []
 
-        async def track_evaluate_model(
+        async def track_evaluate_model(  # noqa: PLR0913
             model,
             test_cases,
             instructions=None,
             prompt_label="default",
             max_concurrent=10,
+            failures=None,
         ):
             model_calls.append(model)
             # Return unique test case for each model to verify they're all collected
-            test_case = mocker.Mock()
-            test_case.model = model  # Tag test case with model for verification
-            return [test_case]
+            # Tagged with its model, to check they're all collected
+            return [_answer(model)]
 
         mock_evaluator_instance.evaluate_model = track_evaluate_model
 
@@ -328,7 +381,7 @@ class TestEvaluationOrchestrator:
         call_args = mock_deepeval.evaluate.call_args
         test_cases_passed = call_args.kwargs["test_cases"]
         assert len(test_cases_passed) == 3
-        models_in_test_cases = {tc.model for tc in test_cases_passed}
+        models_in_test_cases = {tc.metadata["model"] for tc in test_cases_passed}
         assert models_in_test_cases == {"gpt-4", "gpt-3.5", "claude-3"}
 
     @pytest.fixture
@@ -351,7 +404,7 @@ class TestEvaluationOrchestrator:
         mock_load_json.return_value = {"test_bot": mock_prompts_data}
 
         mock_evaluator = mocker.Mock()
-        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.load_cases.return_value = []
         mock_evaluator.evaluate_model = AsyncMock(return_value=[])
 
         orchestrator.reporter.generate_report = mocker.Mock()
@@ -389,7 +442,7 @@ class TestEvaluationOrchestrator:
         mock_get_langsmith.return_value = "mocked langsmith text"
 
         mock_evaluator = mocker.Mock()
-        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.load_cases.return_value = []
         mock_evaluator.evaluate_model = AsyncMock(return_value=[])
 
         orchestrator.reporter.generate_report = mocker.Mock()
@@ -417,49 +470,6 @@ class TestEvaluationOrchestrator:
         assert call.kwargs["instructions"] == mock_get_langsmith.return_value
 
     @pytest.mark.asyncio
-    async def test_tutor_bot_skips_non_default_prompts(self, orchestrator, mocker):
-        """Test that TutorBot skips non-default prompts in prompt sweep."""
-        from deepeval.evaluate.types import EvaluationResult
-
-        mock_load_json = mocker.patch(
-            "ai_chatbots.evaluation.orchestrator.load_json_with_settings"
-        )
-        mock_load_json.return_value = {
-            "tutor": [{"name": "alt_prompt", "text": "custom instructions"}]
-        }
-
-        mock_evaluator = mocker.Mock()
-        mock_evaluator.load_test_cases.return_value = []
-        mock_evaluator.evaluate_model = AsyncMock(return_value=[])
-
-        orchestrator.reporter.generate_report = mocker.Mock()
-
-        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
-        mock_deepeval.evaluate.return_value = EvaluationResult(
-            test_results=[], confident_link=None, test_run_id=None
-        )
-        mocker.patch(
-            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
-            {"tutor": (mocker.Mock(), mocker.Mock(return_value=mock_evaluator))},
-        )
-
-        config = orchestrator.create_evaluation_config(
-            models=["gpt-4"], evaluation_model="gpt-4o"
-        )
-        config.confident_api_key = None
-
-        await orchestrator.run_evaluation(config, bot_names=["tutor"], use_prompts=True)
-
-        # evaluate_model called only once (default prompt), not twice
-        calls = mock_evaluator.evaluate_model.call_args_list
-        assert len(calls) == 1
-        assert calls[0].kwargs["prompt_label"] == "default"
-
-        # Verify skip message was logged
-        write_calls = [str(c) for c in orchestrator.stdout.write.call_args_list]
-        assert any("Skipping prompt" in s and "tutor" in s for s in write_calls)
-
-    @pytest.mark.asyncio
     async def test_run_evaluation_with_data_file(self, orchestrator, mocker):
         """Test evaluation run with data_file parameter."""
         config = orchestrator.create_evaluation_config(
@@ -469,7 +479,7 @@ class TestEvaluationOrchestrator:
 
         mock_evaluator_class = mocker.Mock()
         mock_evaluator = mocker.Mock()
-        mock_evaluator.load_test_cases.return_value = []
+        mock_evaluator.load_cases.return_value = []
         mock_evaluator.evaluate_model = AsyncMock(return_value=[])
         mock_evaluator_class.return_value = mock_evaluator
         mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
@@ -517,7 +527,7 @@ class TestEvaluationConfigIntegration:
         mock_stdout = mocker.Mock()
         orchestrator = EvaluationOrchestrator(mock_stdout)
         config = orchestrator.create_evaluation_config(
-            models=["gpt-4o"], evaluation_model="gpt-4o"
+            models=["gpt-4o"], evaluation_model="judge-model"
         )
 
         assert isinstance(config, EvaluationConfig)
@@ -538,7 +548,7 @@ class TestEvaluationConfigIntegration:
     def test_create_evaluation_config_with_timeout(self, orchestrator):
         """Test evaluation config creation with timeout parameter."""
         models = ["gpt-4o"]
-        evaluation_model = "gpt-4o"
+        evaluation_model = "judge-model"
         timeout_seconds = 120
 
         config = orchestrator.create_evaluation_config(
@@ -553,7 +563,7 @@ class TestEvaluationConfigIntegration:
     def test_create_evaluation_config_default_timeout(self, orchestrator):
         """Test evaluation config creation uses default timeout."""
         models = ["gpt-4o"]
-        evaluation_model = "gpt-4o"
+        evaluation_model = "judge-model"
 
         config = orchestrator.create_evaluation_config(models, evaluation_model)
 
@@ -653,7 +663,7 @@ class TestEvaluationConfigIntegration:
         config.confident_api_key = None
 
         mock_evaluator_class, mock_evaluator_instance = mock_evaluator
-        mock_evaluator_instance.load_test_cases.return_value = []
+        mock_evaluator_instance.load_cases.return_value = []
         mock_evaluator_instance.evaluate_model = AsyncMock(return_value=[])
         mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
         mocker.patch(
@@ -676,22 +686,6 @@ class TestEvaluationConfigIntegration:
         mock_stdout.write.assert_called()
         # Note: With the new implementation, empty test cases don't trigger "No test cases available"
         # since the bot itself returns empty results
-
-
-def _case(question, model, course="c1"):
-    """Build an LLMTestCase shaped like the ones evaluate_model returns."""
-    from deepeval.test_case import LLMTestCase
-
-    return LLMTestCase(
-        input=question,
-        actual_output=f"{model} answer",
-        retrieval_context=["evidence"],
-        metadata={
-            "model": model,
-            "prompt_label": "default",
-            "metadata": {"extra_state": {"course_id": [course]}},
-        },
-    )
 
 
 class TestPairwise:
@@ -729,13 +723,13 @@ class TestPairwise:
         arena_class, metric, wrapper_class = arena
         metric.measure.side_effect = ["model-b", "model-a", "model-b"]
         cases = [
-            _case("Q1", "model-a"),
-            _case("Q1", "model-b"),
-            _case("Q2", "model-a"),
-            _case("Q2", "model-b"),
+            _answer("model-a", "Q1"),
+            _answer("model-b", "Q1"),
+            _answer("model-a", "Q2"),
+            _answer("model-b", "Q2"),
             # Same question for a different course is judged separately
-            _case("Q1", "model-a", course="c2"),
-            _case("Q1", "model-b", course="c2"),
+            _answer("model-a", "Q1", case_id="Q1@c2"),
+            _answer("model-b", "Q1", case_id="Q1@c2"),
         ]
 
         orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
@@ -768,6 +762,21 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "Pairwise wins for syllabus: {'model-a': 1, 'model-b': 2}" in output
 
+    def test_run_pairwise_by_side(self, orchestrator, config, arena):
+        """A baseline run's contestants and winners are sides: model plus prompt."""
+        metric = arena[1]
+        metric.measure.return_value = "model-b [short]"
+        cases = [_answer("model-a"), _answer("model-b")]
+        cases[1].metadata["prompt_label"] = "short"
+
+        orchestrator._run_pairwise("syllabus", cases, config, by_side=True)  # noqa: SLF001
+
+        contestants = metric.measure.call_args.args[0].contestants
+        assert [c.name for c in contestants] == ["model-a", "model-b [short]"]
+        assert orchestrator.pairwise_results == {
+            ("syllabus", "f.json#Q1", None): "model-b [short]"
+        }
+
     def test_run_pairwise_skips_unmatched_and_judge_errors(
         self, orchestrator, config, arena, mock_stdout
     ):
@@ -775,7 +784,7 @@ class TestPairwise:
         the run.
         """
         _, metric, _ = arena
-        outcomes = iter([None, "model-a"])
+        outcomes = iter([None, "model-a", "model-b"])
 
         def measure(_arena):
             # The wrapper returns 0.0 and sets error once its retries run out
@@ -784,44 +793,46 @@ class TestPairwise:
             return winner or 0.0
 
         metric.measure.side_effect = measure
+        reprompted = [_answer(m, "Q2") for m in ("model-a", "model-b")]
+        for case in reprompted:
+            case.metadata["prompt_label"] = "#1"
         cases = [
-            _case("Q1", "model-a"),
-            _case("Q1", "model-b"),
-            _case("Q2", "model-a"),
-            _case("Q2", "model-b"),
-            _case("Only one", "model-a"),
+            _answer("model-a", "Q1"),
+            _answer("model-b", "Q1"),
+            _answer("model-a", "Q2"),
+            _answer("model-b", "Q2"),
+            *reprompted,
+            _answer("model-a", "Only one"),
         ]
 
         orchestrator._run_pairwise("syllabus", cases, config)  # noqa: SLF001
 
-        assert metric.measure.call_count == 2
-        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 0}}
+        assert orchestrator.pairwise_wins == {"syllabus": {"model-a": 1, "model-b": 1}}
+        assert orchestrator.pairwise_results == {
+            ("syllabus", "f.json#Q1", "default"): None,
+            ("syllabus", "f.json#Q2", "default"): "model-a",
+            ("syllabus", "f.json#Q2", "#1"): "model-b",
+        }
+        assert [(f.kind, f.case_id) for f in orchestrator.failures.items] == [
+            ("pairwise judge error", "f.json#Q1"),
+            ("pairwise skipped: an answer is missing", "f.json#Only one"),
+        ]
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "judge error: judge down" in output
 
-    @pytest.mark.parametrize(
-        ("bot_name", "models", "message"),
-        [
-            ("tutor", ["model-a", "model-b"], "Skipping pairwise for tutor"),
-            ("syllabus", ["model-a"], "--pairwise needs two or more models"),
-        ],
-    )
-    def test_run_pairwise_skipped(  # noqa: PLR0913
-        self, orchestrator, arena, mock_stdout, bot_name, models, message
-    ):
-        """Tutor answers (no problem context) and single-model runs are skipped."""
+    def test_run_pairwise_skipped(self, orchestrator, arena, mock_stdout):
+        """Single-model runs are skipped."""
         _, metric, _ = arena
         config = orchestrator.create_evaluation_config(
-            models=models, evaluation_model="judge"
+            models=["model-a"], evaluation_model="judge"
         )
-        cases = [_case("Q1", m) for m in models]
 
-        orchestrator._run_pairwise(bot_name, cases, config)  # noqa: SLF001
+        orchestrator._run_pairwise("syllabus", [_answer("model-a", "Q1")], config)  # noqa: SLF001
 
         metric.measure.assert_not_called()
         assert orchestrator.pairwise_wins == {}
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
-        assert message in output
+        assert "--pairwise needs two or more models" in output
 
     @pytest.mark.parametrize("pairwise", [True, False])
     @pytest.mark.asyncio
@@ -831,9 +842,9 @@ class TestPairwise:
         """run_evaluation passes every model's cases to the judge only when
         asked.
         """
-        cases = {m: _case("Q1", m) for m in config.models}
+        cases = {m: _answer(m, "Q1") for m in config.models}
         evaluator = mocker.Mock()
-        evaluator.load_test_cases.return_value = [mocker.Mock()]
+        evaluator.load_cases.return_value = [mocker.Mock()]
         evaluator.evaluate_model = AsyncMock(
             side_effect=lambda model, *_args, **_kwargs: [cases[model]]
         )
@@ -849,7 +860,7 @@ class TestPairwise:
         )
         orchestrator.reporter.generate_report = mocker.Mock()
 
-        def fake_pairwise(bot_name, _test_cases, _config):
+        def fake_pairwise(bot_name, _test_cases, _config, **_kwargs):
             orchestrator.pairwise_wins[bot_name] = {"model-a": 1, "model-b": 0}
 
         run_pairwise = mocker.patch.object(
@@ -863,7 +874,7 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         if pairwise:
             run_pairwise.assert_called_once_with(
-                "test_bot", list(cases.values()), config
+                "test_bot", list(cases.values()), config, by_side=False
             )
             assert "PAIRWISE WINS" in output
         else:
@@ -878,7 +889,7 @@ class TestPairwise:
         mock_deepeval.evaluate.return_value = mocker.Mock(test_results=[1])
 
         orchestrator._run_deepeval_evaluation(  # noqa: SLF001
-            [_case("Q1", "model-a")], config, 2
+            [_answer("model-a", "Q1")], config, 2
         )
 
         assert mock_prepare.call_count == len(config.metrics)
@@ -891,8 +902,227 @@ class TestPairwise:
         mock_deepeval.evaluate.return_value = mocker.Mock(test_results=[1])
 
         orchestrator._run_deepeval_evaluation(  # noqa: SLF001
-            [_case("Q1", "model-a"), _case("Q2", "model-a")], config, 2
+            [_answer("model-a", "Q1"), _answer("model-a", "Q2")], config, 2
         )
 
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "deepeval returned 1 of 2 test cases" in output
+
+
+class TestFailuresAndBaseline:
+    """Failures are recorded in every run; a baseline adds a verdict."""
+
+    MODELS = ["model-a", "model-b"]
+
+    @pytest.fixture
+    def orchestrator(self, mock_stdout):
+        """Create orchestrator for testing."""
+        return EvaluationOrchestrator(mock_stdout)
+
+    @pytest.fixture
+    def bot(self, mocker):
+        """Register "test_bot"; each model answers the cases in bot.answers."""
+        evaluator = mocker.Mock()
+        evaluator.answers = {"Q1": "f.json#Q1"}
+        evaluator.load_cases.side_effect = lambda **_: (
+            [mocker.Mock()] * len(evaluator.answers)
+        )
+
+        def answers(model, *_args, prompt_label="default", **_kwargs):
+            found = [_answer(model, q, c) for q, c in evaluator.answers.items()]
+            for answer in found:
+                answer.metadata["prompt_label"] = prompt_label
+            return found
+
+        evaluator.evaluate_model = AsyncMock(side_effect=answers)
+        mocker.patch(
+            "ai_chatbots.evaluation.orchestrator.BOT_EVALUATORS",
+            {"test_bot": (mocker.Mock(), mocker.Mock(return_value=evaluator))},
+        )
+        return evaluator
+
+    @pytest.fixture
+    def deepeval_returns(self, mocker):
+        """Make deepeval.evaluate return results for the given answers."""
+        mock_deepeval = mocker.patch("ai_chatbots.evaluation.orchestrator.deepeval")
+
+        def returns(*results):
+            mock_deepeval.evaluate.return_value = mocker.Mock(
+                test_results=[
+                    mocker.Mock(metadata=dict(case.metadata), metrics_data=metrics)
+                    for case, metrics in results
+                ]
+            )
+            return mock_deepeval
+
+        return returns
+
+    def _config(self, orchestrator, **kwargs):
+        return orchestrator.create_evaluation_config(self.MODELS, "judge", **kwargs)
+
+    @staticmethod
+    def _metric(mocker, score, error=None, name="Correctness [GEval]"):
+        metric = mocker.Mock(score=score, error=error)
+        metric.name = name
+        return metric
+
+    @pytest.mark.parametrize(
+        ("judge", "models"),
+        [
+            ("gpt-5.4", ["openai/gpt-5.4", "openai/gpt-4o-mini"]),
+            ("openai/gpt-5.4", ["gpt-5.4"]),
+            ("GPT-5.4", ["openai/gpt-5.4"]),
+        ],
+    )
+    def test_judge_under_test_is_refused(self, orchestrator, judge, models):
+        """The judge can't be a model under test, with or without its prefix."""
+        with pytest.raises(ValueError, match="is one of the models under test"):
+            orchestrator.create_evaluation_config(models, judge)
+
+    @pytest.mark.usefixtures("bot")
+    async def test_pairwise_only(self, orchestrator, deepeval_returns, mocker):
+        """--pairwise-only builds no metric and never calls deepeval.evaluate."""
+        config = self._config(orchestrator, pairwise_only=True)
+        mock_deepeval = deepeval_returns()
+        mocker.patch.object(orchestrator, "_run_pairwise")
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        await orchestrator.run_evaluation(
+            config, bot_names=["test_bot"], use_prompts=False, pairwise=True
+        )
+
+        assert (config.metrics, config.pairwise_only, config.correctness_only) == (
+            [],
+            True,
+            False,
+        )
+        mock_deepeval.evaluate.assert_not_called()
+
+    def test_record_answers(self, orchestrator):
+        """Empty answers, search errors and blocked account calls are recorded."""
+        empty, searched, blocked = (
+            _answer("model-a", case_id=f"f#{i}") for i in range(3)
+        )
+        # Only a metadata comment: still empty
+        empty.actual_output = '\n\n<!-- {"thread_id": "1"} -->\n\n'
+        searched.metadata["search_errors"] = ["search_content_files"]
+        blocked.metadata["blocked_account_calls"] = ["get_enrollments"]
+
+        orchestrator._record_answers("syllabus", [empty, searched, blocked])  # noqa: SLF001
+
+        assert [(f.kind, f.case_id) for f in orchestrator.failures.items] == [
+            ("empty answer", "f#0"),
+            ("search tool returned an error", "f#1"),
+            ("account tool called without made-up records", "f#2"),
+        ]
+        record = next(iter(orchestrator.answer_records.values()))
+        assert set(record["checks"]) == {"follow_up_offer"}
+        # Each answer is saved with what the judge is shown
+        saved = orchestrator.stdout.write.call_args.args[0]
+        assert saved.startswith("ANSWER_JSON ")
+        assert '"context": ["evidence"]' in saved
+
+    def test_scores_recorded_under_threshold_names(
+        self, orchestrator, deepeval_returns, mocker
+    ):
+        """Deepeval's "Answer Relevancy" is scored as the threshold's AnswerRelevancy."""
+        config = self._config(orchestrator, require_expected=True)
+        case = _answer("model-a")
+        orchestrator._record_answers("test_bot", [case])  # noqa: SLF001
+        names = [metric.__name__ for metric in config.metrics]
+        deepeval_returns((case, [self._metric(mocker, 0.9, name=n) for n in names]))
+
+        orchestrator._run_deepeval_evaluation([case], config, 2, bot_name="test_bot")  # noqa: SLF001
+
+        (record,) = orchestrator.answer_records.values()
+        assert set(record["scores"]) == set(config.metric_thresholds)
+
+    @pytest.mark.parametrize(
+        ("metric", "kinds"),
+        [
+            ((0.9, None), ["deepeval returned no result"]),  # model-b's is lost
+            ((None, "timed out"), ["judge error", "deepeval returned no result"]),
+            ((0.0, "timed out"), ["judge error", "deepeval returned no result"]),
+            ((None, None), ["judge error", "deepeval returned no result"]),
+            (None, ["judge returned no score", "deepeval returned no result"]),
+        ],
+    )
+    def test_deepeval_failures_recorded(
+        self, orchestrator, deepeval_returns, mocker, metric, kinds
+    ):
+        """A missing result or score and a judge error are failures, not scores."""
+        config = self._config(orchestrator, correctness_only=True)
+        cases = [_answer(model) for model in self.MODELS]
+        deepeval_returns((cases[0], [self._metric(mocker, *metric)] if metric else []))
+
+        orchestrator._run_deepeval_evaluation(cases, config, 2, bot_name="test_bot")  # noqa: SLF001
+
+        assert [f.kind for f in orchestrator.failures.items] == kinds
+
+    async def test_baseline_comparison(
+        self, orchestrator, bot, deepeval_returns, mock_stdout, mocker
+    ):
+        """A baseline run answers once per side, with its prompt, then compares."""
+        bot.answers = {f"Q{i}": f"f#{i}" for i in range(8)}
+        sides = [("model-a", "default", 0.9), ("model-b", "short", 0.4)]
+        deepeval_returns(
+            *(
+                (answer, [self._metric(mocker, score)])
+                for model, label, score in sides
+                for answer in bot.evaluate_model.side_effect(model, prompt_label=label)
+            )
+        )
+
+        def baseline_wins(bot_name, _cases, _config, **_kwargs):
+            for case_id in bot.answers.values():
+                orchestrator.pairwise_results[(bot_name, case_id, "default")] = (
+                    "model-a"
+                )
+
+        mocker.patch.object(orchestrator, "_run_pairwise", side_effect=baseline_wins)
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        await orchestrator.run_evaluation(
+            self._config(orchestrator, correctness_only=True),
+            bot_names=["test_bot"],
+            baseline="model-a",
+            candidate_prompt={"name": "short", "text": "Be short."},
+            sample=0,
+        )
+
+        calls = bot.evaluate_model.call_args_list
+        assert [(c.args[0], c.kwargs["instructions"]) for c in calls] == [
+            ("model-a", None),
+            ("model-b", "Be short."),
+        ]
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        for text in (
+            "model-b [short] versus baseline model-a, 8 cases compared (loaded ",
+            "pairwise: better 0, worse 8, same 0; p=0.008; 🚩 CLEARLY WORSE",
+            "Correctness: better 0, worse 8, same 0",
+            "↳ worse: f#0: Q0",
+            "Regression found: clearly worse on pairwise, Correctness.",
+        ):
+            assert text in output
+        assert "INCOMPLETE RUN" not in output
+
+    @pytest.mark.parametrize(
+        ("named", "recorded"), [(["test_bot"], True), (None, False)]
+    )
+    async def test_no_cases_loaded(self, orchestrator, bot, mocker, named, recorded):
+        """A bot asked for by name that loads no cases is a failure."""
+        bot.answers = {}
+        mocker.patch.object(orchestrator, "_run_pairwise")
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        await orchestrator.run_evaluation(
+            self._config(orchestrator, pairwise_only=True),
+            bot_names=named,
+            data_file="x.json",
+            use_prompts=False,
+        )
+
+        found = [(f.bot, f.kind, f.detail) for f in orchestrator.failures.items]
+        assert found == (
+            [("test_bot", "no cases loaded", "x.json")] if recorded else []
+        )

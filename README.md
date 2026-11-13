@@ -291,13 +291,47 @@ The default prompts used for each chatbot are specified either in Langsmith if e
 A management command (`rag_evaluation`) has been provided to calculate various evaluation metrics on the chatbots. The command takes the following optional parameters:
 
 - `models`: Comma-delimited list of models that the chatbots will use to answer questions. If none are provided, it will use all the enabled `ai_chatbots.models.LLMModel` objects in the database, so make sure have all the necessary API keys in your environment.
-- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-4o-mini`.
-- `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated.
-- `data-file`: Input data file containing questions and expected answers. See test_json/rag_evaluation.json for the required format.
+- `eval_model`: The LLM model that will act as a "judge" and calculate some of the metrics. The default is `gpt-5.5`. The command refuses a judge that is also one of the `models` under test.
+- `bots`: Comma-delimited list of bots to evaluate. If not provided, all chatbots will be evaluated. `syllabus_canvas` is the Canvas syllabus bot, judged on the same `syllabus` cases with its own prompt.
+- `data-file`: Input data file containing questions and expected answers, or several separated by commas. See test_json/rag_evaluation.json for the required format.
 - `prompts`: If true, include alternative prompts to test against in addition to the default prompt per chatbot.
 - `prompts-file`: The file containing alternative prompts to test. See `test_json/rag_evaluation_prompts.json` for the required format.
 - `output-file`: The file to write results to. If not specified, results will only be sent to stdout.
 - `timeout`: The max amount of seconds to wait before aborting a test case and moving on to the next. Default is 360.
 - `max-concurrent`: The max number of test cases to run concurrently. Default is 1.
+- `correctness-only`: Judge answers against their expected answers. Cases without one are skipped, with a count. Correctness passes an answer that answers the question with fewer of the examples or reasons the expected answer lists. The syllabus and video bots are also scored on Faithfulness, which fails any claim their retrieved material doesn't back up.
+- `pairwise`: Also ask the judge which model answered each question best.
+- `pairwise-only`: Judge only pairwise, with no other metric. For cases without expected answers.
+- `sample`: Judge a seeded random sample of this many cases per bot. Default: every case.
+- `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
+- `baseline`: Compare the other model in `models` (which may name just that one) with this one and give a verdict (see below). Judged pairwise, plus Correctness (and Faithfulness, for the syllabus and video bots) with `correctness-only`; `--bots tutor` alone is judged on TutoringQuality, against the problem, its solution and the conversation so far.
+- `baseline-prompt`, `candidate-prompt`: A text file with that side's prompt (default: the bot's own); the file name labels it. Need `baseline` and a single bot.
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.
+
+Every run reports what it could not measure instead of dropping it: answers that failed or came back empty, search tools that returned their error result, account tools called for a case without made-up learner records (the live account APIs are never called), results deepeval did not return, judge errors, and pairwise judgements skipped for a missing answer. The report lists each one and says `INCOMPLETE RUN` at the top and bottom. A judge error is never shown as a score: it is left out of means and pass counts ("passed/judged"), and a metric with nothing judged shows "not judged".
+
+### Comparing a candidate with the baseline
+
+`--baseline` compares two sides, each a model and a prompt, case by case. For each measure (pairwise preference, Correctness or TutoringQuality when judged, and each code check: follow-up offers for recommendation, syllabus and video, unlinked resources and bare URLs for recommendation) every case comes out candidate better, worse or the same. A measure is flagged "clearly worse" when the candidate is worse more often than better and an exact sign test gives p < 0.05; 6 worse and none better is the smallest result that can be flagged. The section ends with **Incomplete** if anything failed (naming any measure already flagged), else **Regression found** or **Nothing flagged**.
+
+"Nothing flagged" does not mean the candidate is as good: a few dozen cases catch only large losses, so compare on every case you have. To see how repeatable a flag is, rerun with the same `--seed` (same cases, fresh answers and judging); another `--seed` also changes the cases. Neither shows what caused a flag.
+
+One comparison is one run per eval group (data files), for example:
+
+```bash
+python manage.py rag_evaluation --bots syllabus --baseline openai/gpt-4o-mini --models openai/gpt-5.4-mini \
+  --correctness-only --data-file test_json/evaluation_sets/account_tools.json \
+  --batch-size 8 --max-concurrent 4 --output-file report.txt
+```
+
+A chatbot has a regression when any of its runs reports one.
+
+To compare prompts too, give a side its prompt in a text file. For tutor, the text replaces the `tutor_problem` template and must contain `{problem_statement}`:
+
+```bash
+python manage.py rag_evaluation --bots tutor --baseline openai/gpt-4o --models openai/gpt-5.4 \
+  --baseline-prompt production.txt --candidate-prompt strict.txt --data-file <tutor cases>
+```
+
+Tutor cases can carry the saved conversation before the turn (`history`) and a Canvas problem set (`run_readable_id` and `problem_set_title` in `extra_init`) instead of an edX problem. Without a prompt, a side uses the bot's own prompt, which locally is the one in code or in `open-learning-ai-tutor` and may differ from production's LangSmith prompts; to compare with production, pass production's text as `--baseline-prompt`. The report prints each side's prompt source and a hash of its text. Only `tutor_problem` is replaced: with `LANGSMITH_API_KEY` set, the tutor's other prompts still come from LangSmith, as in the app. TutoringQuality penalizes giving away the final answer, not hints that describe the method.

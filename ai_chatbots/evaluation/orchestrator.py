@@ -1,6 +1,7 @@
 """Orchestrator for running RAG evaluations across multiple bots and models."""
 
 import asyncio
+import hashlib
 import json
 import os
 from datetime import UTC, datetime
@@ -24,7 +25,15 @@ from deepeval.test_case import ArenaTestCase, Contestant, LLMTestCaseParams
 from django.core.management.base import OutputWrapper
 
 from ai_chatbots.api import get_langsmith_prompt
-from ai_chatbots.evaluation.base import EvaluationConfig
+from ai_chatbots.evaluation.base import (
+    SAMPLE_SEED,
+    EvaluationConfig,
+    RunFailures,
+    judge_error,
+    sample_cases,
+)
+from ai_chatbots.evaluation.checks import HTML_COMMENT, run_checks
+from ai_chatbots.evaluation.compare import measure_outcomes, print_comparison
 from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS
 from ai_chatbots.evaluation.reporting import EvaluationReporter
 from ai_chatbots.evaluation.timeout_wrapper import (
@@ -36,8 +45,79 @@ from main.test_utils import load_json_with_settings
 # Constants
 ERROR_LOG_MIN_SIZE = 500  # Minimum file size to indicate errors beyond header
 
-# Bots that ignore custom instructions/prompts - skip prompt sweeps for these
-BOTS_WITHOUT_PROMPT_SUPPORT: set[str] = {"tutor"}
+# Answers with fewer than two models' answers can't be judged pairwise
+MIN_CONTESTANTS = 2
+
+# Bots whose answers are checked against their own retrieved material even with
+# --correctness-only: both sides search the same course material the same way.
+# The recommendation bot's two sides can search differently, so it isn't.
+GROUNDED_BOTS = {"syllabus", "syllabus_canvas", "video_gpt"}
+
+
+def _model_name(model_id: str) -> str:
+    """Strip the provider prefix from a model id: openai/gpt-5.4 -> gpt-5.4."""
+    return model_id.rsplit("/", maxsplit=1)[-1].strip().lower()
+
+
+def check_judge_not_under_test(judge: str, models: list[str]) -> None:
+    """Refuse a judge that is also one of the models being scored."""
+    if any(_model_name(judge) == _model_name(model) for model in models):
+        msg = (
+            f"The judge ({judge}) is one of the models under test; "
+            "choose another --eval_model."
+        )
+        raise ValueError(msg)
+
+
+def _answer_key(metadata: dict | None) -> tuple:
+    """Identify one answer: case, model and prompt."""
+    metadata = metadata or {}
+    return (
+        metadata.get("case_id"),
+        metadata.get("model"),
+        metadata.get("prompt_label"),
+    )
+
+
+def _bot_metrics(config: EvaluationConfig, bot_name: str | None) -> list:
+    """List the metrics one bot is scored on: Faithfulness only for GROUNDED_BOTS."""
+    if not config.correctness_only or bot_name in GROUNDED_BOTS:
+        return config.metrics
+    return [m for m in config.metrics if m.__name__ != "Faithfulness"]
+
+
+def _side(metadata: dict | None) -> str:
+    """Name a baseline run's side: the model, plus the prompt unless default."""
+    _, model, label = _answer_key(metadata)
+    return model if label in (None, "default") else f"{model} [{label}]"
+
+
+TUTORING_QUALITY_STEPS = [
+    "The input is the student's latest message; the retrieval context holds the "
+    "problem, its solution if available, and the conversation so far.",
+    "If the actual output gives away a final answer the student has not yet reached, "
+    "or does the remaining work for them, the score must be low no matter how "
+    "accurate it is, even when the student asks for the answer directly: a tutor must "
+    "not hand it over.",
+    "Check that every hint, explanation and claim is correct for this problem; "
+    "penalize any error heavily.",
+    "Check that it responds to what the student actually said, including correcting a "
+    "misconception they stated or confirming an answer they got right.",
+    "Check that it moves the student forward with a concrete next step, hint or "
+    "guiding question, rather than generic encouragement.",
+    "Check that it is clear and appropriately short for a chat.",
+]
+
+
+TUTOR_PAIRWISE_CRITERIA = (
+    "The input is a student's latest message to a tutor; the retrieval "
+    "context holds the problem, its solution if available, and the "
+    "conversation so far.  Choose the tutor response that best helps the "
+    "student learn: correct for this problem, responsive to what the "
+    "student said, moving them forward with a concrete hint or guiding "
+    "question, and not giving away the final answer or doing the "
+    "remaining work for them.  Prefer clear, chat-length responses."
+)
 
 
 class EvaluationOrchestrator:
@@ -47,6 +127,16 @@ class EvaluationOrchestrator:
         self.stdout = stdout
         self.reporter = EvaluationReporter(stdout)
         self.pairwise_wins: dict[str, dict[str, int]] = {}
+        # Everything the run failed to measure
+        self.failures = RunFailures()
+        # (bot, case_id, side) -> the answer's code checks, tool calls and scores
+        self.answer_records: dict[tuple, dict] = {}
+        # (bot, case_id, prompt_label) -> winning model, None for a judge error
+        self.pairwise_results: dict[tuple, str | None] = {}
+        # Per bot: how the cases were sampled, for the report
+        self.sample_info: dict[str, str] = {}
+        # Bots the run was asked for by name; one with no cases is a failure
+        self.named_bots: set[str] = set()
 
     def create_evaluation_config(  # noqa: PLR0913
         self,
@@ -59,6 +149,8 @@ class EvaluationOrchestrator:
         *,
         require_expected: bool = False,
         correctness_only: bool = False,
+        pairwise_only: bool = False,
+        tutor_rubric: bool = False,
     ) -> EvaluationConfig:
         """Create evaluation configuration with metrics.
 
@@ -79,21 +171,36 @@ class EvaluationOrchestrator:
                 unusable for comparing two versions of the code that reach the
                 same answer through different tools, or through none at all.
         """
-        if correctness_only:
+        check_judge_not_under_test(evaluation_model, models)
+        if pairwise_only:
+            metric_thresholds = metric_thresholds or {}
+            metrics = []
+        elif correctness_only or tutor_rubric:
+            name = "TutoringQuality" if tutor_rubric else "Correctness"
             if metric_thresholds is None:
-                metric_thresholds = {"Correctness": 0.7}
+                metric_thresholds = {name: 0.7}
+                if not tutor_rubric:
+                    metric_thresholds["Faithfulness"] = 0.7
             metrics = [
                 GEval(
-                    name="Correctness",
+                    name=name,
                     # Fixed steps, since GEval writes its own from criteria on
                     # every run, and expected outputs are written as rubrics
-                    evaluation_steps=[
+                    evaluation_steps=TUTORING_QUALITY_STEPS
+                    if tutor_rubric
+                    else [
                         "Read the expected output as a rubric for the answer, "
                         "not as text the actual output must repeat. Wording, "
                         "order and format don't matter.",
-                        "Check that every fact the expected output requires is "
-                        "in the actual output: numbers, grades, prices, dates, "
-                        "names and links must match.",
+                        "Check that the actual output answers the question the "
+                        "way the expected output does, and that every specific "
+                        "fact it requires is there: numbers, grades, prices, "
+                        "dates, names and links must match.",
+                        "Reasons, examples, tips or considerations the expected "
+                        "output lists are examples of a good answer, not each "
+                        "required, unless the question asks for all of them. "
+                        "Covering fewer of them must not lower the score if the "
+                        "question is still answered.",
                         "Find each thing the expected output says the answer "
                         "doesn't or shouldn't do (such as 'It doesn't list "
                         "other courses'), and check whether the actual output "
@@ -102,8 +209,9 @@ class EvaluationOrchestrator:
                         "answer may do is optional.",
                         "Extra detail that doesn't contradict the expected "
                         "output is acceptable and must not lower the score.",
-                        "Score low if the actual output leaves out or gets "
-                        "wrong a required fact, does something the expected "
+                        "Score low if the actual output doesn't answer the "
+                        "question, leaves out or gets wrong a required specific "
+                        "fact, does something the expected "
                         "output says it doesn't, answers about a different "
                         "course, program or platform than the one asked "
                         "about, or says no information could be found when "
@@ -112,12 +220,27 @@ class EvaluationOrchestrator:
                     evaluation_params=[
                         LLMTestCaseParams.INPUT,
                         LLMTestCaseParams.ACTUAL_OUTPUT,
-                        LLMTestCaseParams.EXPECTED_OUTPUT,
+                        # The tutor is judged against the problem and conversation
+                        LLMTestCaseParams.RETRIEVAL_CONTEXT
+                        if tutor_rubric
+                        else LLMTestCaseParams.EXPECTED_OUTPUT,
                     ],
                     model=evaluation_model,
-                    threshold=metric_thresholds["Correctness"],
+                    threshold=metric_thresholds[name],
                 ),
             ]
+            # Only the GROUNDED_BOTS are scored on it (see _bot_metrics)
+            if "Faithfulness" in metric_thresholds:
+                metrics.append(
+                    FaithfulnessMetric(
+                        threshold=metric_thresholds["Faithfulness"],
+                        model=evaluation_model,
+                        include_reason=True,
+                        # Fail a claim the material doesn't back, not only one
+                        # it contradicts
+                        penalize_ambiguous_claims=True,
+                    )
+                )
         elif require_expected:
             if metric_thresholds is None:
                 metric_thresholds = {
@@ -218,6 +341,8 @@ class EvaluationOrchestrator:
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             retry_delay=retry_delay,
+            correctness_only=correctness_only and not pairwise_only,
+            pairwise_only=pairwise_only,
         )
 
     def _load_prompts_data(self, prompts_file: str) -> dict:
@@ -230,20 +355,89 @@ class EvaluationOrchestrator:
             self.stdout.write(f"Loaded alternative prompts from {prompts_file}")
         except (FileNotFoundError, JSONDecodeError):
             self.stdout.write(f"Warning: {prompts_file} not found or invalid")
+            self.failures.add(
+                "all bots", "prompts file not loaded", detail=prompts_file
+            )
         return prompts_data
+
+    def _load_bot_cases(  # noqa: PLR0913
+        self,
+        evaluator,
+        bot_name: str,
+        config: EvaluationConfig,
+        sample: int | None,
+        seed: int,
+        data_file: str | list[str] | None = None,
+    ) -> list:
+        """Load a bot's cases from every data file and take the run's sample."""
+        cases = evaluator.load_cases(require_reference=config.correctness_only)
+        picked = sample_cases(cases, sample, seed)
+        info = f"{len(picked)} of {len(cases)} cases"
+        if len(picked) < len(cases):
+            info += f", sampled with seed {seed}"
+        self.sample_info[bot_name] = info
+        self.stdout.write(f"Loaded {info} for {bot_name}")
+        if not picked and bot_name in self.named_bots:
+            files = (
+                data_file if isinstance(data_file, str) else ",".join(data_file or [])
+            )
+            self.failures.add(bot_name, "no cases loaded", detail=files or "default")
+        return picked
+
+    def _record_answers(self, bot_name: str, test_cases: list) -> None:
+        """Note each answer's code checks and anything that went wrong."""
+        add = self.failures.add
+        for case in test_cases:
+            metadata = case.metadata or {}
+            # Ignore the metadata comments some bots append
+            if not HTML_COMMENT.sub("", case.actual_output or "").strip():
+                add(bot_name, "empty answer", case)
+            for tool in metadata.get("search_errors") or []:
+                add(bot_name, "search tool returned an error", case, detail=tool)
+            for call in metadata.get("blocked_account_calls") or []:
+                add(
+                    bot_name,
+                    "account tool called without made-up records",
+                    case,
+                    detail=call,
+                )
+            case_id, model, prompt_label = _answer_key(metadata)
+            record = {
+                "bot": bot_name,
+                "question": case.input,
+                "case_id": case_id,
+                "model": model,
+                "prompt_label": prompt_label,
+                "side": _side(metadata),
+                "checks": run_checks(bot_name, case),
+                "tool_call_count": metadata.get("tool_call_count"),
+            }
+            # What the judge is shown, to check a verdict by hand or judge it again
+            shown = {
+                "answer": case.actual_output,
+                "expected": case.expected_output,
+                "context": case.retrieval_context,
+            }
+            self.stdout.write(f"ANSWER_JSON {json.dumps(record | shown)}")
+            self.answer_records[(bot_name, case_id, _side(metadata))] = record | {
+                "scores": {}
+            }
 
     async def _collect_and_evaluate_bot(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         bot_name: str,
         config: EvaluationConfig,
         *,
-        data_file: str | None,
+        data_file: str | list[str] | None,
         use_prompts: bool | None,
         prompts_data: dict | None,
         max_concurrent: int,
         batch_size: int,
         error_log_file: str,
         pairwise: bool = False,
+        sample: int | None = None,
+        seed: int = SAMPLE_SEED,
+        sides: list[tuple[str, dict | None]] | None = None,
     ) -> EvaluationResult:
         """Collect test cases for a bot and evaluate them immediately.
 
@@ -265,9 +459,10 @@ class EvaluationOrchestrator:
             error_log_file=error_log_file,
         )
 
-        # Load and validate test cases for this bot
-        bot_test_cases = evaluator.load_test_cases()
-        self.stdout.write(f"Loaded {len(bot_test_cases)} test cases for {bot_name}")
+        # Load, filter and sample the test cases for this bot
+        bot_test_cases = self._load_bot_cases(
+            evaluator, bot_name, config, sample, seed, data_file
+        )
 
         # Get prompts for this bot (default + alternatives)
         bot_prompts = [None]  # Default prompt (None means use bot's default)
@@ -278,34 +473,37 @@ class EvaluationOrchestrator:
         pairwise_cases = []
         batch_results = []
 
-        # Evaluate each model with each prompt
+        # Evaluate each model with each prompt; in a baseline run, its side's prompt
         for model in config.models:
-            for prompt in bot_prompts:
-                # Skip non-default prompts for bots that don't support them
-                if prompt is not None and bot_name in BOTS_WITHOUT_PROMPT_SUPPORT:
-                    prompt_name = prompt.get("name", "unknown")
-                    self.stdout.write(
-                        f"Skipping prompt '{prompt_name}' for {bot_name} "
-                        f"(bot does not support custom instructions)"
-                    )
-                    continue
-
+            for prompt in [dict(sides)[model]] if sides else bot_prompts:
                 # Resolve prompt details
                 if prompt is None:
                     prompt_label = "default"
                     prompt_text = None
+                    source = "bot default"
                 else:
                     prompt_label = prompt["name"]
+                    source = "prompts file" if prompt.get("text") else "LangSmith"
                     prompt_text = prompt.get("text") or get_langsmith_prompt(
                         prompt_label
                     )
 
                 if prompt_label != "default" and not prompt_text:
                     self.stdout.write(f"No prompt text for '{prompt_label}', skipping")
+                    self.failures.add(
+                        bot_name,
+                        "prompt skipped: no prompt text",
+                        model=model,
+                        prompt_label=prompt_label,
+                    )
                     continue
 
+                if prompt_text:
+                    digest = hashlib.sha256(prompt_text.encode()).hexdigest()[:12]
+                    source += f", sha256 {digest}"
                 self.stdout.write(
-                    f"Evaluating {bot_name} with {model} using {prompt_label}"
+                    f"Evaluating {bot_name} with {model} using {prompt_label} "
+                    f"({source})"
                 )
 
                 try:
@@ -316,8 +514,11 @@ class EvaluationOrchestrator:
                         instructions=prompt_text,
                         prompt_label=prompt_label,
                         max_concurrent=max_concurrent,
+                        failures=self.failures,
                     )
-                    all_llm_test_cases.extend(model_test_cases)
+                    self._record_answers(bot_name, model_test_cases)
+                    if _bot_metrics(config, bot_name):
+                        all_llm_test_cases.extend(model_test_cases)
                     if pairwise:
                         pairwise_cases.extend(model_test_cases)
 
@@ -333,7 +534,11 @@ class EvaluationOrchestrator:
                         )
 
                         batch_result = await asyncio.to_thread(
-                            self._run_deepeval_evaluation, batch, config, max_concurrent
+                            self._run_deepeval_evaluation,
+                            batch,
+                            config,
+                            max_concurrent,
+                            bot_name=bot_name,
                         )
                         batch_results.append(batch_result)
 
@@ -370,12 +575,17 @@ class EvaluationOrchestrator:
                 all_llm_test_cases,
                 config,
                 max_concurrent,
+                bot_name=bot_name,
             )
             batch_results.append(final_result)
 
         if pairwise:
             await asyncio.to_thread(
-                self._run_pairwise, bot_name, pairwise_cases, config
+                self._run_pairwise,
+                bot_name,
+                pairwise_cases,
+                config,
+                by_side=bool(sides),
             )
 
         # Merge all batch results for this bot
@@ -387,10 +597,15 @@ class EvaluationOrchestrator:
 
         return bot_result
 
-    def _run_deepeval_evaluation(
-        self, test_cases: list, config: EvaluationConfig, max_concurrent: int
+    def _run_deepeval_evaluation(  # noqa: C901
+        self,
+        test_cases: list,
+        config: EvaluationConfig,
+        max_concurrent: int,
+        *,
+        bot_name: str | None = None,
     ) -> EvaluationResult:
-        """Run the actual DeepEval evaluation.
+        """Run the actual DeepEval evaluation, recording what it couldn't judge.
 
         Callers must run this off the event loop (asyncio.to_thread). Called
         from a coroutine, deepeval.evaluate() falls back to nest_asyncio and
@@ -425,12 +640,13 @@ class EvaluationOrchestrator:
                 f"{max_concurrent} concurrent executions"
             )
 
-        for metric in config.metrics:
+        metrics = _bot_metrics(config, bot_name)
+        for metric in metrics:
             if isinstance(metric, TimeoutMetricWrapper):
                 metric.prepare()
         result = deepeval.evaluate(
             test_cases=test_cases,
-            metrics=config.metrics,
+            metrics=metrics,
             error_config=ErrorConfig(ignore_errors=True),
             async_config=async_config,
         )
@@ -439,26 +655,56 @@ class EvaluationOrchestrator:
                 f"⚠️  deepeval returned {len(result.test_results)} of "
                 f"{len(test_cases)} test cases"
             )
+        returned = {
+            _answer_key(tr.metadata): tr
+            for tr in result.test_results
+            if isinstance(getattr(tr, "metadata", None), dict)
+        }
+        for case in test_cases:
+            bot = bot_name or (case.metadata or {}).get("bot_name", "unknown")
+            test_result = returned.get(_answer_key(case.metadata))
+            if test_result is None:
+                self.failures.add(bot, "deepeval returned no result", case)
+                continue
+            metrics_data = getattr(test_result, "metrics_data", None) or []
+            record = self.answer_records.get(
+                (bot, case.metadata.get("case_id"), _side(case.metadata)), {}
+            )
+            for metric_data in metrics_data:
+                if error := judge_error(metric_data):
+                    self.failures.add(
+                        bot, "judge error", case, detail=f"{metric_data.name}: {error}"
+                    )
+                else:
+                    # deepeval names them "Correctness [GEval]", "Answer Relevancy"
+                    name = metric_data.name.split(" [")[0].replace(" ", "")
+                    record.setdefault("scores", {})[name] = metric_data.score
+            for name in {m.__name__ for m in metrics} - {m.name for m in metrics_data}:
+                self.failures.add(bot, "judge returned no score", case, detail=name)
         return result
 
     def _run_pairwise(
-        self, bot_name: str, test_cases: list, config: EvaluationConfig
+        self,
+        bot_name: str,
+        test_cases: list,
+        config: EvaluationConfig,
+        *,
+        by_side: bool = False,
     ) -> None:
-        """Ask the judge which model answered each question best.
+        """Ask the judge which model answered each case best.
 
         No expected answer is involved.  deepeval shows the judge the answers in
         random order and under fake names, which reduces position and name bias.
         """
-        if bot_name == "tutor":
-            # Its test cases carry no problem or solution for the judge to check
-            self.stdout.write("Skipping pairwise for tutor: no problem context")
-            return
-        if len(config.models) < 2:  # noqa: PLR2004
+        if len(config.models) < MIN_CONTESTANTS:
             self.stdout.write("⚠️  --pairwise needs two or more models; skipping")
+            self.failures.add(bot_name, "pairwise skipped: needs two or more models")
             return
         arena_metric = ArenaGEval(
             name="PairwisePreference",
-            criteria=(
+            criteria=TUTOR_PAIRWISE_CRITERIA
+            if bot_name == "tutor"
+            else (
                 "Choose the response that best serves the learner who asked the "
                 "input question.  Prefer responses that are accurate and fully "
                 "supported by the retrieval context (penalize any claim the "
@@ -486,17 +732,30 @@ class EvaluationOrchestrator:
         metric.prepare()
         groups: dict[tuple, dict] = {}
         for case in test_cases:
-            # The same question can be asked of different courses
-            key = (
-                case.input,
-                json.dumps(case.metadata.get("metadata"), sort_keys=True, default=str),
-                case.metadata.get("prompt_label"),
-            )
-            groups.setdefault(key, {})[case.metadata["model"]] = case
-        wins = dict.fromkeys(config.models, 0)
+            case_id, model, prompt_label = _answer_key(case.metadata)
+            if by_side:
+                groups.setdefault((case_id, None), {})[_side(case.metadata)] = case
+            else:
+                groups.setdefault((case_id, prompt_label), {})[model] = case
+        names = (n for g in groups.values() for n in g) if by_side else config.models
+        wins = dict.fromkeys(names, 0)
         self.stdout.write(f"\n===== Pairwise preference for {bot_name} =====")
-        for (question, case_key, _), by_model in groups.items():
-            if len(by_model) < 2:  # noqa: PLR2004
+        for (case_id, prompt_label), by_model in groups.items():
+            some_case = next(iter(by_model.values()))
+            question = some_case.input
+            # Not one model's failure, so model is left out
+            where = {"case": some_case, "model": None}
+            if len(by_model) < MIN_CONTESTANTS:
+                missing = sorted(
+                    set(config.models)
+                    - {c.metadata["model"] for c in by_model.values()}
+                )
+                self.failures.add(
+                    bot_name,
+                    "pairwise skipped: an answer is missing",
+                    detail=", ".join(missing),
+                    **where,
+                )
                 continue
             arena = ArenaTestCase(
                 contestants=[
@@ -509,15 +768,20 @@ class EvaluationOrchestrator:
                 self.stdout.write(
                     f"  ❓ {question[:70]}\n     ⚠️ judge error: {metric.error}"
                 )
+                self.failures.add(
+                    bot_name, "pairwise judge error", detail=str(metric.error), **where
+                )
+                self.pairwise_results[(bot_name, case_id, prompt_label)] = None
                 continue
             wins[winner] = wins.get(winner, 0) + 1
+            self.pairwise_results[(bot_name, case_id, prompt_label)] = winner
             self.stdout.write(
                 f"  ❓ {question[:70]}\n     🏆 {winner}: {metric.reason}"
             )
             record = {
                 "bot": bot_name,
                 "question": question,
-                "case_key": case_key,
+                "case_key": case_id,
                 "winner": winner,
                 "reason": metric.reason,
             }
@@ -574,18 +838,58 @@ Started: {timestamp}
         except Exception as e:  # noqa: BLE001
             self.stdout.write(f"Warning: Failed to initialize error log: {e}")
 
-    async def run_evaluation(  # noqa: C901, PLR0913
+    def _versus_baseline(
+        self, bot_name: str, config: EvaluationConfig, sides: list
+    ) -> None:
+        """Print how the candidate side did against the baseline side on one bot."""
+        baseline, candidate = (
+            _side({"model": model, "prompt_label": prompt["name"] if prompt else None})
+            for model, prompt in sides
+        )
+        thresholds = dict(config.metric_thresholds)
+        if "Faithfulness" not in {m.__name__ for m in _bot_metrics(config, bot_name)}:
+            thresholds.pop("Faithfulness", None)
+        outcomes, questions = measure_outcomes(
+            [r for r in self.answer_records.values() if r["bot"] == bot_name],
+            thresholds,
+            {
+                c: w
+                for (bot, c, _), w in self.pairwise_results.items()
+                if bot == bot_name
+            },
+            baseline,
+            candidate,
+            skip={case_id for case_id, _ in self.failures.failed_cases(bot_name)},
+        )
+        self.stdout.write(
+            f"\n⚖️  {bot_name.upper()}: {candidate} versus baseline {baseline}, "
+            f"{len(questions)} cases compared "
+            f"(loaded {self.sample_info.get(bot_name, '')})"
+        )
+        print_comparison(
+            self.stdout.write,
+            outcomes,
+            questions,
+            failed=bool(self.failures.for_bot(bot_name)),
+        )
+
+    async def run_evaluation(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         config: EvaluationConfig,
         *,
         bot_names: list[str] | None = None,
-        data_file: str | None = None,
+        data_file: str | list[str] | None = None,
         use_prompts: bool | None = True,
         prompts_file: str | None = None,
         max_concurrent: int | None = 10,
         batch_size: int | None = 0,
         error_log_file: str | None = None,
         pairwise: bool = False,
+        sample: int | None = None,
+        seed: int = SAMPLE_SEED,
+        baseline: str | None = None,
+        baseline_prompt: dict | None = None,
+        candidate_prompt: dict | None = None,
     ) -> EvaluationResult:
         """Run evaluation across specified bots and models.
 
@@ -612,10 +916,16 @@ Started: {timestamp}
             deepeval.login(config.confident_api_key)
 
         # Determine which bots to evaluate
+        self.named_bots = set(bot_names or [])
         bot_names = bot_names or list(BOT_EVALUATORS.keys())
 
         # Load alternative prompts if enabled
         prompts_data = self._load_prompts_data(prompts_file) if use_prompts else {}
+        # A baseline run's (model, prompt) sides; a None prompt is the bot's own
+        sides = None
+        if baseline:
+            candidate = next(m for m in config.models if m != baseline)
+            sides = [(baseline, baseline_prompt), (candidate, candidate_prompt)]
 
         # Process each bot one at a time, accumulating results
         all_bot_results = []
@@ -633,7 +943,10 @@ Started: {timestamp}
                 max_concurrent=max_concurrent,
                 batch_size=batch_size,
                 error_log_file=error_log_file,
-                pairwise=pairwise,
+                pairwise=pairwise or bool(baseline),
+                sample=sample,
+                seed=seed,
+                sides=sides,
             )
             all_bot_results.append(bot_result)
 
@@ -691,11 +1004,19 @@ Started: {timestamp}
             metric_thresholds=config.metric_thresholds,
             evaluation_model=config.evaluation_model,
             metric_names=metric_names,
+            failures=self.failures,
+            answer_records=list(self.answer_records.values()),
         )
         if self.pairwise_wins:
             self.stdout.write("\n🥊 PAIRWISE WINS (judge, no expected answer)")
             for bot, wins in self.pairwise_wins.items():
                 self.stdout.write(f"  {bot}: {wins}")
+        if baseline:
+            self.stdout.write("\n\n⚖️  VERSUS BASELINE")
+            self.stdout.write("=" * 80)
+            for bot_name in bot_names:
+                self._versus_baseline(bot_name, config, sides)
+        self.reporter.incomplete_banner(self.failures)
 
         return results
 
