@@ -83,6 +83,286 @@
         "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
       },
       "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Are there any free courses on Python programming with a certificate?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I want a self-paced online course in statistics for beginners.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What MIT OpenCourseWare courses cover organic chemistry?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Show me professional education programs on artificial intelligence for managers.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Are there any advanced graduate-level courses in machine learning theory?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'd like an MITx course on probability that I can start right away.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What are some short programs on leadership for engineers?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Find me a free course on writing and communication for scientists.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Is there a course on supply chain analytics I can take for free?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Do you have any videos or podcasts about the history of computing?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm a software engineer who wants to move into data science. What should I take?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I teach high school biology. Are there courses that would help me teach genetics?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm retired and curious about astronomy. Where should I begin?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm a mechanical engineering student. What courses would help me learn robotics control?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I work in finance and want to understand blockchain. Any suggestions?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I have no math background beyond algebra. Can I learn economics?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm a doctor interested in using AI in medicine. What do you recommend?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "As a product manager, what courses would help me understand user research?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm preparing for a PhD in neuroscience. What foundational courses should I review?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm a non-native English speaker and want to improve my academic writing.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What courses teach differential equations?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Are there any courses on urban planning and housing policy?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I want to learn about quantum computing.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Recommend courses on climate science and the carbon cycle.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What can I take to learn about game theory?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Are there courses on nutrition and public health?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I'm interested in music theory and composition.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Do you have anything on cybersecurity fundamentals?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "What courses cover the economics of developing countries?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I want to learn how to build mobile apps.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Do you have courses on professional dog grooming?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "Are there any courses on medieval Icelandic sagas?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": ["search_courses"]
+    },
+    {
+      "question": "I want to learn something new.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "What should I study?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "Give me a course.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "I'm bored. Any ideas?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "What's the weather in Boston tomorrow?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "Write me a poem about autumn.",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "Can you help me file my taxes?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "Who will win the next World Cup?",
+      "extra_state": {
+        "search_url": ["{{settings.AI_MIT_SEARCH_VECTOR_URL}}"]
+      },
+      "expected_tools": []
     }
   ]
 }
