@@ -20,8 +20,8 @@ def check_default_models(app_configs, **kwargs):  # noqa: ARG001
     """
     Refuse a default model that ol-llm's catalog has retired.
 
-    Each bot runs check_chat_model when it is built, so a retired default fails
-    every chat with that bot. migrate runs system checks, so this fails the
+    Every bot runs check_chat_model before it calls the model, so a retired
+    default fails every answer. migrate runs system checks, so this fails the
     deploy instead.
     """
     errors = []

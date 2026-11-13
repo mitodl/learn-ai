@@ -35,6 +35,7 @@ from ai_chatbots.constants import (
     AI_SESSION_COOKIE_KEY,
     AI_THREAD_COOKIE_KEY,
     AI_THREADS_ANONYMOUS_COOKIE_KEY,
+    SUPPORT_ANSWERS_FEATURE_FLAG,
     ChatbotCookie,
 )
 from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
@@ -152,11 +153,24 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     serializer_class = RecommendationChatRequestSerializer
     headers_sent = False
     session_key = ""
+    # Opt in per consumer.
+    account_tools_allowed = False
 
     @abstractmethod
     def create_chatbot(self, serializer):
         """Return a bot instance"""
         raise NotImplementedError
+
+    def account_tools_enabled(self, flag: str) -> bool:
+        """
+        Say whether this request may use the learner's account tools. The tools
+        read the forwarded session cookie, and each bot passes its own flag.
+        """
+        return bool(
+            self.account_tools_allowed
+            and has_learner_session()
+            and feature_is_enabled(flag, default=False, opt_unique_id=self.user_id)
+        )
 
     def check_origin(self):
         """
@@ -619,15 +633,6 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
         instructions = serializer.validated_data.pop("instructions", None)
         model = serializer.validated_data.pop("model", None)
         enable_related_courses = bool(serializer.validated_data.get("related_courses"))
-        # Account tools need the learner's own session from this request, so
-        # anonymous users and requests without the session never get them.
-        enable_account_tools = (
-            self.account_tools_allowed
-            and has_learner_session()
-            and feature_is_enabled(
-                ACCOUNT_TOOLS_FEATURE_FLAG, default=False, opt_unique_id=self.user_id
-            )
-        )
 
         return self.bot_class(
             self.user_id,
@@ -637,7 +642,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             model=model,
             thread_id=self.thread_id,
             enable_related_courses=enable_related_courses,
-            enable_account_tools=enable_account_tools,
+            enable_account_tools=self.account_tools_enabled(ACCOUNT_TOOLS_FEATURE_FLAG),
             course_id=serializer.validated_data.get("course_id"),
             platform=serializer.validated_data.get("platform"),
         )
@@ -917,6 +922,7 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = SupportChatRequestSerializer
     ROOM_NAME = SupportBot.__name__
     throttle_scope = "support_bot"
+    account_tools_allowed = True
 
     def create_chatbot(
         self,
@@ -935,6 +941,10 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            # Gates answering too: without tools the bot only does intake.
+            enable_account_tools=self.account_tools_enabled(
+                SUPPORT_ANSWERS_FEATURE_FLAG
+            ),
             # Read off the request header rather than the chat payload, so the
             # body has no say in it. The header is still whatever the caller
             # sent, so the device is claimed, not proven.
@@ -965,4 +975,5 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             # but Zendesk's username field should only ever be the account handle.
             "user_username": [session_username or data.get("user_username", "") or ""],
             "confirm": [bool(data.get("confirm", False))],
+            "escalate": [bool(data.get("escalate", False))],
         }

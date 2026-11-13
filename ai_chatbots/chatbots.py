@@ -9,15 +9,23 @@ from collections.abc import AsyncGenerator
 from contextlib import aclosing
 from operator import add
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import ol_llm
 import posthog
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils.module_loading import import_string
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
@@ -48,6 +56,7 @@ from ai_chatbots.api import (
     query_tutorbot_output,
 )
 from ai_chatbots.constants import APP_NAME, AZURE_MODEL_PREFIX
+from ai_chatbots.learner_api import COURSE_KEY_RE
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
@@ -100,6 +109,10 @@ class BaseChatbot(ABC):
     # ai_chatbots system check reads it to catch a retired default at deploy.
     DEFAULT_MODEL_SETTING = "AI_DEFAULT_MODEL"
 
+    # False moves the budget and catalog check from __init__ to the model call,
+    # for a bot whose scripted turns shouldn't pay for a model they never call.
+    SETS_UP_THE_MODEL_EAGERLY = True
+
     def __init__(  # noqa: PLR0913
         self,
         user_id: str,
@@ -126,7 +139,7 @@ class BaseChatbot(ABC):
         self.user_id = user_id
         self.thread_id = thread_id or uuid4().hex
         self.use_case = self.chat_use_case(self.model)
-        if self.CALLS_THE_MODEL:
+        if self.CALLS_THE_MODEL and self.SETS_UP_THE_MODEL_EAGERLY:
             ol_llm.check_chat_model(self.use_case)
         self.attribution = ol_llm.Attribution(
             user_id=self.user_id, thread_id=self.thread_id
@@ -137,7 +150,7 @@ class BaseChatbot(ABC):
             self.proxy = import_string(
                 f"ai_chatbots.proxies.{settings.AI_PROXY_CLASS}"
             )()
-            if self.CALLS_THE_MODEL:
+            if self.CALLS_THE_MODEL and self.SETS_UP_THE_MODEL_EAGERLY:
                 self.proxy.create_proxy_user(self.user_id)
             self.proxy_prefix = self.proxy.PROXY_MODEL_PREFIX
         else:
@@ -166,6 +179,14 @@ class BaseChatbot(ABC):
     def create_tools(self):
         """Create any tools required by the agent"""
         return []
+
+    def add_account_tools_prompt(self, addendum: str) -> None:
+        """Append the shared account-tools rules, then this bot's addendum."""
+        for prompt_name in ("account_tools_core", addendum):
+            account_prompt = get_system_prompt(
+                prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
+            )
+            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
 
     def get_llm(self, **kwargs) -> BaseChatModel:
         """
@@ -674,10 +695,7 @@ class SyllabusBot(TruncatingChatbot):
                 "about these courses."
             )
         if self.enable_account_tools and self.instructions:
-            account_prompt = get_system_prompt(
-                "syllabus_account_tools", SYSTEM_PROMPT_MAPPING, get_django_cache
-            )
-            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
+            self.add_account_tools_prompt("syllabus_account_tools")
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -1076,6 +1094,21 @@ class SupportAgentState(SummaryState):
     filing_uncertain: Annotated[list[bool], add]
     filing_blocked: Annotated[list[bool], add]
     cancelled_after: Annotated[list[int], add]
+    # The learner asked for a human, so this thread stops trying to answer.
+    handed_off: Annotated[list[bool], add]
+    # Whether the previous turn was an answer, so a bare "thanks" closes out.
+    answered: Annotated[list[bool], add]
+
+
+class SupportAnsweringState(SummaryState):
+    """
+    State for the unpersisted answer attempt. LangGraph drops input keys the
+    schema doesn't declare, and the account tools read course_id and platform
+    from state. Kept off SupportAgentState so a course id can't reach a ticket.
+    """
+
+    course_id: Annotated[list[str], add]
+    platform: Annotated[list[str] | None, add]
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
@@ -1114,6 +1147,13 @@ SUPPORT_TICKET_CANCELLED = (
     "No problem - I haven't sent anything, and I've put aside what you'd written "
     "so far. Tell me about it again whenever you're ready and we'll start fresh."
 )
+# Not SUPPORT_TICKET_CANCELLED: there is nothing written to have put aside, and
+# saying there is reads as a request going missing.
+SUPPORT_NOTHING_TO_SEND = (
+    "No problem - there was nothing to pass on, so I haven't sent anything. Tell "
+    "me what's going on whenever you'd like the MIT Open Learning support team to "
+    "take a look."
+)
 SUPPORT_SEND_UNCLEAR = (
     "I'm not sure whether that was a go-ahead or something to add, and I don't "
     'want to guess. Reply "send" on its own to pass on the request exactly as '
@@ -1135,6 +1175,20 @@ SUPPORT_ASK_EMAIL_AGAIN = (
 SUPPORT_ASK_MORE = (
     "Thanks for letting us know. Is there anything else you'd like to add before I "
     "pass this on to the MIT Open Learning support team?"
+)
+SUPPORT_ASK_PROBLEM = (
+    "What's going on? Tell me what you need help with and I'll pass it on to the "
+    "MIT Open Learning support team."
+)
+# Appended in code so the route to a person never depends on the answer. A
+# statement, not a question: "yes" to "did that help?" reads like "yes, send it".
+SUPPORT_OFFER_TICKET = (
+    "If that didn't sort it out, reply \"send\" and I'll pass it to the MIT Open "
+    "Learning support team."
+)
+SUPPORT_ANSWER_CLOSED = (
+    "Glad that helped. If something else comes up, just ask - and I can still "
+    "pass a request to the MIT Open Learning support team whenever you want."
 )
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
@@ -1250,6 +1304,23 @@ AFFIRMATIVE_OPENERS = frozenset(phrase.split()[0] for phrase in AFFIRMATIVE_PHRA
 # mean do not send.
 DECLINE_PHRASES = frozenset({"no", "nope", "no thanks", "no thank you"})
 
+# Said to an answer: the learner is finished and there is nothing to file.
+ANSWER_CLOSING_PHRASES = frozenset(
+    {
+        "thanks",
+        "thanks a lot",
+        "thank you",
+        "thank you very much",
+        "that helped",
+        "that helps",
+        "that's helpful",
+        "got it",
+        "perfect",
+        "great",
+        "cheers",
+    }
+)
+
 # Answers to "anything else to add?" that add nothing. Before the review they
 # move things along; under it they are ambiguous - "that's all" may mean "go
 # ahead" or "I have nothing more" - so they are asked about, not acted on.
@@ -1259,9 +1330,17 @@ NOTHING_MORE_PHRASES = frozenset(
         "nothing else",
         "no that's everything",
         "no that's all",
+        "no that's it",
         "that's everything",
         "that's all",
         "that's it",
+        # The match is exact, so every spelling is listed.
+        "that is everything",
+        "that is all",
+        "that is it",
+        "thats everything",
+        "thats all",
+        "thats it",
         "done",
     }
 )
@@ -1276,6 +1355,20 @@ PAUSE_PHRASES = frozenset({"wait", "hold on", "hang on", "one sec", "one moment"
 FILLER_PHRASES = (
     AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES | PAUSE_PHRASES
 )
+# Not FILLER_PHRASES: said to the offer, "send it" means pass it on, so no
+# affirmatives here.
+ANSWER_END_PHRASES = ANSWER_CLOSING_PHRASES | NOTHING_MORE_PHRASES
+# What a close-out may be padded with ("ok thanks so much!"). Any other word
+# makes the reply a follow-up. Not "nothing" or "done": "nothing helped" and
+# "is it done" aren't a thanks.
+ANSWER_END_WORDS = (
+    frozenset(
+        word
+        for phrase in ANSWER_END_PHRASES | DECLINE_PHRASES
+        for word in phrase.split()
+    )
+    - {"nothing", "done"}
+) | {"ok", "okay", "so", "for", "the", "info"}
 
 
 # A word here on its own calls the send off.
@@ -1323,9 +1416,14 @@ CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
     "want",
 }
 NEGATIONS = frozenset({"dont", "don't", "no", "not"})
+# Not "no": "no, cancel it" still cancels, "don't cancel" doesn't.
+TRIGGER_NEGATIONS = NEGATIONS - {"no"}
 # Past this a reply is carrying real detail, not answering the question we
 # asked, so it is read as an edit rather than a yes or a no.
 SHORT_REPLY_MAX_WORDS = 8
+
+# Only inside a word, so a quoted 'cancel' still strips to cancel.
+CURLY_APOSTROPHE_IN_WORD = re.compile(r"(?<=\w)[\u2018\u2019](?=\w)")
 
 
 def _normalised(message: str) -> str:
@@ -1335,20 +1433,40 @@ def _normalised(message: str) -> str:
     Digits and non-ASCII letters are kept rather than stripped: dropping them
     leaves "yes, 18.01" as a bare "yes", which every caller here reads as
     permission to file the draft - discarding what the learner just typed.
+
+    Phones type curly apostrophes, so those are straightened first, or "that's
+    all" would match nothing.
     """
-    return " ".join(re.sub(r"[^\w' ]", " ", (message or "").lower()).split())
+    straightened = CURLY_APOSTROPHE_IN_WORD.sub("'", message or "")
+    return " ".join(re.sub(r"[^\w' ]", " ", straightened.lower()).split())
+
+
+def _cancellation_vocabulary(message: str) -> set[str] | None:
+    """Return the words of a message made of nothing but CANCELLATION_WORDS."""
+    words = _normalised(message).replace("never mind", "nevermind").split()
+    if not words or len(words) > SHORT_REPLY_MAX_WORDS:
+        return None
+    return set(words) if set(words) <= CANCELLATION_WORDS else None
 
 
 def _is_cancellation(message: str) -> bool:
     """Report whether the learner is calling the send off."""
-    words = _normalised(message).replace("never mind", "nevermind").split()
-    if not words or len(words) > SHORT_REPLY_MAX_WORDS:
+    words = _cancellation_vocabulary(message)
+    if words is None:
         return False
-    if not set(words) <= CANCELLATION_WORDS:
-        return False
-    if set(words) & CANCELLATION_TRIGGERS:
+    # "cancel, don't send this" negates a trigger but still means stop.
+    if words & CANCELLATION_TRIGGERS and not words & TRIGGER_NEGATIONS:
         return True
-    return "send" in words and bool(set(words) & NEGATIONS)
+    return "send" in words and bool(words & NEGATIONS)
+
+
+def _calls_off_a_cancellation(message: str) -> bool:
+    """
+    Report whether the message is only "don't cancel", which isn't a problem to
+    file. "don't cancel, my name is wrong" doesn't count.
+    """
+    words = _cancellation_vocabulary(message)
+    return bool(words and words & CANCELLATION_TRIGGERS and words & TRIGGER_NEGATIONS)
 
 
 def _first(values: list[str]) -> str:
@@ -1388,6 +1506,25 @@ def _is_decline(message: str) -> bool:
     return _normalised(message) in DECLINE_PHRASES
 
 
+def _closes_the_answer(message: str) -> bool:
+    """
+    Report whether the learner is finished with an answer. A plain no or a
+    "nothing" counts only as the whole reply, so "no help" and "got nothing"
+    are not read as a thanks.
+    """
+    # "is that all?" asks for more.
+    if "?" in (message or ""):
+        return False
+    normalised = _normalised(message)
+    if normalised in DECLINE_PHRASES | NOTHING_MORE_PHRASES:
+        return True
+    words = normalised.split()
+    if len(words) > SHORT_REPLY_MAX_WORDS or not set(words) <= ANSWER_END_WORDS:
+        return False
+    padded = f" {normalised} "
+    return any(f" {phrase} " in padded for phrase in ANSWER_END_PHRASES)
+
+
 def _is_unclear_go_ahead(message: str) -> bool:
     """
     Report whether a short reply to the review is one we cannot act on.
@@ -1411,8 +1548,9 @@ def _is_unclear_go_ahead(message: str) -> bool:
 def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
     """
     Join everything the learner typed about the problem. An address they gave is
-    the reply-to, and a bare "send" is an answer to us, so neither belongs in
-    what support reads.
+    the reply-to, a bare "send" is an answer to us, and a bare "thanks" is them
+    finishing, so none of those belong in what support reads. The filler and
+    closing sets overlap but neither contains the other, so both are checked.
 
     The thread's opening message is kept whatever it looks like. Nobody has
     been asked for an address at that point, so "I cannot log in as x@y.com" is
@@ -1420,6 +1558,9 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
     dropping it filed an empty ticket. Past a cancellation the learner has
     already been asked and answered, so the exemption does not apply and a
     stray "ok" would otherwise lead the ticket.
+
+    A blank message (an escalate press) keeps its position, so the exemption
+    stays on position 0 and is dropped at the join.
 
     ``since`` is where the current request starts: a cancellation withdraws
     every word before it, so those are not this request's to file.
@@ -1429,7 +1570,6 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         msg.content
         for position, msg in enumerate(prior_messages)
         if isinstance(msg, HumanMessage)
-        and msg.content
         # Dropped only where we came back and asked what it meant, so the
         # chatter we could not read stays out while the same words typed
         # anywhere else are still the learner's problem.
@@ -1447,7 +1587,11 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         and (
             (position == 0 and since == 0)
             or not (
-                _is_bare_reply_to(text) or _is_filler(text) or _is_cancellation(text)
+                _is_bare_reply_to(text)
+                or _is_filler(text)
+                or _closes_the_answer(text)
+                or _is_cancellation(text)
+                or _calls_off_a_cancellation(text)
             )
         )
     )
@@ -1509,6 +1653,51 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     return "\n".join(lines)
 
 
+def _quotes_the_reply_to(message: BaseMessage) -> bool:
+    """
+    Report whether this is the scripted review, which quotes the reply-to.
+    Defensive: no path replays one today.
+    """
+    return isinstance(message, AIMessage) and str(message.content).startswith(
+        SUPPORT_TICKET_REVIEW_HEADER
+    )
+
+
+def _read_the_records(message: ToolMessage) -> bool:
+    """
+    Report whether a tool reached the records. COULD_NOT_CHECK and langgraph's
+    error ToolMessage don't, so a failed lookup isn't a source.
+    """
+    if message.status == "error":
+        return False
+    if not isinstance(message.content, str):
+        return True
+    try:
+        payload = json.loads(message.content)
+    except ValueError:
+        return True
+    return not (
+        isinstance(payload, dict) and payload.get("error") == tools.COULD_NOT_CHECK
+    )
+
+
+def _the_answer_in(result: dict) -> str:
+    """Return this turn's reply, or "" when no tool reached the records."""
+    messages = result.get("messages") or []
+    if not any(
+        isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
+    ):
+        return ""
+    # The last AIMessage, usable or not: walking further back reaches history.
+    reply = next(
+        (msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None
+    )
+    # Some models return a list of content blocks.
+    if reply is None or not isinstance(reply.content, str):
+        return ""
+    return reply.content.strip()
+
+
 def _ticket_subject(description: str) -> str:
     """Build a subject from the learner's own words, no model involved."""
     subject = " ".join((description or "").split())
@@ -1520,16 +1709,19 @@ def _ticket_subject(description: str) -> str:
 class SupportBot(TruncatingChatbot):
     """Service class for the support intake agent"""
 
-    # No prompt, because nothing here calls the model.
+    # Set per instance: only a bot with tools has a prompt.
     PROMPT_TEMPLATE = None
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
     USE_CASE_NAME = "support"
     DEFAULT_MODEL_SETTING = "AI_DEFAULT_SUPPORT_MODEL"
     STATE_CLASS = SupportAgentState
-    TRACE_STATE_KEYS = ("page_url",)
-    # Every branch of get_completion ends at _reply_without_the_model.
-    CALLS_THE_MODEL = False
+    ANSWERING_STATE_CLASS = SupportAnsweringState
+    # No email or name: these become PostHog event properties.
+    TRACE_STATE_KEYS = ("page_url", "course_id", "platform")
+    # Answering calls a model, so the deploy check in checks.py covers this bot.
+    CALLS_THE_MODEL = True
+    SETS_UP_THE_MODEL_EAGERLY = False
 
     def __init__(  # noqa: PLR0913
         self,
@@ -1542,7 +1734,12 @@ class SupportBot(TruncatingChatbot):
         instructions: str | None = None,
         thread_id: str | None = None,
         user_agent: str = "",
+        enable_account_tools: bool = False,
     ):
+        # Before super().__init__(), which reads PROMPT_TEMPLATE and builds the
+        # tools from enable_account_tools.
+        self.enable_account_tools = enable_account_tools
+        self.PROMPT_TEMPLATE = "support" if enable_account_tools else None
         super().__init__(
             user_id,
             name=name,
@@ -1555,24 +1752,149 @@ class SupportBot(TruncatingChatbot):
         # Not graph state: the turn that files is itself a request, so this is
         # the live header rather than something accumulated over the thread.
         self.user_agent = user_agent
+        if self.enable_account_tools and self.instructions:
+            self.add_account_tools_prompt("support_account_tools")
         self.agent = self.create_agent_graph()
+        self._build_answering_agent()
+
+    def _build_answering_agent(self) -> None:
+        """Build the graph the answer attempt runs on."""
+        # No checkpointer: a failed attempt leaves nothing in the thread.
+        self._answering_agent = (
+            create_react_agent(
+                self.llm,
+                tools=self.tools,
+                state_schema=self.ANSWERING_STATE_CLASS,
+                prompt=self.instructions,
+            )
+            if self.tools
+            else None
+        )
 
     def create_tools(self):
         """
-        No tools: the bot takes the problem in, it does not answer it, and the
-        ticket is filed deterministically in get_completion. A second,
+        Whatever tool sets this request enabled - and never a filing tool. The
+        ticket is filed deterministically in get_completion: a second,
         model-driven filing path could only disagree with that one.
         """
-        return []
+        bot_tools = []
+        if self.enable_account_tools:
+            bot_tools.extend(tools.ACCOUNT_TOOLS)
+        return bot_tools
 
     async def get_tool_metadata(self) -> str:
-        """Return no metadata - this agent has no tools"""
+        """Return no metadata: the attempt's tool calls aren't in the thread."""
         return ""
 
     async def _prior_state(self) -> dict:
         """Return the graph state already accumulated on this thread."""
         state = await self.agent.aget_state(self.config)
         return (state.values if state else None) or {}
+
+    # Enough thread for a follow-up to make sense, without resending a long
+    # intake conversation to the model every turn.
+    ANSWER_HISTORY_MESSAGES = 10
+
+    async def _ensure_proxy_user(self) -> None:
+        """Provision this learner's model budget."""
+        if not self.proxy:
+            return
+        # Blocking HTTP, kept off the shared sync thread.
+        await sync_to_async(self.proxy.create_proxy_user, thread_sensitive=False)(
+            self.user_id
+        )
+
+    @staticmethod
+    def _page_course(page_url: str) -> tuple[str | None, str | None]:
+        """
+        Return the course run on this page and its platform, or (None, None).
+        page_url is browser-supplied, but the tools only read the learner's own
+        records.
+        """
+        openedx = settings.LEARNER_API_OPENEDX_BASE_URL
+        if not page_url or not openedx:
+            return None, None
+        base, page = urlsplit(openedx), urlsplit(page_url)
+        # Scheme+host, not prefix: a prefix would match
+        # courses.learn.mit.edu.evil.test.
+        if (page.scheme, page.netloc.lower()) != (base.scheme, base.netloc.lower()):
+            return None, None
+        found = COURSE_KEY_RE.search(page_url)
+        return (found.group(0), tools.MITXONLINE_PLATFORM) if found else (None, None)
+
+    async def _run_the_attempt(
+        self,
+        message: str,
+        history: list,
+        course_id: str | None,
+        platform: str | None,
+        extra_state: dict | None,
+    ) -> str:
+        """Provision, trace and run one attempt, all inside the caller's timeout."""
+        await self._ensure_proxy_user()
+        properties = self.get_trace_properties(
+            {
+                **(extra_state or {}),
+                "course_id": [course_id],
+                "platform": [platform],
+            }
+        )
+        with ol_llm.traced_chat(
+            self.use_case,
+            message,
+            attribution=self.attribution,
+            metadata=properties,
+            graph=self._answering_agent.get_graph(xray=True)
+            if ol_llm.tracing.enabled()
+            else None,
+        ) as chat:
+            callbacks = [*await self.set_callbacks(properties), *chat.callbacks]
+            result = await self._answering_agent.ainvoke(
+                {
+                    "messages": [*history, HumanMessage(message)],
+                    "course_id": [course_id],
+                    "platform": [platform],
+                },
+                config={"callbacks": callbacks},
+            )
+            answer = _the_answer_in(result)
+            if answer:
+                chat.record(answer)
+            return answer
+
+    async def _try_to_answer(
+        self, message: str, prior_state: dict, extra_state: dict | None = None
+    ) -> str:
+        """
+        Try to answer from the learner's own records. Return the answer, or ""
+        to hand the turn to the intake script.
+        """
+        history = [
+            msg
+            # From the cancellation on: cancelled words are withdrawn.
+            for msg in (prior_state.get("messages") or [])[
+                _cancelled_after(prior_state) :
+            ]
+            if isinstance(msg, (HumanMessage, AIMessage))
+            and msg.content
+            and not _quotes_the_reply_to(msg)
+        ][-self.ANSWER_HISTORY_MESSAGES :]
+        # This turn's page: prior_state still holds last turn's.
+        course_id, platform = self._page_course(
+            ((extra_state or {}).get("page_url") or [""])[-1]
+        )
+        try:
+            return await asyncio.wait_for(
+                self._run_the_attempt(
+                    message, history, course_id, platform, extra_state
+                ),
+                timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
+            )
+        except Exception as error:  # noqa: BLE001
+            # Type only, no exc_info: these frames hold the learner's session
+            # cookies and records, and Sentry would capture their locals.
+            log.warning("Support answer attempt failed: %s", type(error).__name__)
+            return ""
 
     async def _reply_without_the_model(
         self, message: str, reply: str, extra_state: dict
@@ -1698,14 +2020,25 @@ class SupportBot(TruncatingChatbot):
             return (
                 SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
             ), {}
-        if not prior_messages:
-            # An authenticated learner's address arrives with the opening
-            # message; invite more detail before showing the review.
-            return SUPPORT_ASK_MORE, {"user_email": [email]}
+        description = _support_description(
+            prior_messages, message, since=_cancelled_after(prior_state)
+        )
+        # Nothing to review yet. A cancel or close-out ends it; anything else asks.
+        if not prior_messages or not description:
+            if prior_messages and (
+                _is_cancellation(message)
+                or _closes_the_answer(message)
+                or _calls_off_a_cancellation(message)
+            ):
+                return SUPPORT_NOTHING_TO_SEND, {
+                    "cancelled_after": [len(prior_messages) + 2],
+                }
+            # An opening message that carried the address still has a problem
+            # in it; a bare escalate press has nothing to thank them for.
+            reply = SUPPORT_ASK_MORE if description else SUPPORT_ASK_PROBLEM
+            return reply, {"user_email": [email]}
         return _support_review(
-            _support_description(
-                prior_messages, message, since=_cancelled_after(prior_state)
-            ),
+            description,
             _accumulated(prior_state, extra_state, "page_url"),
             email,
             # An address parsed out of this turn reaches state no other way,
@@ -1766,6 +2099,53 @@ class SupportBot(TruncatingChatbot):
         # so a correction made on this turn has to land there.
         return reply, {"user_email": [email], **filing_updates}
 
+    async def _answer_or_collect(
+        self, message: str, *, extra_state: dict, prior_state: dict, escalated: bool
+    ) -> tuple[str, dict]:
+        """
+        Try to answer the learner's question; take their request in when we
+        can't, or when they have asked for a person.
+        """
+        handed_off = escalated or (prior_state.get("handed_off") or [False])[-1]
+        answered_before = (prior_state.get("answered") or [False])[-1]
+        # Close-outs and cancels move cancelled_after past the thread, which
+        # reopens answering.
+        intake_started = not answered_before and len(
+            prior_state.get("messages") or []
+        ) > _cancelled_after(prior_state)
+        # A "yes" after an answer accepts the offer to pass it on.
+        took_up_the_offer = answered_before and _is_affirmative(message)
+        # Not gated on _answering_agent, so a flag turned off mid-thread still
+        # closes out.
+        if (
+            answered_before
+            and not handed_off
+            and not took_up_the_offer
+            and _closes_the_answer(message)
+        ):
+            return SUPPORT_ANSWER_CLOSED, {
+                "answered": [False],
+                "cancelled_after": [len(prior_state.get("messages") or []) + 2],
+            }
+        if (
+            self._answering_agent
+            and not handed_off
+            and not intake_started
+            and not took_up_the_offer
+        ):
+            answer = await self._try_to_answer(message, prior_state, extra_state)
+            if answer:
+                return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
+
+        reply, updates = self._collect_the_request(
+            message,
+            extra_state=extra_state,
+            prior_state=prior_state,
+        )
+        if answered_before:
+            updates = {**updates, "answered": [False]}
+        return reply, updates
+
     async def get_completion(
         self,
         message: str,
@@ -1783,6 +2163,12 @@ class SupportBot(TruncatingChatbot):
         # Popped, not stored: it is this turn's Send button, and a checkpointed
         # one would approve every turn after it.
         confirmed = any(extra_state.pop("confirm", None) or [])
+        # Same reason: this turn's "contact the support team" button. What
+        # sticks for the thread is handed_off, merged in below.
+        escalated = any(extra_state.pop("escalate", None) or [])
+        if escalated:
+            # The press carries the button's label, not the learner's words.
+            message = ""
         session = await UserChatSession.objects.filter(
             thread_id=self.thread_id
         ).afirst()
@@ -1815,9 +2201,16 @@ class SupportBot(TruncatingChatbot):
                 confirmed=confirmed,
             )
         else:
-            reply, updates = self._collect_the_request(
-                message, extra_state=extra_state, prior_state=prior_state
+            reply, updates = await self._answer_or_collect(
+                message,
+                extra_state=extra_state,
+                prior_state=prior_state,
+                escalated=escalated,
             )
+
+        if escalated:
+            # Counts whichever branch ran.
+            updates = {**updates, "handed_off": [True]}
 
         async for chunk in self._reply_without_the_model(
             message, reply, {**extra_state, **updates}

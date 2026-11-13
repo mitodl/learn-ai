@@ -240,6 +240,22 @@ def test_support_serializer_keeps_user_name_and_username():
     assert serializer.validated_data["user_username"] == "ada"
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({}, False), ({"escalate": False}, False), ({"escalate": True}, True)],
+)
+def test_support_serializer_takes_an_escalate_press(body, expected):
+    """
+    Asking for a person is a button, not a phrase the bot has to recognise -
+    the same reason confirm exists. Absent it must read as "not pressed":
+    defaulting the other way hands every learner off and answers nobody.
+    """
+    serializer = SupportChatRequestSerializer(data={"message": "help", **body})
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["escalate"] is expected
+
+
 def test_support_serializer_rejects_a_malformed_user_email():
     """The address becomes the Zendesk requester, so junk must not reach the tool."""
     serializer = SupportChatRequestSerializer(
