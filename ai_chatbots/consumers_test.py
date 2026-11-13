@@ -1915,13 +1915,7 @@ async def test_support_create_chatbot_carries_the_user_agent(
 async def test_support_create_chatbot_gates_answering(  # noqa: PLR0913
     mocker, mock_http_consumer_send, support_consumer, session, flag_on, expected
 ):
-    """
-    Answering needs both the learner's own session and the flag. Without the
-    session the account tools have no cookie to read and every one of them
-    returns COULD_NOT_CHECK, so an answering bot there is a model call that
-    can only fail - the edX MFE, which learn-ai holds no session for, must get
-    the scripted intake instead.
-    """
+    """Without a learner session (e.g. the edX MFE) every tool would fail."""
     mocker.patch("ai_chatbots.consumers.has_learner_session", return_value=session)
     flag = mocker.patch(
         "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on
@@ -1937,8 +1931,7 @@ async def test_support_create_chatbot_gates_answering(  # noqa: PLR0913
 
     assert chatbot.enable_account_tools is expected
     assert chatbot.answering_enabled is expected
-    # Short-circuits before PostHog when there is no session, so the flag name
-    # is only provable on the branch that reaches it.
+    # No session short-circuits before the flag is read.
     assert flag.called is session
     if session:
         assert flag.call_args[0][0] == SUPPORT_ANSWERS_FEATURE_FLAG
@@ -1948,11 +1941,7 @@ async def test_support_create_chatbot_gates_answering(  # noqa: PLR0913
 async def test_the_two_bots_gates_are_independent(
     mocker, mock_http_consumer_send, support_consumer, flag_on
 ):
-    """
-    A shared helper is one edit away from a shared flag. These stay separate
-    on purpose: breaking AskTIM loses an answer, breaking Contact Us loses a
-    support request, and an incident on one must not take the other with it.
-    """
+    """An incident on AskTIM's flag must not take Contact Us down with it."""
     mocker.patch("ai_chatbots.consumers.has_learner_session", return_value=True)
     flag = mocker.patch(
         "ai_chatbots.consumers.feature_is_enabled", return_value=flag_on

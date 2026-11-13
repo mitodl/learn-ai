@@ -198,11 +198,7 @@ tool messages and any previous summaries in this new summary.
 """
 PROMPT_SUMMARY_FINAL = """Summary of the conversation so far: {summary}"""
 
-# Added whenever the account tools are attached, to whichever bot has them.
-# These are the rules that do not depend on what else the bot can do: a rule
-# kept in one bot's addendum is a rule the other bot silently doesn't have.
-# What each tool returns is in its docstring, so this only covers routing and
-# how to read the output. Each bot appends its own addendum after this.
+# Account-tool rules shared by every bot that has them; each bot appends its own.
 PROMPT_ACCOUNT_TOOLS_CORE = """You can also read the signed-in learner's own MITx Online records with
 get_enrollments, get_course_progress, get_certificate_status and
 get_upcoming_assignments.  Use them only for questions about the learner's own
@@ -245,9 +241,7 @@ get_certificate_status answers.  These tools read only the learner's record, so
 don't call them for what a course offers, costs or requires."""
 
 
-# SyllabusBot's own half: routing between the learner's record and the course's
-# own content, and the pointer to support. The core leaves that pointer out
-# because SupportBot adds its own offer in code, in words code guarantees.
+# SyllabusBot's addendum. The support pointer lives here: SupportBot adds its own.
 PROMPT_SYLLABUS_ACCOUNT_TOOLS = """Questions about the course itself, including what it teaches, how it is graded and
 what certificate it offers, still go to the resource facts and search_content_files.
 
@@ -261,9 +255,7 @@ or idea that doesn't mention this resource.  Search before saying you could not
 find anything."""
 
 
-# Deliberately names no tool. Each tool set appends its own addendum in
-# SupportBot.__init__, the way SyllabusBot does, so adding a second set is one
-# more addendum rather than a rewrite of this.
+# Names no tool: each tool set's rules come in its own addendum.
 PROMPT_SUPPORT = """You are Tim, helping a signed-in MIT Open Learning learner who has opened the
 Contact us chat.  Answer what you can from the tools you were given.
 
@@ -278,10 +270,7 @@ you do not file them and you cannot see them.  Never state a policy, price,
 deadline or refund rule: you have no source for any of those."""
 
 
-# SupportBot's own half, appended after the core when the account tools are on.
-# Short on purpose: everything about reading tool output is in the core or in
-# the tool output itself (note, completion, grade_meaning,
-# digital_credential_meaning).
+# SupportBot's addendum; reading tool output is covered by the core.
 PROMPT_SUPPORT_ACCOUNT_TOOLS = """If a tool asks for a course because there is none on the page, ask the learner
 which course they mean.
 

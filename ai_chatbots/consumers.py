@@ -153,8 +153,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     serializer_class = RecommendationChatRequestSerializer
     headers_sent = False
     session_key = ""
-    # Opt in per consumer. A bot that isn't reached from a learner's MIT Learn
-    # session can never satisfy the other two conditions anyway.
+    # Opt in per consumer.
     account_tools_allowed = False
 
     @abstractmethod
@@ -164,13 +163,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
 
     def account_tools_enabled(self, flag: str) -> bool:
         """
-        Say whether this request may use the learner's account tools.
-
-        The session is not optional: the tools read the learner's forwarded
-        cookie, so without one every tool returns COULD_NOT_CHECK. The flag is
-        a parameter rather than a class attribute because each bot keeps its
-        own - breaking AskTIM loses an answer and breaking Contact Us loses a
-        support request, and one incident must not take the other with it.
+        Say whether this request may use the learner's account tools. The tools
+        read the forwarded session cookie, and each bot passes its own flag.
         """
         return bool(
             self.account_tools_allowed
@@ -947,9 +941,7 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
-            # This flag gates answering, not just the tools: with no account
-            # tools the bot has nothing to answer from, so it goes straight to
-            # intake.
+            # Gates answering too: without tools the bot only does intake.
             enable_account_tools=self.account_tools_enabled(
                 SUPPORT_ANSWERS_FEATURE_FLAG
             ),

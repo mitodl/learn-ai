@@ -150,9 +150,8 @@ class SupportChatRequestSerializer(ChatRequestSerializer):
     # Set by a widget that offers a Send button, so the learner's approval does
     # not depend on the bot recognising the word they typed.
     confirm = serializers.BooleanField(required=False, default=False)
-    # The widget's "contact the support team" button. A press, not a phrase: a
-    # learner who asks for a person must not have to say it in words the bot
-    # happens to recognise.
+    # The widget's "contact the support team" button, so asking for a person
+    # doesn't depend on wording.
     escalate = serializers.BooleanField(required=False, default=False)
 
 

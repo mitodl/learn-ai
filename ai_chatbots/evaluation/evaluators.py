@@ -234,14 +234,7 @@ class SupportBotEvaluator(BaseBotEvaluator):
         return cases
 
     def validate_test_case(self, test_case: TestCaseSpec) -> bool:
-        """
-        Require the tools, and nothing else.
-
-        No tools means no answering graph, so the case would be scored against
-        a bot that cannot answer. course_id is not required on top of that: it
-        reaches the graph through extra_state like the rest of the state, so
-        there is nothing for the validator to insist on separately.
-        """
+        """Require the tools: without them there is no answering graph."""
         metadata = test_case.metadata or {}
 
         return bool(metadata.get("extra_init", {}).get("enable_account_tools"))
@@ -263,19 +256,7 @@ class SupportBotEvaluator(BaseBotEvaluator):
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
     ) -> dict[str, Any]:
-        """
-        Collect a response from the answering graph, not the intake one.
-
-        `agent` never reaches a model - it emits the scripted reply - so
-        running it would let every "calls no tool" case pass without proving
-        anything, and fail every other case for the wrong reason.
-
-        This measures the graph alone. Everything _try_to_answer wraps around
-        it - reading the course off page_url, checking that a tool actually
-        reached the records, and picking this turn's reply out of the result -
-        does not run here, so a regression in any of those is caught by the
-        unit tests and not by an eval score.
-        """
+        """Run the answering graph alone; the intake graph never calls a model."""
         metadata = test_case.metadata or {}
         extra_state = metadata.get("extra_state", {})
         token = _learner_records.set(metadata.get("learner_records"))

@@ -109,11 +109,8 @@ class BaseChatbot(ABC):
     # ai_chatbots system check reads it to catch a retired default at deploy.
     DEFAULT_MODEL_SETTING = "AI_DEFAULT_MODEL"
 
-    # Whether the proxy budget and the catalog check happen in __init__. False
-    # for a bot that only sometimes reaches a model: the turns that
-    # short-circuit then pay neither a blocking HTTP call nor a build that
-    # raises, for a model they never call. Such a bot does both at the point it
-    # calls the model, where a failure costs that one call.
+    # False moves the budget and catalog check from __init__ to the model call,
+    # for a bot whose scripted turns shouldn't pay for a model they never call.
     SETS_UP_THE_MODEL_EAGERLY = True
 
     def __init__(  # noqa: PLR0913
@@ -182,6 +179,14 @@ class BaseChatbot(ABC):
     def create_tools(self):
         """Create any tools required by the agent"""
         return []
+
+    def add_account_tools_prompt(self, addendum: str) -> None:
+        """Append the shared account-tools rules, then this bot's addendum."""
+        for prompt_name in ("account_tools_core", addendum):
+            account_prompt = get_system_prompt(
+                prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
+            )
+            self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
 
     def get_llm(self, **kwargs) -> BaseChatModel:
         """
@@ -690,11 +695,7 @@ class SyllabusBot(TruncatingChatbot):
                 "about these courses."
             )
         if self.enable_account_tools and self.instructions:
-            for prompt_name in ("account_tools_core", "syllabus_account_tools"):
-                account_prompt = get_system_prompt(
-                    prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
-                )
-                self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
+            self.add_account_tools_prompt("syllabus_account_tools")
         self.agent = self.create_agent_graph()
 
     def create_tools(self):
@@ -1095,21 +1096,15 @@ class SupportAgentState(SummaryState):
     cancelled_after: Annotated[list[int], add]
     # The learner asked for a human, so this thread stops trying to answer.
     handed_off: Annotated[list[bool], add]
-    # Whether the previous turn was an answer, which is what makes a bare
-    # "thanks" a close-out rather than an edit to a request under review.
+    # Whether the previous turn was an answer, so a bare "thanks" closes out.
     answered: Annotated[list[bool], add]
 
 
 class SupportAnsweringState(SummaryState):
     """
-    State for the support bot's answer attempt, which is a different graph from
-    the persisted intake thread and needs a different shape.
-
-    It declares the page's course because LangGraph silently drops input keys
-    the schema does not define, and the account tools read course_id and
-    platform out of state through InjectedState. None of the intake channels
-    belong here: the attempt is never checkpointed, and a course id that cannot
-    reach the support thread cannot reach a ticket.
+    State for the unpersisted answer attempt. LangGraph drops input keys the
+    schema doesn't declare, and the account tools read course_id and platform
+    from state. Kept off SupportAgentState so a course id can't reach a ticket.
     """
 
     course_id: Annotated[list[str], add]
@@ -1181,10 +1176,12 @@ SUPPORT_ASK_MORE = (
     "Thanks for letting us know. Is there anything else you'd like to add before I "
     "pass this on to the MIT Open Learning support team?"
 )
-# Appended by code to every answer, so the route to a person never depends on
-# the answer having been any good - the same reason filing is in code.
-# Deliberately a statement, not a question: "yes" to "did that help, or shall I
-# send it?" cannot be told apart from "yes, send it".
+SUPPORT_ASK_PROBLEM = (
+    "What's going on? Tell me what you need help with and I'll pass it on to the "
+    "MIT Open Learning support team."
+)
+# Appended in code so the route to a person never depends on the answer. A
+# statement, not a question: "yes" to "did that help?" reads like "yes, send it".
 SUPPORT_OFFER_TICKET = (
     "If that didn't sort it out, tell me more and I'll pass it to the MIT Open "
     "Learning support team."
@@ -1308,7 +1305,6 @@ AFFIRMATIVE_OPENERS = frozenset(phrase.split()[0] for phrase in AFFIRMATIVE_PHRA
 DECLINE_PHRASES = frozenset({"no", "nope", "no thanks", "no thank you"})
 
 # Said to an answer: the learner is finished and there is nothing to file.
-# Narrow on purpose - see _closes_the_answer for why this is not FILLER_PHRASES.
 ANSWER_CLOSING_PHRASES = frozenset(
     {
         "thanks",
@@ -1338,7 +1334,7 @@ NOTHING_MORE_PHRASES = frozenset(
         "that's everything",
         "that's all",
         "that's it",
-        # Spelled out. The match is exact, so both spellings have to be here.
+        # The match is exact, so both spellings are listed.
         "that is everything",
         "that is all",
         "that is it",
@@ -1356,6 +1352,9 @@ PAUSE_PHRASES = frozenset({"wait", "hold on", "hang on", "one sec", "one moment"
 FILLER_PHRASES = (
     AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES | PAUSE_PHRASES
 )
+# Not FILLER_PHRASES: said to the offer, "send it" means pass it on, so no
+# affirmatives here.
+ANSWER_END_PHRASES = ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
 
 
 # A word here on its own calls the send off.
@@ -1403,15 +1402,13 @@ CANCELLATION_WORDS = CANCELLATION_TRIGGERS | {
     "want",
 }
 NEGATIONS = frozenset({"dont", "don't", "no", "not"})
-# The ones that turn a cancellation word into its opposite. "no" is not one of
-# them: "no, cancel it" agrees with the offer to cancel, while "don't cancel"
-# asks for the opposite. Derived so the two cannot drift.
+# Not "no": "no, cancel it" still cancels, "don't cancel" doesn't.
 TRIGGER_NEGATIONS = NEGATIONS - {"no"}
 # Past this a reply is carrying real detail, not answering the question we
 # asked, so it is read as an edit rather than a yes or a no.
 SHORT_REPLY_MAX_WORDS = 8
 
-# A phone's apostrophe, but only where a straight one would have been typed.
+# Only inside a word, so a quoted 'cancel' still strips to cancel.
 CURLY_APOSTROPHE_IN_WORD = re.compile(r"(?<=\w)[\u2018\u2019](?=\w)")
 
 
@@ -1423,15 +1420,8 @@ def _normalised(message: str) -> str:
     leaves "yes, 18.01" as a bare "yes", which every caller here reads as
     permission to file the draft - discarding what the learner just typed.
 
-    A curly apostrophe inside a word is folded to a straight one first. Phones
-    substitute it as the learner types, and it is not a word character, so
-    without this "that's all" and "don't send it" arrive as "that s all" and
-    "don t send it" and match nothing - closing out and cancelling both stop
-    working on a phone.
-
-    Only inside a word: a curly quote around one keeps falling through to the
-    strip below, so the learner who mirrors the review's own 'cancel' back
-    still cancels.
+    Phones type curly apostrophes, so those are straightened first, or "that's
+    all" would match nothing.
     """
     straightened = CURLY_APOSTROPHE_IN_WORD.sub("'", message or "")
     return " ".join(re.sub(r"[^\w' ]", " ", straightened.lower()).split())
@@ -1450,9 +1440,7 @@ def _is_cancellation(message: str) -> bool:
     words = _cancellation_vocabulary(message)
     if words is None:
         return False
-    # Falls through rather than returning False, because a negated send is a
-    # cancellation however it is worded: "cancel, don't send this" names a
-    # trigger and negates it, and still means stop.
+    # "cancel, don't send this" negates a trigger but still means stop.
     if words & CANCELLATION_TRIGGERS and not words & TRIGGER_NEGATIONS:
         return True
     return "send" in words and bool(words & NEGATIONS)
@@ -1460,12 +1448,8 @@ def _is_cancellation(message: str) -> bool:
 
 def _calls_off_a_cancellation(message: str) -> bool:
     """
-    Report whether the learner is calling a cancellation off - "don't cancel".
-
-    Neither a cancellation nor a problem to file: support cannot act on it, so
-    it stays out of the request rather than becoming one. Only when the message
-    is made of nothing else, so "don't cancel, my name is wrong" keeps the part
-    that is the problem.
+    Report whether the message is only "don't cancel", which isn't a problem to
+    file. "don't cancel, my name is wrong" doesn't count.
     """
     words = _cancellation_vocabulary(message)
     return bool(words and words & CANCELLATION_TRIGGERS and words & TRIGGER_NEGATIONS)
@@ -1509,20 +1493,8 @@ def _is_decline(message: str) -> bool:
 
 
 def _closes_the_answer(message: str) -> bool:
-    """
-    Report whether the learner is finished with an answer rather than asking
-    for more or for a person.
-
-    Not _is_filler: FILLER_PHRASES is the union used to keep chatter out of the
-    ticket body, and it contains every affirmative. Said to "tell me more and
-    I'll pass it on", "send it" and "file it" mean pass it on - reading them as
-    "glad that helped" files nothing and tells the learner it did. Ambiguous
-    replies fall through to the review instead, which the learner can read and
-    cancel; a wrong close-out is silent.
-    """
-    return _normalised(message) in (
-        ANSWER_CLOSING_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES
-    )
+    """Report whether the learner is finished with an answer."""
+    return _normalised(message) in ANSWER_END_PHRASES
 
 
 def _is_unclear_go_ahead(message: str) -> bool:
@@ -1549,12 +1521,8 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
     """
     Join everything the learner typed about the problem. An address they gave is
     the reply-to, a bare "send" is an answer to us, and a bare "thanks" is them
-    finishing, so none of those belong in what support reads.
-
-    _closes_the_answer as well as _is_filler: the sets overlap but neither
-    contains the other, and a closing phrase left in here comes back as a
-    non-empty description, which skips the empty-ask exit in
-    _collect_the_request and arms a send whose whole body is that phrase.
+    finishing, so none of those belong in what support reads. The filler and
+    closing sets overlap but neither contains the other, so both are checked.
 
     The thread's opening message is kept whatever it looks like. Nobody has
     been asked for an address at that point, so "I cannot log in as x@y.com" is
@@ -1563,11 +1531,8 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
     already been asked and answered, so the exemption does not apply and a
     stray "ok" would otherwise lead the ticket.
 
-    A blank message holds its place below and is dropped at the join, which
-    already tests for text. Filtering it out earlier moved that exemption onto
-    whatever came next: an escalate press writes a blank, so a press on a new
-    thread made the learner's following "thanks" the exempt opening message,
-    and that one word became the ticket body.
+    A blank message (an escalate press) keeps its position, so the exemption
+    stays on position 0 and is dropped at the join.
 
     ``since`` is where the current request starts: a cancellation withdraws
     every word before it, so those are not this request's to file.
@@ -1662,20 +1627,8 @@ def _support_review(description: str, page_url: str, email: str) -> str:
 
 def _quotes_the_reply_to(message: BaseMessage) -> bool:
     """
-    Whether a persisted reply is the scripted review, which quotes the
-    learner's address back at them.
-
-    Belt and braces: no route reaches an answer attempt with a review still in
-    the replayed slice. A review sets awaiting_send, which sends the next turn
-    to _send_edit_or_cancel, and every way out of there either pushes
-    cancelled_after past the review or lands in one of the branches ahead of
-    answering. Even without that, intake_started is true for any message past
-    cancelled_after once answered is false - and producing a review clears
-    answered - so answering is gated off by the time a review could be read.
-
-    That is four invariants deep, spread over three functions, and the thing it
-    protects is the learner's address reaching a trace. The filter is cheaper
-    than the next person having to re-derive the argument.
+    Report whether this is the scripted review, which quotes the reply-to.
+    Defensive: no path replays one today.
     """
     return isinstance(message, AIMessage) and str(message.content).startswith(
         SUPPORT_TICKET_REVIEW_HEADER
@@ -1684,19 +1637,8 @@ def _quotes_the_reply_to(message: BaseMessage) -> bool:
 
 def _read_the_records(message: ToolMessage) -> bool:
     """
-    Whether a tool call reached the learner's records, as opposed to reporting
-    that it could not.
-
-    Account tools swallow their own errors and return COULD_NOT_CHECK, so a
-    failed lookup still arrives as a ToolMessage and the prompt asks the model
-    to say it couldn't check. Counting that as a source would ship "I couldn't
-    check" as the answer and mark the turn answered - closing intake during the
-    outage that spikes ticket volume.
-
-    A call that never reached the tool body is the same: langgraph writes that
-    ToolMessage itself, so it carries langgraph's error template rather than
-    anything a tool chose to return, and the json below would read it as a
-    lookup that worked.
+    Report whether a tool reached the records. COULD_NOT_CHECK and langgraph's
+    error ToolMessage don't, so a failed lookup isn't a source.
     """
     if message.status == "error":
         return False
@@ -1712,29 +1654,17 @@ def _read_the_records(message: ToolMessage) -> bool:
 
 
 def _the_answer_in(result: dict) -> str:
-    """
-    Return the answer to show the learner, or "" to hand the turn to intake.
-
-    A turn where no lookup reached the records is not a question we have a
-    source for: the model will still have produced text, and showing it would
-    put an answer nothing stands behind in front of a learner who came here for
-    help. A lookup that reached the records and found none is the opposite case
-    - "which course did you mean?" is an answer - so the test is the lookup, not
-    the data it found. See the spec, 4.1.1.
-    """
+    """Return this turn's reply, or "" when no tool reached the records."""
     messages = result.get("messages") or []
     if not any(
         isinstance(msg, ToolMessage) and _read_the_records(msg) for msg in messages
     ):
         return ""
-    # The last AIMessage is this turn's reply. Taking the last one that also has
-    # string content would walk past an unusable reply into the replayed
-    # history, and answer this question with a previous turn's answer.
+    # The last AIMessage, usable or not: walking further back reaches history.
     reply = next(
         (msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None
     )
-    # Content blocks come back as a list for some models, and the repr of a list
-    # is not an answer.
+    # Some models return a list of content blocks.
     if reply is None or not isinstance(reply.content, str):
         return ""
     return reply.content.strip()
@@ -1751,8 +1681,7 @@ def _ticket_subject(description: str) -> str:
 class SupportBot(TruncatingChatbot):
     """Service class for the support intake agent"""
 
-    # Both are set per instance in __init__: only a bot with tools has a prompt
-    # worth loading or a token budget worth provisioning.
+    # Set per instance: only a bot with tools has a prompt.
     PROMPT_TEMPLATE = None
     TASK_NAME = "SUPPORT_TASK"
     JOB_ID = "SUPPORT_JOB"
@@ -1760,19 +1689,10 @@ class SupportBot(TruncatingChatbot):
     DEFAULT_MODEL_SETTING = "AI_DEFAULT_SUPPORT_MODEL"
     STATE_CLASS = SupportAgentState
     ANSWERING_STATE_CLASS = SupportAnsweringState
-    # No user_email, no verified_email, no user_name: a trace property is a
-    # PostHog event property, which is a different retention and a different
-    # access list from a Zendesk ticket.
+    # No email or name: these become PostHog event properties.
     TRACE_STATE_KEYS = ("page_url", "course_id", "platform")
-    # True on the class purely so the deploy check in checks.py covers this
-    # bot: it reads the attribute off the class, and __init__ overwrites it
-    # per instance with the answering flag below.
+    # Answering calls a model, so the deploy check in checks.py covers this bot.
     CALLS_THE_MODEL = True
-    # A bot is constructed on every request, including the ones that
-    # short-circuit before any model call. Both the budget and the catalog
-    # check happen on the first attempt instead, so those turns pay no blocking
-    # HTTP call, and a retired AI_DEFAULT_SUPPORT_MODEL costs the answer rather
-    # than 500ing the scripted intake with it.
     SETS_UP_THE_MODEL_EAGERLY = False
 
     def __init__(  # noqa: PLR0913
@@ -1788,14 +1708,10 @@ class SupportBot(TruncatingChatbot):
         user_agent: str = "",
         enable_account_tools: bool = False,
     ):
-        # Before super().__init__(): it reads PROMPT_TEMPLATE and
-        # CALLS_THE_MODEL, then calls create_tools() and get_llm(), which binds
-        # whatever create_tools returned. A second tool set ORs into `answering`.
+        # Before super().__init__(), which reads PROMPT_TEMPLATE and builds the
+        # tools from enable_account_tools.
         self.enable_account_tools = enable_account_tools
-        self._proxy_user_ready = False
-        answering = enable_account_tools
-        self.PROMPT_TEMPLATE = "support" if answering else None
-        self.CALLS_THE_MODEL = answering
+        self.PROMPT_TEMPLATE = "support" if enable_account_tools else None
         super().__init__(
             user_id,
             name=name,
@@ -1808,33 +1724,14 @@ class SupportBot(TruncatingChatbot):
         # Not graph state: the turn that files is itself a request, so this is
         # the live header rather than something accumulated over the thread.
         self.user_agent = user_agent
-        # Each tool set appends its own rules, so adding a set is an addendum
-        # rather than a rewrite. Before create_agent_graph, which captures
-        # self.instructions as it builds.
         if self.enable_account_tools and self.instructions:
-            for prompt_name in ("account_tools_core", "support_account_tools"):
-                account_prompt = get_system_prompt(
-                    prompt_name, SYSTEM_PROMPT_MAPPING, get_django_cache
-                )
-                self.instructions = f"{self.instructions.rstrip()}\n\n{account_prompt}"
+            self.add_account_tools_prompt("support_account_tools")
         self.agent = self.create_agent_graph()
-        # A second graph, deliberately without the checkpointer: an attempt
-        # that fails or times out must leave nothing behind, so falling back to
-        # the script is structural rather than cleanup that has to be right
-        # under every failure mode. The canonical thread stays the one
-        # _reply_without_the_model writes.
         self._build_answering_agent()
 
     def _build_answering_agent(self) -> None:
-        """
-        Build the unpersisted graph the answer attempt runs on.
-
-        ANSWERING_STATE_CLASS, not STATE_CLASS: LangGraph drops any input key
-        the state schema does not declare, so a schema without course_id means
-        the tools never see the page's course however carefully it is passed
-        in. Keeping it off the persisted class is also what keeps a course id
-        out of reach of the ticket path.
-        """
+        """Build the graph the answer attempt runs on."""
+        # No checkpointer: a failed attempt leaves nothing in the thread.
         self._answering_agent = (
             create_react_agent(
                 self.llm,
@@ -1848,20 +1745,14 @@ class SupportBot(TruncatingChatbot):
 
     @property
     def answering_enabled(self) -> bool:
-        """
-        Whether this bot has anything to answer with.
-
-        Read off the tool list rather than off enable_account_tools, so a
-        second tool set turns answering on by existing.
-        """
+        """Whether this bot has any tools to answer with."""
         return bool(self.tools)
 
     def create_tools(self):
         """
         Whatever tool sets this request enabled - and never a filing tool. The
         ticket is filed deterministically in get_completion: a second,
-        model-driven filing path could only disagree with that one, and a model
-        that declines to call it leaves the learner believing a ticket exists.
+        model-driven filing path could only disagree with that one.
         """
         bot_tools = []
         if self.enable_account_tools:
@@ -1869,11 +1760,7 @@ class SupportBot(TruncatingChatbot):
         return bot_tools
 
     async def get_tool_metadata(self) -> str:
-        """
-        Return no metadata. Every reply goes out through
-        _reply_without_the_model, which writes its own, and the answering
-        graph's tool calls are not part of the thread the frontend reads back.
-        """
+        """Return no metadata: the attempt's tool calls aren't in the thread."""
         return ""
 
     async def _prior_state(self) -> dict:
@@ -1886,37 +1773,27 @@ class SupportBot(TruncatingChatbot):
     ANSWER_HISTORY_MESSAGES = 10
 
     async def _ensure_proxy_user(self) -> None:
-        """Provision this learner's model budget, once, on first use."""
-        if self._proxy_user_ready or not self.proxy:
+        """Provision this learner's model budget."""
+        if not self.proxy:
             return
-        # Synchronous HTTP: called bare it would block the event loop for every
-        # other request this worker is serving. thread_sensitive=False because
-        # it touches no ORM, and the default shared thread is where every other
-        # sync_to_async call in the worker queues - a call that can run for
-        # REQUESTS_TIMEOUT twice over has no business holding it.
+        # Blocking HTTP, kept off the shared sync thread.
         await sync_to_async(self.proxy.create_proxy_user, thread_sensitive=False)(
             self.user_id
         )
-        self._proxy_user_ready = True
 
     @staticmethod
     def _page_course(page_url: str) -> tuple[str | None, str | None]:
         """
         Return the course run on this page and its platform, or (None, None).
-
-        page_url is browser-supplied. The host check is the only thing standing
-        between a crafted url and the tools reading a course the learner is not
-        looking at - though the tools still only ever read that learner's own
-        records, so the worst case is an answer about the wrong one of their
-        own courses.
+        page_url is browser-supplied, but the tools only read the learner's own
+        records.
         """
         openedx = settings.LEARNER_API_OPENEDX_BASE_URL
         if not page_url or not openedx:
             return None, None
         base, page = urlsplit(openedx), urlsplit(page_url)
-        # Compared as a host, not as a string prefix: a prefix match leaves the
-        # check resting on the setting carrying its trailing slash, and without
-        # one courses.learn.mit.edu.evil.test matches it.
+        # Scheme+host, not prefix: a prefix would match
+        # courses.learn.mit.edu.evil.test.
         if (page.scheme, page.netloc.lower()) != (base.scheme, base.netloc.lower()):
             return None, None
         found = COURSE_KEY_RE.search(page_url)
@@ -1930,23 +1807,9 @@ class SupportBot(TruncatingChatbot):
         platform: str | None,
         extra_state: dict | None,
     ) -> str:
-        """
-        Everything the answer timeout has to cover: provision, trace, answer.
-
-        Provisioning is in here rather than ahead of the timeout because it is
-        a synchronous HTTP call with a retry behind it, so it can run for
-        REQUESTS_TIMEOUT twice over - longer than the whole attempt is allowed
-        to take, on a learner who was never going to see an answer.
-
-        The trace is in here for the same reason it is inside the caller's
-        try: traced_chat runs the catalog check, which raises on an unlisted
-        model, and an answering bot that raises owes the learner intake.
-        """
+        """Provision, trace and run one attempt, all inside the caller's timeout."""
         await self._ensure_proxy_user()
         properties = self.get_trace_properties(
-            # course_id and platform are derived in _try_to_answer rather than
-            # carried in extra_state, so they have to be handed over for
-            # TRACE_STATE_KEYS to find them.
             {
                 **(extra_state or {}),
                 "course_id": [course_id],
@@ -1957,12 +1820,7 @@ class SupportBot(TruncatingChatbot):
             self.use_case,
             message,
             attribution=self.attribution,
-            # The same properties PostHog gets. Without them the one trace where
-            # "did it answer about the right course?" matters has no course on it.
             metadata=properties,
-            # The answering graph's own graph, not self.agent's: the trace is of
-            # this attempt, and the persisted intake graph has no model call in
-            # it to draw.
             graph=self._answering_agent.get_graph(xray=True)
             if ol_llm.tracing.enabled()
             else None,
@@ -1974,15 +1832,10 @@ class SupportBot(TruncatingChatbot):
                     "course_id": [course_id],
                     "platform": [platform],
                 },
-                # In this call's config, never on self.config: that one is the
-                # persisted support thread, and the attempt stays out of it.
                 config={"callbacks": callbacks},
             )
             answer = _the_answer_in(result)
             if answer:
-                # The answer the learner is shown, not the raw result. A turn
-                # that reached the records but produced no usable reply shows
-                # nothing, and so has nothing to record.
                 chat.record(answer)
             return answer
 
@@ -1992,18 +1845,12 @@ class SupportBot(TruncatingChatbot):
         """
         Try to answer from the learner's own records. Return the answer, or ""
         to hand the turn to the intake script.
-
-        What counts as an answer is _the_answer_in; anything that goes wrong on
-        the way to one leaves the learner the same fallback as a model that
-        won't answer.
         """
         if not self._answering_agent:
             return ""
         history = [
             msg
-            # Sliced from the cancellation, like every other read of the thread:
-            # a learner who cancelled withdrew those words, and replaying them
-            # would hand them to the model and to the trace this attempt writes.
+            # From the cancellation on: cancelled words are withdrawn.
             for msg in (prior_state.get("messages") or [])[
                 _cancelled_after(prior_state) :
             ]
@@ -2011,9 +1858,7 @@ class SupportBot(TruncatingChatbot):
             and msg.content
             and not _quotes_the_reply_to(msg)
         ][-self.ANSWER_HISTORY_MESSAGES :]
-        # This turn's page, not prior_state's: that one is still the page the
-        # learner was on last turn, and answering about the course they just
-        # left is the whole bug this guards against.
+        # This turn's page: prior_state still holds last turn's.
         course_id, platform = self._page_course(
             ((extra_state or {}).get("page_url") or [""])[-1]
         )
@@ -2025,9 +1870,8 @@ class SupportBot(TruncatingChatbot):
                 timeout=settings.AI_SUPPORT_ANSWER_TIMEOUT,
             )
         except Exception as error:  # noqa: BLE001
-            # Type only, and no exc_info: Sentry scrubs frame locals from every
-            # frame of a matching event, and these frames hold the learner's
-            # session cookies and their records.
+            # Type only, no exc_info: these frames hold the learner's session
+            # cookies and records, and Sentry would capture their locals.
             log.warning("Support answer attempt failed: %s", type(error).__name__)
             return ""
 
@@ -2158,33 +2002,20 @@ class SupportBot(TruncatingChatbot):
         description = _support_description(
             prior_messages, message, since=_cancelled_after(prior_state)
         )
-        # Nothing to show back yet. Either the thread is new - an authenticated
-        # learner's address arrives with the opening message, so ask for the
-        # problem before showing a review - or it starts past a close-out or a
-        # cancel and this turn added only a button press or a filler. A review
-        # with no problem in it still arms the send, and the turn after files a
-        # ticket support cannot act on, which spends the thread on it.
+        # Nothing to review yet. A cancel or close-out ends it; anything else asks.
         if not prior_messages or not description:
-            # Every reply "anything else to add?" invites is filler, so asking
-            # again is all it can do with one. The review this guard replaced
-            # armed the send, where _send_edit_or_cancel reads these as a cancel
-            # or as an unclear go-ahead naming "cancel"; without this the
-            # learner who answers the question has no way out of it.
-            #
-            # _closes_the_answer, not a narrower pair: it already unions the
-            # sets that end a request, and leaves affirmatives out, so "yes" -
-            # which means there is more coming - still asks.
             if prior_messages and (
                 _is_cancellation(message)
                 or _closes_the_answer(message)
                 or _calls_off_a_cancellation(message)
             ):
                 return SUPPORT_NOTHING_TO_SEND, {
-                    # This turn's own exchange is written alongside this update,
-                    # so the next request starts past both of those too.
                     "cancelled_after": [len(prior_messages) + 2],
                 }
-            return SUPPORT_ASK_MORE, {"user_email": [email]}
+            # An opening message that carried the address still has a problem
+            # in it; a bare escalate press has nothing to thank them for.
+            reply = SUPPORT_ASK_MORE if description else SUPPORT_ASK_PROBLEM
+            return reply, {"user_email": [email]}
         return _support_review(
             description,
             _accumulated(prior_state, extra_state, "page_url"),
@@ -2253,34 +2084,18 @@ class SupportBot(TruncatingChatbot):
         """
         Try to answer the learner's question; take their request in when we
         can't, or when they have asked for a person.
-
-        Answering is the only part of this bot a model touches, and it sits in
-        front of the intake form rather than inside it: everything below this
-        point behaves exactly as it does for a learner who gets no answer.
         """
         handed_off = escalated or (prior_state.get("handed_off") or [False])[-1]
         answered_before = (prior_state.get("answered") or [False])[-1]
-        # Intake is under way when a previous turn in this request produced a
-        # scripted reply rather than an answer. Both ways a request ends - a
-        # close-out and a cancel - already push cancelled_after past the whole
-        # thread, so each of them reopens answering without saying so here.
+        # Close-outs and cancels move cancelled_after past the thread, which
+        # reopens answering.
         intake_started = not answered_before and len(
             prior_state.get("messages") or []
         ) > _cancelled_after(prior_state)
-        # The offer says "tell me more and I'll pass it on", so a bare "yes"
-        # after an answer accepts it. _closes_the_answer leaves affirmatives
-        # out by design, so without this they go back to the model, which
-        # answers again and re-appends the offer - and the learner who said
-        # yes never reaches a person. A bare affirmative is filler, so it
-        # stays out of the description either way.
+        # A "yes" after an answer accepts the offer to pass it on.
         took_up_the_offer = answered_before and _is_affirmative(message)
-        # Outside the answering gate, unlike the attempt below it: closing out an
-        # answer only reads state, so it needs no tools. Inside the gate, a gate
-        # that goes off mid-thread - a flag rollback, or the cookie expiring on a
-        # thread the learner comes back to - drops the close-out and sends their
-        # "thanks" into a review of the question that was already answered.
-        # intake_started is left out rather than forgotten: it is defined as
-        # "not answered_before and ...", so it is always false here.
+        # Not gated on answering_enabled, so a flag turned off mid-thread still
+        # closes out.
         if (
             answered_before
             and not handed_off
@@ -2289,8 +2104,6 @@ class SupportBot(TruncatingChatbot):
         ):
             return SUPPORT_ANSWER_CLOSED, {
                 "answered": [False],
-                # This turn's own exchange is written alongside this update,
-                # so a later request starts past both of those too.
                 "cancelled_after": [len(prior_state.get("messages") or []) + 2],
             }
         if (
@@ -2304,11 +2117,7 @@ class SupportBot(TruncatingChatbot):
                 return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
 
         reply, updates = self._collect_the_request(
-            # A button carries whatever words the widget put on it, and
-            # message is required and non-blank on the wire, so the escalate
-            # turn contributes nothing to the ticket - the same reason
-            # _send_edit_or_cancel files with "" after a Send press.
-            "" if escalated else message,
+            message,
             extra_state=extra_state,
             prior_state=prior_state,
         )
@@ -2336,6 +2145,9 @@ class SupportBot(TruncatingChatbot):
         # Same reason: this turn's "contact the support team" button. What
         # sticks for the thread is handed_off, merged in below.
         escalated = any(extra_state.pop("escalate", None) or [])
+        if escalated:
+            # The press carries the button's label, not the learner's words.
+            message = ""
         session = await UserChatSession.objects.filter(
             thread_id=self.thread_id
         ).afirst()
@@ -2361,12 +2173,7 @@ class SupportBot(TruncatingChatbot):
         # whole list would let the send the learner called off come back.
         elif (prior_state.get("awaiting_send") or [False])[-1]:
             reply, updates = await self._send_edit_or_cancel(
-                # Blanked for the same reason as the other two call sites: the
-                # press carries the button's label, and here anything that is
-                # not a send or a cancel reads as an edit, so the label would
-                # be shown back as the learner's words and then left out of
-                # what files. A blank re-shows the request unchanged.
-                "" if escalated else message,
+                message,
                 extra_state=extra_state,
                 prior_state=prior_state,
                 session=session,
@@ -2381,21 +2188,10 @@ class SupportBot(TruncatingChatbot):
             )
 
         if escalated:
-            # Merged after the chain, not inside the else: the press has to
-            # count whichever branch ran. handed_off makes exactly one promise,
-            # that a learner who asked for a person is never looped back into
-            # the assistant, and a press that only counts under one of five
-            # branches does not keep it.
+            # Counts whichever branch ran.
             updates = {**updates, "handed_off": [True]}
 
         async for chunk in self._reply_without_the_model(
-            # Blanked here as well as in the description: this write is
-            # prior_messages on the next turn, and an edit after an escalate
-            # would otherwise file the button's label as the learner's problem.
-            # _support_description drops a blank HumanMessage, and the message
-            # still occupies a position, so cancelled_after's arithmetic holds.
-            "" if escalated else message,
-            reply,
-            {**extra_state, **updates},
+            message, reply, {**extra_state, **updates}
         ):
             yield chunk

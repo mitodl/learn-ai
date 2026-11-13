@@ -615,9 +615,7 @@ AI_DEFAULT_TUTOR_MODEL = get_string("AI_DEFAULT_TUTOR_MODEL", "openai/gpt-4o")
 AI_DEFAULT_VIDEO_GPT_MODEL = get_string("AI_DEFAULT_VIDEO_GPT_MODEL", AI_DEFAULT_MODEL)
 AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 16384)
 AI_DEFAULT_SUPPORT_MODEL = get_string("AI_DEFAULT_SUPPORT_MODEL", AI_DEFAULT_MODEL)
-# The answer attempt is optional work in front of a form that must still work,
-# so it gets a shorter leash than an ordinary request: a slow model costs the
-# learner a pause, not the intake.
+# Shorter than a normal request: a slow answer must not hold up the intake.
 AI_SUPPORT_ANSWER_TIMEOUT = get_int("AI_SUPPORT_ANSWER_TIMEOUT", 20)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(
