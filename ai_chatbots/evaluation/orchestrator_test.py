@@ -732,6 +732,21 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "Pairwise wins for syllabus: {'model-a': 1, 'model-b': 2}" in output
 
+    def test_run_pairwise_by_side(self, orchestrator, config, arena):
+        """A baseline run's contestants and winners are sides: model plus prompt."""
+        metric = arena[1]
+        metric.measure.return_value = "model-b [short]"
+        cases = [_answer("model-a"), _answer("model-b")]
+        cases[1].metadata["prompt_label"] = "short"
+
+        orchestrator._run_pairwise("syllabus", cases, config, by_side=True)  # noqa: SLF001
+
+        contestants = metric.measure.call_args.args[0].contestants
+        assert [c.name for c in contestants] == ["model-a", "model-b [short]"]
+        assert orchestrator.pairwise_results == {
+            ("syllabus", "f.json#Q1", None): "model-b [short]"
+        }
+
     def test_run_pairwise_skips_unmatched_and_judge_errors(
         self, orchestrator, config, arena, mock_stdout
     ):
@@ -972,6 +987,25 @@ class TestFailuresAndBaseline:
         ]
         record = next(iter(orchestrator.answer_records.values()))
         assert set(record["checks"]) == {"follow_up_offer"}
+        # Each answer is saved with what the judge is shown
+        saved = orchestrator.stdout.write.call_args.args[0]
+        assert saved.startswith("ANSWER_JSON ")
+        assert '"context": ["evidence"]' in saved
+
+    def test_scores_recorded_under_threshold_names(
+        self, orchestrator, deepeval_returns, mocker
+    ):
+        """Deepeval's "Answer Relevancy" is scored as the threshold's AnswerRelevancy."""
+        config = self._config(orchestrator, require_expected=True)
+        case = _answer("model-a")
+        orchestrator._record_answers("test_bot", [case])  # noqa: SLF001
+        names = [metric.__name__ for metric in config.metrics]
+        deepeval_returns((case, [self._metric(mocker, 0.9, name=n) for n in names]))
+
+        orchestrator._run_deepeval_evaluation([case], config, 2, bot_name="test_bot")  # noqa: SLF001
+
+        (record,) = orchestrator.answer_records.values()
+        assert set(record["scores"]) == set(config.metric_thresholds)
 
     @pytest.mark.parametrize(
         ("metric", "kinds"),

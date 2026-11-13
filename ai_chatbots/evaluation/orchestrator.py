@@ -369,7 +369,7 @@ class EvaluationOrchestrator:
                     detail=call,
                 )
             case_id, model, prompt_label = _answer_key(metadata)
-            self.answer_records[(bot_name, case_id, _side(metadata))] = {
+            record = {
                 "bot": bot_name,
                 "question": case.input,
                 "case_id": case_id,
@@ -378,7 +378,16 @@ class EvaluationOrchestrator:
                 "side": _side(metadata),
                 "checks": run_checks(bot_name, case),
                 "tool_call_count": metadata.get("tool_call_count"),
-                "scores": {},
+            }
+            # What the judge is shown, to check a verdict by hand or judge it again
+            shown = {
+                "answer": case.actual_output,
+                "expected": case.expected_output,
+                "context": case.retrieval_context,
+            }
+            self.stdout.write(f"ANSWER_JSON {json.dumps(record | shown)}")
+            self.answer_records[(bot_name, case_id, _side(metadata))] = record | {
+                "scores": {}
             }
 
     async def _collect_and_evaluate_bot(  # noqa: C901, PLR0912, PLR0913, PLR0915
@@ -633,8 +642,8 @@ class EvaluationOrchestrator:
                         bot, "judge error", case, detail=f"{metric_data.name}: {error}"
                     )
                 else:
-                    # deepeval names it "Correctness [GEval]"
-                    name = metric_data.name.split(" [")[0]
+                    # deepeval names them "Correctness [GEval]", "Answer Relevancy"
+                    name = metric_data.name.split(" [")[0].replace(" ", "")
                     record.setdefault("scores", {})[name] = metric_data.score
             for name in {m.__name__ for m in config.metrics} - {
                 m.name for m in metrics_data
@@ -877,11 +886,10 @@ Started: {timestamp}
         # Load alternative prompts if enabled
         prompts_data = self._load_prompts_data(prompts_file) if use_prompts else {}
         # A baseline run's (model, prompt) sides; a None prompt is the bot's own
-        sides_by_bot = {}
+        sides = None
         if baseline:
             candidate = next(m for m in config.models if m != baseline)
             sides = [(baseline, baseline_prompt), (candidate, candidate_prompt)]
-            sides_by_bot = dict.fromkeys(bot_names, sides)
 
         # Process each bot one at a time, accumulating results
         all_bot_results = []
@@ -902,7 +910,7 @@ Started: {timestamp}
                 pairwise=pairwise or bool(baseline),
                 sample=sample,
                 seed=seed,
-                sides=sides_by_bot.get(bot_name),
+                sides=sides,
             )
             all_bot_results.append(bot_result)
 
@@ -971,7 +979,7 @@ Started: {timestamp}
             self.stdout.write("\n\n⚖️  VERSUS BASELINE")
             self.stdout.write("=" * 80)
             for bot_name in bot_names:
-                self._versus_baseline(bot_name, config, sides_by_bot[bot_name])
+                self._versus_baseline(bot_name, config, sides)
         self.reporter.incomplete_banner(self.failures)
 
         return results
