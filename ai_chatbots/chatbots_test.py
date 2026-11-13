@@ -2086,8 +2086,14 @@ async def test_support_bot_provisions_a_budget_only_when_it_answers(
         # One word outside the set makes it a follow-up.
         ("thanks, but that's not right", False),
         ("that's not right, I submitted all my assignments last week", False),
-        # A plain no only counts on its own.
+        ("ok that's it", True),
+        # A plain no or a "nothing" only counts as the whole reply.
         ("no help", False),
+        ("nothing helped", False),
+        ("nothing helps", False),
+        ("got nothing", False),
+        ("that helped nothing", False),
+        ("is it done", False),
         ("is that all?", False),
         ("is that all", False),
     ],

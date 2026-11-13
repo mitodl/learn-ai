@@ -1359,9 +1359,15 @@ FILLER_PHRASES = (
 # affirmatives here.
 ANSWER_END_PHRASES = ANSWER_CLOSING_PHRASES | NOTHING_MORE_PHRASES
 # What a close-out may be padded with ("ok thanks so much!"). Any other word
-# makes the reply a follow-up.
-ANSWER_END_WORDS = frozenset(
-    word for phrase in ANSWER_END_PHRASES | DECLINE_PHRASES for word in phrase.split()
+# makes the reply a follow-up. Not "nothing" or "done": "nothing helped" and
+# "is it done" aren't a thanks.
+ANSWER_END_WORDS = (
+    frozenset(
+        word
+        for phrase in ANSWER_END_PHRASES | DECLINE_PHRASES
+        for word in phrase.split()
+    )
+    - {"nothing", "done"}
 ) | {"ok", "okay", "so", "for", "the", "info"}
 
 
@@ -1502,14 +1508,15 @@ def _is_decline(message: str) -> bool:
 
 def _closes_the_answer(message: str) -> bool:
     """
-    Report whether the learner is finished with an answer. A plain no counts
-    only on its own, so "no help" is not read as a thanks.
+    Report whether the learner is finished with an answer. A plain no or a
+    "nothing" counts only as the whole reply, so "no help" and "got nothing"
+    are not read as a thanks.
     """
     # "is that all?" asks for more.
     if "?" in (message or ""):
         return False
     normalised = _normalised(message)
-    if normalised in DECLINE_PHRASES:
+    if normalised in DECLINE_PHRASES | NOTHING_MORE_PHRASES:
         return True
     words = normalised.split()
     if len(words) > SHORT_REPLY_MAX_WORDS or not set(words) <= ANSWER_END_WORDS:
