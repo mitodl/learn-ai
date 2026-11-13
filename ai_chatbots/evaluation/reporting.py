@@ -265,8 +265,8 @@ class EvaluationReporter:
                                 score = row["score"]
 
                                 # Determine PASS/FAIL based on threshold
-                                # GEval metrics are named "Correctness [GEval]"
-                                base_name = metric.split(" [")[0]
+                                # deepeval: "Correctness [GEval]", "Answer Relevancy"
+                                base_name = metric.split(" [")[0].replace(" ", "")
                                 if metric_thresholds and base_name in metric_thresholds:
                                     threshold = metric_thresholds[base_name]
                                     overall_pass = score >= threshold

@@ -61,6 +61,20 @@ def test_unlinked_resources(answer, unlinked):
     assert unlinked_resources(answer, context) == unlinked
 
 
+def test_unlinked_resources_shared_titles():
+    """Any result's url links a shared title; a longer title doesn't mention it."""
+    context = [
+        _search(
+            {"title": "Calculus", "url": URL},
+            {"title": "Calculus", "url": f"{URL}0"},
+            {"title": "Calculus for Poets", "url": f"{URL}1"},
+        )
+    ]
+    assert unlinked_resources(f"Try [Calculus]({URL}0).", context) == []
+    assert unlinked_resources(f"Try [Calculus for Poets]({URL}1).", context) == []
+    assert unlinked_resources("Try Calculus.", context) == ["Calculus"]
+
+
 @pytest.mark.parametrize(
     ("answer", "found"),
     [

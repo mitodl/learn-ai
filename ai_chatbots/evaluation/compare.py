@@ -45,37 +45,24 @@ def measure_outcomes(  # noqa: PLR0913
         if case_id not in skip and {baseline, candidate} <= set(by_side)
     ]
 
-    def below(metric):
-        def fails(case_id, side):
-            score = by_case[case_id][side]["scores"].get(metric)
-            return None if score is None else score < thresholds[metric]
-
-        return fails
-
-    def failed(name):
-        return lambda case_id, side: bool(by_case[case_id][side]["checks"].get(name))
-
-    measures = {
-        "pairwise": lambda case_id, side: (
-            None if winners.get(case_id) is None else winners[case_id] != side
-        )
-    }
-    measures.update({metric: below(metric) for metric in thresholds})
-    checks = {
-        name for case_id in cases for name in by_case[case_id][baseline]["checks"]
-    }
-    measures.update({name: failed(name) for name in sorted(checks)})
-
-    outcomes = {
-        name: {
-            case_id: outcome
-            for case_id in cases
-            if (
-                outcome := _outcome(fails(case_id, baseline), fails(case_id, candidate))
-            )
+    def fails(case_id, side) -> dict[str, bool | None]:
+        """Whether one answer failed each measure; None when it wasn't judged."""
+        record, winner = by_case[case_id][side], winners.get(case_id)
+        scores = {m: record["scores"].get(m) for m in thresholds}
+        return {
+            "pairwise": None if winner is None else winner != side,
+            **{m: None if s is None else s < thresholds[m] for m, s in scores.items()},
+            **{name: bool(record["checks"][name]) for name in sorted(record["checks"])},
         }
-        for name, fails in measures.items()
-    }
+
+    outcomes: dict[str, dict[str, str]] = {}
+    for case_id in cases:
+        candidate_fails = fails(case_id, candidate)
+        for name, baseline_failed in fails(case_id, baseline).items():
+            outcome = _outcome(baseline_failed, candidate_fails.get(name))
+            outcomes.setdefault(name, {})
+            if outcome:
+                outcomes[name][case_id] = outcome
     return outcomes, {c: by_case[c][baseline]["question"] for c in cases}
 
 
@@ -108,14 +95,18 @@ def print_comparison(
             for case_id, outcome in by_case.items():
                 if outcome == WORSE:
                     write(f"     ↳ worse: {case_id}: {questions.get(case_id, '')[:80]}")
-    if failed or not questions:
-        why = "see FAILURES" if failed else "no cases compared"
-        write(f"  Incomplete ({why}): rerun before reading anything into this.")
+    # A measure with nothing compared (say, no score recorded) shows nothing
+    unmeasured = ", ".join(name for name, by_case in outcomes.items() if not by_case)
+    if failed or not questions or unmeasured:
+        on = unmeasured and f" on {unmeasured}"
+        why = "see FAILURES" if failed else f"no cases compared{on}"
+        so_far = f" Clearly worse so far on {', '.join(flagged)}." if flagged else ""
+        write(f"  Incomplete ({why}): rerun before relying on this.{so_far}")
     elif flagged:
         write(f"  Regression found: clearly worse on {', '.join(flagged)}.")
     else:
         write(
-            f"  No regression found on {len(questions)} cases. "
-            "Small samples miss small losses."
+            f"  Nothing flagged on {len(questions)} cases. "
+            "That doesn't rule out a regression."
         )
     return flagged
