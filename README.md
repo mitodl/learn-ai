@@ -299,12 +299,12 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 - `output-file`: The file to write results to. If not specified, results will only be sent to stdout.
 - `timeout`: The max amount of seconds to wait before aborting a test case and moving on to the next. Default is 360.
 - `max-concurrent`: The max number of test cases to run concurrently. Default is 1.
-- `correctness-only`: Judge answers only against their expected answers. Cases without one are skipped, with a count.
+- `correctness-only`: Judge answers against their expected answers. Cases without one are skipped, with a count. Correctness passes an answer that answers the question with fewer of the examples or reasons the expected answer lists. The syllabus and video bots are also scored on Faithfulness, which fails any claim their retrieved material doesn't back up.
 - `pairwise`: Also ask the judge which model answered each question best.
 - `pairwise-only`: Judge only pairwise, with no other metric. For cases without expected answers.
 - `sample`: Judge a seeded random sample of this many cases per bot. Default: every case.
 - `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
-- `baseline`: Compare the other model in `models` (which may name just that one) with this one and give a verdict (see below). Judged pairwise, plus Correctness with `correctness-only`; `--bots tutor` alone is judged on TutoringQuality, against the problem, its solution and the conversation so far.
+- `baseline`: Compare the other model in `models` (which may name just that one) with this one and give a verdict (see below). Judged pairwise, plus Correctness (and Faithfulness, for the syllabus and video bots) with `correctness-only`; `--bots tutor` alone is judged on TutoringQuality, against the problem, its solution and the conversation so far.
 - `baseline-prompt`, `candidate-prompt`: A text file with that side's prompt (default: the bot's own); the file name labels it. Need `baseline` and a single bot.
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.

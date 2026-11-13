@@ -143,7 +143,8 @@ class EvaluationConfig:
     timeout_seconds: int = 360
     max_retries: int = 3
     retry_delay: float = 5.0
-    # Correctness against the reference answer is the only deepeval metric
+    # Correctness against the reference answer, plus Faithfulness to the
+    # retrieved material for the bots both sides search the same way
     correctness_only: bool = False
     # No deepeval metrics at all; only the pairwise judge
     pairwise_only: bool = False

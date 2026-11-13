@@ -3,7 +3,7 @@
 from math import comb
 
 SIGNIFICANCE = 0.05
-JUDGED_SCORES = ("Correctness", "TutoringQuality")
+JUDGED_SCORES = ("Correctness", "Faithfulness", "TutoringQuality")
 # The fewest differing cases that can ever be flagged: 6 worse, none better
 MIN_FLAGGABLE = 6
 BETTER, WORSE, SAME = "better", "worse", "same"

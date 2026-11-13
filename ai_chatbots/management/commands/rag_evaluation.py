@@ -121,8 +121,9 @@ class Command(BaseCommand):
             dest="correctness_only",
             action="store_true",
             help=(
-                "Judge answers against their curated expected answers and "
-                "nothing else.  Use this to compare two versions of the code: "
+                "Judge answers against their curated expected answers, plus "
+                "Faithfulness to the retrieved material for the syllabus and "
+                "video bots.  Use this to compare two versions of the code: "
                 "the other metrics score answers against the retrieval "
                 "context, so they penalize an answer that needed fewer tool "
                 "calls, or none."
