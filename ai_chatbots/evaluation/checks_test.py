@@ -56,6 +56,7 @@ def test_ends_with_offer(answer, fails):
             ["Intro to Data Science"],
         ),
         ("Try [Intro to Data Science](#).", ["Intro to Data Science"]),
+        ("Try [Intro to Data Science](https://[broken).", ["Intro to Data Science"]),
         # Not mentioned at all
         ("Try something else.", []),
     ],

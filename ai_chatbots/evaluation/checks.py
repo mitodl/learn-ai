@@ -31,7 +31,10 @@ def _normalize_quotes(text: str) -> str:
 
 def _normalize_url(url: str) -> str:
     """Compare urls without case in the scheme and host or a trailing slash."""
-    parts = urlsplit(url.strip())
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:  # a model's malformed link, such as "https://[x"
+        return url.strip()
     return urlunsplit(
         (
             parts.scheme.lower(),
