@@ -72,21 +72,23 @@ def unlinked_resources(answer: str, context: Iterable[str]) -> list[str]:
         (text.strip().lower(), _normalize_url(url))
         for text, url in MARKDOWN_LINK.findall(answer)
     }
-    unlinked = []
+    # Several results can share a title, each with its own url
+    urls: dict[str, set[str]] = {}
     for output in _tool_outputs(context):
         for result in output.get("results") or []:
-            if not isinstance(result, dict) or not result.get("title"):
-                continue
-            title = _normalize_quotes(result["title"]).strip()
-            if title.lower() not in answer.lower():
-                continue
-            url = _normalize_url(result.get("url") or "")
-            linked = any(
-                title.lower() in text and url and link_url == url
-                for text, link_url in links
-            )
-            if not linked and title not in unlinked:
-                unlinked.append(title)
+            if isinstance(result, dict) and result.get("title"):
+                title = _normalize_quotes(result["title"]).strip()
+                url = _normalize_url(result.get("url") or "")
+                urls.setdefault(title, set()).update({url} - {""})
+    unlinked = []
+    unseen = answer.lower()
+    # Longest first, so a title inside a longer one isn't taken for a mention
+    for title in sorted(urls, key=len, reverse=True):
+        if title.lower() not in unseen:
+            continue
+        unseen = unseen.replace(title.lower(), " ")
+        if not any(title.lower() in text and url in urls[title] for text, url in links):
+            unlinked.append(title)
     return unlinked
 
 

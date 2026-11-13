@@ -11,9 +11,6 @@ from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
 from ai_chatbots.evaluation.reporting import DualOutputWrapper
 from ai_chatbots.models import LLMModel
 
-# Cases judged per run when comparing with a baseline, unless --sample says
-BASELINE_SAMPLE = 30
-
 
 class Command(BaseCommand):
     """Run RAG evaluations."""
@@ -158,7 +155,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sample",
             type=int,
-            help=f"Seeded cases per bot (all; {BASELINE_SAMPLE} with --baseline)",
+            help="Judge a seeded sample of this many cases per bot (default: all)",
         )
         parser.add_argument("--seed", type=int, default=SAMPLE_SEED)
         parser.add_argument(
@@ -268,8 +265,6 @@ class Command(BaseCommand):
             baseline and not (correctness_only or require_expected or tutor_rubric)
         )
         sample = options["sample"]
-        if sample is None and baseline:
-            sample = BASELINE_SAMPLE
 
         # Create output wrapper (dual output if file specified, otherwise normal stdout)
         if output_file:

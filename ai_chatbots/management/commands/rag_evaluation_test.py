@@ -48,14 +48,14 @@ def test_refused_flags(run_evaluation, args, message):
 @pytest.mark.parametrize(
     ("args", "sample"),
     [
-        ("--baseline a --bots syllabus", 30),
+        ("--baseline a --bots syllabus", None),
         ("--baseline a --pairwise-only --bots syllabus --sample 0", 0),
         ("--pairwise", None),
-        ("--baseline a --bots tutor", 30),
+        ("--baseline a --bots tutor", None),
     ],
 )
 def test_defaults(run_evaluation, args, sample):
-    """Comparisons sample 30 cases, other runs every case; the judge is gpt-5.5."""
+    """Every case runs unless --sample says; the judge is gpt-5.5."""
     call_command("rag_evaluation", "--models", "a,b", *args.split())
     kwargs = run_evaluation.call_args.kwargs
     assert kwargs["sample"] == sample

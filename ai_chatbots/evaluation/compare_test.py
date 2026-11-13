@@ -100,20 +100,27 @@ def test_print_comparison_flags(mocker, worse, better, expected):
     is_flagged = expected == "CLEARLY WORSE"
     assert flagged == (["follow_up_offer"] if is_flagged else [])
     assert ("Regression found" in output) is is_flagged
-    assert ("No regression found" in output) is not is_flagged
+    assert ("Nothing flagged" in output) is not is_flagged
     # The cases behind a flagged code check are listed
     assert ("↳ worse: c0: Question" in output) is is_flagged
 
 
 @pytest.mark.parametrize(
     ("questions", "failed", "why"),
-    [({"c0": "Q"}, True, "see FAILURES"), ({}, False, "no cases compared")],
+    [
+        ({"c0": "Q"}, True, "see FAILURES"),
+        ({}, False, "no cases compared on Correctness"),
+        # Cases were compared, but one measure has no scores
+        ({"c0": "Q"}, False, "no cases compared on Correctness"),
+    ],
 )
 def test_print_comparison_incomplete(mocker, questions, failed, why):
-    """A failure, or nothing compared, is Incomplete whatever the counts say."""
+    """A failure, or a measure with nothing compared, is Incomplete; a flag is named."""
     write = mocker.Mock()
     worse = {f"c{i}": "worse" for i in range(8)}
-    print_comparison(write, {"pairwise": worse}, questions, failed=failed)
+    outcomes = {"pairwise": worse, "Correctness": {}}
+    print_comparison(write, outcomes, questions, failed=failed)
     output = _output(write)
     assert f"Incomplete ({why})" in output
+    assert "Clearly worse so far on pairwise" in output
     assert "Regression found" not in output

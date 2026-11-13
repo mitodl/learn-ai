@@ -302,7 +302,7 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 - `correctness-only`: Judge answers only against their expected answers. Cases without one are skipped, with a count.
 - `pairwise`: Also ask the judge which model answered each question best.
 - `pairwise-only`: Judge only pairwise, with no other metric. For cases without expected answers.
-- `sample`: Judge a seeded random sample of this many cases per bot. Default: every case, or 30 with `baseline`.
+- `sample`: Judge a seeded random sample of this many cases per bot. Default: every case.
 - `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
 - `baseline`: Compare the other model in `models` (which may name just that one) with this one and give a verdict (see below). Judged pairwise, plus Correctness with `correctness-only`; `--bots tutor` alone is judged on TutoringQuality, against the problem, its solution and the conversation so far.
 - `baseline-prompt`, `candidate-prompt`: A text file with that side's prompt (default: the bot's own); the file name labels it. Need `baseline` and a single bot.
@@ -313,9 +313,9 @@ Every run reports what it could not measure instead of dropping it: answers that
 
 ### Comparing a candidate with the baseline
 
-`--baseline` compares two sides, each a model and a prompt, case by case. For each measure (pairwise preference, Correctness or TutoringQuality when judged, and each code check: follow-up offers for recommendation, syllabus and video, unlinked resources and bare URLs for recommendation) every case comes out candidate better, worse or the same. A measure is flagged "clearly worse" when the candidate is worse more often than better and an exact sign test gives p < 0.05; 6 worse and none better is the smallest result that can be flagged. The section ends with **Incomplete** if anything failed, else **Regression found** or **No regression found**.
+`--baseline` compares two sides, each a model and a prompt, case by case. For each measure (pairwise preference, Correctness or TutoringQuality when judged, and each code check: follow-up offers for recommendation, syllabus and video, unlinked resources and bare URLs for recommendation) every case comes out candidate better, worse or the same. A measure is flagged "clearly worse" when the candidate is worse more often than better and an exact sign test gives p < 0.05; 6 worse and none better is the smallest result that can be flagged. The section ends with **Incomplete** if anything failed (naming any measure already flagged), else **Regression found** or **Nothing flagged**.
 
-"No regression found" does not mean the candidate is as good: a sample of 30 misses small losses. To see how repeatable a flag is, rerun with the same `--seed` (same cases, fresh answers and judging); another `--seed` also changes the cases. Neither shows what caused a flag.
+"Nothing flagged" does not mean the candidate is as good: a few dozen cases catch only large losses, so compare on every case you have. To see how repeatable a flag is, rerun with the same `--seed` (same cases, fresh answers and judging); another `--seed` also changes the cases. Neither shows what caused a flag.
 
 One comparison is one run per eval group (data files), for example:
 
