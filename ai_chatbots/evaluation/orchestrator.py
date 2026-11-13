@@ -79,6 +79,18 @@ def _answer_key(metadata: dict | None) -> tuple:
     )
 
 
+def _with_question(test_case):
+    """Copy a case with its question as the first piece of retrieved material.
+
+    deepeval's Faithfulness judge sees only the answer and the retrieved
+    material, so numbers the question gives (a truck bought for 10,000 on Jan
+    1, 2020) count as made up when the answer works through them.
+    """
+    context = [f"The user's question: {test_case.input}"]
+    context += test_case.retrieval_context or []
+    return test_case.model_copy(update={"retrieval_context": context})
+
+
 def _bot_metrics(config: EvaluationConfig, bot_name: str | None) -> list:
     """List the metrics one bot is scored on: Faithfulness only for GROUNDED_BOTS."""
     if not config.correctness_only or bot_name in GROUNDED_BOTS:
@@ -644,8 +656,16 @@ class EvaluationOrchestrator:
         for metric in metrics:
             if isinstance(metric, TimeoutMetricWrapper):
                 metric.prepare()
+        # With correctness_only, Faithfulness is the only metric that reads the
+        # retrieved material; the default metrics include others that do
+        judged = (
+            [_with_question(case) for case in test_cases]
+            if config.correctness_only
+            and "Faithfulness" in {m.__name__ for m in metrics}
+            else test_cases
+        )
         result = deepeval.evaluate(
-            test_cases=test_cases,
+            test_cases=judged,
             metrics=metrics,
             error_config=ErrorConfig(ignore_errors=True),
             async_config=async_config,
