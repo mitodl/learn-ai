@@ -344,3 +344,5 @@ python manage.py rag_evaluation --bots tutor --baseline openai/gpt-4o --models o
 ```
 
 Tutor cases can carry the saved conversation before the turn (`history`) and a Canvas problem set (`run_readable_id` and `problem_set_title` in `extra_init`) instead of an edX problem. TutoringQuality penalizes giving away the final answer, not hints that describe the method.
+
+The eval sets in `test_json/evaluation_sets/` are one file per group: `qa_*.json` and `account_tools.json` (syllabus), `recommendation_questions.json`, `video_questions.json` (answers written from each video's transcript) and `tutor_problems.json`. The tutor messages there were written for the eval, not taken from learners, so they show the kinds of questions students ask rather than how they word them. TutoringQuality doesn't catch hints that give away the method, so read a sample of tutor replies against the solutions too.
