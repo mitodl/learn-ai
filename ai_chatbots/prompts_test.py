@@ -55,151 +55,80 @@ def test_syllabus_prompts_route_by_subject(prompt):
     assert "OUTSIDE OF THE TOOL OUTPUT AND THE RESOURCE FACTS BELOW" in collapsed
 
 
-def test_support_prompt_names_no_tools():
-    """
-    The base prompt is the bot's identity and its hard "never say" rules; the
-    tools it happens to have are an addendum. Naming a tool here is what makes
-    a second tool set a rewrite instead of one more addendum.
-    """
-    prompt = prompts.CHATBOT_PROMPT_MAPPING["support"]
-
-    assert "get_enrollments" not in prompt
-    assert "search_content_files" not in prompt
-    assert "resource facts" not in prompt
-
-
-def test_support_prompt_forbids_the_things_only_code_may_say():
-    """
-    Filing is deterministic and there is no human on the other end of this
-    chat. A model that says a ticket was sent, or that someone will follow up,
-    makes the learner stop asking - and nothing was filed.
-    """
-    prompt = prompts.CHATBOT_PROMPT_MAPPING["support"].lower()
-
-    assert "never say a support ticket" in prompt
-    assert "never promise" in prompt
-    assert "policy" in prompt
+_CORE = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
+_SYLLABUS_ADDENDUM = prompts.SYSTEM_PROMPT_MAPPING["syllabus_account_tools"]
+_SUPPORT_ADDENDUM = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+# Rules the core owns. A copy in an addendum can drift from the core's, and the
+# addendum is read last.
+_CORE_ONLY = [
+    "exactly as they wrote it",
+    "will i get a certificate?",
+    "user_course_input",
+]
 
 
-def test_support_account_tools_prompt_is_support_flavoured():
-    """
-    What SupportBot is actually given is the core plus its own addendum, so the
-    guarantee is about the pair: it must still carry every rule for reading the
-    tools, and none of the syllabus routing - it has no search tools to route
-    to, and no other course's page to send anyone from.
-    """
-    composed = "\n\n".join(
-        prompts.SYSTEM_PROMPT_MAPPING[name]
-        for name in ("account_tools_core", "support_account_tools")
-    )
+@pytest.mark.parametrize(
+    ("prompt", "contains", "excludes"),
+    [
+        pytest.param(
+            prompts.CHATBOT_PROMPT_MAPPING["support"],
+            # Filing is code's job, and there is no person on this chat.
+            ["never say a support ticket", "never promise", "policy"],
+            # Tools are an addendum, so a second tool set isn't a rewrite.
+            ["get_enrollments", "search_content_files", "resource facts"],
+            id="support base",
+        ),
+        pytest.param(
+            _CORE,
+            [
+                "user_course_input",
+                "exactly as they wrote it",
+                "couldn't check",
+                "issued",
+                "will i get a certificate?",
+                # The answer gate is "a tool fired", so a lookup followed by a
+                # refusal would still ship.
+                "don't call them for what a course offers",
+                "whenever the learner names a course, pass user_course_input",
+            ],
+            # Shared, so a tool named here is offered to a bot that lacks it.
+            ["search_content_files", "resource facts", "contact us"],
+            id="core",
+        ),
+        pytest.param(
+            f"{_CORE}\n\n{_SUPPORT_ADDENDUM}",
+            [
+                "user_course_input",
+                "couldn't check",
+                "will i get a certificate?",
+                "did i get my certificate?",
+                "give no answer",
+            ],
+            ["search_content_files", "from that course's page", "resource facts"],
+            id="support core and addendum",
+        ),
+        pytest.param(
+            _SYLLABUS_ADDENDUM,
+            ["search_content_files"],
+            # #152 made "from that course's page" false.
+            ["from that course's page", *_CORE_ONLY],
+            id="syllabus addendum",
+        ),
+        pytest.param(
+            _SUPPORT_ADDENDUM,
+            # Code appends the offer, so a model offer would be a second one.
+            ["do not offer"],
+            ["search_content_files", *_CORE_ONLY],
+            id="support addendum",
+        ),
+    ],
+)
+def test_account_tool_prompts(prompt, contains, excludes):
+    # Collapsed: where a sentence wraps is not under test.
+    text = " ".join(prompt.split()).lower()
 
-    assert "user_course_input" in composed
-    assert "couldn't check" in composed
-    assert "search_content_files" not in composed
-    assert "from that course's page" not in composed
-    assert "resource facts" not in composed
-
-
-def test_account_tools_core_holds_the_rules_both_bots_need():
-    """
-    The core is what any bot with these tools must obey. A rule that lives in
-    only one addendum is a rule the other bot silently doesn't have.
-    """
-    core = " ".join(prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"].split())
-
-    assert "user_course_input" in core
-    assert "exactly as they wrote it" in core
-    assert "couldn't check" in core
-    assert "issued" in core
-    # Telling a course's terms from the learner's record is the same reading
-    # job for both bots; only what each does about it differs. It also has to
-    # say not to call the tools, because the answer gate is "a tool fired",
-    # not "the model answered" - a lookup followed by a refusal still ships.
-    assert "Will I get a certificate?" in core
-    assert "don't call them for what a course offers" in core
-
-
-def test_account_tools_core_names_no_bot_specific_tool():
-    """
-    The core is shared, so a search tool named here would be offered to a bot
-    that does not have it - the model would call a tool that isn't bound.
-    """
-    core = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
-
-    assert "search_content_files" not in core
-    assert "resource facts" not in core
-    assert "Contact us" not in core
-
-
-def test_the_split_addenda_keep_only_what_is_theirs():
-    """
-    REGRESSION guard on the split itself: whatever moved to the core must not
-    also be left behind, or a later edit fixes one copy and not the other.
-    """
-    syllabus = prompts.SYSTEM_PROMPT_MAPPING["syllabus_account_tools"]
-    support = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
-
-    assert "search_content_files" in syllabus
-    assert "search_content_files" not in support
-    # #152 made this false: the tools now take a course the learner named.
-    assert "from that course's page" not in syllabus
-    for addendum in (syllabus, support):
-        assert "exactly as they wrote it" not in addendum
-        # Both bots need this distinction, so a copy in either addendum is a
-        # copy that can drift from the core's.
-        assert "Will I get a certificate?" not in addendum
-
-
-def test_only_the_core_says_when_to_pass_a_named_course():
-    """
-    REGRESSION guard on a rule that flipped: the tools used to want
-    user_course_input only for a course other than the page's, and now want it
-    whenever the learner names one.  An addendum is appended after the core, so
-    a leftover copy of the old rule is the one the model reads last - and the
-    two halves disagree with nothing failing.  The core owns this rule alone.
-
-    Pinning the core's own sentence is deliberate: if it is reworded again,
-    this test is what sends someone back to read both addenda.
-    """
-    core = " ".join(prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"].split())
-
-    assert "Whenever the learner names a course, pass user_course_input" in core
-    for name in ("syllabus_account_tools", "support_account_tools"):
-        assert "user_course_input" not in prompts.SYSTEM_PROMPT_MAPPING[name]
-
-
-def test_support_is_told_what_to_do_with_a_question_about_a_courses_terms():
-    """
-    "Will I get a certificate?" asks what a course offers; "Did I get my
-    certificate?" asks the learner's record. SyllabusBot can answer the first
-    from the course's own content. SupportBot has no source for it, so its
-    answer is to give none and let intake take the question - and the pair it
-    is actually given has to carry both halves, the distinction and that
-    resolution.
-    """
-    # Collapsed: these are sentences, and where the prompt happens to wrap them
-    # is not the thing under test.
-    composed = " ".join(
-        "\n\n".join(
-            prompts.SYSTEM_PROMPT_MAPPING[name]
-            for name in ("account_tools_core", "support_account_tools")
-        ).split()
-    )
-
-    assert "Will I get a certificate?" in composed
-    assert "Did I get my certificate?" in composed
-    assert "give no answer" in composed
-
-
-def test_support_addendum_leaves_the_offer_to_code():
-    """
-    SUPPORT_OFFER_TICKET is appended to every answer by code, so a model that
-    also offers makes the learner read two offers in one reply - and the
-    wording of the one that matters stops being something code guarantees.
-    """
-    support = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
-
-    assert "do not offer" in support.lower()
+    assert [phrase for phrase in contains if phrase not in text] == []
+    assert [phrase for phrase in excludes if phrase in text] == []
 
 
 def test_langsmith_prompt_create(mocker):
