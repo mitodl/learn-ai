@@ -31,6 +31,11 @@ def _search(*results):
         ("Here they are.\n\nBoth are free.", False),
         # An offer earlier in the answer doesn't count
         ("If you want a certificate, pick the first.\n\nBoth start in May.", False),
+        # "If you want" describing a fit, not offering more
+        ("1. [A](u)\n\n2. [B](v)\n   Best fit if you want modern history.", False),
+        ("It's free; only pay if you want the certificate track.", False),
+        ("Here they are.\n\nIf you'd like more options, just ask.", True),
+        ("Here they are.\n\nI can also format it as an exam if you want.", True),
     ],
 )
 def test_ends_with_offer(answer, fails):

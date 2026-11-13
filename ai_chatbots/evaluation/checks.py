@@ -6,9 +6,14 @@ from collections.abc import Iterable
 from urllib.parse import urlsplit, urlunsplit
 
 # An offer to do more at the end of an answer ("If you want, I can..."),
-# from the October gpt-5-mini comparison
+# from the October gpt-5-mini comparison.  "If you want" alone isn't one: a
+# recommendation says "Best fit if you want X", so it needs an offer with it.
+IF_YOU_WANT = r"\bif you(?:'d| would)? (?:want|like|prefer|wish)\b"
 OFFER = re.compile(
-    r"(?i)\bif you(?:'d| would)? (?:want|like|prefer|wish)\b|\bwould you like\b"
+    rf"(?i){IF_YOU_WANT}[^.!?\n]*?"
+    r"\b(?:I(?:'ll| will| can| could)|let me|tell me|just ask|feel free|ask me)\b"
+    rf"|\bI(?:'ll| will| can| could)\b[^.!?\n]*?{IF_YOU_WANT}"
+    r"|\bwould you like\b"
     r"|\bdo you want\b|\bwant me to\b|\blet me know if\b|\bhappy to\b|\bshall i\b"
     r"|\bI can (?:also )?(?:help|look|narrow|find|walk|show|suggest|recommend"
     r"|provide|search|check|give|share|explain|turn|tailor|compare|pull|list|break)"
