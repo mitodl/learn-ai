@@ -1067,7 +1067,7 @@ class TestFailuresAndBaseline:
         ]
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         for text in (
-            "model-b [short] versus baseline model-a, on 8 cases",
+            "model-b [short] versus baseline model-a, 8 cases compared (loaded ",
             "pairwise: better 0, worse 8, same 0; p=0.008; 🚩 CLEARLY WORSE",
             "Correctness: better 0, worse 8, same 0",
             "↳ worse: f#0: Q0",
