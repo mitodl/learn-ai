@@ -48,6 +48,11 @@ ERROR_LOG_MIN_SIZE = 500  # Minimum file size to indicate errors beyond header
 # Answers with fewer than two models' answers can't be judged pairwise
 MIN_CONTESTANTS = 2
 
+# Bots whose answers are checked against their own retrieved material even with
+# --correctness-only: both sides search the same course material the same way.
+# The recommendation bot's two sides can search differently, so it isn't.
+GROUNDED_BOTS = {"syllabus", "syllabus_canvas", "video_gpt"}
+
 
 def _model_name(model_id: str) -> str:
     """Strip the provider prefix from a model id: openai/gpt-5.4 -> gpt-5.4."""
@@ -72,6 +77,13 @@ def _answer_key(metadata: dict | None) -> tuple:
         metadata.get("model"),
         metadata.get("prompt_label"),
     )
+
+
+def _bot_metrics(config: EvaluationConfig, bot_name: str | None) -> list:
+    """List the metrics one bot is scored on: Faithfulness only for GROUNDED_BOTS."""
+    if not config.correctness_only or bot_name in GROUNDED_BOTS:
+        return config.metrics
+    return [m for m in config.metrics if m.__name__ != "Faithfulness"]
 
 
 def _side(metadata: dict | None) -> str:
@@ -167,6 +179,8 @@ class EvaluationOrchestrator:
             name = "TutoringQuality" if tutor_rubric else "Correctness"
             if metric_thresholds is None:
                 metric_thresholds = {name: 0.7}
+                if not tutor_rubric:
+                    metric_thresholds["Faithfulness"] = 0.7
             metrics = [
                 GEval(
                     name=name,
@@ -178,9 +192,15 @@ class EvaluationOrchestrator:
                         "Read the expected output as a rubric for the answer, "
                         "not as text the actual output must repeat. Wording, "
                         "order and format don't matter.",
-                        "Check that every fact the expected output requires is "
-                        "in the actual output: numbers, grades, prices, dates, "
-                        "names and links must match.",
+                        "Check that the actual output answers the question the "
+                        "way the expected output does, and that every specific "
+                        "fact it requires is there: numbers, grades, prices, "
+                        "dates, names and links must match.",
+                        "Reasons, examples, tips or considerations the expected "
+                        "output lists are examples of a good answer, not each "
+                        "required, unless the question asks for all of them. "
+                        "Covering fewer of them must not lower the score if the "
+                        "question is still answered.",
                         "Find each thing the expected output says the answer "
                         "doesn't or shouldn't do (such as 'It doesn't list "
                         "other courses'), and check whether the actual output "
@@ -189,8 +209,9 @@ class EvaluationOrchestrator:
                         "answer may do is optional.",
                         "Extra detail that doesn't contradict the expected "
                         "output is acceptable and must not lower the score.",
-                        "Score low if the actual output leaves out or gets "
-                        "wrong a required fact, does something the expected "
+                        "Score low if the actual output doesn't answer the "
+                        "question, leaves out or gets wrong a required specific "
+                        "fact, does something the expected "
                         "output says it doesn't, answers about a different "
                         "course, program or platform than the one asked "
                         "about, or says no information could be found when "
@@ -208,6 +229,18 @@ class EvaluationOrchestrator:
                     threshold=metric_thresholds[name],
                 ),
             ]
+            # Only the GROUNDED_BOTS are scored on it (see _bot_metrics)
+            if "Faithfulness" in metric_thresholds:
+                metrics.append(
+                    FaithfulnessMetric(
+                        threshold=metric_thresholds["Faithfulness"],
+                        model=evaluation_model,
+                        include_reason=True,
+                        # Fail a claim the material doesn't back, not only one
+                        # it contradicts
+                        penalize_ambiguous_claims=True,
+                    )
+                )
         elif require_expected:
             if metric_thresholds is None:
                 metric_thresholds = {
@@ -484,7 +517,7 @@ class EvaluationOrchestrator:
                         failures=self.failures,
                     )
                     self._record_answers(bot_name, model_test_cases)
-                    if config.metrics:
+                    if _bot_metrics(config, bot_name):
                         all_llm_test_cases.extend(model_test_cases)
                     if pairwise:
                         pairwise_cases.extend(model_test_cases)
@@ -607,12 +640,13 @@ class EvaluationOrchestrator:
                 f"{max_concurrent} concurrent executions"
             )
 
-        for metric in config.metrics:
+        metrics = _bot_metrics(config, bot_name)
+        for metric in metrics:
             if isinstance(metric, TimeoutMetricWrapper):
                 metric.prepare()
         result = deepeval.evaluate(
             test_cases=test_cases,
-            metrics=config.metrics,
+            metrics=metrics,
             error_config=ErrorConfig(ignore_errors=True),
             async_config=async_config,
         )
@@ -645,9 +679,7 @@ class EvaluationOrchestrator:
                     # deepeval names them "Correctness [GEval]", "Answer Relevancy"
                     name = metric_data.name.split(" [")[0].replace(" ", "")
                     record.setdefault("scores", {})[name] = metric_data.score
-            for name in {m.__name__ for m in config.metrics} - {
-                m.name for m in metrics_data
-            }:
+            for name in {m.__name__ for m in metrics} - {m.name for m in metrics_data}:
                 self.failures.add(bot, "judge returned no score", case, detail=name)
         return result
 
@@ -814,9 +846,12 @@ Started: {timestamp}
             _side({"model": model, "prompt_label": prompt["name"] if prompt else None})
             for model, prompt in sides
         )
+        thresholds = dict(config.metric_thresholds)
+        if "Faithfulness" not in {m.__name__ for m in _bot_metrics(config, bot_name)}:
+            thresholds.pop("Faithfulness", None)
         outcomes, questions = measure_outcomes(
             [r for r in self.answer_records.values() if r["bot"] == bot_name],
-            config.metric_thresholds,
+            thresholds,
             {
                 c: w
                 for (bot, c, _), w in self.pairwise_results.items()
