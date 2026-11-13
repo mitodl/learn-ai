@@ -532,6 +532,15 @@ def test_sample_cases_is_repeatable():
     assert sample_cases(cases, 0) == cases
 
 
+def test_failed_cases_leave_out_judge_failures():
+    """A judge failure doesn't drop the case's other measures from a comparison."""
+    failures = RunFailures()
+    failures.add("bot", "pairwise judge error", case_id="f#0")
+    failures.add("bot", "judge error", case_id="f#1")
+    failures.add("bot", "empty answer", case_id="f#2")
+    assert failures.failed_cases("bot") == {("f#2", None)}
+
+
 @pytest.mark.asyncio
 async def test_evaluate_model_records_generation_failures(evaluator, mocker):
     """A case that fails to generate is recorded, not just dropped."""

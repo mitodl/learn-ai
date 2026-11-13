@@ -59,6 +59,14 @@ def judge_error(metric_data) -> str | None:
     return None
 
 
+JUDGE_FAILURES = {
+    "judge error",
+    "judge returned no score",
+    "deepeval returned no result",
+    "pairwise judge error",
+}
+
+
 @dataclass
 class Failure:
     """Something a run failed to measure."""
@@ -96,8 +104,15 @@ class RunFailures:
         return [f for f in self.items if f.bot == bot]
 
     def failed_cases(self, bot: str) -> set[tuple[str | None, str | None]]:
-        """Return the (case_id, prompt_label) pairs of a bot with any failure."""
-        return {(f.case_id, f.prompt_label) for f in self.for_bot(bot)}
+        """Return the (case_id, prompt_label) pairs of a bot with a failed answer.
+
+        A judge failure leaves out only that measure, so it isn't counted here.
+        """
+        return {
+            (f.case_id, f.prompt_label)
+            for f in self.for_bot(bot)
+            if f.kind not in JUDGE_FAILURES
+        }
 
     def __bool__(self) -> bool:
         return bool(self.items)
