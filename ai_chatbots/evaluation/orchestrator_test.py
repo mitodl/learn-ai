@@ -8,7 +8,7 @@ from deepeval.test_case import LLMTestCaseParams
 
 from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
-from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
+from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator, _bot_metrics
 from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 
 NUM_METRICS = 5
@@ -120,12 +120,12 @@ class TestEvaluationOrchestrator:
         assert "ContextualRecallMetric" in underlying_metric_names
 
     def test_create_evaluation_config_correctness_only(self, orchestrator):
-        """correctness_only should score against the expected answer alone."""
+        """correctness_only scores against the expected answer, plus Faithfulness."""
         config = orchestrator.create_evaluation_config(
             ["gpt-4o"], "judge-model", correctness_only=True
         )
-        assert len(config.metrics) == 1
-        metric = config.metrics[0]
+        assert len(config.metrics) == 2
+        metric, faithfulness = config.metrics
         assert isinstance(metric, TimeoutMetricWrapper)
         assert metric.base_metric.name == "Correctness"
         assert metric.base_metric.threshold == 0.7
@@ -134,6 +134,30 @@ class TestEvaluationOrchestrator:
             LLMTestCaseParams.ACTUAL_OUTPUT,
             LLMTestCaseParams.EXPECTED_OUTPUT,
         ]
+        # A claim the material doesn't back fails, not only one it contradicts
+        assert faithfulness.__name__ == "Faithfulness"
+        assert faithfulness.base_metric.penalize_ambiguous_claims is True
+        assert config.metric_thresholds == {"Correctness": 0.7, "Faithfulness": 0.7}
+
+    @pytest.mark.parametrize(
+        ("bot", "correctness_only", "faithfulness"),
+        [
+            ("syllabus", True, True),
+            ("syllabus_canvas", True, True),
+            ("video_gpt", True, True),
+            # Its two sides can search differently
+            ("recommendation", True, False),
+            # Without correctness_only, every bot gets the default metrics
+            ("recommendation", False, True),
+        ],
+    )
+    def test_bot_metrics(self, orchestrator, bot, correctness_only, faithfulness):
+        """Faithfulness is scored only for bots whose sides search alike."""
+        config = orchestrator.create_evaluation_config(
+            ["gpt-4o"], "judge-model", correctness_only=correctness_only
+        )
+        names = {m.__name__ for m in _bot_metrics(config, bot)}
+        assert ("Faithfulness" in names) is faithfulness
 
     @patch.dict(os.environ, {"CONFIDENT_AI_API_KEY": "test-api-key"})
     def test_create_evaluation_config_with_api_key(self, orchestrator):
