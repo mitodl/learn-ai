@@ -8,7 +8,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.conf import settings as django_settings
 from django.contrib.auth.models import AnonymousUser
-from django.core.cache import cache
+from django.core.cache import caches
 from freezegun import freeze_time
 from rest_framework import exceptions
 
@@ -18,6 +18,24 @@ from main.constants import DURATION_MAPPING
 from main.consumer_throttles import CONSUMER_THROTTLES_KEY, UserScopedRateThrottle
 from main.consumers import BaseThrottledAsyncConsumer
 from main.factories import ConsumerThrottleLimitFactory
+
+
+@pytest.fixture(autouse=True)
+def shared_throttle_cache(settings):
+    """
+    Give the redis alias a working backend; the root conftest makes it a
+    DummyCache, which would forget every request the throttle records.
+    """
+    settings.CELERY_BROKER_URL = "redis://redis:6379/4"
+    settings.CACHES = {
+        **settings.CACHES,
+        "redis": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "throttle-test-redis",
+        },
+    }
+    yield caches["redis"]
+    caches["redis"].clear()
 
 
 @pytest.mark.parametrize(
@@ -50,12 +68,12 @@ async def test_scoped_throttle_parse_rate(user, is_authenticated, interval, is_s
 async def test_scoped_allow_request(user, has_consumer_scope, over_limit):
     """Test the allow_request method of ScopedRateThrottle."""
     throttle_limit = await sync_to_async(ConsumerThrottleLimitFactory.create)()
-    cache.set(CONSUMER_THROTTLES_KEY, None)
+    caches["default"].set(CONSUMER_THROTTLES_KEY, None)
     consumer = BaseThrottledAsyncConsumer()
     consumer.scope = {"user": user} if has_consumer_scope else {}
     consumer.throttle_scope = throttle_limit.throttle_key
     consumer.throttle_classes = [UserScopedRateThrottle]
-    cache.set(
+    caches["redis"].set(
         f"throttle_{throttle_limit.throttle_key}_{user.global_id}",
         [time() for t in range(10 if over_limit else 1)],
     )
@@ -199,4 +217,21 @@ async def test_anonymous_throttle_ignores_spoofed_forwarded_for(
     with pytest.raises(exceptions.Throttled):
         await _anon_consumer(
             anon_limit_two.throttle_key, forwarded_for="3.3.3.3, 203.0.113.5"
+        ).check_throttles()
+
+
+async def test_anonymous_throttle_counts_requests_other_pods_recorded(
+    anon_limit_two, shared_throttle_cache
+):
+    """
+    Each pod has its own default cache, so the history has to live in the
+    shared one for the limit to hold across replicas.
+    """
+    shared_throttle_cache.set(
+        f"throttle_{anon_limit_two.throttle_key}_203.0.113.5", [time(), time()]
+    )
+
+    with pytest.raises(exceptions.Throttled):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
         ).check_throttles()

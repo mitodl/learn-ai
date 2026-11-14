@@ -8,8 +8,10 @@ from abc import ABC, abstractmethod
 from typing import Literal
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache as default_cache
+from django.core.cache import caches
 from django.core.exceptions import ImproperlyConfigured
 
 from main.constants import CONSUMER_THROTTLES_KEY, DURATION_MAPPING
@@ -54,7 +56,6 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
     Previous request information used for throttling is stored in the cache.
     """
 
-    cache = default_cache
     timer = time.time
     cache_format = "throttle_%(scope)s_%(ident)s"
     scope = None
@@ -63,6 +64,17 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if not getattr(self, "rate", None):
             self.rate = self.get_rate()
         self.num_requests, self.duration = self.parse_rate(self.rate)
+
+    @property
+    def cache(self):
+        """
+        Return the cache shared by every pod, so a caller's requests count
+        toward one limit wherever they land. The default cache is per process.
+        Resolved per call rather than at import, so test settings apply.
+        """
+        if settings.CELERY_BROKER_URL:
+            return caches["redis"]
+        return caches["default"]
 
     async def get_or_set_throttles(self) -> dict:
         """Get consumer throttles if defined or load them from database if empty"""
@@ -119,7 +131,7 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if self.key is None:
             return True
 
-        self.history = self.cache.get(self.key, [])
+        self.history = await self.cache.aget(self.key, [])
         self.now = self.timer()
         # Drop any requests from the history which have now passed the
         # throttle duration
@@ -135,7 +147,7 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         into the cache.
         """
         self.history.insert(0, self.now)
-        self.cache.set(self.key, self.history, self.duration)
+        await self.cache.aset(self.key, self.history, self.duration)
         return True
 
     async def throttle_failure(self) -> Literal[False]:
