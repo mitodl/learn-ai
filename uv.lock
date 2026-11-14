@@ -2940,7 +2940,7 @@ requires-dist = [
     { name = "django-scim2", specifier = ">=0.23,<0.24" },
     { name = "django-server-status", specifier = ">=0.7.0,<0.8" },
     { name = "django-storages", specifier = ">=1.13.2,<2" },
-    { name = "djangorestframework", specifier = ">=3.14.0,<4" },
+    { name = "djangorestframework", specifier = ">=3.18.0,<4" },
     { name = "drf-jwt", specifier = ">=1.19.2,<2" },
     { name = "drf-spectacular", specifier = ">=0.30,<0.31" },
     { name = "granian", specifier = ">=2.5.4,<3" },

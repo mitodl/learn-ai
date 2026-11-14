@@ -1,10 +1,12 @@
 import logging
+from types import SimpleNamespace
 
 from channels.consumer import AsyncConsumer
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils.module_loading import import_string
 from django.utils.text import slugify
+from rest_framework.throttling import BaseThrottle
 
 from main.exceptions import AsyncThrottled
 from main.utils import anonymize_ident
@@ -18,6 +20,9 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
     """
 
     throttle_classes = settings.CONSUMER_THROTTLE_CLASSES
+    # False for routes a server calls on behalf of many learners, where the
+    # caller's address would put every learner in one bucket.
+    throttle_anonymous_by_address = True
 
     def get_session_key(self):
         """
@@ -40,16 +45,40 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
         ident = self.get_session_key()
         return slugify(ident)
 
+    def get_throttle_ident(self):
+        """
+        Get the identifier to throttle the consumer user by: the user for a
+        signed-in user, the client IP address for an anonymous one.
+
+        Not get_ident(): an anonymous session key changes every second on
+        these routes, so it never fills a bucket (mitodl/hq#13968). And an IP
+        must not become get_ident(), which also names anonymous chat threads.
+        """
+        user = self.scope.get("user")
+        if isinstance(user, get_user_model()):
+            return user.global_id
+        if not self.throttle_anonymous_by_address:
+            return self.get_ident()
+        request = SimpleNamespace(
+            headers={
+                key.decode("latin-1").lower(): value.decode("latin-1")
+                for key, value in self.scope.get("headers") or []
+            },
+            META={"REMOTE_ADDR": (self.scope.get("client") or [None])[0]},
+        )
+        # DRF's lookup, so REST_FRAMEWORK["NUM_PROXIES"] decides which
+        # X-Forwarded-For entry to trust, as in mit-learn (mitodl/hq#12775).
+        return BaseThrottle().get_ident(request)
+
     def get_trace_ident(self):
         """
         Get an identifier for the consumer user that is safe to emit to
         external systems (trace/analytics providers such as LangSmith,
         Opik, and PostHog).
 
-        Unlike get_ident(), which is used for throttling and returns the
-        raw session key for anonymous users, this hashes anonymous
-        identifiers so a live session cookie value never leaves the
-        process.
+        Unlike get_ident(), which returns the raw session key for anonymous
+        users, this hashes anonymous identifiers so a live session cookie
+        value never leaves the process.
         """
         user = self.scope.get("user")
         if isinstance(user, get_user_model()):

@@ -2140,3 +2140,43 @@ def test_recommendation_process_extra_state(
     if search_filters is not None:
         data["search_filters"] = search_filters
     assert recommendation_consumer.process_extra_state(data) == expected
+
+
+def _lms_proxied_consumer(consumer_class, django_session):
+    """Build a consumer for an anonymous request the LMS forwards."""
+    consumer = consumer_class()
+    consumer.scope = {
+        "user": AnonymousUser(),
+        "session": django_session,
+        "client": ("10.0.0.2", 54321),
+        "headers": [(b"x-forwarded-for", b"203.0.113.5")],
+    }
+    return consumer
+
+
+@pytest.mark.parametrize(
+    "consumer_class",
+    [consumers.CanvasSyllabusBotHttpConsumer, consumers.CanvasTutorBotHttpConsumer],
+)
+def test_canvas_consumers_are_not_throttled_by_address(consumer_class, django_session):
+    """
+    The LMS calls the Canvas routes server-side for every learner, so the
+    address it sends from is one shared bucket, not a per-learner key.
+    """
+    consumer = _lms_proxied_consumer(consumer_class, django_session)
+
+    assert consumer.get_throttle_ident() == consumer.get_ident()
+
+
+@pytest.mark.parametrize(
+    "consumer_class",
+    [
+        consumers.DemoCanvasSyllabusBotHttpConsumer,
+        consumers.DemoCanvasTutorBotHttpConsumer,
+    ],
+)
+def test_demo_canvas_consumers_are_throttled_by_address(consumer_class, django_session):
+    """The demo routes are called from the browser, without a canvas_token."""
+    consumer = _lms_proxied_consumer(consumer_class, django_session)
+
+    assert consumer.get_throttle_ident() == "203.0.113.5"
