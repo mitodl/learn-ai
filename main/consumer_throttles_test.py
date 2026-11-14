@@ -235,3 +235,10 @@ async def test_anonymous_throttle_counts_requests_other_pods_recorded(
         await _anon_consumer(
             anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
         ).check_throttles()
+
+
+def test_throttle_history_uses_default_cache_without_redis(settings):
+    """With no broker configured, the redis alias has nowhere to connect to."""
+    settings.CELERY_BROKER_URL = None
+
+    assert UserScopedRateThrottle().cache is caches["default"]
