@@ -4,11 +4,14 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from deepeval.test_case import LLMTestCaseParams
+from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
-from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator, _bot_metrics
+from ai_chatbots.evaluation.orchestrator import (
+    EvaluationOrchestrator,
+    _bot_metrics,
+)
 from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 
 NUM_METRICS = 5
@@ -16,8 +19,6 @@ NUM_METRICS = 5
 
 def _answer(model, question="Q1", case_id=None):
     """Build an answer shaped like the ones evaluate_model returns."""
-    from deepeval.test_case import LLMTestCase
-
     case_id = case_id or f"f.json#{question}"
     return LLMTestCase(
         input=question,
@@ -1021,6 +1022,30 @@ class TestFailuresAndBaseline:
         saved = orchestrator.stdout.write.call_args.args[0]
         assert saved.startswith("ANSWER_JSON ")
         assert '"context": ["evidence"]' in saved
+
+    @pytest.mark.parametrize(
+        ("bot_name", "correctness_only", "context"),
+        [
+            ("syllabus", True, ["The user's question: Q1", "evidence"]),
+            # Not scored on Faithfulness, so its material is left alone
+            ("recommendation", True, ["evidence"]),
+            # The default metrics include others that read the material
+            ("syllabus", False, ["evidence"]),
+        ],
+    )
+    def test_faithfulness_sees_the_question(
+        self, orchestrator, deepeval_returns, bot_name, correctness_only, context
+    ):
+        """Facts from the question count as supported, on a copy of the case."""
+        config = self._config(orchestrator, correctness_only=correctness_only)
+        case = _answer("model-a")
+        mock_deepeval = deepeval_returns()
+
+        orchestrator._run_deepeval_evaluation([case], config, 2, bot_name=bot_name)  # noqa: SLF001
+
+        (judged,) = mock_deepeval.evaluate.call_args.kwargs["test_cases"]
+        assert judged.retrieval_context == context
+        assert case.retrieval_context == ["evidence"]
 
     def test_scores_recorded_under_threshold_names(
         self, orchestrator, deepeval_returns, mocker
