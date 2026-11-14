@@ -20,6 +20,9 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
     """
 
     throttle_classes = settings.CONSUMER_THROTTLE_CLASSES
+    # False for routes a server calls on behalf of many learners, where the
+    # caller's address would put every learner in one bucket.
+    throttle_anonymous_by_address = True
 
     def get_session_key(self):
         """
@@ -54,6 +57,8 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
         user = self.scope.get("user")
         if isinstance(user, get_user_model()):
             return user.global_id
+        if not self.throttle_anonymous_by_address:
+            return self.get_ident()
         request = SimpleNamespace(
             headers={
                 key.decode("latin-1").lower(): value.decode("latin-1")
