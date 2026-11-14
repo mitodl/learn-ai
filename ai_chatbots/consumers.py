@@ -710,6 +710,9 @@ class DemoCanvasSyllabusBotHttpConsumer(CanvasSyllabusBotHttpConsumer):
     does not require authentication but is limited to demo runs.
     """
 
+    # Called from the browser, so the address is the learner's.
+    throttle_anonymous_by_address = True
+
     def create_chatbot(
         self,
         serializer: CanvasTutorChatRequestSerializer,
@@ -839,6 +842,9 @@ class DemoCanvasTutorBotHttpConsumer(CanvasTutorBotHttpConsumer):
     Async HTTP consumer for the tutor bot. This is a demo version that
     does not require authentication but is limited to demo runs.
     """
+
+    # Called from the browser, so the address is the learner's.
+    throttle_anonymous_by_address = True
 
     def create_chatbot(
         self,
