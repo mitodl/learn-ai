@@ -63,7 +63,7 @@ dependencies = [
     "starlette==1.10.0",
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
-    "open-learning-ai-tutor==0.2.16",
+    "open-learning-ai-tutor==0.2.17",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
