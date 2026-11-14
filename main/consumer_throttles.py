@@ -131,7 +131,10 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if self.key is None:
             return True
 
-        self.history = await self.cache.aget(self.key, [])
+        # Sync on purpose: with no await between this read and the write in
+        # throttle_success, requests on one pod can't all read the same
+        # history and all pass. aget/aset would yield in between.
+        self.history = self.cache.get(self.key, [])
         self.now = self.timer()
         # Drop any requests from the history which have now passed the
         # throttle duration
@@ -147,7 +150,7 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         into the cache.
         """
         self.history.insert(0, self.now)
-        await self.cache.aset(self.key, self.history, self.duration)
+        self.cache.set(self.key, self.history, self.duration)
         return True
 
     async def throttle_failure(self) -> Literal[False]:

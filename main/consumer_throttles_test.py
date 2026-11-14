@@ -1,5 +1,6 @@
 """Tests for consumer throttle classes."""
 
+import asyncio
 from importlib import import_module
 from pathlib import Path
 from time import time
@@ -218,6 +219,28 @@ async def test_anonymous_throttle_ignores_spoofed_forwarded_for(
         await _anon_consumer(
             anon_limit_two.throttle_key, forwarded_for="3.3.3.3, 203.0.113.5"
         ).check_throttles()
+
+
+async def test_anonymous_throttle_holds_against_a_concurrent_burst(anon_limit_two):
+    """Requests sent at once from one address still share one count."""
+
+    async def allowed(consumer):
+        try:
+            await consumer.check_throttles()
+        except exceptions.Throttled:
+            return False
+        return True
+
+    results = await asyncio.gather(
+        *(
+            allowed(
+                _anon_consumer(anon_limit_two.throttle_key, forwarded_for="203.0.113.5")
+            )
+            for _ in range(10)
+        )
+    )
+
+    assert sum(results) == 2
 
 
 async def test_anonymous_throttle_counts_requests_other_pods_recorded(
