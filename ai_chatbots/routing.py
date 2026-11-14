@@ -7,37 +7,37 @@ from users.consumers import LoginHttpConsumer, UserMetaHttpConsumer
 
 http_patterns = [
     re_path(
-        r"http/recommendation_agent/",
+        r"^http/recommendation_agent/",
         consumers.RecommendationBotHttpConsumer.as_asgi(),
         name="recommendation_agent_sse",
     ),
     re_path(
-        r"http/search_summary_agent/",
+        r"^http/search_summary_agent/",
         consumers.SearchSummaryBotHttpConsumer.as_asgi(),
         name="search_summary_agent_sse",
     ),
     re_path(
-        r"http/syllabus_agent/",
+        r"^http/syllabus_agent/",
         consumers.SyllabusBotHttpConsumer.as_asgi(),
         name="syllabus_agent_sse",
     ),
     re_path(
-        r"http/canvas_syllabus_agent/",
+        r"^http/canvas_syllabus_agent/",
         consumers.CanvasSyllabusBotHttpConsumer.as_asgi(),
         name="canvas_syllabus_agent_sse",
     ),
     re_path(
-        r"http/demo_canvas_syllabus_agent/",
+        r"^http/demo_canvas_syllabus_agent/",
         consumers.DemoCanvasSyllabusBotHttpConsumer.as_asgi(),
         name="demo_canvas_syllabus_agent_sse",
     ),
     re_path(
-        r"http/video_gpt_agent/",
+        r"^http/video_gpt_agent/",
         consumers.VideoGPTBotHttpConsumer.as_asgi(),
         name="video_gpt_agent_sse",
     ),
     re_path(
-        r"http/support_agent/",
+        r"^http/support_agent/",
         consumers.SupportBotHttpConsumer.as_asgi(),
         name="support_agent_sse",
     ),
@@ -53,17 +53,17 @@ http_patterns = [
         name="login",
     ),
     re_path(
-        r"http/tutor_agent/",
+        r"^http/tutor_agent/",
         consumers.TutorBotHttpConsumer.as_asgi(),
         name="tutor_agent_sse",
     ),
     re_path(
-        r"http/canvas_tutor_agent/",
+        r"^http/canvas_tutor_agent/",
         consumers.CanvasTutorBotHttpConsumer.as_asgi(),
         name="canvas_tutor_agent_sse",
     ),
     re_path(
-        r"http/demo_canvas_tutor_agent/",
+        r"^http/demo_canvas_tutor_agent/",
         consumers.DemoCanvasTutorBotHttpConsumer.as_asgi(),
         name="demo_canvas_tutor_agent_sse",
     ),
