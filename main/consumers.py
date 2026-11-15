@@ -47,12 +47,11 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
 
     def get_throttle_ident(self):
         """
-        Get the identifier to throttle the consumer user by: the user for a
-        signed-in user, the client IP address for an anonymous one.
+        Get the throttle key: the user if signed in, else the client IP.
 
-        Not get_ident(): an anonymous session key changes every second on
-        these routes, so it never fills a bucket (mitodl/hq#13968). And an IP
-        must not become get_ident(), which also names anonymous chat threads.
+        Not get_ident(): the anonymous session key changes every second
+        (mitodl/hq#13968), and get_ident() also names chat threads, so it
+        can't become an IP.
         """
         user = self.scope.get("user")
         if isinstance(user, get_user_model()):
@@ -66,8 +65,7 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
             },
             META={"REMOTE_ADDR": (self.scope.get("client") or [None])[0]},
         )
-        # DRF's lookup, so REST_FRAMEWORK["NUM_PROXIES"] decides which
-        # X-Forwarded-For entry to trust, as in mit-learn (mitodl/hq#12775).
+        # DRF's lookup, as in mit-learn (mitodl/hq#12775).
         return BaseThrottle().get_ident(request)
 
     def get_trace_ident(self):

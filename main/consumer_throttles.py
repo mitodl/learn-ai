@@ -67,11 +67,7 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
 
     @property
     def cache(self):
-        """
-        Return the cache shared by every pod, so a caller's requests count
-        toward one limit wherever they land. The default cache is per process.
-        Resolved per call rather than at import, so test settings apply.
-        """
+        """Return the cache shared by every pod; the default cache is per process."""
         if settings.CELERY_BROKER_URL:
             return caches["redis"]
         return caches["default"]
@@ -131,9 +127,8 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if self.key is None:
             return True
 
-        # Sync on purpose: with no await between this read and the write in
-        # throttle_success, requests on one pod can't all read the same
-        # history and all pass. aget/aset would yield in between.
+        # Sync, not aget/aset: an await before the write in throttle_success
+        # would let a burst of requests all read the same history and pass.
         self.history = self.cache.get(self.key, [])
         self.now = self.timer()
         # Drop any requests from the history which have now passed the
