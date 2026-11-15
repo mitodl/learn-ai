@@ -8,12 +8,11 @@ from abc import ABC, abstractmethod
 from typing import Literal
 
 from asgiref.sync import sync_to_async
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache as default_cache
-from django.core.cache import caches
 from django.core.exceptions import ImproperlyConfigured
 
+from ai_chatbots.utils import get_django_cache
 from main.constants import CONSUMER_THROTTLES_KEY, DURATION_MAPPING
 from main.models import ConsumerThrottleLimit
 
@@ -64,13 +63,6 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if not getattr(self, "rate", None):
             self.rate = self.get_rate()
         self.num_requests, self.duration = self.parse_rate(self.rate)
-
-    @property
-    def cache(self):
-        """Return the cache shared by every pod; the default cache is per process."""
-        if settings.CELERY_BROKER_URL:
-            return caches["redis"]
-        return caches["default"]
 
     async def get_or_set_throttles(self) -> dict:
         """Get consumer throttles if defined or load them from database if empty"""
@@ -129,7 +121,7 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
 
         # Sync, not aget/aset: an await before the write in throttle_success
         # would let a burst of requests all read the same history and pass.
-        self.history = self.cache.get(self.key, [])
+        self.history = get_django_cache().get(self.key, [])
         self.now = self.timer()
         # Drop any requests from the history which have now passed the
         # throttle duration
@@ -145,7 +137,7 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         into the cache.
         """
         self.history.insert(0, self.now)
-        self.cache.set(self.key, self.history, self.duration)
+        get_django_cache().set(self.key, self.history, self.duration)
         return True
 
     async def throttle_failure(self) -> Literal[False]:

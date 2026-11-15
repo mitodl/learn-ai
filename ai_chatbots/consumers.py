@@ -497,8 +497,14 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
         except AsyncThrottled as err:
+            # The throttle key, unless it's a raw session key, which stays hashed.
+            ident = (
+                self.get_throttle_ident()
+                if self.throttle_anonymous_by_address
+                else self.get_trace_ident()
+            )
             log_msg = (
-                f"User {self.get_trace_ident()} throttled on "
+                f"User {ident} throttled on "
                 f"{self.__class__.__name__} for {err.wait} seconds"
             )
             log.info(log_msg)
