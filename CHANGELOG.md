@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.11.13.1] - 2026-11-13
+
+### Changes
+
+- **Update dependency langchain-litellm to >=0.11,<0.12** (#124) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update all non-major dev-dependencies** (#162) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update dependency next to v15.5.29** (#163) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update redis Docker tag to v7.4.12** (#165) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update dependency starlette to v1.10.0** (#167) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update nginx Docker tag to v1.31.8** (#169) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update dependency oauthlib to v4.0.1 [SECURITY]** (#171) by 29139614+renovate[bot]@users.noreply.github.com
+- **Trace chatbots through ol-llm and remove the custom Opik tracer** (#157) by tmacey@mit.edu
+- **Update dependency ruff to v0.17.3** (#164) by 29139614+renovate[bot]@users.noreply.github.com
+
 ## [2026.11.10.1] - 2026-11-10
 
 ### Changes
