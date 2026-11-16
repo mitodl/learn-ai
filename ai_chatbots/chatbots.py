@@ -2196,6 +2196,9 @@ class SupportBot(TruncatingChatbot):
         # Latest wins, not any(): a cancellation appends False, and reading the
         # whole list would let the send the learner called off come back.
         elif (prior_state.get("awaiting_send") or [False])[-1]:
+            if confirmed:
+                # The Send press carries the button's label, not the learner's words.
+                message = ""
             reply, updates = await self._send_edit_or_cancel(
                 message,
                 extra_state=extra_state,

@@ -4568,6 +4568,36 @@ async def test_support_bot_files_on_an_explicit_confirm_flag(mocker, mock_checkp
     assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
 
 
+@pytest.mark.asyncio
+async def test_support_bot_keeps_the_send_buttons_words_out_of_a_retried_ticket(
+    mocker, mock_checkpointer
+):
+    """A press carries the button's label, which isn't the learner's problem."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"error": "Could not file the support request."}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+    async for _ in chatbot.get_completion(
+        "Send request",
+        extra_state={**_support_state("signedin@mit.edu"), "confirm": [True]},
+    ):
+        pass
+
+    mock_file.return_value = {"reference": 4821}
+    async for _ in chatbot.get_completion(
+        "try again", extra_state=_support_state("signedin@mit.edu")
+    ):
+        pass
+
+    assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
+
+
 PENDING_SEND = {"user_email": ["signedin@mit.edu"], "awaiting_send": [True]}
 
 
