@@ -3,6 +3,7 @@ Provides various throttling policies.
 """
 
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Literal
@@ -17,6 +18,9 @@ from main.constants import CONSUMER_THROTTLES_KEY, DURATION_MAPPING
 from main.models import ConsumerThrottleLimit
 
 log = logging.getLogger(__name__)
+
+# One lock for every key: it's held for a single cache round trip.
+_history_lock = threading.Lock()
 
 
 class AsyncBaseThrottle(ABC):
@@ -119,25 +123,36 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if self.key is None:
             return True
 
-        # Sync, not aget/aset: an await before the write in throttle_success
-        # would let a burst of requests all read the same history and pass.
-        self.history = get_django_cache().get(self.key, [])
         self.now = self.timer()
-        # Drop any requests from the history which have now passed the
-        # throttle duration
-        while self.history and self.history[-1] <= self.now - self.duration:
-            self.history.pop()
-        if len(self.history) >= self.num_requests:
-            return await self.throttle_failure()
-        return await self.throttle_success()
+        # Off the event loop, so a slow cache doesn't stall every other request
+        # on the worker.
+        if await sync_to_async(self.record_request, thread_sensitive=False)():
+            return await self.throttle_success()
+        return await self.throttle_failure()
+
+    def record_request(self) -> bool:
+        """
+        Prune the history and, if the request is under the limit, add it.
+        Read and write under one lock, so a burst of requests can't all read
+        the same history before any of them is recorded.
+        """
+        cache = get_django_cache()
+        with _history_lock:
+            self.history = cache.get(self.key, [])
+            # Drop any requests from the history which have now passed the
+            # throttle duration
+            while self.history and self.history[-1] <= self.now - self.duration:
+                self.history.pop()
+            if len(self.history) >= self.num_requests:
+                return False
+            self.history.insert(0, self.now)
+            cache.set(self.key, self.history, self.duration)
+            return True
 
     async def throttle_success(self) -> Literal[True]:
         """
-        Insert the current request's timestamp along with the key
-        into the cache.
+        Return True when the request is allowed.
         """
-        self.history.insert(0, self.now)
-        get_django_cache().set(self.key, self.history, self.duration)
         return True
 
     async def throttle_failure(self) -> Literal[False]:

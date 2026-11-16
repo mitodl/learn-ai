@@ -1,6 +1,7 @@
 """Tests for consumer throttle classes."""
 
 import asyncio
+import threading
 from importlib import import_module
 from pathlib import Path
 from time import time
@@ -10,6 +11,7 @@ from asgiref.sync import sync_to_async
 from django.conf import settings as django_settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import caches
+from django.core.cache.backends.locmem import LocMemCache
 from freezegun import freeze_time
 from rest_framework import exceptions
 
@@ -258,3 +260,22 @@ async def test_anonymous_throttle_counts_requests_other_pods_recorded(
         await _anon_consumer(
             anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
         ).check_throttles()
+
+
+async def test_throttle_history_is_read_off_the_event_loop(anon_limit_two, mocker):
+    """A slow cache call must not stall every other request on the worker."""
+    threads = []
+    real_get = LocMemCache.get
+
+    def get(cache, key, *args, **kwargs):
+        if key.startswith(f"throttle_{anon_limit_two.throttle_key}_"):
+            threads.append(threading.get_ident())
+        return real_get(cache, key, *args, **kwargs)
+
+    mocker.patch.object(LocMemCache, "get", autospec=True, side_effect=get)
+    await _anon_consumer(
+        anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
+    ).check_throttles()
+
+    assert threads
+    assert threading.get_ident() not in threads
