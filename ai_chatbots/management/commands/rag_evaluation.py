@@ -6,7 +6,7 @@ from asgiref.sync import async_to_sync
 from django.core.management import BaseCommand, CommandError
 
 from ai_chatbots.evaluation.base import SAMPLE_SEED
-from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS
+from ai_chatbots.evaluation.evaluators import BOT_EVALUATORS, tutor_prompt_overrides
 from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator
 from ai_chatbots.evaluation.reporting import DualOutputWrapper
 from ai_chatbots.models import LLMModel
@@ -228,16 +228,22 @@ class Command(BaseCommand):
         return options["bots"] == "tutor" and not any(options[m] for m in modes)
 
     def _side_prompt(self, path: str | None, bot: str) -> dict | None:
-        """Read a side's prompt file; the file name labels it."""
+        """
+        Read a side's prompt file; the file name labels it. For tutor, a JSON
+        file maps prompt names to text; other text is the tutor_problem prompt.
+        """
         if path is None:
             return None
         text = Path(path).read_text(encoding="utf-8")
         if not text.strip():
             msg = f"{path} is empty"
             raise CommandError(msg)
-        if bot == "tutor" and "{problem_statement}" not in text:
-            msg = f"{path}: a tutor prompt needs {{problem_statement}}"
-            raise CommandError(msg)
+        if bot == "tutor":
+            try:
+                tutor_prompt_overrides(text)
+            except ValueError as error:
+                msg = f"{path}: {error}"
+                raise CommandError(msg) from error
         return {"name": Path(path).stem, "text": text}
 
     def handle(self, **options):

@@ -35,7 +35,7 @@ def run_evaluation(mocker):
         ("--models a,b --pairwise-only --correctness-only", "can't be combined"),
         ("--models a,a --baseline a", "name the same model"),
         (
-            "--models a --baseline a --bots tutor "
+            "--models a --baseline a --bots syllabus "
             "--baseline-prompt x/p.txt --candidate-prompt y/p.txt",
             "name the same model",
         ),
@@ -96,3 +96,21 @@ def test_baseline_same_model_two_prompts(run_evaluation, tmp_path):
         "old",
         "new",
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("Be brief.", "needs {problem_statement}"),
+        ('{"problem": "Be brief."}', "Unknown tutor prompts"),
+    ],
+)
+def test_tutor_side_prompt_refused(run_evaluation, tmp_path, text, message):
+    """A tutor prompt it can't use is refused before anything runs."""
+    (tmp_path / "p.txt").write_text(text)
+    with pytest.raises(CommandError, match=message):
+        call_command(
+            "rag_evaluation",
+            *f"--models a,b --baseline a --bots tutor --candidate-prompt {tmp_path}/p.txt".split(),
+        )
+    run_evaluation.assert_not_called()

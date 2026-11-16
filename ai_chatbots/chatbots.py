@@ -754,6 +754,7 @@ class TutorBot(BaseChatbot):
         edx_module_id: str | None = None,
         run_readable_id: str | None = None,
         problem_set_title: str | None = None,
+        prompt_overrides: dict[str, str] | None = None,
     ):
         super().__init__(
             user_id,
@@ -764,6 +765,8 @@ class TutorBot(BaseChatbot):
             model=model,
         )
 
+        # Prompt text by name, in place of LangSmith's (for evaluations)
+        self.prompt_overrides = prompt_overrides
         self.edx_module_id = edx_module_id
         self.block_siblings = block_siblings
         self.run_readable_id = run_readable_id or get_run_readable_id_from_block_id(
@@ -872,6 +875,7 @@ class TutorBot(BaseChatbot):
                     intent_history,
                     tools=tutor_tools,
                     variant=self.variant,
+                    prompt_overrides=self.prompt_overrides,
                 )
 
                 async with aclosing(generator) as stream:

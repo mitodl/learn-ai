@@ -305,7 +305,7 @@ A management command (`rag_evaluation`) has been provided to calculate various e
 - `sample`: Judge a seeded random sample of this many cases per bot. Default: every case.
 - `seed`: The sample's seed. The default is fixed, so two runs judge the same cases.
 - `baseline`: Compare the other model in `models` (which may name just that one) with this one and give a verdict (see below). Judged pairwise, plus Correctness (and Faithfulness, for the syllabus and video bots) with `correctness-only`; `--bots tutor` alone is judged on TutoringQuality, against the problem, its solution and the conversation so far.
-- `baseline-prompt`, `candidate-prompt`: A text file with that side's prompt (default: the bot's own); the file name labels it. Need `baseline` and a single bot.
+- `baseline-prompt`, `candidate-prompt`: A text file with that side's prompt (default: the bot's own); the file name, without its extension, labels it. Need `baseline` and a single bot. Both sides can use the same model if their prompts' labels differ.
 
 Make sure that you have the `LEARN_ACCESS_TOKEN` env variable set, otherwise most bots will not return valid contentfile search results.
 
@@ -327,11 +327,20 @@ python manage.py rag_evaluation --bots syllabus --baseline openai/gpt-4o-mini --
 
 A chatbot has a regression when any of its runs reports one.
 
-To compare prompts too, give a side its prompt in a text file. For tutor, the text replaces the `tutor_problem` template and must contain `{problem_statement}`:
+To compare prompts too, give a side its prompt in a text file. The two sides can use the same model:
+
+```bash
+python manage.py rag_evaluation --bots syllabus --baseline openai/gpt-4o --models openai/gpt-4o \
+  --baseline-prompt production.txt --candidate-prompt strict.txt --correctness-only
+```
+
+Without a prompt, a side uses the bot's own prompt, which locally is the one in code and may differ from production's LangSmith prompts; to compare with production, pass production's text as `--baseline-prompt`. The report prints each side's prompt source and a hash of its text.
+
+For tutor, a text file replaces the `tutor_problem` prompt and must contain `{problem_statement}`. A JSON file can replace any of the tutor's prompts, by their LangSmith names (`tutor_problem`, `tutor_initial_assessment`, `tutor_assessment_*`, `tutor_intent_*`); the rest stay as they are, from LangSmith when `LANGSMITH_API_KEY` is set:
 
 ```bash
 python manage.py rag_evaluation --bots tutor --baseline openai/gpt-4o --models openai/gpt-5.4 \
-  --baseline-prompt production.txt --candidate-prompt strict.txt --data-file <tutor cases>
+  --candidate-prompt strict.json --data-file <tutor cases>
 ```
 
-Tutor cases can carry the saved conversation before the turn (`history`) and a Canvas problem set (`run_readable_id` and `problem_set_title` in `extra_init`) instead of an edX problem. Without a prompt, a side uses the bot's own prompt, which locally is the one in code or in `open-learning-ai-tutor` and may differ from production's LangSmith prompts; to compare with production, pass production's text as `--baseline-prompt`. The report prints each side's prompt source and a hash of its text. Only `tutor_problem` is replaced: with `LANGSMITH_API_KEY` set, the tutor's other prompts still come from LangSmith, as in the app. TutoringQuality penalizes giving away the final answer, not hints that describe the method.
+Tutor cases can carry the saved conversation before the turn (`history`) and a Canvas problem set (`run_readable_id` and `problem_set_title` in `extra_init`) instead of an edX problem. TutoringQuality penalizes giving away the final answer, not hints that describe the method.
