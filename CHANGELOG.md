@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.11.16.1] - 2026-11-16
+
+### Changes
+
+- **Update dependency soupsieve to v4 [SECURITY]** (#177) by 29139614+renovate[bot]@users.noreply.github.com
+- **Update dependency opentelemetry-api to v1.45.2 [SECURITY]** (#179) by 29139614+renovate[bot]@users.noreply.github.com
+- **Remove brotli uv exclude-newer override** (#175) by asad.ali@arbisoft.com
+- **Answer support questions before taking a ticket** (#161) by zamanafzal@gmail.com
+
 ## [2026.11.13.1] - 2026-11-13
 
 ### Changes
