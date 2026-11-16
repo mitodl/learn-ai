@@ -1107,6 +1107,46 @@ class TestFailuresAndBaseline:
             assert text in output
         assert "INCOMPLETE RUN" not in output
 
+    async def test_baseline_same_model_two_prompts(
+        self, orchestrator, bot, deepeval_returns, mock_stdout, mocker
+    ):
+        """A model can be its own baseline when only the prompts differ."""
+        bot.answers = {f"Q{i}": f"f#{i}" for i in range(8)}
+        deepeval_returns(
+            *(
+                (answer, [self._metric(mocker, score)])
+                for label, score in (("old", 0.9), ("new", 0.4))
+                for answer in bot.evaluate_model.side_effect(
+                    "model-a", prompt_label=label
+                )
+            )
+        )
+        mocker.patch.object(orchestrator, "_run_pairwise")
+        orchestrator.reporter.generate_report = mocker.Mock()
+
+        await orchestrator.run_evaluation(
+            orchestrator.create_evaluation_config(
+                ["model-a"], "judge", correctness_only=True
+            ),
+            bot_names=["test_bot"],
+            baseline="model-a",
+            baseline_prompt={"name": "old", "text": "Old."},
+            candidate_prompt={"name": "new", "text": "New."},
+            sample=0,
+        )
+
+        calls = bot.evaluate_model.call_args_list
+        assert [(c.args[0], c.kwargs["instructions"]) for c in calls] == [
+            ("model-a", "Old."),
+            ("model-a", "New."),
+        ]
+        output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
+        for text in (
+            "model-a [new] versus baseline model-a [old], 8 cases compared",
+            "Correctness: better 0, worse 8, same 0",
+        ):
+            assert text in output
+
     @pytest.mark.parametrize(
         ("named", "recorded"), [(["test_bot"], True), (None, False)]
     )

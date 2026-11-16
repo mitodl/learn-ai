@@ -196,13 +196,24 @@ class Command(BaseCommand):
         if len(names) != len(set(names)):
             msg = "--data-file names must differ: eval cases are named by file"
             raise CommandError(msg)
-        if options["pairwise_only"] and len(models) < 2:  # noqa: PLR2004
+        baseline = options["baseline"]
+        if options["pairwise_only"] and len(models) < 2 and not baseline:  # noqa: PLR2004
             msg = "--pairwise-only needs two or more models"
             raise CommandError(msg)
-        baseline = options["baseline"]
         if baseline:
-            if len(models) != 2:  # noqa: PLR2004
+            if len(models) > 2:  # noqa: PLR2004
                 msg = "--baseline needs exactly one other model in --models"
+                raise CommandError(msg)
+            # One model on both sides: only the prompts can differ
+            labels = {
+                Path(options[f"{side}_prompt"] or "default").stem
+                for side in ("baseline", "candidate")
+            }
+            if len(models) == 1 and len(labels) == 1:
+                msg = (
+                    "--baseline and --models name the same model; give the sides "
+                    "different --baseline-prompt and --candidate-prompt files"
+                )
                 raise CommandError(msg)
             if options["prompts"] or options["prompts_file"]:
                 msg = (
