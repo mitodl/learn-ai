@@ -11,6 +11,10 @@ from ai_chatbots.api import get_resource_facts
 from ai_chatbots.evaluation.base import BaseBotEvaluator, TestCaseSpec
 from main.test_utils import load_json_with_settings
 
+# Scored in place of a reply the bot would not ship: with no lookup behind it,
+# the learner goes to the intake script instead.
+SUPPORT_NO_ANSWER = "No answer. The learner goes to the support intake."
+
 # The learner records of the case being evaluated. A context variable, so cases
 # run concurrently each see their own.
 _learner_records: ContextVar[dict | None] = ContextVar("learner_records", default=None)
@@ -205,6 +209,80 @@ class SyllabusBotEvaluator(BaseBotEvaluator):
         return response
 
 
+class SupportBotEvaluator(BaseBotEvaluator):
+    """Evaluator for SupportBot's answering graph."""
+
+    def load_test_cases(self) -> list[TestCaseSpec]:
+        """Load support bot test cases."""
+        test_data = load_json_with_settings(self.data_file)
+        # Records shared by the file's cases; a case can bring its own
+        default_records = test_data.get("learner_records")
+        cases = [
+            TestCaseSpec(
+                question=case_data["question"],
+                expected_output=case_data.get("expected_output"),
+                expected_tools=case_data.get("expected_tools"),
+                metadata={
+                    "extra_state": case_data.get("extra_state", {}),
+                    "extra_init": case_data.get("extra_init", {}),
+                    "history": case_data.get("history", []),
+                    "learner_records": case_data.get(
+                        "learner_records", default_records
+                    ),
+                },
+            )
+            for case_data in test_data.get("support", [])
+        ]
+        if any(case.metadata["learner_records"] is not None for case in cases):
+            _serve_learner_records()
+        return cases
+
+    def validate_test_case(self, test_case: TestCaseSpec) -> bool:
+        """Require the tools: without them there is no answering graph."""
+        metadata = test_case.metadata or {}
+
+        return bool(metadata.get("extra_init", {}).get("enable_account_tools"))
+
+    def create_bot_instance(
+        self, model: str, test_case: TestCaseSpec, instructions: str | None = None
+    ):
+        """Create support bot instance."""
+        metadata = test_case.metadata or {}
+
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            instructions=instructions,
+            **metadata.get("extra_init", {}),
+        )
+
+    async def collect_response(
+        self, chatbot, test_case: TestCaseSpec
+    ) -> dict[str, Any]:
+        """Run the answering graph alone; the intake graph never calls a model."""
+        metadata = test_case.metadata or {}
+        extra_state = metadata.get("extra_state", {})
+        token = _learner_records.set(metadata.get("learner_records"))
+        try:
+            result = await chatbot._answering_agent.ainvoke(  # noqa: SLF001
+                {
+                    # Earlier turns of the conversation, for follow-up questions
+                    "messages": [
+                        *metadata.get("history", []),
+                        {"content": test_case.question, "role": "user"},
+                    ],
+                    **extra_state,
+                },
+                config=chatbot.config["configurable"],
+            )
+        finally:
+            _learner_records.reset(token)
+        if not chatbots._the_answer_in(result):  # noqa: SLF001
+            result["messages"].append(AIMessage(SUPPORT_NO_ANSWER))
+        return result
+
+
 class VideoGPTBotEvaluator(BaseBotEvaluator):
     """Evaluator for VideoGPTBot."""
 
@@ -323,4 +401,5 @@ BOT_EVALUATORS = {
     "syllabus": (chatbots.SyllabusBot, SyllabusBotEvaluator),
     "video_gpt": (chatbots.VideoGPTBot, VideoGPTBotEvaluator),
     "tutor": (chatbots.TutorBot, TutorBotEvaluator),
+    "support": (chatbots.SupportBot, SupportBotEvaluator),
 }

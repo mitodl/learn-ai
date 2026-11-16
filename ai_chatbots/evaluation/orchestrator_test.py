@@ -125,7 +125,7 @@ class TestEvaluationOrchestrator:
         """Test getting available bot names."""
         available_bots = orchestrator.get_available_bots()
 
-        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor"]
+        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor", "support"]
         assert set(available_bots) == set(expected_bots)
 
     def test_validate_bot_names_valid(self, orchestrator):

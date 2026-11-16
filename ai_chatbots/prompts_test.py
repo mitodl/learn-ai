@@ -55,6 +55,82 @@ def test_syllabus_prompts_route_by_subject(prompt):
     assert "OUTSIDE OF THE TOOL OUTPUT AND THE RESOURCE FACTS BELOW" in collapsed
 
 
+_CORE = prompts.SYSTEM_PROMPT_MAPPING["account_tools_core"]
+_SYLLABUS_ADDENDUM = prompts.SYSTEM_PROMPT_MAPPING["syllabus_account_tools"]
+_SUPPORT_ADDENDUM = prompts.SYSTEM_PROMPT_MAPPING["support_account_tools"]
+# Rules the core owns. A copy in an addendum can drift from the core's, and the
+# addendum is read last.
+_CORE_ONLY = [
+    "exactly as they wrote it",
+    "will i get a certificate?",
+    "user_course_input",
+]
+
+
+@pytest.mark.parametrize(
+    ("prompt", "contains", "excludes"),
+    [
+        pytest.param(
+            prompts.CHATBOT_PROMPT_MAPPING["support"],
+            # Filing is code's job, and there is no person on this chat.
+            ["never say a support ticket", "never promise", "policy"],
+            # Tools are an addendum, so a second tool set isn't a rewrite.
+            ["get_enrollments", "search_content_files", "resource facts"],
+            id="support base",
+        ),
+        pytest.param(
+            _CORE,
+            [
+                "user_course_input",
+                "exactly as they wrote it",
+                "couldn't check",
+                "issued",
+                "will i get a certificate?",
+                # The answer gate is "a tool fired", so a lookup followed by a
+                # refusal would still ship.
+                "don't call them for what a course offers",
+                "whenever the learner names a course, pass user_course_input",
+            ],
+            # Shared, so a tool named here is offered to a bot that lacks it.
+            ["search_content_files", "resource facts", "contact us"],
+            id="core",
+        ),
+        pytest.param(
+            f"{_CORE}\n\n{_SUPPORT_ADDENDUM}",
+            [
+                "user_course_input",
+                "couldn't check",
+                "will i get a certificate?",
+                "did i get my certificate?",
+                "give no answer",
+            ],
+            ["search_content_files", "from that course's page", "resource facts"],
+            id="support core and addendum",
+        ),
+        pytest.param(
+            _SYLLABUS_ADDENDUM,
+            ["search_content_files"],
+            # #152 made "from that course's page" false.
+            ["from that course's page", *_CORE_ONLY],
+            id="syllabus addendum",
+        ),
+        pytest.param(
+            _SUPPORT_ADDENDUM,
+            # Code appends the offer, so a model offer would be a second one.
+            ["do not offer"],
+            ["search_content_files", *_CORE_ONLY],
+            id="support addendum",
+        ),
+    ],
+)
+def test_account_tool_prompts(prompt, contains, excludes):
+    # Collapsed: where a sentence wraps is not under test.
+    text = " ".join(prompt.split()).lower()
+
+    assert [phrase for phrase in contains if phrase not in text] == []
+    assert [phrase for phrase in excludes if phrase in text] == []
+
+
 def test_langsmith_prompt_create(mocker):
     """Test that the langsmith_prompt function creates a prompt if it doesn't exist."""
     os.environ["LANGSMITH_API_KEY"] = "test_key"
