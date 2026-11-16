@@ -4568,6 +4568,93 @@ async def test_support_bot_files_on_an_explicit_confirm_flag(mocker, mock_checkp
     assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
 
 
+PENDING_SEND = {"user_email": ["signedin@mit.edu"], "awaiting_send": [True]}
+
+
+@pytest.mark.parametrize(
+    ("prior", "state", "message", "zendesk", "expected_reply", "expected"),
+    [
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            {"user_email": ["signedin@mit.edu"]},
+            "that's everything",
+            {"reference": 4821},
+            SUPPORT_TICKET_REVIEW_HEADER,
+            True,
+            id="review",
+        ),
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            PENDING_SEND,
+            "yes, and the course is 18.01",
+            {"reference": 4821},
+            SUPPORT_SEND_UNCLEAR,
+            True,
+            id="unclear",
+        ),
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            PENDING_SEND,
+            "send",
+            {"error": "Could not file the support request."},
+            SUPPORT_TICKET_FAILED,
+            True,
+            id="failed",
+        ),
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            PENDING_SEND,
+            "send",
+            {"reference": 4821},
+            "4821",
+            False,
+            id="filed",
+        ),
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            PENDING_SEND,
+            "cancel",
+            {"reference": 4821},
+            SUPPORT_TICKET_CANCELLED,
+            False,
+            id="cancelled",
+        ),
+        pytest.param(
+            [],
+            None,
+            SUPPORT_PROBLEM,
+            {"reference": 4821},
+            SUPPORT_ASK_EMAIL,
+            False,
+            id="collecting",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_reports_whether_it_awaits_a_send(  # noqa: PLR0913
+    mocker, mock_checkpointer, prior, state, message, zendesk, expected_reply, expected
+):
+    """The widget shows Send and Cancel off this flag, so it must match state."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket", AsyncMock(return_value=zendesk)
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, prior, state=state)
+    email = "signedin@mit.edu" if state else ""
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                message, extra_state=_support_state(email)
+            )
+        ]
+    )
+
+    assert expected_reply in reply
+    metadata = json.loads(re.search(r"<!-- (.*) -->", reply).group(1))
+    assert metadata["awaiting_send"] is expected
+
+
 @pytest.fixture
 def support_filing_cache(settings):
     """
