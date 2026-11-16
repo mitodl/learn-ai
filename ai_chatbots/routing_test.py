@@ -39,3 +39,14 @@ def test_prefixed_paths_match_no_route(path):
     so a prefixed path must not reach a consumer through the open route.
     """
     assert _route_name(path) is None
+
+
+@pytest.mark.parametrize(
+    "path", ["http/canvas_tutor_agent/x", "http/canvas_syllabus_agent/x"]
+)
+def test_suffixed_canvas_paths_match_no_route(path):
+    """
+    The local gateway asks for a canvas_token only on the exact Canvas paths,
+    so a suffixed one must not reach a Canvas consumer through the open route.
+    """
+    assert _route_name(path) is None
