@@ -33,7 +33,12 @@ def run_evaluation(mocker):
             "need --baseline and one bot",
         ),
         ("--models a,b --pairwise-only --correctness-only", "can't be combined"),
-        ("--models a,a --baseline a", "exactly one other model"),
+        ("--models a,a --baseline a", "name the same model"),
+        (
+            "--models a --baseline a --bots tutor "
+            "--baseline-prompt x/p.txt --candidate-prompt y/p.txt",
+            "name the same model",
+        ),
         ("--models a,b --data-file x/c.json,y/c.json", "names must differ"),
         ("--models a --pairwise-only", "--pairwise-only needs two"),
     ],
@@ -74,3 +79,20 @@ def test_baseline_joins_models(run_evaluation):
         "rag_evaluation", "--models", "b", "--baseline", "a", "--bots", "syllabus"
     )
     assert run_evaluation.call_args.args[0].models == ["a", "b"]
+
+
+def test_baseline_same_model_two_prompts(run_evaluation, tmp_path):
+    """One model can be its own baseline when the sides' prompts differ."""
+    for name in ("old", "new"):
+        (tmp_path / f"{name}.txt").write_text(f"{name} prompt")
+    call_command(
+        "rag_evaluation",
+        *f"--models a --baseline a --bots syllabus --baseline-prompt {tmp_path}/old.txt "
+        f"--candidate-prompt {tmp_path}/new.txt".split(),
+    )
+    kwargs = run_evaluation.call_args.kwargs
+    assert run_evaluation.call_args.args[0].models == ["a"]
+    assert (kwargs["baseline_prompt"]["name"], kwargs["candidate_prompt"]["name"]) == (
+        "old",
+        "new",
+    )

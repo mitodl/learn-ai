@@ -473,86 +473,83 @@ class EvaluationOrchestrator:
         pairwise_cases = []
         batch_results = []
 
-        # Evaluate each model with each prompt; in a baseline run, its side's prompt
-        for model in config.models:
-            for prompt in [dict(sides)[model]] if sides else bot_prompts:
-                # Resolve prompt details
-                if prompt is None:
-                    prompt_label = "default"
-                    prompt_text = None
-                    source = "bot default"
-                else:
-                    prompt_label = prompt["name"]
-                    source = "prompts file" if prompt.get("text") else "LangSmith"
-                    prompt_text = prompt.get("text") or get_langsmith_prompt(
-                        prompt_label
-                    )
+        # Each model with each prompt; in a baseline run, each side's model and prompt
+        runs = sides or [(m, p) for m in config.models for p in bot_prompts]
+        for model, prompt in runs:
+            # Resolve prompt details
+            if prompt is None:
+                prompt_label = "default"
+                prompt_text = None
+                source = "bot default"
+            else:
+                prompt_label = prompt["name"]
+                source = "prompts file" if prompt.get("text") else "LangSmith"
+                prompt_text = prompt.get("text") or get_langsmith_prompt(prompt_label)
 
-                if prompt_label != "default" and not prompt_text:
-                    self.stdout.write(f"No prompt text for '{prompt_label}', skipping")
-                    self.failures.add(
-                        bot_name,
-                        "prompt skipped: no prompt text",
-                        model=model,
-                        prompt_label=prompt_label,
-                    )
-                    continue
-
-                if prompt_text:
-                    digest = hashlib.sha256(prompt_text.encode()).hexdigest()[:12]
-                    source += f", sha256 {digest}"
-                self.stdout.write(
-                    f"Evaluating {bot_name} with {model} using {prompt_label} "
-                    f"({source})"
+            if prompt_label != "default" and not prompt_text:
+                self.stdout.write(f"No prompt text for '{prompt_label}', skipping")
+                self.failures.add(
+                    bot_name,
+                    "prompt skipped: no prompt text",
+                    model=model,
+                    prompt_label=prompt_label,
                 )
+                continue
 
-                try:
-                    # Generate bot responses concurrently (this is now parallel!)
-                    model_test_cases = await evaluator.evaluate_model(
-                        model,
-                        bot_test_cases,
-                        instructions=prompt_text,
-                        prompt_label=prompt_label,
-                        max_concurrent=max_concurrent,
-                        failures=self.failures,
+            if prompt_text:
+                digest = hashlib.sha256(prompt_text.encode()).hexdigest()[:12]
+                source += f", sha256 {digest}"
+            self.stdout.write(
+                f"Evaluating {bot_name} with {model} using {prompt_label} ({source})"
+            )
+
+            try:
+                # Generate bot responses concurrently (this is now parallel!)
+                model_test_cases = await evaluator.evaluate_model(
+                    model,
+                    bot_test_cases,
+                    instructions=prompt_text,
+                    prompt_label=prompt_label,
+                    max_concurrent=max_concurrent,
+                    failures=self.failures,
+                )
+                self._record_answers(bot_name, model_test_cases)
+                if _bot_metrics(config, bot_name):
+                    all_llm_test_cases.extend(model_test_cases)
+                if pairwise:
+                    pairwise_cases.extend(model_test_cases)
+
+                # Process batches (loop until remaining < batch_size)
+                while batch_size > 0 and len(all_llm_test_cases) >= batch_size:
+                    batch = all_llm_test_cases[:batch_size]
+                    remaining = all_llm_test_cases[batch_size:]
+
+                    batch_num = len(batch_results) + 1
+                    self.stdout.write(
+                        f"\n===== Evaluating batch {batch_num} for {bot_name} "
+                        f"({len(batch)} test cases) ====="
                     )
-                    self._record_answers(bot_name, model_test_cases)
-                    if _bot_metrics(config, bot_name):
-                        all_llm_test_cases.extend(model_test_cases)
-                    if pairwise:
-                        pairwise_cases.extend(model_test_cases)
 
-                    # Process batches (loop until remaining < batch_size)
-                    while batch_size > 0 and len(all_llm_test_cases) >= batch_size:
-                        batch = all_llm_test_cases[:batch_size]
-                        remaining = all_llm_test_cases[batch_size:]
+                    batch_result = await asyncio.to_thread(
+                        self._run_deepeval_evaluation,
+                        batch,
+                        config,
+                        max_concurrent,
+                        bot_name=bot_name,
+                    )
+                    batch_results.append(batch_result)
 
-                        batch_num = len(batch_results) + 1
-                        self.stdout.write(
-                            f"\n===== Evaluating batch {batch_num} for {bot_name} "
-                            f"({len(batch)} test cases) ====="
-                        )
+                    # Clear processed test cases to free memory
+                    all_llm_test_cases = remaining
 
-                        batch_result = await asyncio.to_thread(
-                            self._run_deepeval_evaluation,
-                            batch,
-                            config,
-                            max_concurrent,
-                            bot_name=bot_name,
-                        )
-                        batch_results.append(batch_result)
+                    self.stdout.write(
+                        f"Batch {batch_num} complete: "
+                        f"{len(batch_result.test_results)} results"
+                    )
 
-                        # Clear processed test cases to free memory
-                        all_llm_test_cases = remaining
-
-                        self.stdout.write(
-                            f"Batch {batch_num} complete: "
-                            f"{len(batch_result.test_results)} results"
-                        )
-
-                except Exception as e:
-                    msg = f"Error on {bot_name} with {model} and {prompt_label}: {e}"
-                    raise RuntimeError(msg) from e
+            except Exception as e:
+                msg = f"Error on {bot_name} with {model} and {prompt_label}: {e}"
+                raise RuntimeError(msg) from e
 
         # Evaluate any remaining test cases
         if all_llm_test_cases:
@@ -696,7 +693,7 @@ class EvaluationOrchestrator:
         No expected answer is involved.  deepeval shows the judge the answers in
         random order and under fake names, which reduces position and name bias.
         """
-        if len(config.models) < MIN_CONTESTANTS:
+        if not by_side and len(config.models) < MIN_CONTESTANTS:
             self.stdout.write("⚠️  --pairwise needs two or more models; skipping")
             self.failures.add(bot_name, "pairwise skipped: needs two or more models")
             return
@@ -924,7 +921,8 @@ Started: {timestamp}
         # A baseline run's (model, prompt) sides; a None prompt is the bot's own
         sides = None
         if baseline:
-            candidate = next(m for m in config.models if m != baseline)
+            # The same model as the baseline when only the prompts differ
+            candidate = next((m for m in config.models if m != baseline), baseline)
             sides = [(baseline, baseline_prompt), (candidate, candidate_prompt)]
 
         # Process each bot one at a time, accumulating results

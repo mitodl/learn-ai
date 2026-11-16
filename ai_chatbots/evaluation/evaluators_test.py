@@ -760,6 +760,12 @@ async def test_tutor_problem_template_per_case(monkeypatch):
     assert first.startswith("A ")
     assert second.startswith("B ")
     assert not default.startswith(("A ", "B "))
+    # Only the problem prompt is replaced: the assessment step keeps its own
+    token = _tutor_problem_template.set("REPLACED {problem_statement}")
+    assessment = prompts.get_assessment_initial_prompt("p", "ps", "edx")
+    _tutor_problem_template.reset(token)
+    assert "REPLACED" not in assessment
+    assert assessment.startswith(prompts.ASSESSMENT_PROMPT_TEMPLATE[:40])
 
 
 def test_syllabus_canvas_uses_the_syllabus_cases(mocker):
