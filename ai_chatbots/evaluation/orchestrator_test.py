@@ -778,6 +778,24 @@ class TestPairwise:
             ("syllabus", "f.json#Q1", None): "model-b [short]"
         }
 
+    def test_run_pairwise_same_model_sides(self, orchestrator, arena):
+        """One model with two prompts is still two contestants."""
+        metric = arena[1]
+        metric.measure.return_value = "model-a [new]"
+        cases = [_answer("model-a"), _answer("model-a")]
+        for case, label in zip(cases, ("old", "new"), strict=True):
+            case.metadata["prompt_label"] = label
+        config = orchestrator.create_evaluation_config(["model-a"], "judge")
+
+        orchestrator._run_pairwise("syllabus", cases, config, by_side=True)  # noqa: SLF001
+
+        contestants = metric.measure.call_args.args[0].contestants
+        assert [c.name for c in contestants] == ["model-a [old]", "model-a [new]"]
+        assert orchestrator.pairwise_results == {
+            ("syllabus", "f.json#Q1", None): "model-a [new]"
+        }
+        assert orchestrator.pairwise_wins["syllabus"]["model-a [new]"] == 1
+
     def test_run_pairwise_skips_unmatched_and_judge_errors(
         self, orchestrator, config, arena, mock_stdout
     ):

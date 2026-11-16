@@ -7,7 +7,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from langchain_core.messages import AIMessage
-from open_learning_ai_tutor import prompts as tutor_prompts
+from open_learning_ai_tutor.prompts import check_prompt_overrides
 
 from ai_chatbots import chatbots, learner_api
 from ai_chatbots.api import get_resource_facts
@@ -34,27 +34,30 @@ _blocked_calls: ContextVar[list | None] = ContextVar("blocked_calls", default=No
 # What TutorBot.get_completion streams when it fails
 TUTOR_ERROR_MARKER = '<!-- {"error":'
 
-# The tutor_problem template of the case being evaluated (None: the package's).
-# Per context: asyncio.to_thread copies it into the thread that builds the prompt.
-_tutor_problem_template: ContextVar[str | None] = ContextVar(
-    "tutor_problem_template", default=None
-)
 
-
-def _serve_tutor_problem_template():
-    """Make the tutor package use the case's tutor_problem template, if any."""
-    original = tutor_prompts.get_system_prompt
-    if getattr(original, "serves_eval_template", False):
-        return
-
-    def get_system_prompt(prompt_name, mapping, cache_func):
-        template = _tutor_problem_template.get()
-        if prompt_name == "tutor_problem" and template is not None:
-            return template
-        return original(prompt_name, mapping, cache_func)
-
-    get_system_prompt.serves_eval_template = True
-    tutor_prompts.get_system_prompt = get_system_prompt
+def tutor_prompt_overrides(text: str | None) -> dict[str, str] | None:
+    """
+    Read a tutor prompt: JSON maps prompt names to text, anything else is the
+    tutor_problem prompt. Raises ValueError for a prompt the tutor doesn't use.
+    """
+    if text is None:
+        return None
+    try:
+        overrides = json.loads(text)
+    except json.JSONDecodeError:
+        overrides = None
+    if not isinstance(overrides, dict):
+        overrides = {"tutor_problem": text}
+    check_prompt_overrides(overrides)
+    if not all(isinstance(value, str) for value in overrides.values()):
+        msg = "every tutor prompt must be text"
+        raise ValueError(msg)
+    if "{problem_statement}" not in overrides.get(
+        "tutor_problem", "{problem_statement}"
+    ):
+        msg = "a tutor_problem prompt needs {problem_statement}"
+        raise ValueError(msg)
+    return overrides
 
 
 class LiveAccountCallBlockedError(RuntimeError):
@@ -436,11 +439,15 @@ class TutorBotEvaluator(BaseBotEvaluator):
     def create_bot_instance(
         self, model: str, test_case: TestCaseSpec, instructions: str | None = None
     ):
-        """Create tutor bot instance; instructions replace its tutor_problem prompt."""
+        """Create tutor bot instance; instructions override its prompts."""
         extra_init = (test_case.metadata or {}).get("extra_init", {})
-        bot = self.bot_class("eval", checkpointer=None, model=model, **extra_init)
-        bot.eval_problem_template = instructions
-        return bot
+        return self.bot_class(
+            "eval",
+            checkpointer=None,
+            model=model,
+            prompt_overrides=tutor_prompt_overrides(instructions),
+            **extra_init,
+        )
 
     async def collect_response(
         self, chatbot, test_case: TestCaseSpec
@@ -455,14 +462,7 @@ class TutorBotEvaluator(BaseBotEvaluator):
 
             chatbot.get_latest_history = latest_history
 
-        _serve_tutor_problem_template()
-        token = _tutor_problem_template.set(chatbot.eval_problem_template)
-        try:
-            chunks = [
-                chunk async for chunk in chatbot.get_completion(test_case.question)
-            ]
-        finally:
-            _tutor_problem_template.reset(token)
+        chunks = [chunk async for chunk in chatbot.get_completion(test_case.question)]
         if any(TUTOR_ERROR_MARKER in chunk for chunk in chunks):
             msg = "the tutor streamed an error instead of an answer"
             raise RuntimeError(msg)

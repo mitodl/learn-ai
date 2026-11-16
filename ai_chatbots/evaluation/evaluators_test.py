@@ -18,8 +18,7 @@ from ai_chatbots.evaluation.evaluators import (
     SyllabusBotEvaluator,
     TutorBotEvaluator,
     VideoGPTBotEvaluator,
-    _serve_tutor_problem_template,
-    _tutor_problem_template,
+    tutor_prompt_overrides,
 )
 
 
@@ -735,37 +734,56 @@ async def test_tutor_streamed_error_is_a_failure(mocker):
         await evaluator.collect_response(chatbot, TestCaseSpec(question="Help"))
 
 
-@pytest.mark.asyncio
-async def test_tutor_problem_template_per_case(monkeypatch):
-    """Concurrent cases each build the tutor prompt from their own template."""
-    from open_learning_ai_tutor import prompts
-    from open_learning_ai_tutor.constants import Intent
+@pytest.mark.parametrize(
+    ("text", "overrides"),
+    [
+        (None, None),
+        (
+            "Be brief. {problem_statement}",
+            {"tutor_problem": "Be brief. {problem_statement}"},
+        ),
+        ('{"tutor_intent_S_HINT": "Hint."}', {"tutor_intent_S_HINT": "Hint."}),
+        ('"just {problem_statement}"', {"tutor_problem": '"just {problem_statement}"'}),
+    ],
+)
+def test_tutor_prompt_overrides(text, overrides):
+    """JSON names the tutor's prompts; other text is its tutor_problem prompt."""
+    assert tutor_prompt_overrides(text) == overrides
 
-    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
-    _serve_tutor_problem_template()
 
-    async def system_prompt(template):
-        _tutor_problem_template.set(template)
-        await asyncio.sleep(0)  # let the other case set its template
-        messages = await asyncio.to_thread(
-            prompts.get_tutor_prompt, "p", "ps", [], [Intent.S_STRATEGY], "edx"
-        )
-        return messages[0].content
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("Be brief.", "needs {problem_statement}"),
+        ('{"tutor_problem": "Be brief."}', "needs {problem_statement}"),
+        ('{"problem": "Be brief."}', "Unknown tutor prompts: problem"),
+        ('{"tutor_problem": null}', "must be text"),
+        ('{"tutor_initial_assessment": 123}', "must be text"),
+    ],
+)
+def test_tutor_prompt_overrides_refused(text, message):
+    """A prompt the tutor can't use is refused before anything runs."""
+    with pytest.raises(ValueError, match=message):
+        tutor_prompt_overrides(text)
 
-    first, second, default = await asyncio.gather(
-        system_prompt("A {problem_statement}"),
-        system_prompt("B {problem_statement}"),
-        system_prompt(None),
+
+def test_tutor_bot_gets_prompt_overrides(mocker):
+    """The tutor is built with its side's prompts."""
+    bot_class = mocker.Mock()
+    evaluator = TutorBotEvaluator(bot_class, "tutor")
+    case = TestCaseSpec(
+        question="Help", metadata={"extra_init": {"edx_module_id": "b"}}
     )
-    assert first.startswith("A ")
-    assert second.startswith("B ")
-    assert not default.startswith(("A ", "B "))
-    # Only the problem prompt is replaced: the assessment step keeps its own
-    token = _tutor_problem_template.set("REPLACED {problem_statement}")
-    assessment = prompts.get_assessment_initial_prompt("p", "ps", "edx")
-    _tutor_problem_template.reset(token)
-    assert "REPLACED" not in assessment
-    assert assessment.startswith(prompts.ASSESSMENT_PROMPT_TEMPLATE[:40])
+
+    evaluator.create_bot_instance("m", case, '{"tutor_intent_S_HINT": "Hint."}')
+
+    bot_class.assert_called_once_with(
+        "eval",
+        checkpointer=None,
+        model="m",
+        prompt_overrides={"tutor_intent_S_HINT": "Hint."},
+        edx_module_id="b",
+    )
 
 
 def test_syllabus_canvas_uses_the_syllabus_cases(mocker):
