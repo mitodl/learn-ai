@@ -2,6 +2,7 @@
 
 import json
 from contextvars import ContextVar
+from string import Formatter
 from types import SimpleNamespace
 from typing import Any
 
@@ -35,6 +36,18 @@ _blocked_calls: ContextVar[list | None] = ContextVar("blocked_calls", default=No
 TUTOR_ERROR_MARKER = '<!-- {"error":'
 
 
+# The tutor's prompts it fills in with str.format, and their fields. The others
+# are inserted as they are.
+_TUTOR_TEMPLATE_FIELDS = {
+    "tutor_problem": ("problem_statement",),
+    "tutor_initial_assessment": (
+        "problem_statement",
+        "assessment_keys",
+        "assessment_choices",
+    ),
+}
+
+
 def tutor_prompt_overrides(text: str | None) -> dict[str, str] | None:
     """
     Read a tutor prompt: JSON maps prompt names to text, anything else is the
@@ -52,9 +65,21 @@ def tutor_prompt_overrides(text: str | None) -> dict[str, str] | None:
     if not all(isinstance(value, str) for value in overrides.values()):
         msg = "every tutor prompt must be text"
         raise ValueError(msg)
-    if "{problem_statement}" not in overrides.get(
-        "tutor_problem", "{problem_statement}"
-    ):
+    for name, fields in _TUTOR_TEMPLATE_FIELDS.items():
+        if name in overrides:
+            try:
+                overrides[name].format(**dict.fromkeys(fields, ""))
+            except (KeyError, IndexError, ValueError, AttributeError) as error:
+                msg = (
+                    f"{name} can't be filled in ({error!r}); "
+                    "escape literal braces as {{ }}"
+                )
+                raise ValueError(msg) from error
+    # A real field, not an escaped {{problem_statement}}
+    problem = overrides.get("tutor_problem", "{problem_statement}")
+    if "problem_statement" not in {
+        field for _, field, _, _ in Formatter().parse(problem)
+    }:
         msg = "a tutor_problem prompt needs {problem_statement}"
         raise ValueError(msg)
     return overrides
