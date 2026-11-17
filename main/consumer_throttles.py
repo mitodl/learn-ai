@@ -123,7 +123,6 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if self.key is None:
             return True
 
-        self.now = self.timer()
         # Off the event loop, so a slow cache doesn't stall every other request
         # on the worker.
         if await sync_to_async(self.record_request, thread_sensitive=False)():
@@ -133,11 +132,13 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
     def record_request(self) -> bool:
         """
         Prune the history and, if the request is under the limit, add it.
-        Read and write under one lock, so a burst of requests can't all read
-        the same history before any of them is recorded.
+        Timestamp, read and write under one lock, so a burst of requests can't
+        all read the same history before any of them is recorded, and the
+        history stays newest first for the pruning below.
         """
         cache = get_django_cache()
         with _history_lock:
+            self.now = self.timer()
             self.history = cache.get(self.key, [])
             # Drop any requests from the history which have now passed the
             # throttle duration
