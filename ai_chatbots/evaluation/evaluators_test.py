@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import json
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -744,11 +745,24 @@ async def test_tutor_streamed_error_is_a_failure(mocker):
         ),
         ('{"tutor_intent_S_HINT": "Hint."}', {"tutor_intent_S_HINT": "Hint."}),
         ('"just {problem_statement}"', {"tutor_problem": '"just {problem_statement}"'}),
+        # Intent text isn't a template, so braces in it are fine
+        ('{"tutor_intent_S_HINT": "Use {x}."}', {"tutor_intent_S_HINT": "Use {x}."}),
     ],
 )
 def test_tutor_prompt_overrides(text, overrides):
     """JSON names the tutor's prompts; other text is its tutor_problem prompt."""
     assert tutor_prompt_overrides(text) == overrides
+
+
+def test_tutor_prompt_overrides_package_templates():
+    """The package's own templates, escaped braces and all, pass the check."""
+    from open_learning_ai_tutor import prompts
+
+    overrides = {
+        "tutor_problem": prompts.PROBLEM_PROMPT_TEMPLATE,
+        "tutor_initial_assessment": prompts.ASSESSMENT_PROMPT_TEMPLATE,
+    }
+    assert tutor_prompt_overrides(json.dumps(overrides)) == overrides
 
 
 @pytest.mark.parametrize(
@@ -759,6 +773,10 @@ def test_tutor_prompt_overrides(text, overrides):
         ('{"problem": "Be brief."}', "Unknown tutor prompts: problem"),
         ('{"tutor_problem": null}', "must be text"),
         ('{"tutor_initial_assessment": 123}', "must be text"),
+        ("{{problem_statement}}", "needs {problem_statement}"),
+        ("{problem_statement} {bogus}", "tutor_problem can't be filled in"),
+        ("{problem_statement} {", "tutor_problem can't be filled in"),
+        ('{"tutor_initial_assessment": "{bogus}"}', "can't be filled in"),
     ],
 )
 def test_tutor_prompt_overrides_refused(text, message):
