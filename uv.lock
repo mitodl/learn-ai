@@ -2960,7 +2960,7 @@ requires-dist = [
     { name = "mitol-django-observability", specifier = ">=2026.8.19" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
     { name = "ol-llm", extras = ["langchain"], specifier = ">=0.0.17,<0.1" },
-    { name = "open-learning-ai-tutor", git = "https://github.com/mitodl/open-learning-ai-tutor?rev=5faffc61a372f8ba065038aba8f46a6baedb3af9" },
+    { name = "open-learning-ai-tutor", git = "https://github.com/mitodl/open-learning-ai-tutor?rev=5fe0aa16e2f869e921384986f507b115de758f0a" },
     { name = "opentelemetry-instrumentation-asgi", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-django", specifier = ">=0.52b0" },
@@ -3630,7 +3630,7 @@ wheels = [
 [[package]]
 name = "open-learning-ai-tutor"
 version = "0.2.18"
-source = { git = "https://github.com/mitodl/open-learning-ai-tutor?rev=5faffc61a372f8ba065038aba8f46a6baedb3af9#5faffc61a372f8ba065038aba8f46a6baedb3af9" }
+source = { git = "https://github.com/mitodl/open-learning-ai-tutor?rev=5fe0aa16e2f869e921384986f507b115de758f0a#5fe0aa16e2f869e921384986f507b115de758f0a" }
 dependencies = [
     { name = "certifi" },
     { name = "e2b-code-interpreter" },
