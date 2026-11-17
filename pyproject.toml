@@ -64,7 +64,7 @@ dependencies = [
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
     # shortcut: mitodl/open-learning-ai-tutor#108 head; pin its release (0.2.18) before merging
-    "open-learning-ai-tutor @ git+https://github.com/mitodl/open-learning-ai-tutor@5faffc61a372f8ba065038aba8f46a6baedb3af9",
+    "open-learning-ai-tutor @ git+https://github.com/mitodl/open-learning-ai-tutor@5fe0aa16e2f869e921384986f507b115de758f0a",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
