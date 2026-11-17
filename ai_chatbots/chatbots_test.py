@@ -4569,6 +4569,34 @@ async def test_support_bot_files_on_an_explicit_confirm_flag(mocker, mock_checkp
 
 
 @pytest.mark.asyncio
+async def test_support_bot_cancels_over_a_confirm_flag(mocker, mock_checkpointer):
+    """Filing cannot be undone, so a cancel wins even with confirm set."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "Cancel",
+                extra_state={**_support_state("signedin@mit.edu"), "confirm": [True]},
+            )
+        ]
+    )
+
+    mock_file.assert_not_called()
+    assert SUPPORT_TICKET_CANCELLED in reply
+
+
+@pytest.mark.asyncio
 async def test_support_bot_keeps_the_send_buttons_words_out_of_a_retried_ticket(
     mocker, mock_checkpointer
 ):
