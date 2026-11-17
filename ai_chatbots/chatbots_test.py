@@ -4709,7 +4709,7 @@ async def test_support_bot_reports_whether_it_awaits_a_send(  # noqa: PLR0913
     )
 
     assert expected_reply in reply
-    metadata = json.loads(re.search(r"<!-- (.*) -->", reply).group(1))
+    metadata = json.loads(re.search(r"<!-- (.*) -->", reply, re.DOTALL).group(1))
     assert metadata["awaiting_send"] is expected
 
 
