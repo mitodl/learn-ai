@@ -4713,6 +4713,46 @@ async def test_support_bot_reports_whether_it_awaits_a_send(  # noqa: PLR0913
     assert metadata["awaiting_send"] is expected
 
 
+@pytest.mark.parametrize("held", ["sending", "filed"])
+@pytest.mark.asyncio
+async def test_support_bot_offers_no_send_while_a_ticket_is_sent_or_filed(
+    mocker, mock_checkpointer, support_filing_cache, held
+):
+    """A Cancel there would tell the learner nothing was sent when it was."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    chatbot = await _support_bot(
+        mocker, mock_checkpointer, [HumanMessage(SUPPORT_PROBLEM)], state=PENDING_SEND
+    )
+    if held == "sending":
+        await support_filing_cache.aadd(
+            f"{SUPPORT_FILING_LOCK_PREFIX}{chatbot.thread_id}",
+            value="another turn",
+            timeout=300,
+        )
+        expected_reply = SUPPORT_TICKET_SENDING
+    else:
+        await UserChatSession.objects.filter(thread_id=chatbot.thread_id).aupdate(
+            support_ticket_reference="4821", support_ticket_email="signedin@mit.edu"
+        )
+        expected_reply = "4821"
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                "send", extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert expected_reply in reply
+    metadata = json.loads(re.search(r"<!-- (.*) -->", reply, re.DOTALL).group(1))
+    assert metadata["awaiting_send"] is False
+
+
 @pytest.fixture
 def support_filing_cache(settings):
     """

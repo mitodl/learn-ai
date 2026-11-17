@@ -2220,12 +2220,18 @@ class SupportBot(TruncatingChatbot):
             updates = {**updates, "handed_off": [True]}
 
         # Tells the widget to show Send and Cancel. Last element, not _latest():
-        # that skips False, so a cancelled review would still report True.
+        # that skips False, so a cancelled review would still report True. Off
+        # while another turn sends or once a ticket exists: a Cancel there would
+        # tell the learner nothing was sent.
         awaiting_send = (
-            (prior_state.get("awaiting_send") or [])
-            + (updates.get("awaiting_send") or [])
-            or [False]
-        )[-1]
+            reply != SUPPORT_TICKET_SENDING
+            and not (session and session.support_ticket_reference)
+            and (
+                (prior_state.get("awaiting_send") or [])
+                + (updates.get("awaiting_send") or [])
+                or [False]
+            )[-1]
+        )
         async for chunk in self._reply_without_the_model(
             message, reply, {**extra_state, **updates}, awaiting_send=awaiting_send
         ):
