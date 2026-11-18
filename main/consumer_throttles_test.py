@@ -305,3 +305,25 @@ async def test_throttle_allows_requests_when_the_cache_fails(
     ]
     assert failures
     assert not [message for message in failures if "203.0.113.5" in message]
+
+
+async def test_throttle_allows_a_request_stuck_behind_its_lock(
+    anon_limit_two, shared_throttle_cache, mocker, caplog
+):
+    """A request doesn't queue behind a stuck cache call holding its bucket's lock."""
+    lock = threading.Lock()
+    shared_throttle_cache.set(
+        f"throttle_{anon_limit_two.throttle_key}_203.0.113.5", [time(), time()]
+    )
+    lock.acquire()
+    # Released later, so code that waits for the lock gets it and throttles.
+    threading.Timer(3, lock.release).start()
+
+    mocker.patch("main.consumer_throttles._history_locks", [lock])
+
+    with caplog.at_level("WARNING", logger="main.consumer_throttles"):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
+        ).check_throttles()
+
+    assert "waited too long for its lock" in caplog.text
