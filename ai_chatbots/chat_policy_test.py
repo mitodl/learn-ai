@@ -51,10 +51,13 @@ class FakeProvider:
     def __init__(self, scripts):
         self.scripts = list(scripts)
         self.requests = 0
+        self.retry_counts: list[str | None] = []
         self.api_base = ""
 
     async def handle(self, request: web.Request) -> web.StreamResponse:
         await request.read()
+        # The OpenAI SDK numbers its own retries in this header.
+        self.retry_counts.append(request.headers.get("x-stainless-retry-count"))
         script = self.scripts[min(self.requests, len(self.scripts) - 1)]
         self.requests += 1
         kind, *args = script
@@ -173,7 +176,7 @@ async def test_a_failure_before_the_stream_starts_is_retried(provider):
     await _collect(_chat_model(provider.api_base), received)
 
     assert received == ["part0 "]
-    assert provider.requests == 3
+    assert provider.retry_counts == ["0", "1", "2"]
 
 
 async def test_retries_stop_at_the_policy(provider):
