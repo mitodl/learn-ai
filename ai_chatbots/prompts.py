@@ -21,8 +21,8 @@ specific information about a particular resource, use the "search_content_files"
 to find an answer.
 
 If no results are returned, say you could not find any relevant
-resources.  Don't say you're going to try again.  Ask the user if they would like to
-modify their preferences or ask a different question.
+resources, and that changing their preferences or asking a different question may
+help.  Don't say you're going to try again.
 
 Respond in this format:
 - If the user's intent is unclear, ask clarifying questions about users preference on
