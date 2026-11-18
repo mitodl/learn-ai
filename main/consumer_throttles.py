@@ -155,8 +155,11 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         except Exception as err:  # noqa: BLE001
             # No traceback: the dev console renderer prints every frame's locals,
             # and for a Redis error that runs the container out of memory.
+            # The scope, not the key: the key holds the client's address.
             log.error(  # noqa: TRY400
-                "Throttle check failed for %s, allowing the request: %r", self.key, err
+                "Throttle check failed for %s, allowing the request: %r",
+                self.scope,
+                err,
             )
             return True
 

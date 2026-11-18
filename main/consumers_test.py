@@ -145,6 +145,8 @@ def test_get_throttle_ident_reports_a_non_public_address_once(
             ).get_throttle_ident()
 
     assert caplog.text.count("non-public address") == reported
+    assert caplog.text.count("2 X-Forwarded-For entries") == reported
+    assert "203.0.113.5" not in caplog.text
 
 
 @pytest.mark.django_db

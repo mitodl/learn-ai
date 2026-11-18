@@ -298,4 +298,10 @@ async def test_throttle_allows_requests_when_the_cache_fails(
             anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
         ).check_throttles()
 
-    assert "Throttle check failed" in caplog.text
+    failures = [
+        record.getMessage()
+        for record in caplog.records
+        if "Throttle check failed" in record.getMessage()
+    ]
+    assert failures
+    assert not [message for message in failures if "203.0.113.5" in message]

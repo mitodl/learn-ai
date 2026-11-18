@@ -70,11 +70,13 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
         # NUM_PROXIES counted one of our proxies as the client.
         if not _non_public_address_reported.is_set() and not _is_public(address):
             _non_public_address_reported.set()
+            # The entry count, not the header: it holds the visitor's address.
+            forwarded = request.headers.get("x-forwarded-for")
             log.error(
                 "Anonymous throttle keyed on non-public address %s "
-                "(X-Forwarded-For %r, peer %s); check NUM_PROXIES",
+                "(%d X-Forwarded-For entries, peer %s); check NUM_PROXIES",
                 address,
-                request.headers.get("x-forwarded-for"),
+                len(forwarded.split(",")) if forwarded else 0,
                 request.META["REMOTE_ADDR"],
             )
         return address
