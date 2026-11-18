@@ -9,6 +9,7 @@ from ai_chatbots.evaluation.checks import (
     bare_urls,
     ends_with_offer,
     run_checks,
+    tool_use,
     unlinked_resources,
 )
 
@@ -98,7 +99,10 @@ def test_bare_urls(answer, found):
 @pytest.mark.parametrize(
     ("bot", "checks"),
     [
-        ("recommendation", {"follow_up_offer", "unlinked_resource", "bare_url"}),
+        (
+            "recommendation",
+            {"follow_up_offer", "unlinked_resource", "bare_url", "tool_use"},
+        ),
         ("syllabus", {"follow_up_offer"}),
         ("syllabus_canvas", {"follow_up_offer"}),
         ("video_gpt", {"follow_up_offer"}),
@@ -117,3 +121,22 @@ def test_run_checks_by_bot(bot, checks):
     assert set(found) == checks
     if checks:
         assert found["follow_up_offer"]
+
+
+@pytest.mark.parametrize(
+    ("expected", "called", "found"),
+    [
+        # A case that doesn't say which tools it expects isn't checked
+        (None, [], []),
+        (None, ["search_courses"], []),
+        ([], [], []),
+        ([], ["search_courses", "search_courses"], ["called search_courses"]),
+        (["search_courses"], ["search_courses"], []),
+        # Other tools alongside the expected one are fine
+        (["search_courses"], ["search_content_files", "search_courses"], []),
+        (["search_courses"], [], ["didn't call search_courses"]),
+    ],
+)
+def test_tool_use(expected, called, found):
+    """Flag a missing expected tool, or any tool call when none was expected."""
+    assert tool_use({"expected_tools": expected, "tool_names": called}) == found

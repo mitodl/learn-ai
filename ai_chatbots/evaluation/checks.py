@@ -111,8 +111,20 @@ def bare_urls(answer: str) -> list[str]:
     return found
 
 
+def tool_use(metadata: dict) -> list[str]:
+    """Return expected tools the bot didn't call, or any it called if none were."""
+    expected = metadata.get("expected_tools")
+    if expected is None:
+        return []
+    called = metadata.get("tool_names") or []
+    if not expected:
+        return [f"called {name}" for name in dict.fromkeys(called)]
+    return [f"didn't call {name}" for name in expected if name not in called]
+
+
 # Each check, run on an LLMTestCase
 CHECKS = {
+    "tool_use": lambda case: tool_use(case.metadata or {}),
     "follow_up_offer": lambda case: ends_with_offer(case.actual_output),
     "unlinked_resource": lambda case: unlinked_resources(
         case.actual_output, case.retrieval_context
@@ -120,7 +132,7 @@ CHECKS = {
     "bare_url": lambda case: bare_urls(case.actual_output),
 }
 CHECKS_BY_BOT = {
-    "recommendation": ("follow_up_offer", "unlinked_resource", "bare_url"),
+    "recommendation": ("follow_up_offer", "unlinked_resource", "bare_url", "tool_use"),
     "syllabus": ("follow_up_offer",),
     "syllabus_canvas": ("follow_up_offer",),
     "video_gpt": ("follow_up_offer",),

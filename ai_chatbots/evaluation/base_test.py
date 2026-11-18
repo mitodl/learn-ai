@@ -57,7 +57,7 @@ class TestBaseBotEvaluator:
         expected_dict = {
             "question": "Test question",
             "expected_output": None,
-            "expected_tools": [],
+            "expected_tools": None,
             "metadata": {},
         }
         assert spec_dict == expected_dict
@@ -593,4 +593,5 @@ def test_create_llm_test_case_search_errors(evaluator, name, content, is_error):
     assert case.metadata["search_errors"] == ([name] if is_error else [])
     assert case.metadata["case_id"] == "f#0"
     assert case.metadata["tool_call_count"] == 1
+    assert case.metadata["tool_names"] == [name]
     assert case.metadata["blocked_account_calls"] == ["get_enrollments"]

@@ -140,7 +140,8 @@ class TestCaseSpec:
         return {
             "question": self.question,
             "expected_output": self.expected_output,
-            "expected_tools": self.expected_tools or [],
+            # None means the case doesn't say, [] that it expects no tool call
+            "expected_tools": self.expected_tools,
             "metadata": self.metadata or {},
         }
 
@@ -327,6 +328,7 @@ class BaseBotEvaluator(ABC):
                 "case_id": (test_case.metadata or {}).get("case_id"),
                 "search_errors": search_errors,
                 "tool_call_count": len(tool_messages),
+                "tool_names": [m.name for m in tool_messages],
                 "blocked_account_calls": response.get("blocked_account_calls", []),
             },
             input=test_case.question,
