@@ -1726,10 +1726,15 @@ async def test_anonymous_consumer_room_group_name_is_channels_safe(
     assert consumer.channel_name in real_channel_layer.groups[consumer.room_group_name]
 
 
-async def test_throttle_log_omits_raw_session_key(
-    mocker, caplog, anonymous_consumer_setup, test_session_key
+@pytest.mark.parametrize("by_address", [True, False])
+async def test_throttle_log_names_the_bucket_not_the_session_key(  # noqa: PLR0913
+    mocker, caplog, anonymous_consumer_setup, test_session_key, settings, by_address
 ):
-    """The throttle log line must not contain the raw anonymous session key."""
+    """
+    The log names the throttled address and the chain it came from, or a hashed
+    session for Canvas.
+    """
+    settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
     mocker.patch(
         "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
         side_effect=AsyncThrottled(30),
@@ -1737,13 +1742,19 @@ async def test_throttle_log_omits_raw_session_key(
     mocker.patch("ai_chatbots.consumers.AsyncHttpConsumer.send", new_callable=AsyncMock)
     mocker.patch("ai_chatbots.consumers.SyllabusBotHttpConsumer.send_chunk")
     consumer = anonymous_consumer_setup(test_session_key)
+    consumer.throttle_anonymous_by_address = by_address
+    consumer.scope["client"] = ("10.0.0.2", 54321)
+    consumer.scope["headers"] = [(b"x-forwarded-for", b"203.0.113.5")]
 
     with caplog.at_level("INFO", logger="ai_chatbots.consumers"):
         await consumer.handle('{"message": "hello", "course_id": "MITx+6.00.1x"}')
 
     assert "throttled on" in caplog.text
     assert test_session_key not in caplog.text
-    assert consumer.get_trace_ident() in caplog.text
+    expected = "203.0.113.5" if by_address else consumer.get_trace_ident()
+    assert f"User {expected} throttled" in caplog.text
+    chain = "(X-Forwarded-For '203.0.113.5', peer 10.0.0.2)"
+    assert (chain in caplog.text) is by_address
 
 
 def test_support_process_extra_state_trusts_only_the_session_email(
@@ -2207,3 +2218,43 @@ def test_recommendation_process_extra_state(
     if search_filters is not None:
         data["search_filters"] = search_filters
     assert recommendation_consumer.process_extra_state(data) == expected
+
+
+def _lms_proxied_consumer(consumer_class, django_session):
+    """Build a consumer for an anonymous request the LMS forwards."""
+    consumer = consumer_class()
+    consumer.scope = {
+        "user": AnonymousUser(),
+        "session": django_session,
+        "client": ("10.0.0.2", 54321),
+        "headers": [(b"x-forwarded-for", b"203.0.113.5")],
+    }
+    return consumer
+
+
+@pytest.mark.parametrize(
+    "consumer_class",
+    [consumers.CanvasSyllabusBotHttpConsumer, consumers.CanvasTutorBotHttpConsumer],
+)
+def test_canvas_consumers_are_not_throttled_by_address(consumer_class, django_session):
+    """
+    The LMS calls the Canvas routes server-side for every learner, so the
+    address it sends from is one shared bucket, not a per-learner key.
+    """
+    consumer = _lms_proxied_consumer(consumer_class, django_session)
+
+    assert consumer.get_throttle_ident() == consumer.get_ident()
+
+
+@pytest.mark.parametrize(
+    "consumer_class",
+    [
+        consumers.DemoCanvasSyllabusBotHttpConsumer,
+        consumers.DemoCanvasTutorBotHttpConsumer,
+    ],
+)
+def test_demo_canvas_consumers_are_throttled_by_address(consumer_class, django_session):
+    """The demo routes are called from the browser, without a canvas_token."""
+    consumer = _lms_proxied_consumer(consumer_class, django_session)
+
+    assert consumer.get_throttle_ident() == "203.0.113.5"

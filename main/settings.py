@@ -408,7 +408,13 @@ CACHES = {
     "redis": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": CELERY_BROKER_URL,
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # redis-py waits forever by default, so a Redis that stops answering
+            # would hang every chat request that reads this cache.
+            "SOCKET_CONNECT_TIMEOUT": 1,
+            "SOCKET_TIMEOUT": 1,
+        },
     },
 }
 
@@ -499,6 +505,9 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.NamespaceVersioning",
     "ALLOWED_VERSIONS": ["v0"],
     "ORDERING_PARAM": "sortby",
+    # Proxies that append to X-Forwarded-For: APISIX when deployed, APISIX
+    # and nginx locally (2). Entries left of them are client-controlled.
+    "NUM_PROXIES": get_int("NUM_PROXIES", 1),
 }
 
 

@@ -3,6 +3,7 @@ Provides various throttling policies.
 """
 
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Literal
@@ -12,10 +13,14 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache as default_cache
 from django.core.exceptions import ImproperlyConfigured
 
+from ai_chatbots.utils import get_django_cache
 from main.constants import CONSUMER_THROTTLES_KEY, DURATION_MAPPING
 from main.models import ConsumerThrottleLimit
 
 log = logging.getLogger(__name__)
+
+# Picked by key, so only requests sharing a bucket wait on each other.
+_history_locks = [threading.Lock() for _ in range(64)]
 
 
 class AsyncBaseThrottle(ABC):
@@ -54,7 +59,6 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
     Previous request information used for throttling is stored in the cache.
     """
 
-    cache = default_cache
     timer = time.time
     cache_format = "throttle_%(scope)s_%(ident)s"
     scope = None
@@ -119,23 +123,61 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         if self.key is None:
             return True
 
-        self.history = self.cache.get(self.key, [])
-        self.now = self.timer()
-        # Drop any requests from the history which have now passed the
-        # throttle duration
-        while self.history and self.history[-1] <= self.now - self.duration:
-            self.history.pop()
-        if len(self.history) >= self.num_requests:
-            return await self.throttle_failure()
-        return await self.throttle_success()
+        # Off the event loop, so a slow cache doesn't stall every other request
+        # on the worker.
+        if await sync_to_async(self.record_request, thread_sensitive=False)():
+            return await self.throttle_success()
+        return await self.throttle_failure()
+
+    def record_request(self) -> bool:
+        """
+        Prune the history and, if the request is under the limit, add it.
+        Timestamp, read and write under the key's lock, so a burst of requests
+        can't all read the same history before any of them is recorded, and the
+        history stays newest first for the pruning below.
+
+        If the cache fails, or the key's lock stays held, log it and allow the
+        request rather than fail it or queue behind a stuck cache call.
+        """
+        cache = get_django_cache()
+        lock = _history_locks[hash(self.key) % len(_history_locks)]
+        # A healthy cache call takes milliseconds; 1s matches the Redis socket
+        # timeout, so only a stuck call makes a request give up waiting.
+        if not lock.acquire(timeout=1):
+            log.warning(
+                "Throttle check for %s waited too long for its lock, allowing "
+                "the request",
+                self.scope,
+            )
+            return True
+        try:
+            self.now = self.timer()
+            self.history = cache.get(self.key, [])
+            # Drop any requests from the history which have now passed the
+            # throttle duration
+            while self.history and self.history[-1] <= self.now - self.duration:
+                self.history.pop()
+            if len(self.history) >= self.num_requests:
+                return False
+            self.history.insert(0, self.now)
+            cache.set(self.key, self.history, self.duration)
+        except Exception as err:  # noqa: BLE001
+            # No traceback: the dev console renderer prints every frame's locals,
+            # and for a Redis error that runs the container out of memory.
+            # The scope, not the key: the key holds the client's address.
+            log.error(  # noqa: TRY400
+                "Throttle check failed for %s, allowing the request: %r",
+                self.scope,
+                err,
+            )
+        finally:
+            lock.release()
+        return True
 
     async def throttle_success(self) -> Literal[True]:
         """
-        Insert the current request's timestamp along with the key
-        into the cache.
+        Return True when the request is allowed.
         """
-        self.history.insert(0, self.now)
-        self.cache.set(self.key, self.history, self.duration)
         return True
 
     async def throttle_failure(self) -> Literal[False]:
@@ -216,4 +258,7 @@ class UserScopedRateThrottle(AsyncSimpleRateThrottle):
         Otherwise generate the unique cache key by concatenating the user id
         with the `.throttle_scope` property of the consumer.
         """
-        return self.cache_format % {"scope": self.scope, "ident": consumer.get_ident()}
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": consumer.get_throttle_ident(),
+        }

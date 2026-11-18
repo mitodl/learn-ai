@@ -511,10 +511,26 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             log.exception("Bad request")
             await self.send_error_response(400, err, cookies)
         except AsyncThrottled as err:
+            # The throttle key, unless it's a raw session key, which stays hashed.
+            ident = (
+                self.get_throttle_ident()
+                if self.throttle_anonymous_by_address
+                else self.get_trace_ident()
+            )
             log_msg = (
-                f"User {self.get_trace_ident()} throttled on "
+                f"User {ident} throttled on "
                 f"{self.__class__.__name__} for {err.wait} seconds"
             )
+            if self.throttle_anonymous_by_address and not isinstance(
+                self.scope.get("user"), User
+            ):
+                # Where the address came from, so a NUM_PROXIES that no longer
+                # matches the proxies in front shows up as a proxy's address.
+                request = self.client_request()
+                log_msg += (
+                    f" (X-Forwarded-For {request.headers.get('x-forwarded-for')!r},"
+                    f" peer {request.META['REMOTE_ADDR']})"
+                )
             log.info(log_msg)
             await self.start_response(thread_id=None, status=200, cookies=cookies)
             await self.send_chunk(
@@ -695,6 +711,8 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
 
     ROOM_NAME = "CanvasSyllabusBot"
     throttle_scope = "canvas_syllabus_bot"
+    # The LMS calls this for every Canvas learner (ol_openedx_chat_xblock).
+    throttle_anonymous_by_address = False
     bot_class = CanvasSyllabusBot
     # Canvas requests don't come from a learner's MIT Learn session
     account_tools_allowed = False
@@ -712,6 +730,9 @@ class DemoCanvasSyllabusBotHttpConsumer(CanvasSyllabusBotHttpConsumer):
     Async HTTP consumer for the Canvas syllabus bot. This is a demo version that
     does not require authentication but is limited to demo runs.
     """
+
+    # Called from the browser, so the address is the learner's.
+    throttle_anonymous_by_address = True
 
     def create_chatbot(
         self,
@@ -790,6 +811,8 @@ class CanvasTutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = CanvasTutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
     throttle_scope = "tutor_bot"
+    # The LMS calls this for every Canvas learner (ol_openedx_chat_xblock).
+    throttle_anonymous_by_address = False
 
     def create_chatbot(
         self,
@@ -840,6 +863,9 @@ class DemoCanvasTutorBotHttpConsumer(CanvasTutorBotHttpConsumer):
     Async HTTP consumer for the tutor bot. This is a demo version that
     does not require authentication but is limited to demo runs.
     """
+
+    # Called from the browser, so the address is the learner's.
+    throttle_anonymous_by_address = True
 
     def create_chatbot(
         self,
