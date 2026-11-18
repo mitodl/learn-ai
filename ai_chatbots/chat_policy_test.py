@@ -43,9 +43,10 @@ def _chunk(content: str) -> bytes:
 class FakeProvider:
     """An OpenAI-compatible server that follows a script per request.
 
-    :param scripts: one entry per request in arrival order: ``("status", code)``,
-        or ``("stream", delays)`` to stream one chunk after each delay, then
-        ``"abort"`` to drop the connection instead of finishing.
+    :param scripts: one entry per request in arrival order: ``("status", code)``
+        or ``("status", code, headers)``, or ``("stream", delays, ending)`` to
+        stream one chunk after each delay, then ``"abort"`` to drop the connection
+        instead of finishing.
     """
 
     def __init__(self, scripts):
@@ -62,9 +63,11 @@ class FakeProvider:
         self.requests += 1
         kind, *args = script
         if kind == "status":
+            status, *headers = args
             return web.json_response(
                 {"error": {"message": "failed", "type": "server_error"}},
-                status=args[0],
+                status=status,
+                headers=headers[0] if headers else None,
             )
         delays, ending = args
         response = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
@@ -96,15 +99,16 @@ async def provider():
     await runner.cleanup()
 
 
-def _chat_model(api_base: str) -> ChatLiteLLM:
-    policy = ol_llm.chat_litellm_kwargs(USE_CASE, environ=POLICY_ENVIRON)
-    return ChatLiteLLM(
+def _chat_model(api_base: str) -> ol_llm.PolicyChatModel:
+    settings = ol_llm.chat_litellm_kwargs(USE_CASE, environ=POLICY_ENVIRON)
+    llm = ChatLiteLLM(
         model="openai/gpt-4o",
         api_base=api_base,
         api_key="test-key",
         streaming=True,
-        **policy,
+        **settings,
     )
+    return ol_llm.with_call_policy(llm, USE_CASE, environ=POLICY_ENVIRON)
 
 
 def _caused_by(error: BaseException, error_type: type[BaseException]) -> bool:
@@ -120,7 +124,7 @@ def _caused_by(error: BaseException, error_type: type[BaseException]) -> bool:
     return False
 
 
-async def _collect(llm: ChatLiteLLM, received: list[str]) -> None:
+async def _collect(llm: ol_llm.PolicyChatModel, received: list[str]) -> None:
     # A loop, not extend(), so the chunks before a failure stay recorded.
     async for chunk in llm.astream([HumanMessage("hello")]):
         if chunk.content:
@@ -169,14 +173,29 @@ async def test_a_dropped_stream_fails_without_a_retry(provider):
 
 
 async def test_a_failure_before_the_stream_starts_is_retried(provider):
-    """A 5xx before any chunk is retried up to the policy's retries."""
+    """A 5xx before any chunk is retried by ol-llm, not by the OpenAI SDK."""
     provider.scripts = [("status", 500), ("status", 503), ("stream", [0], "finish")]
     received: list[str] = []
 
     await _collect(_chat_model(provider.api_base), received)
 
     assert received == ["part0 "]
-    assert provider.retry_counts == ["0", "1", "2"]
+    # Each request is a first SDK attempt: the SDK's own retries are off.
+    assert provider.retry_counts == ["0", "0", "0"]
+
+
+async def test_a_stall_before_the_first_chunk_is_retried(provider):
+    """A stream that sends headers and then nothing is retried, having shown nothing."""
+    provider.scripts = [
+        ("stream", [TIMEOUT_SECONDS * 3], "finish"),
+        ("stream", [0], "finish"),
+    ]
+    received: list[str] = []
+
+    await _collect(_chat_model(provider.api_base), received)
+
+    assert received == ["part0 "]
+    assert provider.requests == 2
 
 
 async def test_retries_stop_at_the_policy(provider):
@@ -188,3 +207,34 @@ async def test_retries_stop_at_the_policy(provider):
         await _collect(_chat_model(provider.api_base), received)
 
     assert provider.requests == 3
+
+
+async def test_a_retry_after_past_the_budget_ends_the_call(provider):
+    """A 429 asking for longer than the request budget fails at once."""
+    provider.scripts = [
+        ("status", 429, {"Retry-After": "30"}),
+        ("stream", [0], "finish"),
+    ]
+    started = time.monotonic()
+
+    with pytest.raises(litellm.RateLimitError):
+        await _collect(_chat_model(provider.api_base), [])
+
+    assert time.monotonic() - started < 5
+    assert provider.requests == 1
+
+
+async def test_a_retry_after_within_the_budget_is_waited_out(provider):
+    """A 429 asking for less than the budget is retried after that wait."""
+    provider.scripts = [
+        ("status", 429, {"Retry-After": "1"}),
+        ("stream", [0], "finish"),
+    ]
+    received: list[str] = []
+    started = time.monotonic()
+
+    await _collect(_chat_model(provider.api_base), received)
+
+    assert time.monotonic() - started >= 1
+    assert received == ["part0 "]
+    assert provider.requests == 2

@@ -244,11 +244,15 @@ async def test_recommendation_bot_initialization_defaults(
         instructions if instructions else chatbot.instructions
     )
     worker_llm = chatbot.llm
-    # tools bound -> wrapped runnable (RunnableBinding or subclass); else a bare model.
-    # Use isinstance rather than exact class identity, which is brittle across
-    # langchain-core/langchain-litellm versions.
-    assert isinstance(worker_llm, RunnableBinding if has_tools else ChatLiteLLM)
-    assert worker_llm.model == (
+    # tools bound -> wrapped runnable (RunnableBinding or subclass); else the policy
+    # wrapper. Use isinstance rather than exact class identity, which is brittle
+    # across langchain-core/langchain-litellm versions.
+    assert isinstance(
+        worker_llm, RunnableBinding if has_tools else ol_llm.PolicyChatModel
+    )
+    policy_llm = worker_llm.bound if has_tools else worker_llm
+    assert isinstance(policy_llm.inner, ChatLiteLLM)
+    assert policy_llm.inner.model == (
         model if model else settings.AI_DEFAULT_RECOMMENDATION_MODEL
     )
 
@@ -675,7 +679,7 @@ async def test_bot_with_an_unresolvable_model_is_built_uncataloged(mock_checkpoi
     )
 
     assert ol_llm.check_chat_model(chatbot.use_case) == ("model_status:uncataloged",)
-    assert chatbot.llm.model == "proxy-only-alias"
+    assert chatbot.llm.inner.model == "proxy-only-alias"
 
 
 @pytest.mark.asyncio
@@ -989,7 +993,7 @@ async def test_syllabus_bot_get_completion_state(
             chatbot.config,
             stream_mode="messages",
         )
-    assert chatbot.llm.model == default_model
+    assert chatbot.llm.inner.model == default_model
     # config metadata is how the resource reaches every tracer, including
     # LangSmith, whose tracer is installed globally rather than via callbacks
     assert chatbot.config["metadata"] == {
@@ -1207,6 +1211,8 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
         "ai_chatbots.proxies.LiteLLMProxy.create_proxy_user"
     )
     mock_llm = mocker.patch("ai_chatbots.chatbots.ChatLiteLLM")
+    # ChatLiteLLM is a mock here, so the policy wrapper (which validates it) is skipped.
+    mocker.patch("ol_llm.with_call_policy", side_effect=lambda llm, _use_case: llm)
     settings.AI_PROXY_CLASS = "LiteLLMProxy" if use_proxy else None
     settings.AI_PROXY_URL = "http://proxy.url"
     settings.AI_PROXY_AUTH_TOKEN = "test"  # noqa: S105
@@ -1221,7 +1227,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
             streaming=True,
             stream_options={"include_usage": True},
-            model_kwargs={"max_retries": 2},
+            model_kwargs={"max_retries": 0},
             request_timeout=60,
             max_retries=1,
             **chatbot.proxy.get_api_kwargs(),
@@ -1235,7 +1241,7 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             model=model_name,
             streaming=True,
             stream_options={"include_usage": True},
-            model_kwargs={"max_retries": 2},
+            model_kwargs={"max_retries": 0},
             request_timeout=60,
             max_retries=1,
         )
@@ -1264,7 +1270,10 @@ async def test_get_llm_with_reasoning_effort(mocker, mock_checkpointer):
         "user", mock_checkpointer, model="openai/test-reasoning-model"
     )
 
-    assert chatbot.llm.model_kwargs == {"max_retries": 2, "reasoning_effort": "high"}
+    assert chatbot.llm.inner.model_kwargs == {
+        "max_retries": 0,
+        "reasoning_effort": "high",
+    }
 
 
 @pytest.mark.asyncio
@@ -1291,7 +1300,7 @@ async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
         "user", mock_checkpointer, model="openai/test-no-reasoning-model"
     )
 
-    assert chatbot.llm.model_kwargs == {"max_retries": 2}
+    assert chatbot.llm.inner.model_kwargs == {"max_retries": 0}
 
 
 @pytest.mark.asyncio
@@ -1307,8 +1316,8 @@ async def test_get_llm_model_not_found(mocker, mock_checkpointer):
         "user", mock_checkpointer, model="openai/nonexistent-model"
     )
 
-    assert chatbot.llm.temperature is None
-    assert chatbot.llm.model_kwargs == {"max_retries": 2}
+    assert chatbot.llm.inner.temperature is None
+    assert chatbot.llm.inner.model_kwargs == {"max_retries": 0}
 
 
 @pytest.mark.asyncio
@@ -1338,7 +1347,7 @@ async def test_get_llm_temperature_supported(mocker, mock_checkpointer, temp_val
         temperature=temp_value,
     )
 
-    assert chatbot.llm.temperature == temp_value
+    assert chatbot.llm.inner.temperature == temp_value
 
 
 @pytest.mark.asyncio
@@ -1367,30 +1376,23 @@ async def test_get_llm_temperature_not_supported(mocker, mock_checkpointer):
     )
 
     # Temperature should remain None since model_spec.temperature is None
-    assert chatbot.llm.temperature is None
+    assert chatbot.llm.inner.temperature is None
 
 
 @pytest.mark.asyncio
 async def test_get_llm_binds_tools(mocker, mock_checkpointer):
-    """Test that get_llm binds tools when chatbot has tools."""
-    mock_llm_instance = mocker.Mock()
-    mock_bound_llm = mocker.Mock()
-    mock_llm_instance.bind_tools.return_value = mock_bound_llm
-    mocker.patch("ai_chatbots.chatbots.ChatLiteLLM", return_value=mock_llm_instance)
-
+    """Test that get_llm binds tools on the policy wrapper when chatbot has tools."""
     # ResourceRecommendationBot has tools by default
     chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
 
-    # Verify bind_tools was called
-    mock_llm_instance.bind_tools.assert_called_once()
-    assert chatbot.llm == mock_bound_llm
+    assert isinstance(chatbot.llm, RunnableBinding)
+    assert isinstance(chatbot.llm.bound, ol_llm.PolicyChatModel)
+    assert chatbot.llm.kwargs["tools"]
 
 
 @pytest.mark.asyncio
 async def test_get_llm_no_tools(mocker, mock_checkpointer):
     """Test that get_llm does NOT bind tools when chatbot has no tools."""
-    mock_llm_instance = mocker.Mock()
-    mocker.patch("ai_chatbots.chatbots.ChatLiteLLM", return_value=mock_llm_instance)
     mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
         return_value=[],
@@ -1398,9 +1400,8 @@ async def test_get_llm_no_tools(mocker, mock_checkpointer):
 
     chatbot = await sync_to_async(ResourceRecommendationBot)("user", mock_checkpointer)
 
-    # Verify bind_tools was NOT called
-    mock_llm_instance.bind_tools.assert_not_called()
-    assert chatbot.llm == mock_llm_instance
+    assert isinstance(chatbot.llm, ol_llm.PolicyChatModel)
+    assert isinstance(chatbot.llm.inner, ChatLiteLLM)
 
 
 @pytest.mark.asyncio
@@ -1427,10 +1428,10 @@ async def test_get_llm_azure(settings, mocker, mock_checkpointer):
         "user", mock_checkpointer, model="azure/gpt-5.2"
     )
 
-    assert chatbot.llm.model == "azure/gpt-5.2"
-    assert chatbot.llm.api_base == settings.AZURE_OPENAI_ENDPOINT
-    assert chatbot.llm.model_kwargs == {
-        "max_retries": 2,
+    assert chatbot.llm.inner.model == "azure/gpt-5.2"
+    assert chatbot.llm.inner.api_base == settings.AZURE_OPENAI_ENDPOINT
+    assert chatbot.llm.inner.model_kwargs == {
+        "max_retries": 0,
         "reasoning_effort": "none",
         "api_version": "v1",
         "azure_ad_token_provider": token_provider,
@@ -1511,6 +1512,8 @@ async def test_get_llm_azure_not_applied(
     mocker.patch("ai_chatbots.proxies.LiteLLMProxy.create_proxy_user")
     mock_token_provider = mocker.patch("ai_chatbots.utils.get_azure_ad_token_provider")
     mock_llm = mocker.patch("ai_chatbots.chatbots.ChatLiteLLM")
+    # ChatLiteLLM is a mock here, so the policy wrapper (which validates it) is skipped.
+    mocker.patch("ol_llm.with_call_policy", side_effect=lambda llm, _use_case: llm)
     mocker.patch(
         "ai_chatbots.chatbots.ResourceRecommendationBot.create_tools",
         return_value=[],
@@ -1843,7 +1846,7 @@ async def test_video_gpt_bot_get_completion_state(
             chatbot.config,
             stream_mode="messages",
         )
-    assert chatbot.llm.model == default_model
+    assert chatbot.llm.inner.model == default_model
 
 
 @pytest.mark.asyncio
