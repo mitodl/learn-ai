@@ -46,7 +46,8 @@ class FakeProvider:
     :param scripts: one entry per request in arrival order: ``("status", code)``
         or ``("status", code, headers)``, or ``("stream", delays, ending)`` to
         stream one chunk after each delay, then ``"abort"`` to drop the connection
-        instead of finishing.
+        instead of finishing, or ``("error_event", error)`` to send an error object
+        inside a 200 stream, as a proxy reports an upstream failure.
     """
 
     def __init__(self, scripts):
@@ -69,9 +70,13 @@ class FakeProvider:
                 status=status,
                 headers=headers[0] if headers else None,
             )
-        delays, ending = args
         response = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
         await response.prepare(request)
+        if kind == "error_event":
+            await response.write(f"data: {json.dumps({'error': args[0]})}\n\n".encode())
+            await response.write_eof()
+            return response
+        delays, ending = args
         for index, delay in enumerate(delays):
             await asyncio.sleep(delay)
             await response.write(_chunk(f"part{index} "))
@@ -238,3 +243,23 @@ async def test_a_retry_after_within_the_budget_is_waited_out(provider):
     assert time.monotonic() - started >= 1
     assert received == ["part0 "]
     assert provider.requests == 2
+
+
+async def test_an_error_object_in_the_stream_is_not_retried(provider):
+    """An error the provider sends inside a 200 stream is a rejection, not an outage."""
+    provider.scripts = [
+        (
+            "error_event",
+            {
+                "message": "too long",
+                "type": "invalid_request_error",
+                "code": "context_length_exceeded",
+            },
+        ),
+        ("stream", [0], "finish"),
+    ]
+
+    with pytest.raises(MidStreamFallbackError):
+        await _collect(_chat_model(provider.api_base), [])
+
+    assert provider.requests == 1
