@@ -1221,7 +1221,9 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             model=f"{LiteLLMProxy.PROXY_MODEL_PREFIX}{model_name}",
             streaming=True,
             stream_options={"include_usage": True},
-            model_kwargs={},
+            model_kwargs={"max_retries": 2},
+            request_timeout=60,
+            max_retries=1,
             **chatbot.proxy.get_api_kwargs(),
             **chatbot.proxy.get_additional_kwargs(chatbot),
         )
@@ -1233,7 +1235,9 @@ async def test_proxy_settings(settings, mocker, mock_checkpointer, use_proxy):
             model=model_name,
             streaming=True,
             stream_options={"include_usage": True},
-            model_kwargs={},
+            model_kwargs={"max_retries": 2},
+            request_timeout=60,
+            max_retries=1,
         )
 
 
@@ -1260,12 +1264,12 @@ async def test_get_llm_with_reasoning_effort(mocker, mock_checkpointer):
         "user", mock_checkpointer, model="openai/test-reasoning-model"
     )
 
-    assert chatbot.llm.model_kwargs == {"reasoning_effort": "high"}
+    assert chatbot.llm.model_kwargs == {"max_retries": 2, "reasoning_effort": "high"}
 
 
 @pytest.mark.asyncio
 async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
-    """Test that get_llm passes empty model_kwargs when model_spec has no reasoning_effort."""
+    """Test that get_llm adds no reasoning_effort when model_spec has none."""
     from ai_chatbots.models import LLMModel
 
     # Create a model without reasoning_effort
@@ -1287,7 +1291,7 @@ async def test_get_llm_without_reasoning_effort(mocker, mock_checkpointer):
         "user", mock_checkpointer, model="openai/test-no-reasoning-model"
     )
 
-    assert chatbot.llm.model_kwargs == {}
+    assert chatbot.llm.model_kwargs == {"max_retries": 2}
 
 
 @pytest.mark.asyncio
@@ -1304,7 +1308,7 @@ async def test_get_llm_model_not_found(mocker, mock_checkpointer):
     )
 
     assert chatbot.llm.temperature is None
-    assert chatbot.llm.model_kwargs == {}
+    assert chatbot.llm.model_kwargs == {"max_retries": 2}
 
 
 @pytest.mark.asyncio
@@ -1426,6 +1430,7 @@ async def test_get_llm_azure(settings, mocker, mock_checkpointer):
     assert chatbot.llm.model == "azure/gpt-5.2"
     assert chatbot.llm.api_base == settings.AZURE_OPENAI_ENDPOINT
     assert chatbot.llm.model_kwargs == {
+        "max_retries": 2,
         "reasoning_effort": "none",
         "api_version": "v1",
         "azure_ad_token_provider": token_provider,

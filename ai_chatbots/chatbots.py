@@ -193,14 +193,14 @@ class BaseChatbot(ABC):
         Return the LLM instance for the chatbot.
         Set it up to use a proxy, with required proxy kwargs, if applicable.
         Bind the LLM to any tools if they are present.
+        The use case's ol-llm policy sets the timeout and retries.
         """
         model_spec = LLMModel.objects.filter(litellm_id=self.model).first()
+        policy = ol_llm.chat_litellm_kwargs(self.use_case)
+        model_kwargs = policy.pop("model_kwargs")
         # Set reasoning effort if specified for the model
-        model_kwargs = (
-            {"reasoning_effort": model_spec.reasoning_effort}
-            if model_spec and model_spec.reasoning_effort
-            else {}
-        )
+        if model_spec and model_spec.reasoning_effort:
+            model_kwargs["reasoning_effort"] = model_spec.reasoning_effort
         # A configured proxy handles azure/ models itself
         azure_kwargs = (
             get_azure_openai_kwargs()
@@ -216,6 +216,7 @@ class BaseChatbot(ABC):
             # behavior survives a library default change.)
             stream_options={"include_usage": True},
             model_kwargs=model_kwargs,
+            **policy,
             **azure_kwargs,
             **(self.proxy.get_api_kwargs() if self.proxy else {}),
             **(self.proxy.get_additional_kwargs(self) if self.proxy else {}),
