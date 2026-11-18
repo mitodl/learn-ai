@@ -67,8 +67,8 @@ dependencies = [
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
-    "ol-llm[langchain]>=0.0.8,<0.1",
-    "opik==2.2.94",
+    "ol-llm[langchain]>=0.0.17,<0.1",
+    "opik==2.2.144",
     "azure-identity>=1.25,<2",
 ]
 
@@ -123,6 +123,9 @@ mitol-django-common = "0d"
 mitol-django-observability = "0d"
 mitol-drf-lint = "0d"
 ol-llm = "0d"
+# ol-llm pins opik exactly; this admits the 2.2.144 that ol-llm 0.0.17 pins and nothing
+# newer. Move the date with each ol-llm release that bumps opik.
+opik = "2026-11-17T00:00:00Z"
 
 [tool.uv.build-backend]
 module-root = ""
