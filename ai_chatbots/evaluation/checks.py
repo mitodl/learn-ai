@@ -14,7 +14,7 @@ OFFER = re.compile(
     r"\b(?:I(?:'ll| will| can| could)|let me|tell me|just ask|feel free|ask me)\b"
     rf"|\bI(?:'ll| will| can| could)\b[^.!?\n]*?{IF_YOU_WANT}"
     r"|\bwould you like\b"
-    r"|\bdo you want\b|\bwant me to\b|\blet me know if\b|\bhappy to\b|\bshall i\b"
+    r"|\bdo you want\b|\bwant me to\b|\blet me know\b|\bhappy to\b|\bshall i\b"
     r"|\bI can (?:also )?(?:help|look|narrow|find|walk|show|suggest|recommend"
     r"|provide|search|check|give|share|explain|turn|tailor|compare|pull|list|break)"
 )

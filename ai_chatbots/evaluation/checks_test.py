@@ -29,6 +29,12 @@ def _search(*results):
         ("Here they are.\n\nWould you like more options?", True),
         # A trailing rule or comment is not the last paragraph
         ("Here they are.\n\nLet me know if that helps.\n\n---", True),
+        # gpt-4o-mini's no-results ending, with no "if" after "let me know"
+        (
+            "Here they are.\n\nIf you're looking for something more specific or "
+            "different, please let me know!",
+            True,
+        ),
         ("Here they are.\n\nBoth are free.", False),
         # An offer earlier in the answer doesn't count
         ("If you want a certificate, pick the first.\n\nBoth start in May.", False),
