@@ -19,8 +19,8 @@ from main.models import ConsumerThrottleLimit
 
 log = logging.getLogger(__name__)
 
-# One lock for every key: it's held for a single cache round trip.
-_history_lock = threading.Lock()
+# Picked by key, so only requests sharing a bucket wait on each other.
+_history_locks = [threading.Lock() for _ in range(64)]
 
 
 class AsyncBaseThrottle(ABC):
@@ -132,12 +132,12 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
     def record_request(self) -> bool:
         """
         Prune the history and, if the request is under the limit, add it.
-        Timestamp, read and write under one lock, so a burst of requests can't
-        all read the same history before any of them is recorded, and the
+        Timestamp, read and write under the key's lock, so a burst of requests
+        can't all read the same history before any of them is recorded, and the
         history stays newest first for the pruning below.
         """
         cache = get_django_cache()
-        with _history_lock:
+        with _history_locks[hash(self.key) % len(_history_locks)]:
             self.now = self.timer()
             self.history = cache.get(self.key, [])
             # Drop any requests from the history which have now passed the

@@ -408,7 +408,13 @@ CACHES = {
     "redis": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": CELERY_BROKER_URL,
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # redis-py waits forever by default, so a Redis that stops answering
+            # would hang every chat request that reads this cache.
+            "SOCKET_CONNECT_TIMEOUT": 1,
+            "SOCKET_TIMEOUT": 1,
+        },
     },
 }
 
