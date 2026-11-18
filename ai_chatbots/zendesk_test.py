@@ -44,6 +44,8 @@ pytestmark = pytest.mark.django_db
 URL_FIELD_ID = 51720932683537
 NAME_FIELD_ID = 51721582949009
 USERNAME_FIELD_ID = 51741744445201
+BRAND_ID = 29258700000001
+TICKET_FORM_ID = 29258766832411
 
 # Real user agent strings, because the classifier is only as good as the shapes
 # browsers actually send. The two desktop-mode constants are the point of the
@@ -128,6 +130,8 @@ def zendesk_ticket_settings(settings, token_cache):
     settings.AI_ZENDESK_URL_FIELD_ID = URL_FIELD_ID
     settings.AI_ZENDESK_NAME_FIELD_ID = NAME_FIELD_ID
     settings.AI_ZENDESK_USERNAME_FIELD_ID = USERNAME_FIELD_ID
+    settings.AI_ZENDESK_BRAND_ID = BRAND_ID
+    settings.AI_ZENDESK_TICKET_FORM_ID = TICKET_FORM_ID
     token_cache.set(ZENDESK_TOKEN_CACHE_KEY, CACHED_TOKEN, 300)
     return settings
 
@@ -471,6 +475,42 @@ async def test_file_support_ticket_omits_empty_custom_fields(
 
     _, kwargs = mock_patch.return_value.post.call_args
     assert "custom_fields" not in kwargs["json"]["ticket"]
+
+
+async def test_file_support_ticket_sets_the_brand_and_form(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    """
+    Without a brand the ticket takes the account default, not the brand CS
+    routes and answers intake tickets on.
+    """
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    assert kwargs["json"]["ticket"]["brand_id"] == BRAND_ID
+    assert kwargs["json"]["ticket"]["ticket_form_id"] == TICKET_FORM_ID
+
+
+async def test_file_support_ticket_omits_an_unconfigured_brand_and_form(
+    zendesk_ticket_settings, mock_httpx_async_client
+):
+    zendesk_ticket_settings.AI_ZENDESK_BRAND_ID = 0
+    zendesk_ticket_settings.AI_ZENDESK_TICKET_FORM_ID = 0
+    mock_patch = mock_httpx_async_client(
+        {"ticket": {"id": 4821}},
+        patch_path="ai_chatbots.zendesk.get_async_http_client",
+    )
+
+    await file_support_ticket(**_ticket_args())
+
+    _, kwargs = mock_patch.return_value.post.call_args
+    assert "brand_id" not in kwargs["json"]["ticket"]
+    assert "ticket_form_id" not in kwargs["json"]["ticket"]
 
 
 async def test_file_support_ticket_omits_unconfigured_custom_fields(

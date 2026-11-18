@@ -196,6 +196,18 @@ def _custom_fields(page_url: str, name: str, username: str) -> list[dict]:
     ]
 
 
+def _brand_and_form() -> dict:
+    """Return the configured brand and form ids, leaving off any set to 0."""
+    return {
+        key: value
+        for key, value in (
+            ("brand_id", settings.AI_ZENDESK_BRAND_ID),
+            ("ticket_form_id", settings.AI_ZENDESK_TICKET_FORM_ID),
+        )
+        if value
+    }
+
+
 def _clean_user_agent(user_agent: str) -> str:
     """
     Fold the header onto one bounded line, so it stays a single Browser: entry
@@ -316,6 +328,7 @@ async def file_support_ticket(  # noqa: PLR0913
         }
         if custom_fields:
             ticket_data["custom_fields"] = custom_fields
+        ticket_data.update(_brand_and_form())
         if thread_id:
             # Zendesk de-duplicates on the header; external_id is what lets a
             # human find the pair on an instance that does not honour it.

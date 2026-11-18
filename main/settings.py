@@ -767,6 +767,11 @@ AI_ZENDESK_STUB_MODE = get_bool(name="AI_ZENDESK_STUB_MODE", default=False)
 AI_ZENDESK_URL_FIELD_ID = get_int(name="AI_ZENDESK_URL_FIELD_ID", default=0)
 AI_ZENDESK_NAME_FIELD_ID = get_int(name="AI_ZENDESK_NAME_FIELD_ID", default=0)
 AI_ZENDESK_USERNAME_FIELD_ID = get_int(name="AI_ZENDESK_USERNAME_FIELD_ID", default=0)
+# Brand and ticket form the ticket is filed under. Unset, Zendesk uses the
+# account default, not the brand CS routes intake on. Same per-instance rule
+# as the field ids: 0 leaves it off.
+AI_ZENDESK_BRAND_ID = get_int(name="AI_ZENDESK_BRAND_ID", default=0)
+AI_ZENDESK_TICKET_FORM_ID = get_int(name="AI_ZENDESK_TICKET_FORM_ID", default=0)
 # How long the platform of a course is cached for, in seconds.  A course does
 # not change platforms, so this only needs to expire often enough to pick up
 # resources that were not yet published at the time of the first lookup.
