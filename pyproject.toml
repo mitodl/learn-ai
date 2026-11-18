@@ -63,8 +63,7 @@ dependencies = [
     "starlette==1.10.0",
     "ulid-py>=1.0.0,<2",
     "granian>=2.5.4,<3",
-    # shortcut: mitodl/open-learning-ai-tutor#108 head; pin its release (0.2.18) before merging
-    "open-learning-ai-tutor @ git+https://github.com/mitodl/open-learning-ai-tutor@5fe0aa16e2f869e921384986f507b115de758f0a",
+    "open-learning-ai-tutor==0.2.18",
     "httpx>=0.28.1,<0.29",
     "opentelemetry-instrumentation-httpx>=0.60b0,<1",
     "django-health-check>=3.0.0,<4",
@@ -124,6 +123,7 @@ mitol-django-common = "0d"
 mitol-django-observability = "0d"
 mitol-drf-lint = "0d"
 ol-llm = "0d"
+open-learning-ai-tutor = "0d"
 
 [tool.uv.build-backend]
 module-root = ""

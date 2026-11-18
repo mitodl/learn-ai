@@ -16,6 +16,7 @@ exclude-newer-span = "P7D"
 mitol-drf-lint = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-observability = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 ol-llm = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
+open-learning-ai-tutor = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 mitol-django-common = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 
 [manifest]
@@ -2958,7 +2959,7 @@ requires-dist = [
     { name = "mitol-django-observability", specifier = ">=2026.8.19" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
     { name = "ol-llm", extras = ["langchain"], specifier = ">=0.0.8,<0.1" },
-    { name = "open-learning-ai-tutor", git = "https://github.com/mitodl/open-learning-ai-tutor?rev=5fe0aa16e2f869e921384986f507b115de758f0a" },
+    { name = "open-learning-ai-tutor", specifier = "==0.2.18" },
     { name = "opentelemetry-instrumentation-asgi", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-django", specifier = ">=0.52b0" },
@@ -3625,7 +3626,7 @@ wheels = [
 [[package]]
 name = "open-learning-ai-tutor"
 version = "0.2.18"
-source = { git = "https://github.com/mitodl/open-learning-ai-tutor?rev=5fe0aa16e2f869e921384986f507b115de758f0a#5fe0aa16e2f869e921384986f507b115de758f0a" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
     { name = "e2b-code-interpreter" },
@@ -3634,6 +3635,10 @@ dependencies = [
     { name = "langchain-experimental" },
     { name = "langgraph" },
     { name = "langsmith" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/83/1351ebd1fd1b6e46b4b4ce4564915ce200fc27214d31690b541e7b6163ac/open_learning_ai_tutor-0.2.18.tar.gz", hash = "sha256:47a9cca658a45edf877a681e8fe3b028ac774bd813abe67399e116e83fd35c4f", size = 103568, upload-time = "2026-11-18T16:00:29.242Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/40/9baf5a9f8495e9196fcfd075fc25ea3ae93fd74814ab34df57607317706d/open_learning_ai_tutor-0.2.18-py3-none-any.whl", hash = "sha256:3b023dc10b00f68451d2413eb7eae05154faf1e8a1b1a9a8ca410eb55ad11ba6", size = 21875, upload-time = "2026-11-18T16:00:27.643Z" },
 ]
 
 [[package]]
