@@ -135,19 +135,29 @@ class AsyncSimpleRateThrottle(AsyncBaseThrottle):
         Timestamp, read and write under the key's lock, so a burst of requests
         can't all read the same history before any of them is recorded, and the
         history stays newest first for the pruning below.
+
+        If the cache fails, log it and allow the request rather than fail it.
         """
         cache = get_django_cache()
-        with _history_locks[hash(self.key) % len(_history_locks)]:
-            self.now = self.timer()
-            self.history = cache.get(self.key, [])
-            # Drop any requests from the history which have now passed the
-            # throttle duration
-            while self.history and self.history[-1] <= self.now - self.duration:
-                self.history.pop()
-            if len(self.history) >= self.num_requests:
-                return False
-            self.history.insert(0, self.now)
-            cache.set(self.key, self.history, self.duration)
+        try:
+            with _history_locks[hash(self.key) % len(_history_locks)]:
+                self.now = self.timer()
+                self.history = cache.get(self.key, [])
+                # Drop any requests from the history which have now passed the
+                # throttle duration
+                while self.history and self.history[-1] <= self.now - self.duration:
+                    self.history.pop()
+                if len(self.history) >= self.num_requests:
+                    return False
+                self.history.insert(0, self.now)
+                cache.set(self.key, self.history, self.duration)
+                return True
+        except Exception as err:  # noqa: BLE001
+            # No traceback: the dev console renderer prints every frame's locals,
+            # and for a Redis error that runs the container out of memory.
+            log.error(  # noqa: TRY400
+                "Throttle check failed for %s, allowing the request: %r", self.key, err
+            )
             return True
 
     async def throttle_success(self) -> Literal[True]:

@@ -279,3 +279,23 @@ async def test_throttle_history_is_read_off_the_event_loop(anon_limit_two, mocke
 
     assert threads
     assert threading.get_ident() not in threads
+
+
+async def test_throttle_allows_requests_when_the_cache_fails(
+    anon_limit_two, mocker, caplog
+):
+    """A cache outage is logged and lets requests through rather than failing them."""
+    real_get = LocMemCache.get
+
+    def get(cache, key, *args, **kwargs):
+        if key.startswith(f"throttle_{anon_limit_two.throttle_key}_"):
+            raise ConnectionError
+        return real_get(cache, key, *args, **kwargs)
+
+    mocker.patch.object(LocMemCache, "get", autospec=True, side_effect=get)
+    for _ in range(3):
+        await _anon_consumer(
+            anon_limit_two.throttle_key, forwarded_for="203.0.113.5"
+        ).check_throttles()
+
+    assert "Throttle check failed" in caplog.text
