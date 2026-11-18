@@ -58,15 +58,18 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
             return user.global_id
         if not self.throttle_anonymous_by_address:
             return self.get_ident()
-        request = SimpleNamespace(
+        # DRF's lookup, as in mit-learn (mitodl/hq#12775).
+        return BaseThrottle().get_ident(self.client_request())
+
+    def client_request(self):
+        """Return the scope's headers and peer address shaped like a DRF request."""
+        return SimpleNamespace(
             headers={
                 key.decode("latin-1").lower(): value.decode("latin-1")
                 for key, value in self.scope.get("headers") or []
             },
             META={"REMOTE_ADDR": (self.scope.get("client") or [None])[0]},
         )
-        # DRF's lookup, as in mit-learn (mitodl/hq#12775).
-        return BaseThrottle().get_ident(request)
 
     def get_trace_ident(self):
         """

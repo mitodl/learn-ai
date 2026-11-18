@@ -507,6 +507,16 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                 f"User {ident} throttled on "
                 f"{self.__class__.__name__} for {err.wait} seconds"
             )
+            if self.throttle_anonymous_by_address and not isinstance(
+                self.scope.get("user"), User
+            ):
+                # Where the address came from, so a NUM_PROXIES that no longer
+                # matches the proxies in front shows up as a proxy's address.
+                request = self.client_request()
+                log_msg += (
+                    f" (X-Forwarded-For {request.headers.get('x-forwarded-for')!r},"
+                    f" peer {request.META['REMOTE_ADDR']})"
+                )
             log.info(log_msg)
             await self.start_response(thread_id=None, status=200, cookies=cookies)
             await self.send_chunk(

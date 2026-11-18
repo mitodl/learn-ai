@@ -1728,7 +1728,10 @@ async def test_anonymous_consumer_room_group_name_is_channels_safe(
 async def test_throttle_log_names_the_bucket_not_the_session_key(  # noqa: PLR0913
     mocker, caplog, anonymous_consumer_setup, test_session_key, settings, by_address
 ):
-    """The log names the throttled address, or a hashed session for Canvas."""
+    """
+    The log names the throttled address and the chain it came from, or a hashed
+    session for Canvas.
+    """
     settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
     mocker.patch(
         "ai_chatbots.consumers.SyllabusBotHttpConsumer.check_throttles",
@@ -1748,6 +1751,8 @@ async def test_throttle_log_names_the_bucket_not_the_session_key(  # noqa: PLR09
     assert test_session_key not in caplog.text
     expected = "203.0.113.5" if by_address else consumer.get_trace_ident()
     assert f"User {expected} throttled" in caplog.text
+    chain = "(X-Forwarded-For '203.0.113.5', peer 10.0.0.2)"
+    assert (chain in caplog.text) is by_address
 
 
 def test_support_process_extra_state_trusts_only_the_session_email(
