@@ -507,8 +507,11 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
 
 
 @pytest.fixture
-def opik_traces():
+def opik_traces(monkeypatch):
     """Trace through ol-llm into local storage instead of sending to Opik."""
+    # ol-llm leaves Opik out of tracing unless an instance is configured
+    # (ol-llm 0.0.16); nothing listens here, and the traces are recorded locally.
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "http://127.0.0.1:9/api")
     ol_llm.tracing.reset()
     ol_llm.configure_tracing(ol_llm.TracingConfig())
     # finally: record_traces_locally can raise in setup, and tracing left on
