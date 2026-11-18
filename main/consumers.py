@@ -1,4 +1,6 @@
+import ipaddress
 import logging
+import threading
 from types import SimpleNamespace
 
 from channels.consumer import AsyncConsumer
@@ -12,6 +14,9 @@ from main.exceptions import AsyncThrottled
 from main.utils import anonymize_ident
 
 log = logging.getLogger(__name__)
+
+# Set after the first non-public throttle address is logged, so it logs once.
+_non_public_address_reported = threading.Event()
 
 
 class BaseThrottledAsyncConsumer(AsyncConsumer):
@@ -59,7 +64,20 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
         if not self.throttle_anonymous_by_address:
             return self.get_ident()
         # DRF's lookup, as in mit-learn (mitodl/hq#12775).
-        return BaseThrottle().get_ident(self.client_request())
+        request = self.client_request()
+        address = BaseThrottle().get_ident(request)
+        # Visitors connect from public addresses, so a private one means
+        # NUM_PROXIES counted one of our proxies as the client.
+        if not _non_public_address_reported.is_set() and not _is_public(address):
+            _non_public_address_reported.set()
+            log.error(
+                "Anonymous throttle keyed on non-public address %s "
+                "(X-Forwarded-For %r, peer %s); check NUM_PROXIES",
+                address,
+                request.headers.get("x-forwarded-for"),
+                request.META["REMOTE_ADDR"],
+            )
+        return address
 
     def client_request(self):
         """Return the scope's headers and peer address shaped like a DRF request."""
@@ -117,3 +135,11 @@ class BaseThrottledAsyncConsumer(AsyncConsumer):
 
             duration = max(durations, default=None)
             await self.throttled(duration)
+
+
+def _is_public(address):
+    """Return whether the address is a public IP."""
+    try:
+        return ipaddress.ip_address(address).is_global
+    except ValueError:
+        return False

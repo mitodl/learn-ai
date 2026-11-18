@@ -1,5 +1,7 @@
 """Tests for main consumer classes"""
 
+import threading
+
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import exceptions
@@ -123,6 +125,26 @@ def test_get_throttle_ident_falls_back_to_peer_address(settings):
     consumer = _anon_consumer(client_ip="203.0.113.5")
 
     assert consumer.get_throttle_ident() == "203.0.113.5"
+
+
+@pytest.mark.parametrize(("address", "reported"), [("9.9.9.9", 0), ("10.0.0.7", 1)])
+def test_get_throttle_ident_reports_a_non_public_address_once(
+    mocker, caplog, settings, address, reported
+):
+    """
+    A private address means a proxy was taken for the client. It's logged as an
+    error, once per process.
+    """
+    settings.REST_FRAMEWORK = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
+    mocker.patch("main.consumers._non_public_address_reported", threading.Event())
+
+    with caplog.at_level("ERROR", logger="main.consumers"):
+        for _ in range(2):
+            _anon_consumer(
+                client_ip="10.0.0.2", forwarded_for=f"203.0.113.5, {address}"
+            ).get_throttle_ident()
+
+    assert caplog.text.count("non-public address") == reported
 
 
 @pytest.mark.django_db
