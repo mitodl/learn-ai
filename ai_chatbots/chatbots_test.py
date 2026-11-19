@@ -1730,7 +1730,7 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
         lambda: TutorBotOutput.objects.filter(thread_id=thread_id).last()
     )()
 
-    metadata = json.loads(re.search(r"<!-- (.*) -->", results, re.DOTALL).group(1))
+    metadata = _metadata_of(results)
     assert metadata["thread_id"] == thread_id
     assert metadata["checkpoint_pk"] == checkpoint.pk
     assert history.thread_id == thread_id
@@ -2627,6 +2627,10 @@ async def _state_of(chatbot):
 
 async def _awaiting_send(chatbot):
     return ((await _state_of(chatbot)).get("awaiting_send") or [False])[-1]
+
+
+def _metadata_of(reply: str) -> dict:
+    return json.loads(re.search(r"<!-- (.*) -->", reply, re.DOTALL).group(1))
 
 
 @pytest.mark.asyncio
@@ -4709,7 +4713,7 @@ async def test_support_bot_reports_whether_it_awaits_a_send(  # noqa: PLR0913
     )
 
     assert expected_reply in reply
-    metadata = json.loads(re.search(r"<!-- (.*) -->", reply, re.DOTALL).group(1))
+    metadata = _metadata_of(reply)
     assert metadata["awaiting_send"] is expected
 
 
@@ -4749,7 +4753,7 @@ async def test_support_bot_offers_no_send_while_a_ticket_is_sent_or_filed(
     )
 
     assert expected_reply in reply
-    metadata = json.loads(re.search(r"<!-- (.*) -->", reply, re.DOTALL).group(1))
+    metadata = _metadata_of(reply)
     assert metadata["awaiting_send"] is False
 
 
