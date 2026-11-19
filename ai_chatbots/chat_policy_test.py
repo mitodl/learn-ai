@@ -15,6 +15,7 @@ import litellm
 import ol_llm
 import pytest
 from aiohttp import web
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage
 from langchain_litellm import ChatLiteLLM
 from litellm.exceptions import MidStreamFallbackError
@@ -175,6 +176,38 @@ async def test_a_dropped_stream_fails_without_a_retry(provider):
     assert isinstance(raised.value.original_exception, litellm.APIConnectionError)
     assert received == ["part0 ", "part1 "]
     assert provider.requests == 1
+
+
+class _RecordingHandler(BaseCallbackHandler):
+    def __init__(self):
+        self.events: list[str] = []
+
+    def on_chat_model_start(self, *args, **kwargs):  # noqa: ARG002
+        self.events.append("start")
+
+    def on_llm_new_token(self, *args, **kwargs):  # noqa: ARG002
+        self.events.append("token")
+
+    def on_llm_end(self, *args, **kwargs):  # noqa: ARG002
+        self.events.append("end")
+
+
+async def test_callbacks_assigned_after_construction_reach_the_call(provider):
+    """TutorBot sets callbacks on the wrapper, and message_tutor binds tools to it."""
+    provider.scripts = [("stream", [0, 0], "finish")]
+    llm = _chat_model(provider.api_base)
+    handler = _RecordingHandler()
+    llm.callbacks = [handler]
+    bound = llm.bind_tools(
+        [{"type": "function", "function": {"name": "noop", "parameters": {}}}]
+    )
+
+    await asyncio.to_thread(bound.invoke, [HumanMessage("hello")])
+
+    # The stream's empty and finish chunks are tokens too, so only the shape is fixed.
+    assert handler.events[0] == "start"
+    assert handler.events[-1] == "end"
+    assert set(handler.events[1:-1]) == {"token"}
 
 
 async def test_a_failure_before_the_stream_starts_is_retried(provider):
