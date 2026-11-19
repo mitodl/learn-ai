@@ -19,6 +19,13 @@ WORKDIR /src
 RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
     uv sync --frozen --no-install-project --no-default-groups
 
+# Every default group (dev and prek, per `default-groups = "all"`), the same
+# set development installs, before any source so a source edit reuses it.
+FROM deps AS deps-dev
+
+RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
+    uv sync --frozen --no-install-project
+
 FROM deps AS runtime
 
 # Add project source.
@@ -63,13 +70,18 @@ RUN --mount=type=cache,target=/opt/uv-cache,uid=1000,gid=1000 \
     uv sync --frozen --no-install-project
 
 # ─── Local-dev target (ol-infrastructure local-dev k8s/Tilt stack) ────────────
-FROM development AS local-dev
+# FROM deps-dev, not development: development installs the default groups after
+# the source, so every source edit would reinstall them and ship them as a new
+# layer.
+# The command and PORT come from the k8s manifest.
+FROM deps-dev AS local-dev
 
-# runtime copies the source in as root, and Tilt's live update writes synced
-# files as mitodl.
-USER root
-RUN chown -R mitodl:mitodl /src
-USER mitodl
+# Owned by mitodl because Tilt's live update writes synced files as mitodl. No
+# collectstatic: the webapp's collectstatic init container fills
+# /src/staticfiles, an emptyDir, before the server starts. static/ is in
+# STATICFILES_DIRS but not in the repo; management commands warn without it.
+COPY --chown=mitodl:mitodl . /src
+RUN mkdir -p /src/static
 
 # Reload is set here rather than in the k8s manifest, which also runs the
 # published image when there is no checkout to build. A short kill timeout stops
