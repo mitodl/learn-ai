@@ -477,7 +477,9 @@ class BaseChatbot(ABC):
         metadata = await self.get_metadata(debug=debug)
         yield f"\n\n<!-- {metadata} -->\n\n"
 
-    async def get_metadata(self, *, debug: bool = False) -> str:
+    async def get_metadata(
+        self, *, debug: bool = False, extra: dict | None = None
+    ) -> str:
         """
         Return metadata JSON about the response
         """
@@ -485,6 +487,7 @@ class BaseChatbot(ABC):
         metadata = {} if not debug else await self.get_tool_metadata()
         metadata["checkpoint_pk"] = await self._get_latest_checkpoint_id()
         metadata["thread_id"] = self.thread_id
+        metadata.update(extra or {})
         if metadata:
             return comment_safe_json(metadata)
         return ""
@@ -1897,7 +1900,7 @@ class SupportBot(TruncatingChatbot):
             return ""
 
     async def _reply_without_the_model(
-        self, message: str, reply: str, extra_state: dict
+        self, message: str, reply: str, extra_state: dict, *, awaiting_send: bool
     ) -> AsyncGenerator[str, None]:
         """
         Yield a reply the model had no part in, and leave the same trace behind
@@ -1918,7 +1921,7 @@ class SupportBot(TruncatingChatbot):
             as_node="agent",
         )
         yield reply
-        metadata = await self.get_metadata()
+        metadata = await self.get_metadata(extra={"awaiting_send": awaiting_send})
         yield f"\n\n<!-- {metadata} -->\n\n"
 
     async def _send_to_zendesk(self, *, session, ticket: dict) -> tuple[str, dict]:
@@ -2200,6 +2203,10 @@ class SupportBot(TruncatingChatbot):
                 session=session,
                 confirmed=confirmed,
             )
+            if confirmed:
+                # Blanked after the decision, so a cancel still wins, but before
+                # it is stored: a retry would file the button's label.
+                message = ""
         else:
             reply, updates = await self._answer_or_collect(
                 message,
@@ -2212,7 +2219,20 @@ class SupportBot(TruncatingChatbot):
             # Counts whichever branch ran.
             updates = {**updates, "handed_off": [True]}
 
+        # Tells the widget to show Send and Cancel. Last element, not _latest():
+        # that skips False, so a cancelled review would still report True. Off
+        # while another turn sends or once a ticket exists: a Cancel there would
+        # tell the learner nothing was sent.
+        awaiting_send = (
+            reply != SUPPORT_TICKET_SENDING
+            and not (session and session.support_ticket_reference)
+            and (
+                updates.get("awaiting_send")
+                or prior_state.get("awaiting_send")
+                or [False]
+            )[-1]
+        )
         async for chunk in self._reply_without_the_model(
-            message, reply, {**extra_state, **updates}
+            message, reply, {**extra_state, **updates}, awaiting_send=awaiting_send
         ):
             yield chunk
