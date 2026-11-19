@@ -12,6 +12,7 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from openai import AsyncOpenAI
 from rest_framework.exceptions import ValidationError
@@ -2258,3 +2259,132 @@ def test_demo_canvas_consumers_are_throttled_by_address(consumer_class, django_s
     consumer = _lms_proxied_consumer(consumer_class, django_session)
 
     assert consumer.get_throttle_ident() == "203.0.113.5"
+
+
+@pytest.fixture
+def learner_notes(mocker):
+    """Stand in for the learner's notes that open_learner_notes returns."""
+    notes = mocker.Mock(context="# Learner context\nWorking nurse")
+    notes.remember = AsyncMock()
+    return mocker.patch("ai_chatbots.consumers.open_learner_notes", return_value=notes)
+
+
+async def test_handle_reads_and_writes_learner_memory(
+    mocker, mock_http_consumer_send, recommendation_consumer, learner_notes
+):
+    """The notes go ahead of the bot's prompt, and the turn is remembered after
+    the last chunk has been sent.
+    """
+    order = []
+    mock_http_consumer_send.send_body.side_effect = lambda **kwargs: order.append(
+        ("send", kwargs["more_body"])
+    )
+    notes = learner_notes.return_value
+    notes.remember.side_effect = lambda *args: order.append(("remember", args))
+    answered_reply(mocker, ["Two ", "courses"])
+    await recommendation_consumer.handle(json.dumps({"message": "I am a nurse"}))
+
+    learner_notes.assert_awaited_once_with(
+        recommendation_consumer.scope,
+        bot="recommendation",
+        user_id=recommendation_consumer.user_id,
+        thread_id=recommendation_consumer.thread_id,
+    )
+    bot = recommendation_consumer.bot
+    assert bot.system_prompt.startswith("# Learner context\nWorking nurse\n\n")
+    assert bot.system_prompt.endswith(bot.instructions)
+    assert order[-2:] == [
+        ("send", False),
+        ("remember", ("I am a nurse", "Two courses", [])),
+    ]
+
+
+def answered_reply(mocker, chunks):
+    """Stream a whole reply, as get_completion does when the model answers."""
+
+    async def get_completion(self, *_args, **_kwargs):
+        for chunk in chunks:
+            yield chunk
+        self.answered = True
+
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        get_completion,
+    )
+
+
+async def test_handle_remembers_nothing_after_an_error_reply(
+    mocker, mock_http_consumer_send, recommendation_consumer, learner_notes
+):
+    """A turn the bot answered with an error comment isn't remembered."""
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=MockAsyncIterator(
+            ['<!-- {"error":{"message":"An error occurred, please try again"}} -->']
+        ),
+    )
+    await recommendation_consumer.handle(json.dumps({"message": "I am a nurse"}))
+    learner_notes.return_value.remember.assert_not_awaited()
+
+
+async def test_handle_remembers_nothing_after_a_failure(
+    mocker, mock_http_consumer_send, recommendation_consumer, learner_notes
+):
+    """A turn that didn't produce a reply isn't remembered."""
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        side_effect=RuntimeError("boom"),
+    )
+    await recommendation_consumer.handle(json.dumps({"message": "hello"}))
+    learner_notes.return_value.remember.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "consumer_class",
+    [
+        consumers.SearchSummaryBotHttpConsumer,
+        consumers.CanvasSyllabusBotHttpConsumer,
+        consumers.CanvasTutorBotHttpConsumer,
+        consumers.SupportBotHttpConsumer,
+    ],
+)
+def test_consumers_without_learner_memory(consumer_class):
+    """Bots that aren't a learner's own chat behind the login don't read memory."""
+    assert consumer_class.memory_bot is None
+
+
+@pytest.mark.parametrize(
+    ("consumer_class", "bot"),
+    [
+        (consumers.RecommendationBotHttpConsumer, "recommendation"),
+        (consumers.SyllabusBotHttpConsumer, "syllabus"),
+        (consumers.TutorBotHttpConsumer, "tutor"),
+        (consumers.VideoGPTBotHttpConsumer, "video-gpt"),
+    ],
+)
+def test_consumers_with_learner_memory(consumer_class, bot):
+    """Each learner chat reads memory under its bot's use case name."""
+    assert consumer_class.memory_bot == bot
+
+
+async def test_earlier_messages(mocker, settings, recommendation_consumer):
+    """History for memory is the learner's earlier messages, not this turn's."""
+    settings.AI_MEMORY_HISTORY_MESSAGES = 2
+    state = mocker.Mock(
+        values={
+            "messages": [
+                HumanMessage("one"),
+                AIMessage("reply"),
+                HumanMessage("two"),
+                HumanMessage("three"),
+                AIMessage("reply"),
+                HumanMessage("this turn"),
+            ]
+        }
+    )
+    recommendation_consumer.bot = mocker.Mock(thread_id="t1")
+    recommendation_consumer.bot.agent.aget_state = AsyncMock(return_value=state)
+    assert await recommendation_consumer.earlier_messages() == ["two", "three"]
+    recommendation_consumer.bot.agent.aget_state.assert_awaited_once_with(
+        {"configurable": {"thread_id": "t1"}}
+    )
