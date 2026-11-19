@@ -2227,8 +2227,8 @@ class SupportBot(TruncatingChatbot):
             reply != SUPPORT_TICKET_SENDING
             and not (session and session.support_ticket_reference)
             and (
-                (prior_state.get("awaiting_send") or [])
-                + (updates.get("awaiting_send") or [])
+                updates.get("awaiting_send")
+                or prior_state.get("awaiting_send")
                 or [False]
             )[-1]
         )
