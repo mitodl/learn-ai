@@ -2281,10 +2281,7 @@ async def test_handle_reads_and_writes_learner_memory(
     )
     notes = learner_notes.return_value
     notes.remember.side_effect = lambda *args: order.append(("remember", args))
-    mocker.patch(
-        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
-        return_value=MockAsyncIterator(["Two ", "courses"]),
-    )
+    answered_reply(mocker, ["Two ", "courses"])
     await recommendation_consumer.handle(json.dumps({"message": "I am a nurse"}))
 
     learner_notes.assert_awaited_once_with(
@@ -2300,6 +2297,34 @@ async def test_handle_reads_and_writes_learner_memory(
         ("send", False),
         ("remember", ("I am a nurse", "Two courses", [])),
     ]
+
+
+def answered_reply(mocker, chunks):
+    """Stream a whole reply, as get_completion does when the model answers."""
+
+    async def get_completion(self, *_args, **_kwargs):
+        for chunk in chunks:
+            yield chunk
+        self.answered = True
+
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        get_completion,
+    )
+
+
+async def test_handle_remembers_nothing_after_an_error_reply(
+    mocker, mock_http_consumer_send, recommendation_consumer, learner_notes
+):
+    """A turn the bot answered with an error comment isn't remembered."""
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_completion",
+        return_value=MockAsyncIterator(
+            ['<!-- {"error":{"message":"An error occurred, please try again"}} -->']
+        ),
+    )
+    await recommendation_consumer.handle(json.dumps({"message": "I am a nurse"}))
+    learner_notes.return_value.remember.assert_not_awaited()
 
 
 async def test_handle_remembers_nothing_after_a_failure(

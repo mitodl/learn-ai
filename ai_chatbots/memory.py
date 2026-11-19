@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from redis.exceptions import LockError
 
 from ai_chatbots.chatbots import MemoryExtractionBot, MemoryGateBot
+from ai_chatbots.utils import request_header
 from main.features import is_enabled
 
 if TYPE_CHECKING:
@@ -189,18 +190,17 @@ class GateDecision(BaseModel):
 class MemoryRevision(BaseModel):
     """Revised notes returned by the extraction model."""
 
+    # No defaults: an empty section deletes its note, so a section the model
+    # left out must fail validation rather than read as empty.
     about: str = Field(
-        "",
         description="Durable facts about the learner as a person: background, "
         "occupation, education level, goals, constraints such as available time.",
     )
     instructions: str = Field(
-        "",
         description="How the learner wants every chatbot to behave: tone, length, "
         "level of jargon, format.",
     )
     bot_instructions: str = Field(
-        "",
         description="How the learner wants this particular chatbot to behave, "
         "including topics or kinds of results they asked not to be shown.",
     )
@@ -226,19 +226,24 @@ def get_memory() -> "Memory | None":
     return build_memory()
 
 
-def memory_enabled(user) -> bool:
-    """Whether this user is a signed-in learner with the CHAT_MEMORY flag on."""
+def memory_enabled(user, *, cached: bool = True) -> bool:
+    """
+    Whether this user is a signed-in learner with the CHAT_MEMORY flag on.
+
+    cached=False asks PostHog rather than the flag cache, which can hold an
+    answer for minutes after the flag changes. When PostHog can't answer, the
+    flag falls back to its settings default, as on every read.
+    """
     if not isinstance(user, get_user_model()) or not user.global_id:
         return False
-    return is_enabled(CHAT_MEMORY_FLAG, default=False, opt_unique_id=user.global_id)
+    return is_enabled(
+        CHAT_MEMORY_FLAG, default=False, opt_unique_id=user.global_id, cached=cached
+    )
 
 
 def session_token(scope: dict) -> str | None:
     """Return the session token the gateway forwarded with the request, if any."""
-    for name, value in scope.get("headers") or ():
-        if name.lower() == ACCESS_TOKEN_HEADER and value:
-            return value.decode("latin-1")
-    return None
+    return request_header(scope, ACCESS_TOKEN_HEADER) or None
 
 
 def fit_length(text: str, cap: int | None = None) -> str | None:
@@ -388,7 +393,10 @@ class LearnerNotes:
         lock = get_redis_connection("redis").lock(
             LOCK_KEY.format(user_id=self.user.id),
             timeout=settings.AI_MEMORY_LOCK_SECONDS,
-            blocking_timeout=settings.AI_MEMORY_LOCK_SECONDS,
+            blocking_timeout=settings.AI_MEMORY_LOCK_WAIT_SECONDS,
+            # Acquire and release run on whichever pool thread to_thread picks,
+            # so the token can't live in thread-local storage.
+            thread_local=False,
         )
         # A blocking wait, off the thread-sensitive executor that every other
         # sync_to_async call in the worker shares.
@@ -396,7 +404,7 @@ class LearnerNotes:
             log.warning("Learner memory lock not acquired, notes not revised")
             return
         try:
-            if not await sync_to_async(memory_enabled)(self.user):
+            if not await sync_to_async(memory_enabled)(self.user, cached=False):
                 return
             stored = {
                 note.key: note.text

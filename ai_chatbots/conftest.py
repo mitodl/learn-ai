@@ -2,12 +2,15 @@
 
 import json
 import os
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import httpx
 import pytest
+from aiohttp import web
 from asgiref.sync import sync_to_async
 
 from ai_chatbots import utils
@@ -113,6 +116,28 @@ async def mock_checkpointer(mocker) -> AsyncDjangoSaver:  # noqa: ARG001
     return await AsyncDjangoSaver.create_with_session(
         uuid4(), "test message", "test_bot"
     )
+
+
+@asynccontextmanager
+async def chat_completions_server(
+    handler: Callable[[web.Request], Awaitable[web.StreamResponse]],
+) -> AsyncIterator[str]:
+    """
+    Serve an OpenAI-compatible /v1/chat/completions on a free local port.
+
+    Yields the API base URL; the handler answers each request.
+    """
+    app = web.Application()
+    app.router.add_post("/v1/chat/completions", handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    try:
+        yield f"http://127.0.0.1:{port}/v1"
+    finally:
+        await runner.cleanup()
 
 
 class MockAsyncIterator:
