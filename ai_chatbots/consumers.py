@@ -15,6 +15,7 @@ from django.http.request import split_domain_port, validate_host
 from django.middleware.csrf import _get_new_csrf_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langsmith import trace
 from rest_framework.exceptions import ValidationError
@@ -39,6 +40,7 @@ from ai_chatbots.constants import (
     ChatbotCookie,
 )
 from ai_chatbots.learner_api import forwarded_learner_session, has_learner_session
+from ai_chatbots.memory import LearnerNotes, open_learner_notes
 from ai_chatbots.models import UserChatSession
 from ai_chatbots.serializers import (
     CanvasTutorChatRequestSerializer,
@@ -155,11 +157,23 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
     session_key = ""
     # Opt in per consumer.
     account_tools_allowed = False
+    # The bot's USE_CASE_NAME when it reads the learner's shared memory; None for
+    # a bot that doesn't. Only set it behind the gateway's login, which is what
+    # forwards the learner's session token.
+    memory_bot: str | None = None
+    learner_notes: LearnerNotes | None = None
+    # (message, reply) once a reply has streamed, for the learner's notes
+    memory_turn: tuple[str, str] | None = None
 
     @abstractmethod
     def create_chatbot(self, serializer):
         """Return a bot instance"""
         raise NotImplementedError
+
+    @property
+    def learner_context(self) -> str:
+        """The learner's notes for the bot's system prompt, or ""."""
+        return self.learner_notes.context if self.learner_notes else ""
 
     def account_tools_enabled(self, flag: str) -> bool:
         """
@@ -472,6 +486,13 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             checkpointer = await self.create_checkpointer(
                 thread_id, message_text, serializer
             )
+            if self.memory_bot:
+                self.learner_notes = await open_learner_notes(
+                    self.scope,
+                    bot=self.memory_bot,
+                    user_id=self.user_id,
+                    thread_id=thread_id,
+                )
             self.bot = await sync_to_async(self.create_chatbot)(
                 serializer, checkpointer
             )
@@ -501,6 +522,7 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                         await self.send_chunk(chunk)
                         output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
+            self.memory_turn = (message_text, "".join(output))
         except CrossOriginRequestError as err:
             log.warning("Rejected chat request from origin %s", err)
             await self.start_response(thread_id=None, status=403, cookies=cookies)
@@ -542,7 +564,40 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
             await self.send_error_response(500, err, cookies)
         finally:
             await self.send_chunk("", more_body=False)
+            await self.remember_turn()
             await self.disconnect()
+
+    async def remember_turn(self):
+        """
+        Revise the learner's notes from the turn just answered. The reply has
+        already been sent, so the learner doesn't wait on this.
+        """
+        if not (self.learner_notes and self.learner_notes.writes and self.memory_turn):
+            return
+        message, reply = self.memory_turn
+        try:
+            history = await self.earlier_messages()
+        except Exception as exc:  # noqa: BLE001 - the reply has already been sent
+            log.warning("Thread history unavailable for memory: %s", type(exc).__name__)
+            return
+        await self.learner_notes.remember(message, reply, history)
+
+    async def earlier_messages(self) -> list[str]:
+        """Return the learner's earlier messages in this thread, oldest first."""
+        if self.bot.agent is None:
+            return []
+        state = await self.bot.agent.aget_state(
+            {"configurable": {"thread_id": self.bot.thread_id}}
+        )
+        texts = [
+            message.content
+            for message in state.values.get("messages", [])
+            if isinstance(message, HumanMessage)
+            and isinstance(message.content, str)
+            and message.content
+        ]
+        # The last one is this turn's message.
+        return texts[:-1][-settings.AI_MEMORY_HISTORY_MESSAGES :]
 
     async def disconnect(self):
         """Discard the group when the connection is closed."""
@@ -586,6 +641,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
     ROOM_NAME = ResourceRecommendationBot.__name__
     throttle_scope = "recommendation_bot"
     bot_class = ResourceRecommendationBot
+    memory_bot = ResourceRecommendationBot.USE_CASE_NAME
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
@@ -612,6 +668,7 @@ class RecommendationBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
         )
 
 
@@ -626,6 +683,7 @@ class SearchSummaryBotHttpConsumer(RecommendationBotHttpConsumer):
     ROOM_NAME = SearchSummaryBot.__name__
     throttle_scope = "search_summary_bot"
     bot_class = SearchSummaryBot
+    memory_bot = None
 
 
 class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
@@ -638,6 +696,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
     throttle_scope = "syllabus_bot"
     bot_class = SyllabusBot
     account_tools_allowed = True
+    memory_bot = SyllabusBot.USE_CASE_NAME
 
     def create_chatbot(
         self,
@@ -657,6 +716,7 @@ class SyllabusBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
             enable_related_courses=enable_related_courses,
             enable_account_tools=self.account_tools_enabled(ACCOUNT_TOOLS_FEATURE_FLAG),
             course_id=serializer.validated_data.get("course_id"),
@@ -716,6 +776,7 @@ class CanvasSyllabusBotHttpConsumer(SyllabusBotHttpConsumer):
     bot_class = CanvasSyllabusBot
     # Canvas requests don't come from a learner's MIT Learn session
     account_tools_allowed = False
+    memory_bot = None
 
     def process_extra_state(self, data: dict) -> dict:
         """Process extra state parameters if any"""
@@ -758,6 +819,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = TutorChatRequestSerializer
     ROOM_NAME = TutorBot.__name__
     throttle_scope = "tutor_bot"
+    memory_bot = TutorBot.USE_CASE_NAME
 
     def create_chatbot(
         self,
@@ -778,6 +840,7 @@ class TutorBotHttpConsumer(BaseBotHttpConsumer):
             thread_id=self.thread_id,
             block_siblings=block_siblings,
             edx_module_id=edx_module_id,
+            learner_context=self.learner_context,
         )
 
     def prepare_response(
@@ -891,6 +954,7 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
     serializer_class = VideoGPTRequestSerializer
     ROOM_NAME = VideoGPTBot.__name__
     throttle_scope = "video_gpt_bot"
+    memory_bot = VideoGPTBot.USE_CASE_NAME
 
     def create_chatbot(
         self,
@@ -909,6 +973,7 @@ class VideoGPTBotHttpConsumer(BaseBotHttpConsumer):
             instructions=instructions,
             model=model,
             thread_id=self.thread_id,
+            learner_context=self.learner_context,
         )
 
     def process_extra_state(self, data: dict) -> dict:

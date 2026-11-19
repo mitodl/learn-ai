@@ -573,6 +573,10 @@ POSTHOG_PROJECT_ID = get_int(
 # the SDK would otherwise send to Comet's hosted Opik.
 OL_LLM_ENVIRONMENT = get_string(name="OL_LLM_ENVIRONMENT", default=ENVIRONMENT)
 OPIK_URL_OVERRIDE = get_string(name="OPIK_URL_OVERRIDE", default=None)
+# Learner memory (RFC 13314) is the shared memory service, reached through ol-llm,
+# which reads the service URL and token-exchange client from OL_LLM_MEMORY_*. Empty
+# turns memory off; the CHAT_MEMORY flag then decides per learner.
+OL_LLM_MEMORY_BACKEND = get_string(name="OL_LLM_MEMORY_BACKEND", default="")
 
 # Keycloak API settings
 KEYCLOAK_ADMIN_CLIENT_ID = get_string("KEYCLOAK_ADMIN_CLIENT_ID", False)  # noqa: FBT003
@@ -626,6 +630,19 @@ AI_DEFAULT_VIDEO_GPT_MAX_TOKENS = get_int("AI_DEFAULT_VIDEO_GPT_MAX_TOKENS", 163
 AI_DEFAULT_SUPPORT_MODEL = get_string("AI_DEFAULT_SUPPORT_MODEL", AI_DEFAULT_MODEL)
 # Shorter than a normal request: a slow answer must not hold up the intake.
 AI_SUPPORT_ANSWER_TIMEOUT = get_int("AI_SUPPORT_ANSWER_TIMEOUT", 20)
+# The yes/no "anything worth remembering?" call that runs after each reply
+AI_MEMORY_GATE_MODEL = get_string("AI_MEMORY_GATE_MODEL", "openai/gpt-4o-mini")
+# gpt-4.1-mini lost scoped preferences and recorded complaints as rules (RFC 13314)
+AI_MEMORY_EXTRACTION_MODEL = get_string("AI_MEMORY_EXTRACTION_MODEL", "openai/gpt-4.1")
+AI_MEMORY_MAX_CHARS = get_int("AI_MEMORY_MAX_CHARS", 1500)
+AI_MEMORY_HISTORY_MESSAGES = get_int("AI_MEMORY_HISTORY_MESSAGES", 8)
+AI_MEMORY_MESSAGE_CHARS = get_int("AI_MEMORY_MESSAGE_CHARS", 2000)
+AI_MEMORY_REPLY_CHARS = get_int("AI_MEMORY_REPLY_CHARS", 500)
+# Held only around the save, which makes up to four memory calls (a read and three
+# writes) of at most 10 s each (ol-llm's per-call bound), so it outlives them.
+AI_MEMORY_LOCK_SECONDS = get_int("AI_MEMORY_LOCK_SECONDS", 60)
+# Bound on the token exchange and read before the reply, which waits on them
+AI_MEMORY_OPEN_TIMEOUT_SECONDS = get_int("AI_MEMORY_OPEN_TIMEOUT_SECONDS", 5)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)
 AI_MAX_MESSAGE_LENGTH = get_int(
     name="AI_MAX_MESSAGE_LENGTH", default=6000
