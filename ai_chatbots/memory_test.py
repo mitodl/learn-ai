@@ -8,10 +8,12 @@ import pytest
 from aiohttp import web
 from asgiref.sync import sync_to_async
 from ol_llm.memory import InMemoryBackend, InMemoryStore, Memory, MemoryFenced
+from pydantic import ValidationError
 from redis.exceptions import LockNotOwnedError
 
 from ai_chatbots import memory
 from ai_chatbots.chatbots import MemoryExtractionBot, MemoryGateBot
+from ai_chatbots.conftest import chat_completions_server
 from ai_chatbots.memory import (
     ABOUT_KEY,
     INSTRUCTIONS_KEY,
@@ -336,17 +338,10 @@ async def tool_call_provider(monkeypatch):
         await response.write_eof()
         return response
 
-    app = web.Application()
-    app.router.add_post("/v1/chat/completions", handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", 0)
-    await site.start()
-    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
-    monkeypatch.setenv("OPENAI_API_BASE", f"http://127.0.0.1:{port}/v1")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    yield requests
-    await runner.cleanup()
+    async with chat_completions_server(handle) as api_base:
+        monkeypatch.setenv("OPENAI_API_BASE", api_base)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        yield requests
 
 
 def _tool_call(name, arguments):
@@ -424,3 +419,40 @@ async def test_open_is_bounded(mocker, settings, learn_ai_memory, async_user):
 
     mocker.patch.object(learn_ai_memory, "learner", hang)
     assert await open_notes(async_user) is None
+
+
+async def test_save_lock_settings(mocker, settings, seeded, async_user):
+    """The lock's token isn't thread-local (acquire and release run on pool
+    threads), and a busy lock is waited on only briefly.
+    """
+    answers(
+        mocker,
+        revision=MemoryRevision(about="new", instructions="", bot_instructions=""),
+    )
+    connection = mocker.patch("ai_chatbots.memory.get_redis_connection")
+    connection.return_value.lock.return_value.acquire.return_value = True
+    await (await open_notes(async_user)).remember("m", "r", [])
+    connection.return_value.lock.assert_called_once_with(
+        f"learner-memory:{async_user.id}",
+        timeout=settings.AI_MEMORY_LOCK_SECONDS,
+        blocking_timeout=settings.AI_MEMORY_LOCK_WAIT_SECONDS,
+        thread_local=False,
+    )
+
+
+async def test_save_asks_posthog_not_the_cache(mocker, seeded, async_user):
+    """The flag re-check at save time skips the flag cache."""
+    answers(
+        mocker,
+        revision=MemoryRevision(about="new", instructions="", bot_instructions=""),
+    )
+    is_enabled = mocker.patch("ai_chatbots.memory.is_enabled", return_value=True)
+    await (await open_notes(async_user)).remember("m", "r", [])
+    assert is_enabled.call_args_list[0].kwargs["cached"] is True
+    assert is_enabled.call_args_list[-1].kwargs["cached"] is False
+
+
+def test_a_revision_needs_every_section():
+    """A section the model left out fails validation instead of deleting a note."""
+    with pytest.raises(ValidationError):
+        MemoryRevision.model_validate({"about": "x", "instructions": "y"})

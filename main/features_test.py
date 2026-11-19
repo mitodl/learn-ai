@@ -183,3 +183,16 @@ def test_posthog_flag_cache_timeout(mocker, settings):
     assert features.is_enabled("test_function")
     get_feature_flag_mock.assert_called()
     time_freezer.stop()
+
+
+def test_uncached_read_asks_posthog(mocker, settings):
+    """cached=False ignores a cached answer, so a changed flag is seen now."""
+    get_feature_flag_mock = mocker.patch(
+        "posthog.get_feature_flag", autospec=True, return_value=True
+    )
+    settings.POSTHOG_PROJECT_API_KEY = "fake key"
+    caches["durable"].clear()
+    assert features.is_enabled("testing_function", opt_unique_id="u1")
+    get_feature_flag_mock.return_value = False
+    assert features.is_enabled("testing_function", opt_unique_id="u1")
+    assert not features.is_enabled("testing_function", opt_unique_id="u1", cached=False)

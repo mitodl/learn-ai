@@ -51,7 +51,7 @@ from ai_chatbots.serializers import (
     TutorChatRequestSerializer,
     VideoGPTRequestSerializer,
 )
-from ai_chatbots.utils import comment_safe_json
+from ai_chatbots.utils import comment_safe_json, request_header
 from main.consumers import BaseThrottledAsyncConsumer
 from main.exceptions import AsyncThrottled
 from main.features import is_enabled as feature_is_enabled
@@ -65,27 +65,15 @@ class CrossOriginRequestError(Exception):
     """A request whose origin is not in the CORS allow-list."""
 
 
-def _header(scope: dict, name: bytes) -> str:
-    """Return a request header from the ASGI scope, or ''."""
-    return next(
-        (
-            value.decode("latin-1")
-            for key, value in (scope.get("headers") or [])
-            if key.lower() == name
-        ),
-        "",
-    )
-
-
 def request_origin(scope: dict) -> str:
     """
     Return the origin the request came from, falling back to Referer the way
     CsrfViewMiddleware does for browsers that send one but no Origin.
     """
-    origin = _header(scope, b"origin")
+    origin = request_header(scope, b"origin")
     if origin:
         return origin
-    parts = urlsplit(_header(scope, b"referer"))
+    parts = urlsplit(request_header(scope, b"referer"))
     return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
 
 
@@ -101,7 +89,7 @@ def _request_scheme(scope: dict) -> str:
     if proxy_header:
         meta_name, secure_value = proxy_header
         name = meta_name.removeprefix("HTTP_").replace("_", "-").lower()
-        forwarded = _header(scope, name.encode("latin-1"))
+        forwarded = request_header(scope, name.encode("latin-1"))
         if forwarded:
             first, _, _ = forwarded.partition(",")
             return "https" if first.strip() == secure_value else "http"
@@ -113,8 +101,12 @@ def request_host_origin(scope: dict) -> str:
     Return the scheme://host the request was sent to, or '' if the Host header
     is missing or not one this site answers to.
     """
-    host = _header(scope, b"x-forwarded-host") if settings.USE_X_FORWARDED_HOST else ""
-    host = host or _header(scope, b"host")
+    host = (
+        request_header(scope, b"x-forwarded-host")
+        if settings.USE_X_FORWARDED_HOST
+        else ""
+    )
+    host = host or request_header(scope, b"host")
     domain, _ = split_domain_port(host)
     # ALLOWED_HOSTS is what stops a forged Host header nominating itself as the
     # origin. get_host() rejects the same way, and the caller falls back to the
@@ -522,7 +514,8 @@ class BaseBotHttpConsumer(ABC, AsyncHttpConsumer, BaseThrottledAsyncConsumer):
                         await self.send_chunk(chunk)
                         output.append(chunk)
                 langsmith_trace.end(outputs={"output": "".join(output)})
-            self.memory_turn = (message_text, "".join(output))
+            if self.bot.answered:
+                self.memory_turn = (message_text, "".join(output))
         except CrossOriginRequestError as err:
             log.warning("Rejected chat request from origin %s", err)
             await self.start_response(thread_id=None, status=403, cookies=cookies)
@@ -1039,7 +1032,7 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             # Read off the request header rather than the chat payload, so the
             # body has no say in it. The header is still whatever the caller
             # sent, so the device is claimed, not proven.
-            user_agent=_header(self.scope, b"user-agent"),
+            user_agent=request_header(self.scope, b"user-agent"),
         )
 
     def process_extra_state(self, data: dict) -> dict:

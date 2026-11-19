@@ -136,6 +136,9 @@ class BaseChatbot(ABC):
         """
         self.bot_name = name
         self.learner_context = learner_context
+        # Set once get_completion has streamed a whole reply, which an error
+        # comment (get_completion catches model failures) is not.
+        self.answered = False
         self.model = model or getattr(settings, self.DEFAULT_MODEL_SETTING)
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = (
@@ -480,6 +483,7 @@ class BaseChatbot(ABC):
                             full_response += chunk
                             yield chunk
                 chat.record(full_response)
+            self.answered = True
         except BadRequestError as error:
             log.exception("Bad request error")
             # Format and yield an error message inside a hidden comment

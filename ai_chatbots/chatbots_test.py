@@ -5546,3 +5546,28 @@ async def test_no_learner_context_leaves_the_prompt_alone(mocker, mock_checkpoin
     create_react_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
     chatbot = await sync_to_async(SyllabusBot)("user", mock_checkpointer)
     assert create_react_agent.call_args.kwargs["prompt"] == chatbot.instructions
+
+
+@pytest.mark.parametrize("fails", [False, True])
+async def test_get_completion_marks_an_answered_turn(mocker, mock_checkpointer, fails):
+    """Answered is set only once a whole reply has streamed, not when the model
+    failed and the bot sent an error comment instead.
+    """
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "anonymous", mock_checkpointer
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.CompiledStateGraph.aget_state_history",
+        return_value=MockAsyncIterator([]),
+    )
+    mocker.patch(
+        "ai_chatbots.chatbots.CompiledStateGraph.astream",
+        side_effect=RuntimeError("model down")
+        if fails
+        else lambda *_args, **_kwargs: MockAsyncIterator(
+            [(AIMessageChunkFactory.create(content="Hi"), {"langgraph_node": "agent"})]
+        ),
+    )
+    reply = "".join([chunk async for chunk in chatbot.get_completion("hello")])
+    assert chatbot.answered is not fails
+    assert ("error" in reply) is fails

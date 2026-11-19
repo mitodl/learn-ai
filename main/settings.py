@@ -641,6 +641,9 @@ AI_MEMORY_REPLY_CHARS = get_int("AI_MEMORY_REPLY_CHARS", 500)
 # Held only around the save, which makes up to four memory calls (a read and three
 # writes) of at most 10 s each (ol-llm's per-call bound), so it outlives them.
 AI_MEMORY_LOCK_SECONDS = get_int("AI_MEMORY_LOCK_SECONDS", 60)
+# How long a save waits for another turn's save. Past it, this turn's notes are
+# dropped rather than holding the finished request (and a pool thread) open.
+AI_MEMORY_LOCK_WAIT_SECONDS = get_int("AI_MEMORY_LOCK_WAIT_SECONDS", 10)
 # Bound on the token exchange and read before the reply, which waits on them
 AI_MEMORY_OPEN_TIMEOUT_SECONDS = get_int("AI_MEMORY_OPEN_TIMEOUT_SECONDS", 5)
 AI_DEFAULT_TEMPERATURE = get_float(name="AI_DEFAULT_TEMPERATURE", default=0.1)

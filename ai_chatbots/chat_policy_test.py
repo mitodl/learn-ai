@@ -20,6 +20,8 @@ from langchain_core.messages import HumanMessage
 from langchain_litellm import ChatLiteLLM
 from litellm.exceptions import MidStreamFallbackError
 
+from ai_chatbots.conftest import chat_completions_server
+
 USE_CASE = ol_llm.UseCase(
     app="learn-ai", name="chat-policy-test", profile="request", model="openai:gpt-4o"
 )
@@ -93,16 +95,9 @@ class FakeProvider:
 async def provider():
     """Serve a FakeProvider on a free local port; tests set its scripts."""
     fake = FakeProvider([])
-    app = web.Application()
-    app.router.add_post("/v1/chat/completions", fake.handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", 0)
-    await site.start()
-    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
-    fake.api_base = f"http://127.0.0.1:{port}/v1"
-    yield fake
-    await runner.cleanup()
+    async with chat_completions_server(fake.handle) as api_base:
+        fake.api_base = api_base
+        yield fake
 
 
 def _chat_model(api_base: str) -> ol_llm.PolicyChatModel:

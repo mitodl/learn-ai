@@ -100,6 +100,7 @@ def is_enabled(
     *,
     default: bool | None = None,
     opt_unique_id: str | None = None,
+    cached: bool = True,
 ) -> bool:
     """
     Return True if the feature flag is enabled
@@ -113,6 +114,8 @@ def is_enabled(
             more readable user flags as well as more clear troubleshooting. For
             anonymous users, a persistent ID will help with troubleshooting and tracking
             efforts.
+        cached (bool): False skips the cache and asks Posthog, for a check that
+            must see a change to the flag now.
 
     Returns:
         bool: True if the feature flag is enabled
@@ -123,7 +126,7 @@ def is_enabled(
     cache_key = generate_cache_key(name, unique_id, person_properties)
     cached_value = durable_cache.get(cache_key)
 
-    if cached_value is not None:
+    if cached and cached_value is not None:
         log.debug("Retrieved %s from the cache", name)
         return cached_value
     else:
