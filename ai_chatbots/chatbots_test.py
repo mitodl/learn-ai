@@ -5521,3 +5521,28 @@ async def test_the_answering_graph_hands_the_tools_the_page_course(
 
     assert seen["course_id"] == ["course-v1:MITx+18.01x+2T2025"]
     assert seen["platform"] == ["mitxonline"]
+
+
+@pytest.mark.parametrize(
+    "bot_class", [ResourceRecommendationBot, SyllabusBot, VideoGPTBot]
+)
+async def test_learner_context_leads_the_agent_prompt(
+    mocker, mock_checkpointer, bot_class
+):
+    """The learner's notes go ahead of the static instructions in the agent's
+    prompt, and only there, not in graph state.
+    """
+    create_react_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(bot_class)(
+        "user", mock_checkpointer, learner_context="# Learner context\nnurse"
+    )
+    prompt = create_react_agent.call_args.kwargs["prompt"]
+    assert prompt == f"# Learner context\nnurse\n\n{chatbot.instructions}"
+    assert "nurse" not in chatbot.instructions
+
+
+async def test_no_learner_context_leaves_the_prompt_alone(mocker, mock_checkpointer):
+    """Without notes the agent gets the static instructions unchanged."""
+    create_react_agent = mocker.patch("ai_chatbots.chatbots.create_react_agent")
+    chatbot = await sync_to_async(SyllabusBot)("user", mock_checkpointer)
+    assert create_react_agent.call_args.kwargs["prompt"] == chatbot.instructions
