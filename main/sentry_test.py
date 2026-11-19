@@ -9,6 +9,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.transport import Transport
 
 from main.sentry import (
+    EVENT_SCRUBBER,
     before_send,
     scrub_pg_detail,
     scrub_pg_details,
@@ -48,6 +49,7 @@ def sentry_transport():
         dsn="https://k@o0.ingest.sentry.io/0",
         transport=transport,
         before_send=before_send,
+        event_scrubber=EVENT_SCRUBBER,
         default_integrations=False,
         integrations=[
             LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
@@ -349,3 +351,23 @@ def test_real_sdk_drops_chatbot_frame_locals(sentry_transport):
     ]
     assert chatbot_frames, [frame.get("module") for frame in frames]
     assert "vars" not in chatbot_frames[0]
+
+
+def test_real_sdk_scrubs_the_forwarded_access_token(sentry_transport):
+    """The learner's session token in request headers never reaches Sentry."""
+    token = "eyJ.learner-session-token"  # noqa: S105
+
+    def add_request(event, _hint):
+        event["request"] = {
+            "headers": {"x-access-token": token, "user-agent": "test"},
+        }
+        return event
+
+    with sentry_sdk.new_scope() as scope:
+        scope.add_event_processor(add_request)
+        sentry_sdk.capture_message("boom")
+    sentry_sdk.flush()
+
+    (event,) = sentry_transport.events
+    assert token not in json.dumps(event)
+    assert event["request"]["headers"]["user-agent"] == "test"
