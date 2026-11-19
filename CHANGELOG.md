@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.11.19.1] - 2026-11-19
+
+### Changes
+
+- **Tell the support widget when the bot is waiting on Send or Cancel** (#191) by zamanafzal@gmail.com
+- **File support intake tickets under a configured Zendesk brand and form** (#197) by zamanafzal@gmail.com
+- **Throttle anonymous chat requests by client IP** (#184) by zamanafzal@gmail.com
+- **Update dependency tornado to v6.6.1 [SECURITY]** (#193) by 29139614+renovate[bot]@users.noreply.github.com
+
 ## [2026.11.16.1] - 2026-11-16
 
 ### Changes
