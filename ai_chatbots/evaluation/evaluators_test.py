@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import json
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -12,11 +13,13 @@ from ai_chatbots.evaluation.evaluators import (
     _RECORD_KEYS,
     BOT_EVALUATORS,
     SUPPORT_NO_ANSWER,
+    LiveAccountCallBlockedError,
     RecommendationBotEvaluator,
     SupportBotEvaluator,
     SyllabusBotEvaluator,
     TutorBotEvaluator,
     VideoGPTBotEvaluator,
+    tutor_prompt_overrides,
 )
 
 
@@ -202,8 +205,9 @@ class TestSyllabusBotEvaluator:
     @pytest.mark.parametrize(
         ("shared", "expected"),
         [
-            # no shared records: a case without its own reads the live API
-            (None, ["live", [{"id": "own"}], "error", []]),
+            # no shared records: a case without its own is blocked from the
+            # live API
+            (None, ["blocked", [{"id": "own"}], "error", []]),
             (
                 {"enrollments": [{"id": "shared"}]},
                 [[{"id": "shared"}], [{"id": "own"}], "error", []],
@@ -222,9 +226,8 @@ class TestSyllabusBotEvaluator:
             "get_course_dates",
         ):
             mocker.patch.object(learner_api, name, getattr(learner_api, name))
-        mocker.patch.object(
-            learner_api, "get_enrollments", mocker.AsyncMock(return_value="live")
-        )
+        live = mocker.AsyncMock(return_value="live")
+        mocker.patch.object(learner_api, "get_enrollments", live)
         own = [
             {"enrollments": [{"id": "own"}]},
             {"error": True},
@@ -256,6 +259,8 @@ class TestSyllabusBotEvaluator:
                 return {"records": await learner_api.get_enrollments()}
             except learner_api.LearnerAPIError:
                 return {"records": "error"}
+            except LiveAccountCallBlockedError:
+                return {"records": "blocked"}
 
         chatbot = mocker.Mock(config={"configurable": {}})
         chatbot.agent.ainvoke = ainvoke
@@ -264,6 +269,10 @@ class TestSyllabusBotEvaluator:
         )
 
         assert [result["records"] for result in results] == expected
+        # A blocked lookup is recorded on its case and never reaches the live API
+        blocked = ["get_enrollments"] if shared is None else []
+        assert [r["blocked_account_calls"] for r in results] == [blocked, [], [], []]
+        live.assert_not_called()
 
     async def test_history_comes_before_the_question(self, evaluator, mocker):
         """A follow-up case sends the earlier turns, then the question."""
@@ -490,6 +499,36 @@ class TestSupportBotEvaluator:
         assert cases[0].metadata["extra_state"]["page_url"] == ["https://courses/c"]
         assert cases[0].metadata["learner_records"] == {"enrollments": []}
 
+    async def test_a_case_without_records_is_blocked(self, evaluator, mocker):
+        """With no records anywhere, a lookup is recorded and never goes live."""
+        live = mocker.AsyncMock(return_value="live")
+        mocker.patch.object(learner_api, "get_enrollments", live)
+        mocker.patch(
+            "ai_chatbots.evaluation.evaluators.load_json_with_settings",
+            return_value={
+                "support": [
+                    {
+                        "question": "what am I enrolled in?",
+                        "extra_init": {"enable_account_tools": True},
+                    }
+                ]
+            },
+        )
+        (case,) = evaluator.load_test_cases()
+
+        async def ainvoke(state, config):
+            with pytest.raises(LiveAccountCallBlockedError):
+                await learner_api.get_enrollments()
+            return {"messages": [AIMessage("I can't look that up.")]}
+
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot._answering_agent.ainvoke = ainvoke  # noqa: SLF001
+
+        result = await evaluator.collect_response(chatbot, case)
+
+        assert result["blocked_account_calls"] == ["get_enrollments"]
+        live.assert_not_called()
+
     @pytest.mark.parametrize(
         ("messages", "scored"),
         [
@@ -585,7 +624,14 @@ class TestBotEvaluatorRegistry:
 
     def test_bot_evaluators_registry(self):
         """Test that all expected bot evaluators are registered."""
-        expected_bots = ["recommendation", "syllabus", "video_gpt", "tutor", "support"]
+        expected_bots = [
+            "recommendation",
+            "syllabus",
+            "syllabus_canvas",
+            "video_gpt",
+            "tutor",
+            "support",
+        ]
 
         # Test BOT_EVALUATORS registry
         assert set(BOT_EVALUATORS.keys()) == set(expected_bots)
@@ -601,6 +647,7 @@ class TestBotEvaluatorRegistry:
         expected_classes = {
             "recommendation": RecommendationBotEvaluator,
             "syllabus": SyllabusBotEvaluator,
+            "syllabus_canvas": SyllabusBotEvaluator,
             "video_gpt": VideoGPTBotEvaluator,
             "tutor": TutorBotEvaluator,
             "support": SupportBotEvaluator,
@@ -658,3 +705,114 @@ class TestEvaluatorIntegration:
         assert llm_test_case.name == "recommendation-gpt-4-default"
         assert llm_test_case.input == "Test question"
         assert llm_test_case.actual_output == "Bot response"
+
+
+def test_qa_15_515_loads_for_correctness(mocker):
+    """With Correctness judged, 15.515 drops its no-reference cases."""
+    evaluator = SyllabusBotEvaluator(
+        mocker.Mock(),
+        "syllabus",
+        data_file="test_json/evaluation_sets/qa_15_515.json",
+    )
+    everything = evaluator.load_cases()
+    referenced = evaluator.load_cases(require_reference=True)
+    assert len(everything) == 84
+    assert len(referenced) == 52
+    assert all(case.expected_output for case in referenced)
+    assert len({case.metadata["case_id"] for case in referenced}) == 52
+
+
+async def test_tutor_streamed_error_is_a_failure(mocker):
+    """The tutor's streamed error comment is raised, so the answer counts as failed."""
+
+    async def get_completion(_question):
+        yield "Let's start with"
+        yield '<!-- {"error":{"message":"An error occurred"}} -->'
+
+    chatbot = mocker.Mock(get_completion=get_completion)
+    evaluator = TutorBotEvaluator(mocker.Mock(), "tutor")
+    with pytest.raises(RuntimeError, match="streamed an error"):
+        await evaluator.collect_response(chatbot, TestCaseSpec(question="Help"))
+
+
+@pytest.mark.parametrize(
+    ("text", "overrides"),
+    [
+        (None, None),
+        (
+            "Be brief. {problem_statement}",
+            {"tutor_problem": "Be brief. {problem_statement}"},
+        ),
+        ('{"tutor_intent_S_HINT": "Hint."}', {"tutor_intent_S_HINT": "Hint."}),
+        ('"just {problem_statement}"', {"tutor_problem": '"just {problem_statement}"'}),
+        # Intent text isn't a template, so braces in it are fine
+        ('{"tutor_intent_S_HINT": "Use {x}."}', {"tutor_intent_S_HINT": "Use {x}."}),
+    ],
+)
+def test_tutor_prompt_overrides(text, overrides):
+    """JSON names the tutor's prompts; other text is its tutor_problem prompt."""
+    assert tutor_prompt_overrides(text) == overrides
+
+
+def test_tutor_prompt_overrides_package_templates():
+    """The package's own templates, escaped braces and all, pass the check."""
+    from open_learning_ai_tutor import prompts
+
+    overrides = {
+        "tutor_problem": prompts.PROBLEM_PROMPT_TEMPLATE,
+        "tutor_initial_assessment": prompts.ASSESSMENT_PROMPT_TEMPLATE,
+    }
+    assert tutor_prompt_overrides(json.dumps(overrides)) == overrides
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("Be brief.", "needs {problem_statement}"),
+        ('{"tutor_problem": "Be brief."}', "needs {problem_statement}"),
+        ('{"problem": "Be brief."}', "Unknown tutor prompts: problem"),
+        ('{"tutor_problem": null}', "must be text"),
+        ('{"tutor_initial_assessment": 123}', "must be text"),
+        ("{{problem_statement}}", "needs {problem_statement}"),
+        ("{problem_statement} {bogus}", "tutor_problem can't be filled in"),
+        ("{problem_statement} {", "tutor_problem can't be filled in"),
+        ('{"tutor_initial_assessment": "{bogus}"}', "can't be filled in"),
+    ],
+)
+def test_tutor_prompt_overrides_refused(text, message):
+    """A prompt the tutor can't use is refused before anything runs."""
+    with pytest.raises(ValueError, match=message):
+        tutor_prompt_overrides(text)
+
+
+def test_tutor_bot_gets_prompt_overrides(mocker):
+    """The tutor is built with its side's prompts."""
+    bot_class = mocker.Mock()
+    evaluator = TutorBotEvaluator(bot_class, "tutor")
+    case = TestCaseSpec(
+        question="Help", metadata={"extra_init": {"edx_module_id": "b"}}
+    )
+
+    evaluator.create_bot_instance("m", case, '{"tutor_intent_S_HINT": "Hint."}')
+
+    bot_class.assert_called_once_with(
+        "eval",
+        checkpointer=None,
+        model="m",
+        prompt_overrides={"tutor_intent_S_HINT": "Hint."},
+        edx_module_id="b",
+    )
+
+
+def test_syllabus_canvas_uses_the_syllabus_cases(mocker):
+    """The Canvas bot is judged on the same syllabus cases, with its own bot class."""
+    from ai_chatbots.chatbots import CanvasSyllabusBot
+
+    bot_class, evaluator_class = BOT_EVALUATORS["syllabus_canvas"]
+    assert bot_class is CanvasSyllabusBot
+    evaluator = evaluator_class(
+        bot_class,
+        "syllabus_canvas",
+        data_file="test_json/evaluation_sets/qa_15_515.json",
+    )
+    assert len(evaluator.load_cases()) == 84

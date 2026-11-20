@@ -93,9 +93,10 @@ async def test_create_with_session_assign_user(async_user):
 
 @pytest.mark.parametrize(
     ("thread_id", "message", "agent"),
+    # Fixed values: xdist workers must collect the same test ids
     [
-        (uuid4().hex, "test_message", None),
-        (uuid4().hex, None, "test_agent"),
+        ("thread-1", "test_message", None),
+        ("thread-1", None, "test_agent"),
         (None, "test_message", "test_agent"),
     ],
 )
