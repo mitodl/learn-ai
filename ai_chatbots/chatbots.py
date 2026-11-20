@@ -1183,12 +1183,6 @@ SUPPORT_ASK_PROBLEM = (
     "What's going on? Tell me what you need help with and I'll pass it on to the "
     "MIT Open Learning support team."
 )
-# Appended in code so the route to a person never depends on the answer. A
-# statement, not a question: "yes" to "did that help?" reads like "yes, send it".
-SUPPORT_OFFER_TICKET = (
-    "If that didn't sort it out, reply \"send\" and I'll pass it to the MIT Open "
-    "Learning support team."
-)
 SUPPORT_ANSWER_CLOSED = (
     "Glad that helped. If something else comes up, just ask - and I can still "
     "pass a request to the MIT Open Learning support team whenever you want."
@@ -2116,7 +2110,7 @@ class SupportBot(TruncatingChatbot):
         intake_started = not answered_before and len(
             prior_state.get("messages") or []
         ) > _cancelled_after(prior_state)
-        # A "yes" after an answer accepts the offer to pass it on.
+        # A "yes" or "send" after an answer asks to pass it on.
         took_up_the_offer = answered_before and _is_affirmative(message)
         # Not gated on _answering_agent, so a flag turned off mid-thread still
         # closes out.
@@ -2138,7 +2132,7 @@ class SupportBot(TruncatingChatbot):
         ):
             answer = await self._try_to_answer(message, prior_state, extra_state)
             if answer:
-                return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
+                return answer, {"answered": [True]}
 
         reply, updates = self._collect_the_request(
             message,
