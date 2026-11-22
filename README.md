@@ -320,7 +320,7 @@ Every run reports what it could not measure instead of dropping it: answers that
 One comparison is one run per eval group (data files), for example:
 
 ```bash
-python manage.py rag_evaluation --bots syllabus --baseline openai/gpt-4o-mini --models openai/gpt-5.4-mini \
+python manage.py rag_evaluation --bots syllabus --baseline openai/gpt-4o-mini --models openai/gpt-6-luna \
   --correctness-only --data-file test_json/evaluation_sets/account_tools.json \
   --batch-size 8 --max-concurrent 4 --output-file report.txt
 ```
@@ -339,7 +339,7 @@ Without a prompt, a side uses the bot's own prompt, which locally is the one in 
 For tutor, a text file replaces the `tutor_problem` prompt and must contain `{problem_statement}`. A JSON file can replace any of the tutor's prompts, by their LangSmith names (`tutor_problem`, `tutor_initial_assessment`, `tutor_assessment_*`, `tutor_intent_*`); the rest stay as they are, from LangSmith when `LANGSMITH_API_KEY` is set:
 
 ```bash
-python manage.py rag_evaluation --bots tutor --baseline openai/gpt-4o --models openai/gpt-5.4 \
+python manage.py rag_evaluation --bots tutor --baseline openai/gpt-4o --models openai/gpt-6-sol \
   --candidate-prompt strict.json --data-file <tutor cases>
 ```
 
