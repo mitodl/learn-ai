@@ -4,16 +4,18 @@ from pathlib import Path
 from django.db import migrations
 
 
-def add_gpt_5_4_models(apps, schema_editor):
+def add_gpt_models(apps, schema_editor):
     """
-    Add gpt-5.4 and gpt-5.4-mini, the new default models.
+    Add gpt-5.4, gpt-5.4-mini, gpt-6-luna and gpt-6-sol.
 
+    reasoning_effort is "none": gpt-6-luna and gpt-6-sol default to "medium",
+    and Chat Completions only allows their tool calls with reasoning off.
     The azure/ rows are disabled, like those from 0013, until Azure is
     configured where they are used.
     """
     LLMModel = apps.get_model("ai_chatbots", "LLMModel")
     with Path.open(
-        "ai_chatbots/fixtures/migrations/0016_gpt_5_4_models.json"
+        "ai_chatbots/fixtures/migrations/0016_gpt_5_4_and_6_models.json"
     ) as llm_json:
         for llm_model in json.load(llm_json):
             LLMModel.objects.get_or_create(
@@ -34,7 +36,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(
-            add_gpt_5_4_models, reverse_code=migrations.RunPython.noop
-        ),
+        migrations.RunPython(add_gpt_models, reverse_code=migrations.RunPython.noop),
     ]

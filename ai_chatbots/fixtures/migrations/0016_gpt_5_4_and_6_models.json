@@ -26,5 +26,33 @@
     "litellm_id": "azure/gpt-5.4-mini",
     "enabled": false,
     "reasoning_effort": "none"
+  },
+  {
+    "provider": "openai",
+    "name": "gpt-6-luna",
+    "litellm_id": "openai/gpt-6-luna",
+    "enabled": true,
+    "reasoning_effort": "none"
+  },
+  {
+    "provider": "openai",
+    "name": "gpt-6-sol",
+    "litellm_id": "openai/gpt-6-sol",
+    "enabled": true,
+    "reasoning_effort": "none"
+  },
+  {
+    "provider": "azure",
+    "name": "gpt-6-luna",
+    "litellm_id": "azure/gpt-6-luna",
+    "enabled": false,
+    "reasoning_effort": "none"
+  },
+  {
+    "provider": "azure",
+    "name": "gpt-6-sol",
+    "litellm_id": "azure/gpt-6-sol",
+    "enabled": false,
+    "reasoning_effort": "none"
   }
 ]
