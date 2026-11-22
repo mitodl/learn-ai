@@ -989,9 +989,9 @@ class TestFailuresAndBaseline:
     @pytest.mark.parametrize(
         ("judge", "models"),
         [
-            ("gpt-5.4", ["openai/gpt-5.4", "openai/gpt-4o-mini"]),
-            ("openai/gpt-5.4", ["gpt-5.4"]),
-            ("GPT-5.4", ["openai/gpt-5.4"]),
+            ("gpt-6-sol", ["openai/gpt-6-sol", "openai/gpt-4o-mini"]),
+            ("openai/gpt-6-sol", ["gpt-6-sol"]),
+            ("GPT-6-SOL", ["openai/gpt-6-sol"]),
         ],
     )
     def test_judge_under_test_is_refused(self, orchestrator, judge, models):

@@ -55,7 +55,7 @@ GROUNDED_BOTS = {"syllabus", "syllabus_canvas", "video_gpt"}
 
 
 def _model_name(model_id: str) -> str:
-    """Strip the provider prefix from a model id: openai/gpt-5.4 -> gpt-5.4."""
+    """Strip the provider prefix from a model id: openai/gpt-6-sol -> gpt-6-sol."""
     return model_id.rsplit("/", maxsplit=1)[-1].strip().lower()
 
 
