@@ -1808,6 +1808,24 @@ wheels = [
 ]
 
 [[package]]
+name = "hindsight-client"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "aiohttp-retry" },
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "typing-extensions" },
+    { name = "urllib3" },
+    { name = "yarl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ba/83/a9626ebeb43c0bd03d5173adc31ea3e2e7a32939ef1043dff435fa3cd913/hindsight_client-1.2.1.tar.gz", hash = "sha256:251c545fa2890997db4e5c447c2d971df4333a73a1ce60560ae5eabc7fe23106", size = 223936, upload-time = "2026-11-10T14:03:08.129Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/26/17820f9235864422b6d058eb17ffc6f339f0241abf13a567057d2730e143/hindsight_client-1.2.1-py3-none-any.whl", hash = "sha256:d02a7768a581f65db26a688e3b83677c258cc19fc1b9a3325b60a49dd2f271d9", size = 480357, upload-time = "2026-11-10T14:03:06.461Z" },
+]
+
+[[package]]
 name = "hpack"
 version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2852,7 +2870,7 @@ dependencies = [
     { name = "markdown2" },
     { name = "mitol-django-observability" },
     { name = "named-enum" },
-    { name = "ol-llm", extra = ["langchain"] },
+    { name = "ol-llm", extra = ["langchain", "memory"] },
     { name = "open-learning-ai-tutor" },
     { name = "opentelemetry-instrumentation-asgi" },
     { name = "opentelemetry-instrumentation-celery" },
@@ -2959,7 +2977,7 @@ requires-dist = [
     { name = "markdown2", specifier = ">=2.5.2,<3" },
     { name = "mitol-django-observability", specifier = ">=2026.8.19" },
     { name = "named-enum", specifier = ">=1.4.0,<2" },
-    { name = "ol-llm", extras = ["langchain"], specifier = ">=0.0.17,<0.1" },
+    { name = "ol-llm", extras = ["langchain", "memory"], specifier = ">=0.0.17,<0.1" },
     { name = "open-learning-ai-tutor", specifier = "==0.2.16" },
     { name = "opentelemetry-instrumentation-asgi", specifier = ">=0.52b0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.52b0" },
@@ -3594,6 +3612,9 @@ wheels = [
 [package.optional-dependencies]
 langchain = [
     { name = "langchain-core" },
+]
+memory = [
+    { name = "hindsight-client" },
 ]
 
 [[package]]

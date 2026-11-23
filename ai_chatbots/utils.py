@@ -111,6 +111,18 @@ class HTTPClientManager:
 http_client_manager = HTTPClientManager()
 
 
+def request_header(scope: dict, name: bytes) -> str:
+    """Return a request header from the ASGI scope, or ''."""
+    return next(
+        (
+            value.decode("latin-1")
+            for key, value in (scope.get("headers") or [])
+            if key.lower() == name
+        ),
+        "",
+    )
+
+
 def comment_safe_json(data) -> str:
     """
     Serialize data to JSON that cannot terminate an enclosing HTML comment.

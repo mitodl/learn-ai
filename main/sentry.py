@@ -8,6 +8,7 @@ from celery.exceptions import WorkerLostError
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.scrubber import DEFAULT_DENYLIST, EventScrubber
 
 # these errors occur when a shutdown is happening (usually caused by a SIGTERM)
 SHUTDOWN_ERRORS = (WorkerLostError, SystemExit)
@@ -70,6 +71,13 @@ def _scrub_node(node):
         node[:] = [_scrub_node(item) for item in node]
         return node
     return node
+
+
+# The gateway forwards the learner's session access token to the chatbots as
+# X-Access-Token, and SentryAsgiMiddleware puts request headers on every event.
+# The SDK's header filter knows authorization and cookies but not this one, so
+# without it a live token ships with any error or sampled transaction.
+EVENT_SCRUBBER = EventScrubber(denylist=[*DEFAULT_DENYLIST, "x-access-token"])
 
 
 # The support intake carries a learner's reply-to address and the text of their
@@ -177,6 +185,7 @@ def init_sentry(  # noqa: PLR0913
         environment=environment,
         release=version,
         before_send=before_send,
+        event_scrubber=EVENT_SCRUBBER,
         # Request bodies are NOT gated on send_default_pii: the SDK sets
         # request.data unconditionally (RequestExtractor.extract_into_event)
         # and this is the only control (request_body_within_bounds).  Left

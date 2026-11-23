@@ -27,6 +27,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.output_parsers.openai_tools import PydanticToolsParser
 from langchain_core.tools.base import BaseTool
 from langchain_litellm import ChatLiteLLM
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -44,6 +45,7 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
+from pydantic import BaseModel
 
 from ai_chatbots import learn_api, tools
 from ai_chatbots.admin import LLMModel
@@ -123,9 +125,20 @@ class BaseChatbot(ABC):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
     ):
-        """Initialize the AI chat agent service"""
+        """
+        Initialize the AI chat agent service.
+
+        learner_context is the learner's notes from shared memory, rendered by
+        ai_chatbots.memory, or "" for none. It goes in the system prompt only,
+        never in graph state, so it is not saved with the checkpoint.
+        """
         self.bot_name = name
+        self.learner_context = learner_context
+        # Set once get_completion has streamed a whole reply, which an error
+        # comment (get_completion catches model failures) is not.
+        self.answered = False
         self.model = model or getattr(settings, self.DEFAULT_MODEL_SETTING)
         self.temperature = temperature or settings.AI_DEFAULT_TEMPERATURE
         self.instructions = (
@@ -175,6 +188,20 @@ class BaseChatbot(ABC):
             profile="request",
             model=catalog_model_id(model),
         )
+
+    @property
+    def system_prompt(self) -> str | None:
+        """
+        Learner context first, static instructions after.
+
+        Appending the block instead (prompt-cache friendly) lost to the static
+        prompt's "ask clarifying questions" examples: in the RFC 13314 prototype,
+        gpt-4o-mini asked 6/6 times for something the notes already answered,
+        0/6 with the block first.
+        """
+        if self.instructions and self.learner_context:
+            return f"{self.learner_context}\n\n{self.instructions}"
+        return self.instructions
 
     def create_tools(self):
         """Create any tools required by the agent"""
@@ -262,7 +289,7 @@ class BaseChatbot(ABC):
             """Call the LLM, injecting system prompt"""
             if len(state["messages"]) == 1:
                 # New chat, so inject the system prompt
-                state["messages"].insert(0, SystemMessage(self.instructions))
+                state["messages"].insert(0, SystemMessage(self.system_prompt))
             return self.STATE_CLASS(messages=[self.llm.invoke(state["messages"])])
 
         agent_graph = StateGraph(MessagesState)
@@ -456,6 +483,7 @@ class BaseChatbot(ABC):
                             full_response += chunk
                             yield chunk
                 chat.record(full_response)
+            self.answered = True
         except BadRequestError as error:
             log.exception("Bad request error")
             # Format and yield an error message inside a hidden comment
@@ -536,7 +564,7 @@ class TruncatingChatbot(BaseChatbot):
             checkpointer=self.checkpointer,
             pre_model_hook=MessageTruncationNode(),
             state_schema=self.STATE_CLASS,
-            prompt=self.instructions,
+            prompt=self.system_prompt,
         )
 
 
@@ -572,6 +600,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
     ):
         """Initialize the AI search agent service"""
         super().__init__(
@@ -582,6 +611,7 @@ class ResourceRecommendationBot(TruncatingChatbot):
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            learner_context=learner_context,
         )
         self.agent = self.create_agent_graph()
 
@@ -663,6 +693,7 @@ class SyllabusBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
         enable_related_courses: bool | None = False,
         enable_account_tools: bool = False,
         course_id: str | None = None,
@@ -680,6 +711,7 @@ class SyllabusBot(TruncatingChatbot):
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            learner_context=learner_context,
         )
         # The graph captures the instructions, so the facts have to be in
         # place before create_agent_graph below.
@@ -754,6 +786,7 @@ class TutorBot(BaseChatbot):
         edx_module_id: str | None = None,
         run_readable_id: str | None = None,
         problem_set_title: str | None = None,
+        learner_context: str = "",
     ):
         super().__init__(
             user_id,
@@ -762,6 +795,7 @@ class TutorBot(BaseChatbot):
             temperature=temperature,
             thread_id=thread_id,
             model=model,
+            learner_context=learner_context,
         )
 
         self.edx_module_id = edx_module_id
@@ -841,6 +875,11 @@ class TutorBot(BaseChatbot):
             chat_history = [HumanMessage(content=message, id=message_id)]
             intent_history = []
             assessment_history = []
+        if self.learner_context:
+            # message_tutor builds its own system prompt, so the notes go in as a
+            # trailing system message, which filter_out_system_messages drops
+            # before the history is saved.
+            chat_history.append(SystemMessage(content=self.learner_context))
         posthog_callbacks = await self.set_callbacks(
             properties=await self.get_tool_metadata()
         )
@@ -1060,6 +1099,7 @@ class VideoGPTBot(TruncatingChatbot):
         temperature: float | None = None,
         instructions: str | None = None,
         thread_id: str | None = None,
+        learner_context: str = "",
     ):
         super().__init__(
             user_id,
@@ -1069,6 +1109,7 @@ class VideoGPTBot(TruncatingChatbot):
             temperature=temperature,
             instructions=instructions,
             thread_id=thread_id,
+            learner_context=learner_context,
         )
         self.agent = self.create_agent_graph()
 
@@ -2238,3 +2279,59 @@ class SupportBot(TruncatingChatbot):
             message, reply, {**extra_state, **updates}, awaiting_send=awaiting_send
         ):
             yield chunk
+
+
+class LearnerMemoryBot(BaseChatbot):
+    """
+    One structured model call that maintains a learner's notes (ai_chatbots.memory).
+
+    Not a chat: no graph, no checkpoint, no tools. It is a bot so the call gets
+    the same model setup as every other: the use case's timeout and retries, the
+    catalog check at deploy and an ol-llm trace in the learner's thread.
+    """
+
+    PROMPT_TEMPLATE = None
+    TASK_NAME = "LEARNER_MEMORY_TASK"
+    JOB_ID = "LEARNER_MEMORY_JOB"
+
+    def __init__(self, user_id: str, *, thread_id: str):
+        super().__init__(user_id, checkpointer=None, thread_id=thread_id)
+
+    async def get_tool_metadata(self) -> str:
+        """There are no tools."""
+        return ""
+
+    async def ask(self, output_type: type[BaseModel], instructions: str, prompt: str):
+        """
+        Return the model's answer to prompt as an output_type.
+
+        The model is made to call one tool whose arguments are the answer.
+        ol-llm's policy wrapper refuses with_structured_output, which would
+        replace ChatLiteLLM's own, but binds tools.
+        """
+        llm = self.llm.bind_tools(
+            [output_type], tool_choice=output_type.__name__
+        ) | PydanticToolsParser(tools=[output_type], first_tool_only=True)
+        with ol_llm.traced_chat(
+            self.use_case, prompt, attribution=self.attribution
+        ) as chat:
+            answer = await llm.ainvoke(
+                [SystemMessage(instructions), HumanMessage(prompt)],
+                config={"callbacks": [*chat.callbacks]},
+            )
+            chat.record(answer.model_dump_json())
+        return answer
+
+
+class MemoryGateBot(LearnerMemoryBot):
+    """Whether a turn has anything worth remembering."""
+
+    USE_CASE_NAME = "memory-gate"
+    DEFAULT_MODEL_SETTING = "AI_MEMORY_GATE_MODEL"
+
+
+class MemoryExtractionBot(LearnerMemoryBot):
+    """The learner's notes, rewritten with what a turn added."""
+
+    USE_CASE_NAME = "memory-extraction"
+    DEFAULT_MODEL_SETTING = "AI_MEMORY_EXTRACTION_MODEL"
