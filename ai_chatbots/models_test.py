@@ -49,3 +49,11 @@ def test_support_widget_copy_rejects_same_send_and_cancel(send_label, cancel_lab
     with pytest.raises(ValidationError) as excinfo:
         SupportWidgetCopy(send_label=send_label, cancel_label=cancel_label).full_clean()
     assert "send_label" in excinfo.value.message_dict
+
+
+@pytest.mark.parametrize("field", ["send_label", "cancel_label", "escalate_label"])
+def test_support_widget_copy_rejects_send_as_a_chip_label(field):
+    """The composer's submit button is already named "Send"."""
+    with pytest.raises(ValidationError) as excinfo:
+        SupportWidgetCopy(**{field: " send "}).full_clean()
+    assert field in excinfo.value.message_dict

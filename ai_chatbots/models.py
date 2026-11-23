@@ -201,11 +201,16 @@ class SupportWidgetCopy(TimestampedModel):
                 setattr(self, field.name, getattr(self, field.name).strip())
 
         errors = {}
+        for field in ("send_label", "cancel_label", "escalate_label"):
+            if getattr(self, field).casefold() == "send":
+                errors[field] = (
+                    '"Send" is already the name of the button that sends a message.'
+                )
         if MARKDOWN_IMAGE.search(self.greeting):
             errors["greeting"] = "Images can't be used in the greeting."
         send = self.send_label or SUPPORT_WIDGET_SEND_DEFAULT
         cancel = self.cancel_label or SUPPORT_WIDGET_CANCEL_DEFAULT
-        if send.casefold() == cancel.casefold():
+        if send.casefold() == cancel.casefold() and "send_label" not in errors:
             errors["send_label"] = (
                 f'The Send and Cancel buttons can\'t both say "{send}".'
             )
