@@ -3,9 +3,11 @@
 import asyncio
 import json
 import logging
+import math
+import random
 import traceback
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,114 @@ from asgiref.sync import sync_to_async
 from deepeval.test_case import LLMTestCase, ToolCall
 
 log = logging.getLogger(__name__)
+
+# Fixed, so two runs of the same command judge the same cases
+SAMPLE_SEED = 20261110
+
+# A failed search here makes a run incomplete.  Not the account tools: some
+# account cases plant a failing record, and "couldn't check" is what they test.
+SEARCH_TOOLS = frozenset(
+    {
+        "search_courses",
+        "search_content_files",
+        "search_related_course_content_files",
+        "get_video_transcript_chunk",
+        "search_support_articles",
+    }
+)
+
+
+def search_error(content: Any) -> str | None:
+    """Return the error a search tool reported in its output, if any."""
+    try:
+        parsed = json.loads(content) if isinstance(content, str) else None
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    metadata = parsed.get("metadata")
+    error = parsed.get("error") or (
+        metadata.get("error") if isinstance(metadata, dict) else None
+    )
+    return str(error) if error else None
+
+
+def judge_error(metric_data) -> str | None:
+    """Return why the judge failed to score a deepeval metric, if it failed."""
+    error = getattr(metric_data, "error", None)
+    if isinstance(error, str) and error:
+        return error
+    score = getattr(metric_data, "score", None)
+    if score is None or (isinstance(score, float) and math.isnan(score)):
+        return "no score"
+    return None
+
+
+JUDGE_FAILURES = {
+    "judge error",
+    "judge returned no score",
+    "deepeval returned no result",
+    "pairwise judge error",
+}
+
+
+@dataclass
+class Failure:
+    """Something a run failed to measure."""
+
+    bot: str
+    kind: str
+    question: str = ""
+    case_id: str | None = None
+    model: str | None = None
+    prompt_label: str | None = None
+    detail: str = ""
+
+
+@dataclass
+class RunFailures:
+    """Everything a run failed to measure, so none of it is dropped quietly."""
+
+    items: list[Failure] = field(default_factory=list)
+
+    def add(self, bot: str, kind: str, case: LLMTestCase | None = None, **kwargs):
+        """Record one failure, of the given answer (an LLMTestCase) if any."""
+        if case is not None:
+            metadata = case.metadata or {}
+            kwargs = {
+                "question": case.input,
+                "case_id": metadata.get("case_id"),
+                "model": metadata.get("model"),
+                "prompt_label": metadata.get("prompt_label"),
+                **kwargs,
+            }
+        self.items.append(Failure(bot=bot, kind=kind, **kwargs))
+
+    def for_bot(self, bot: str) -> list[Failure]:
+        """Return the failures of one bot."""
+        return [f for f in self.items if f.bot == bot]
+
+    def failed_cases(self, bot: str) -> set[tuple[str | None, str | None]]:
+        """Return the (case_id, prompt_label) pairs of a bot with a failed answer.
+
+        A judge failure leaves out only that measure, so it isn't counted here.
+        """
+        return {
+            (f.case_id, f.prompt_label)
+            for f in self.for_bot(bot)
+            if f.kind not in JUDGE_FAILURES
+        }
+
+    def __bool__(self) -> bool:
+        return bool(self.items)
+
+
+def sample_cases(cases: list, n: int | None, seed: int = SAMPLE_SEED) -> list:
+    """Return a seeded sample of n cases in their order (all if n is 0 or None)."""
+    if not n or n >= len(cases):
+        return list(cases)
+    picked = sorted(random.Random(seed).sample(range(len(cases)), n))  # noqa: S311
+    return [cases[i] for i in picked]
 
 
 @dataclass
@@ -48,6 +158,11 @@ class EvaluationConfig:
     timeout_seconds: int = 360
     max_retries: int = 3
     retry_delay: float = 5.0
+    # Correctness against the reference answer, plus Faithfulness to the
+    # retrieved material for the bots both sides search the same way
+    correctness_only: bool = False
+    # No deepeval metrics at all; only the pairwise judge
+    pairwise_only: bool = False
 
 
 class BaseBotEvaluator(ABC):
@@ -58,13 +173,16 @@ class BaseBotEvaluator(ABC):
         bot_class,
         bot_name: str,
         *,
-        data_file: str | None = None,
+        data_file: str | list[str] | None = None,
         stdout=None,
         error_log_file: str | None = None,
     ):
         self.bot_class = bot_class
         self.bot_name = bot_name
-        self.data_file = data_file or "test_json/rag_evaluation.json"
+        if isinstance(data_file, str):
+            data_file = [f for f in data_file.split(",") if f]
+        self.data_files = data_file or ["test_json/rag_evaluation.json"]
+        self.data_file = self.data_files[0]
         self.stdout = stdout  # Optional output wrapper for logging
         self.error_log_file = error_log_file or "rag_evaluation_errors.log"
 
@@ -103,7 +221,30 @@ class BaseBotEvaluator(ABC):
 
     @abstractmethod
     def load_test_cases(self) -> list[TestCaseSpec]:
-        """Load test cases specific to this bot type."""
+        """Load test cases specific to this bot type from self.data_file."""
+
+    def load_cases(self, *, require_reference: bool = False) -> list[TestCaseSpec]:
+        """Load every data file's valid cases, tagged "<file>#<index>"."""
+        cases = []
+        dropped: dict[str, int] = {}
+        for data_file in self.data_files:
+            self.data_file = data_file
+            for index, case in enumerate(self.load_test_cases()):
+                case.metadata = case.metadata or {}
+                case.metadata["case_id"] = f"{Path(data_file).name}#{index}"
+                if not self.validate_test_case(case):
+                    reason = "invalid for this bot"
+                elif require_reference and not case.expected_output:
+                    reason = "no reference answer"
+                else:
+                    cases.append(case)
+                    continue
+                dropped[reason] = dropped.get(reason, 0) + 1
+        self.data_file = self.data_files[0]
+        if self.stdout:
+            for reason, count in dropped.items():
+                self.stdout.write(f"Skipped {count} {self.bot_name} cases: {reason}")
+        return cases
 
     @abstractmethod
     def validate_test_case(self, test_case: TestCaseSpec) -> bool:
@@ -154,11 +295,19 @@ class BaseBotEvaluator(ABC):
                     test_case.expected_tools,
                 )
 
+        tool_messages = [
+            m
+            for m in response.get("messages", [])
+            if getattr(m, "type", None) == "tool"
+        ]
         # Every tool output, so the metrics see all evidence the bot had
         context = response.get("extra_context", []) + [
-            m.content
-            for m in response.get("messages", [])
-            if getattr(m, "type", None) == "tool" and m.content
+            m.content for m in tool_messages if m.content
+        ]
+        search_errors = [
+            m.name
+            for m in tool_messages
+            if getattr(m, "name", None) in SEARCH_TOOLS and search_error(m.content)
         ]
         log.info(
             "Evidence context for %s/%s %r: %d items, %d chars",
@@ -175,6 +324,10 @@ class BaseBotEvaluator(ABC):
                 "model": model,
                 "prompt_label": prompt_label,
                 **test_case.to_dict(),
+                "case_id": (test_case.metadata or {}).get("case_id"),
+                "search_errors": search_errors,
+                "tool_call_count": len(tool_messages),
+                "blocked_account_calls": response.get("blocked_account_calls", []),
             },
             input=test_case.question,
             actual_output=response["messages"][-1].content,
@@ -234,13 +387,14 @@ class BaseBotEvaluator(ABC):
 
         return []
 
-    async def evaluate_model(
+    async def evaluate_model(  # noqa: PLR0913
         self,
         model: str,
         test_cases: list[TestCaseSpec],
         instructions: str | None = None,
         prompt_label: str = "default",
         max_concurrent: int = 10,
+        failures: RunFailures | None = None,
     ) -> list[LLMTestCase]:
         """Evaluate a single model against all test cases with concurrent execution.
 
@@ -250,6 +404,7 @@ class BaseBotEvaluator(ABC):
             instructions: Optional custom instructions/prompt
             prompt_label: Label for the prompt being used
             max_concurrent: Maximum number of concurrent bot response generations
+            failures: If given, every case that failed to generate is added to it
         """
         # Filter valid test cases upfront
         valid_test_cases = [tc for tc in test_cases if self.validate_test_case(tc)]
@@ -301,6 +456,16 @@ class BaseBotEvaluator(ABC):
 
                     # Log to file with full details
                     self._log_error(error_msg, test_case=test_case, exception=e)
+                    if failures is not None:
+                        failures.add(
+                            self.bot_name,
+                            "answer failed to generate",
+                            question=test_case.question,
+                            case_id=(test_case.metadata or {}).get("case_id"),
+                            model=model,
+                            prompt_label=prompt_label,
+                            detail=str(e),
+                        )
 
                     return None
 

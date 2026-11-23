@@ -641,6 +641,7 @@ async def test_search_support_articles_warns_on_empty_category(
     )
 
     assert results["results"] == []
+    assert "error" not in results["metadata"]
     # A stale category id looks exactly like this, so it should not pass silently
     assert mock_log.call_count == 1
     assert mock_log.call_args.args[1:] == (OCW_CATEGORY, "ocw", COURSE_ID)
@@ -707,7 +708,7 @@ async def test_search_support_articles_portal_error(mocker, mock_support_request
         "results": [],
         "support_center_url_to_offer_if_no_article_answers": settings.AI_ZENDESK_URL,
         "citation_sources": {},
-        "metadata": {},
+        "metadata": {"error": "An error occurred while searching the support center"},
     }
 
 

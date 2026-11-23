@@ -1668,7 +1668,9 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
             new_callable=AsyncMock,
             return_value="problem_set",
         )
-    mocker.patch("ai_chatbots.chatbots.message_tutor", return_value=output)
+    mock_message_tutor = mocker.patch(
+        "ai_chatbots.chatbots.message_tutor", return_value=output
+    )
     user_msg = "what should i try next?"
     # Use unique UUID-based thread_id per variant
     if variant == "edx":
@@ -1729,6 +1731,8 @@ async def test_tutor_get_completion(posthog_settings, mocker, variant):
     async for chunk in chatbot.get_completion(user_msg):
         results += str(chunk)
     assert "Let's start by thinking about the problem. " in results
+    # The app's tutor uses its LangSmith prompts
+    assert mock_message_tutor.call_args.kwargs["prompt_overrides"] is None
 
     checkpoint = await database_sync_to_async(
         lambda: (
