@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.11.23.1] - 2026-11-23
+
+### Changes
+
+- **Add a baseline comparison and failure reporting to rag_evaluation** (#176) by mrbertrand@gmail.com
+- **Assert uv.lock stays on revision 5** (#178) by rhysyngsun@users.noreply.github.com
+- **Run the chat models under the use case's ol-llm timeout and retries** (#199) by tmacey@mit.edu
+- **Build local-dev from the dev group installed before any source** (#196) by christopher.chudzicki@gmail.com
+- **chore: add a 7-day npm release-age gate to Yarn** (#198) by 1447295+shaidar@users.noreply.github.com
+
 ## [2026.11.19.1] - 2026-11-19
 
 ### Changes
