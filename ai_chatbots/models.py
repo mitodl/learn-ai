@@ -153,6 +153,12 @@ class ChatResponseRating(models.Model):
 SUPPORT_WIDGET_SEND_DEFAULT = "Send request"
 SUPPORT_WIDGET_CANCEL_DEFAULT = "Cancel"
 MARKDOWN_IMAGE = re.compile(r"!\[")
+# A pressed chip's label becomes the learner's own message, which renders as
+# Markdown, so chip labels are held to letters, numbers and plain punctuation.
+PLAIN_LABEL = re.compile(r"[^\W_](?:[^\W_]|[ .,!?'\u2019\"()\-:;&/])*")
+NUMBERED_LIST_START = re.compile(r"\d+[.)]")
+# The widget trims U+FEFF like whitespace; Python's strip() doesn't.
+EDGE_SPACE = re.compile(r"^[\s\ufeff]+|[\s\ufeff]+$")
 
 
 class SupportWidgetCopy(TimestampedModel):
@@ -198,19 +204,27 @@ class SupportWidgetCopy(TimestampedModel):
     def clean(self):
         for field in self._meta.get_fields():
             if isinstance(field, models.CharField | models.TextField):
-                setattr(self, field.name, getattr(self, field.name).strip())
+                setattr(self, field.name, EDGE_SPACE.sub("", getattr(self, field.name)))
 
         errors = {}
         for field in ("send_label", "cancel_label", "escalate_label"):
-            if getattr(self, field).casefold() == "send":
+            label = getattr(self, field)
+            if label.casefold() == "send":
                 errors[field] = (
                     '"Send" is already the name of the button that sends a message.'
+                )
+            elif label and (
+                not PLAIN_LABEL.fullmatch(label) or NUMBERED_LIST_START.match(label)
+            ):
+                errors[field] = (
+                    "Use letters, numbers, spaces and . , ! ? ' \" ( ) - : ; & /, "
+                    "starting with a letter or number."
                 )
         if MARKDOWN_IMAGE.search(self.greeting):
             errors["greeting"] = "Images can't be used in the greeting."
         send = self.send_label or SUPPORT_WIDGET_SEND_DEFAULT
         cancel = self.cancel_label or SUPPORT_WIDGET_CANCEL_DEFAULT
-        if send.casefold() == cancel.casefold() and "send_label" not in errors:
+        if send.casefold() == cancel.casefold():
             errors["send_label"] = (
                 f'The Send and Cancel buttons can\'t both say "{send}".'
             )

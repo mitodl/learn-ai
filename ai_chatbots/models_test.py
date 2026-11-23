@@ -57,3 +57,46 @@ def test_support_widget_copy_rejects_send_as_a_chip_label(field):
     with pytest.raises(ValidationError) as excinfo:
         SupportWidgetCopy(**{field: " send "}).full_clean()
     assert field in excinfo.value.message_dict
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "![](https://example.com/p.png)",
+        "[Help](https://example.com)",
+        "# Cancel",
+        "1. Yes",
+        "- Yes",
+        "---",
+        "**Stop**",
+        "Talk_to_us",
+        "x^2^",
+        "`stop`",
+        "> quote",
+    ],
+)
+@pytest.mark.parametrize("field", ["send_label", "cancel_label", "escalate_label"])
+def test_support_widget_copy_rejects_markdown_in_chip_labels(field, label):
+    """A pressed chip's label shows in the learner's own message, which renders Markdown."""
+    with pytest.raises(ValidationError) as excinfo:
+        SupportWidgetCopy(**{field: label}).full_clean()
+    assert field in excinfo.value.message_dict
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["Never mind", "Don\u2019t send it", "Yes, send it!", "Talk to a person (24/7)"],
+)
+def test_support_widget_copy_allows_plain_chip_labels(label):
+    """Ordinary wording with simple punctuation is fine."""
+    SupportWidgetCopy(cancel_label=label).full_clean()
+
+
+def test_support_widget_copy_strips_a_pasted_byte_order_mark():
+    """
+    The widget trims U+FEFF like whitespace, so the admin has to as well or it
+    would save a label the widget then treats differently.
+    """
+    with pytest.raises(ValidationError) as excinfo:
+        SupportWidgetCopy(send_label="﻿Send").full_clean()
+    assert "send_label" in excinfo.value.message_dict
