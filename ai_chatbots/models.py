@@ -1,5 +1,8 @@
 """ai_chabots models"""
 
+import re
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from ai_chatbots.constants import ChatResponseScore
@@ -144,3 +147,67 @@ class ChatResponseRating(models.Model):
 
     def __str__(self):
         return f"{self.checkpoint.checkpoint_id}-{self.rating}"
+
+
+# The widget's own defaults, in smoot-design ContactUsLauncher.
+SUPPORT_WIDGET_SEND_DEFAULT = "Send request"
+SUPPORT_WIDGET_CANCEL_DEFAULT = "Cancel"
+MARKDOWN_IMAGE = re.compile(r"!\[")
+
+
+class SupportWidgetCopy(TimestampedModel):
+    """
+    The Contact us widget's text, edited by product in the admin. One row. A blank
+    field leaves the widget's built-in default in place.
+    """
+
+    launcher_label = models.CharField(
+        max_length=40, blank=True, help_text='Blank shows "Contact us".'
+    )
+    escalate_label = models.CharField(
+        max_length=60, blank=True, help_text='Blank shows "Contact the support team".'
+    )
+    send_label = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text=f'Blank shows "{SUPPORT_WIDGET_SEND_DEFAULT}".',
+    )
+    cancel_label = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text=f'Blank shows "{SUPPORT_WIDGET_CANCEL_DEFAULT}".',
+    )
+    placeholder = models.CharField(
+        max_length=80, blank=True, help_text='Blank shows "Describe what you need".'
+    )
+    badge = models.CharField(
+        max_length=30, blank=True, help_text='Blank shows "AI ASSISTANT".'
+    )
+    greeting = models.TextField(
+        max_length=1000,
+        blank=True,
+        help_text="Markdown, no images. Blank shows the built-in greeting.",
+    )
+
+    class Meta:
+        verbose_name_plural = "support widget copy"
+
+    def __str__(self):
+        return "Support widget copy"
+
+    def clean(self):
+        for field in self._meta.get_fields():
+            if isinstance(field, models.CharField | models.TextField):
+                setattr(self, field.name, getattr(self, field.name).strip())
+
+        errors = {}
+        if MARKDOWN_IMAGE.search(self.greeting):
+            errors["greeting"] = "Images can't be used in the greeting."
+        send = self.send_label or SUPPORT_WIDGET_SEND_DEFAULT
+        cancel = self.cancel_label or SUPPORT_WIDGET_CANCEL_DEFAULT
+        if send.casefold() == cancel.casefold():
+            errors["send_label"] = (
+                f'The Send and Cancel buttons can\'t both say "{send}".'
+            )
+        if errors:
+            raise ValidationError(errors)

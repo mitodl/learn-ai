@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import QuerySet
 from django.http import HttpResponse, JsonResponse
+from django.utils.cache import patch_cache_control, patch_vary_headers
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -26,6 +27,7 @@ from ai_chatbots.learn_api import LearnError
 from ai_chatbots.models import (
     DjangoCheckpoint,
     LLMModel,
+    SupportWidgetCopy,
     UserChatSession,
 )
 from ai_chatbots.permissions import IsThreadOwner
@@ -34,6 +36,7 @@ from ai_chatbots.serializers import (
     ChatMessageSerializer,
     ChatRatingSerializer,
     LLMModelSerializer,
+    SupportWidgetCopySerializer,
     SystemPromptSerializer,
     UserChatSessionSerializer,
 )
@@ -180,6 +183,23 @@ class LLMModelViewSet(ReadOnlyModelViewSet):
     filterset_fields = ["provider"]
     ordering = ["provider", "name"]
     ordering_fields = ["provider", "name", "litellm_id"]
+
+
+@extend_schema(responses=SupportWidgetCopySerializer)
+class SupportWidgetCopyView(ApiView):
+    """The Contact us widget's text as edited in the admin."""
+
+    http_method_names = ["get"]
+    permission_classes = (AllowAny,)
+
+    def get(self, request, *args, **kwargs):  # noqa: ARG002
+        copy = SupportWidgetCopy.objects.first()
+        response = Response(SupportWidgetCopySerializer(copy).data if copy else {})
+        patch_cache_control(response, max_age=300)
+        # learn.mit.edu and courses.learn.mit.edu share one browser cache, so a
+        # cached CORS answer for one host would otherwise be reused on the other.
+        patch_vary_headers(response, ["Origin"])
+        return response
 
 
 @extend_schema(

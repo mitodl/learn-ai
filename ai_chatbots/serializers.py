@@ -10,6 +10,7 @@ from ai_chatbots.models import (
     ChatResponseScore,
     DjangoCheckpoint,
     LLMModel,
+    SupportWidgetCopy,
     UserChatSession,
 )
 
@@ -296,6 +297,29 @@ class CanvasTutorChatRequestSerializer(ChatRequestSerializer):
             f"{attrs.get('run_readable_id', '')} - {attrs.get('problem_set_title', '')}"
         )
         return attrs
+
+
+class SupportWidgetCopySerializer(serializers.ModelSerializer):
+    """Only the filled-in strings, so the widget keeps its default for the rest."""
+
+    class Meta:
+        model = SupportWidgetCopy
+        fields = [
+            "launcher_label",
+            "escalate_label",
+            "send_label",
+            "cancel_label",
+            "placeholder",
+            "badge",
+            "greeting",
+        ]
+
+    def to_representation(self, instance):
+        return {
+            key: value
+            for key, value in super().to_representation(instance).items()
+            if value
+        }
 
 
 class LLMModelSerializer(serializers.ModelSerializer):
