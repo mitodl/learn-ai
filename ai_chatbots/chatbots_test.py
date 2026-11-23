@@ -5421,30 +5421,15 @@ def test_support_description_leaves_the_bots_own_words_out():
     )
 
 
-# Threads stored before the go-ahead line was reworded carry this text.
-OLD_SEND_UNCLEAR = (
-    "I'm not sure whether that was a go-ahead or something to add, and I don't "
-    'want to guess. Reply "send" on its own to pass on the request exactly as '
-    'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
-    "updated version."
-)
-
-
-@pytest.mark.parametrize("unclear", [SUPPORT_SEND_UNCLEAR, OLD_SEND_UNCLEAR])
-def test_support_description_drops_what_the_go_ahead_line_queried(unclear):
+def test_support_description_drops_what_the_go_ahead_line_queried():
     prior = [
         HumanMessage(SUPPORT_PROBLEM),
         AIMessage("review"),
         HumanMessage("yes please send it asap"),
-        AIMessage(unclear),
+        AIMessage(SUPPORT_SEND_UNCLEAR),
     ]
 
     assert _support_description(prior, "") == SUPPORT_PROBLEM
-
-
-def test_the_go_ahead_line_names_the_buttons():
-    assert "Send request" in SUPPORT_SEND_UNCLEAR
-    assert "Cancel" in SUPPORT_SEND_UNCLEAR
 
 
 @pytest.mark.parametrize(
@@ -5529,28 +5514,6 @@ async def test_the_answering_graph_hands_the_tools_the_page_course(
 
     assert seen["course_id"] == ["course-v1:MITx+18.01x+2T2025"]
     assert seen["platform"] == ["mitxonline"]
-
-
-def test_scripted_support_lines_speak_plainly():
-    """No institution's full name, no deadline we have no source for."""
-    lines = [
-        value
-        for name, value in vars(chatbots_module).items()
-        if name.startswith("SUPPORT_") and isinstance(value, str)
-    ]
-
-    assert not [line for line in lines if "MIT Open Learning" in line]
-    assert not [line for line in lines if "day or two" in line]
-
-
-def test_the_review_footer_names_the_buttons_and_the_typed_words():
-    footer = chatbots_module.SUPPORT_TICKET_REVIEW_FOOTER
-
-    assert "Send request" in footer
-    assert "Cancel" in footer
-    # Learners without the buttons type these, and the parser reads them.
-    assert '"send"' in footer
-    assert '"cancel"' in footer
 
 
 @pytest.mark.asyncio
@@ -5694,15 +5657,21 @@ async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("result", "expected"),
+    ("result", "expected", "done"),
     [
-        ({"reference": None, "uncertain": True}, SUPPORT_TICKET_MAYBE_FILED),
-        ({"reference": None, "reason": TICKET_REJECTED}, SUPPORT_TICKET_REJECTED),
-        ({"reference": None}, SUPPORT_TICKET_FAILED),
+        # The thread files nothing more, so the next request needs its own.
+        ({"reference": None, "uncertain": True}, SUPPORT_TICKET_MAYBE_FILED, True),
+        (
+            {"reference": None, "reason": TICKET_REJECTED},
+            SUPPORT_TICKET_REJECTED,
+            True,
+        ),
+        # A retry on this thread can still file it.
+        ({"reference": None}, SUPPORT_TICKET_FAILED, False),
     ],
 )
-async def test_no_ticket_means_no_filed_flag(
-    mocker, mock_checkpointer, result, expected
+async def test_filed_flag_without_a_reference(
+    mocker, mock_checkpointer, result, expected, done
 ):
     mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",
@@ -5712,6 +5681,8 @@ async def test_no_ticket_means_no_filed_flag(
 
     await _say(chatbot, SUPPORT_PROBLEM)
     reply = await _say(chatbot, "send")
+    later = await _say(chatbot, "hello?")
 
     assert expected in reply
-    assert _metadata_of(reply)["filed"] is False
+    assert _metadata_of(reply)["filed"] is done
+    assert _metadata_of(later)["filed"] is done

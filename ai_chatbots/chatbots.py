@@ -1118,9 +1118,8 @@ class SupportAnsweringState(SummaryState):
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
 SUPPORT_TICKET_REVIEW_FOOTER = (
-    'Press Send request to pass this on, or Cancel to drop it. Typing "send" '
-    'or "cancel" works too. Anything else you type gets added, and I\'ll show '
-    "you the new version."
+    "Press Send request to pass this on, or Cancel to drop it. Anything else you "
+    "type gets added, and I'll show you the new version."
 )
 SUPPORT_TICKET_FILED = (
     "Sent. Your reference number is {reference}. If the team needs to reply, "
@@ -1132,8 +1131,8 @@ SUPPORT_TICKET_ALREADY_FILED = (
     "the team needs to reply, they'll write to {email}."
 )
 SUPPORT_TICKET_FAILED = (
-    'Sorry, that didn\'t go through. Press Send request (or type "send") to try '
-    "again, or email our support team directly."
+    "Sorry, that didn't go through. Press Send request to try again, or email our "
+    "support team directly."
 )
 SUPPORT_TICKET_REJECTED = (
     "Sorry, our support system turned this request down, and sending it again "
@@ -1163,21 +1162,9 @@ SUPPORT_FILLER_OPENER = (
 )
 SUPPORT_SEND_UNCLEAR = (
     "I'm not sure whether that was a go-ahead or something to add. Press Send "
-    'request to pass it on exactly as shown, or Cancel to drop it. Typing "send" '
-    'or "cancel" on its own works too. To add something, just tell me and I\'ll '
-    "show you the updated version."
+    "request to pass it on exactly as shown, or Cancel to drop it. To add "
+    "something, just tell me and I'll show you the updated version."
 )
-# Threads stored before the rewording still carry the old line, and
-# _support_description has to recognise both.
-SUPPORT_SEND_UNCLEAR_REPLIES = {
-    SUPPORT_SEND_UNCLEAR,
-    (
-        "I'm not sure whether that was a go-ahead or something to add, and I don't "
-        'want to guess. Reply "send" on its own to pass on the request exactly as '
-        'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
-        "updated version."
-    ),
-}
 SUPPORT_TICKET_SENDING = (
     "Still sending that one. The reference number will show up here once it's through."
 )
@@ -1575,10 +1562,11 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         # Dropped only where we came back and asked what it meant, so the
         # chatter we could not read stays out while the same words typed
         # anywhere else are still the learner's problem.
-        and not any(
-            getattr(reply, "content", "") in SUPPORT_SEND_UNCLEAR_REPLIES
+        and SUPPORT_SEND_UNCLEAR
+        not in [
+            getattr(reply, "content", "")
             for reply in prior_messages[position + 1 : position + 2]
-        )
+        ]
     ]
     typed.append(message)
     return "\n\n".join(
@@ -2248,9 +2236,13 @@ class SupportBot(TruncatingChatbot):
                 or [False]
             )[-1]
         )
-        # Tells the widget to start a new thread with the next message. Read off
-        # the session, which only holds a reference once Zendesk returned one.
-        filed = bool(session and session.support_ticket_reference)
+        # Tells the widget to start a new thread with the next message. This one
+        # files nothing more once Zendesk returned a reference, may hold a ticket
+        # it never confirmed, or turned the request down.
+        filed = bool(session and session.support_ticket_reference) or any(
+            (updates.get(key) or prior_state.get(key) or [False])[-1]
+            for key in ("filing_uncertain", "filing_blocked")
+        )
         async for chunk in self._reply_without_the_model(
             message,
             reply,
