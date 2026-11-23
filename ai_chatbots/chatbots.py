@@ -1626,8 +1626,16 @@ def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
     would let the chat name a stranger as the requester.
     """
     # On the opening message an address is part of the problem ("can't log in
-    # as x@y.com"), not a reply-to, so it only counts once we have asked.
-    parsed_reply_to = _reply_to_email(message) if prior_state.get("messages") else ""
+    # as x@y.com"), not a reply-to, so it only counts once we have asked. A
+    # "thanks" opener asked nothing, so the message after it still opens. A bare
+    # address after a cancel is a correction, not a problem.
+    prior_messages = prior_state.get("messages") or []
+    asked = prior_messages[_cancelled_after(prior_state) :]
+    parsed_reply_to = (
+        _reply_to_email(message)
+        if asked or (prior_messages and _is_bare_reply_to(message))
+        else ""
+    )
     # The body address is a fallback, not the latest word: a host that resends
     # it every request would otherwise undo a correction on the turn that files.
     known = _accumulated(prior_state, {}, "user_email") or _latest(

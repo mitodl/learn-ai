@@ -5625,6 +5625,54 @@ async def test_after_a_filler_opener_the_first_email_ask_is_not_again(
 
 
 @pytest.mark.asyncio
+async def test_after_a_filler_opener_an_address_in_the_problem_is_not_the_reply_to(
+    mocker, mock_checkpointer
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("")
+                )
+            ]
+        )
+
+    await say("thanks")
+    reply = await say("My colleague bob@example.com cannot log in")
+
+    assert reply.startswith(SUPPORT_ASK_EMAIL)
+
+
+@pytest.mark.asyncio
+async def test_a_bare_address_after_a_cancel_replaces_the_reply_to(
+    mocker, mock_checkpointer
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("")
+                )
+            ]
+        )
+
+    await say(SUPPORT_PROBLEM)
+    await say("old@example.com")
+    await say("cancel")
+    await say("new@example.com")
+    review = await say(SUPPORT_PROBLEM)
+
+    assert "new@example.com" in review
+    assert "old@example.com" not in review
+
+
+@pytest.mark.asyncio
 async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
     mocker, mock_checkpointer
 ):
