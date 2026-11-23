@@ -55,7 +55,6 @@ from ai_chatbots.chatbots import (
     SUPPORT_ASK_PROBLEM,
     SUPPORT_FILING_LOCK_PREFIX,
     SUPPORT_NOTHING_TO_SEND,
-    SUPPORT_OFFER_TICKET,
     SUPPORT_SEND_UNCLEAR,
     SUPPORT_TICKET_BAD_EMAIL,
     SUPPORT_TICKET_CANCELLED,
@@ -2676,9 +2675,7 @@ async def test_a_close_out_reopens_answering(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
-async def test_support_bot_answers_and_still_offers_the_ticket(
-    mocker, mock_checkpointer
-):
+async def test_support_bot_answers_without_a_ticket_footer(mocker, mock_checkpointer):
     chatbot = await _answering_support_bot(
         mocker, mock_checkpointer, "You're enrolled in 18.01x."
     )
@@ -2686,7 +2683,7 @@ async def test_support_bot_answers_and_still_offers_the_ticket(
     reply = await _say(chatbot, "what am I enrolled in?")
 
     assert "You're enrolled in 18.01x." in reply
-    assert SUPPORT_OFFER_TICKET in reply
+    assert "didn't sort it out" not in reply
     state = await _state_of(chatbot)
     # An answer is not a request, so nothing is queued to send.
     assert (state.get("awaiting_send") or [False])[-1] is False
@@ -2729,7 +2726,6 @@ async def test_support_bot_collects_when_it_cannot_answer(mocker, mock_checkpoin
     reply = await _say(chatbot, "why was I charged twice?")
 
     assert SUPPORT_TICKET_REVIEW_HEADER in reply
-    assert SUPPORT_OFFER_TICKET not in reply
 
 
 @pytest.mark.asyncio
@@ -2784,7 +2780,6 @@ async def test_send_after_disagreeing_with_an_answer_files_both(
     review = await _say(chatbot, "send")
 
     assert "still 90.0%" in again
-    assert SUPPORT_OFFER_TICKET in again
     assert SUPPORT_TICKET_REVIEW_HEADER in review
     assert "What's my grade in AT.101x?" in review
     assert disagreement in review
@@ -2897,7 +2892,6 @@ async def test_yes_after_an_answer_takes_up_the_offer(mocker, mock_checkpointer)
 
     assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
     assert "another answer" not in reply
-    assert SUPPORT_OFFER_TICKET not in reply
     assert SUPPORT_ANSWER_CLOSED not in reply
     assert "my certificate is missing" in reply
     assert (await _state_of(chatbot))["answered"][-1] is False
@@ -2913,7 +2907,6 @@ async def test_support_bot_escalates_to_the_intake_script(mocker, mock_checkpoin
     reply = await _say(chatbot, "Contact the support team", escalate=[True])
 
     assert SUPPORT_ASK_PROBLEM in reply
-    assert SUPPORT_OFFER_TICKET not in reply
     SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
     state = await _state_of(chatbot)
     assert state["handed_off"][-1] is True
