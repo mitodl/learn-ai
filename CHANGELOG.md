@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026.11.24.1] - 2026-11-24
+
+### Changes
+
+- **Make the support bot sound less robotic and start a new request after filing** (#205) by zamanafzal@gmail.com
+
 ## [2026.11.23.1] - 2026-11-23
 
 ### Changes
