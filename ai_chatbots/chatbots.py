@@ -1130,8 +1130,9 @@ SUPPORT_TICKET_ALREADY_FILED = (
     "the team needs to reply, they'll write to {email}."
 )
 SUPPORT_TICKET_FAILED = (
-    "I couldn't submit your request. Our ticket system didn't respond, so nothing "
-    "has been sent and there's no ticket number yet."
+    "I couldn't submit your request, so nothing has been sent and there's no "
+    "ticket number yet. Press Send request to try again, or email our support "
+    "team directly."
 )
 SUPPORT_TICKET_REJECTED = (
     "Sorry, our support system turned this request down, and sending it again "
