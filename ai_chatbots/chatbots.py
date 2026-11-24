@@ -1348,6 +1348,11 @@ PAUSE_PHRASES = frozenset({"wait", "hold on", "hang on", "one sec", "one moment"
 FILLER_PHRASES = (
     AFFIRMATIVE_PHRASES | DECLINE_PHRASES | NOTHING_MORE_PHRASES | PAUSE_PHRASES
 )
+# Only matched on a thread's first message. Exact match, so "I want to cancel
+# my ticket" is still a request.
+OPENER_PHRASES = frozenset(
+    {"hi", "hello", "hey", "help", "cancel", "never mind", "nevermind", "stop"}
+)
 # Not FILLER_PHRASES: said to the offer, "send it" means pass it on, so no
 # affirmatives here.
 ANSWER_END_PHRASES = ANSWER_CLOSING_PHRASES | NOTHING_MORE_PHRASES
@@ -2028,7 +2033,11 @@ class SupportBot(TruncatingChatbot):
         """
         prior_messages = prior_state.get("messages") or []
         # Moving cancelled_after past this exchange keeps it out of the request.
-        if not prior_messages and (_is_filler(message) or _closes_the_answer(message)):
+        if not prior_messages and (
+            _is_filler(message)
+            or _closes_the_answer(message)
+            or _normalised(message) in OPENER_PHRASES
+        ):
             return SUPPORT_FILLER_OPENER, {"cancelled_after": [2]}
         email = _support_email(prior_state, extra_state, message)
         if not email:

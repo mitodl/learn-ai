@@ -2683,8 +2683,7 @@ async def test_support_bot_answers_without_a_ticket_footer(mocker, mock_checkpoi
 
     reply = await _say(chatbot, "what am I enrolled in?")
 
-    assert "You're enrolled in 18.01x." in reply
-    assert "didn't sort it out" not in reply
+    assert reply.split("\n\n<!--")[0] == "You're enrolled in 18.01x."
     state = await _state_of(chatbot)
     # An answer is not a request, so nothing is queued to send.
     assert (state.get("awaiting_send") or [False])[-1] is False
@@ -5545,7 +5544,7 @@ async def test_a_signed_in_learner_sees_the_review_on_the_first_message(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("filler", ["thanks", "ok", "Thank you!"])
+@pytest.mark.parametrize("filler", ["thanks", "ok", "Thank you!", "hi", "Cancel"])
 @pytest.mark.parametrize("email", ["", "learner@mit.edu"])
 async def test_a_filler_opener_does_not_start_a_request(
     mocker, mock_checkpointer, filler, email
@@ -5572,6 +5571,18 @@ async def test_a_filler_opener_does_not_start_a_request(
     assert _metadata_of(reply)["awaiting_send"] is False
     assert review.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert filler not in review.split("**Where you were:**")[0]
+
+
+@pytest.mark.asyncio
+async def test_an_opening_request_that_mentions_cancel_is_reviewed(
+    mocker, mock_checkpointer
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    reply = await _say(chatbot, "I want to cancel my ticket", confirm=[True])
+
+    assert reply.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
+    assert "I want to cancel my ticket" in reply
 
 
 @pytest.mark.asyncio
