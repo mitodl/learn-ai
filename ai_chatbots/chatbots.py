@@ -1116,23 +1116,22 @@ class SupportAnsweringState(SummaryState):
     platform: Annotated[list[str] | None, add]
 
 
-SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
+SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send:"
 SUPPORT_TICKET_REVIEW_FOOTER = (
-    "Press Send request to pass this on, or Cancel to drop it. Anything else you "
-    "type gets added, and I'll show you the new version."
+    "Is anything missing? You can add it below before sending. When it looks "
+    "right, press Send request, or press Cancel to drop it."
 )
 SUPPORT_TICKET_FILED = (
-    "Sent. Your reference number is {reference}. If the team needs to reply, "
-    "they'll write to {email}. You can type something new here if there's "
-    "anything else."
+    "Your request has been submitted. Your reference number is {reference}. The "
+    "support team will reply to {email}, usually within 2 business days."
 )
 SUPPORT_TICKET_ALREADY_FILED = (
     "That one's already been sent. Your reference number is {reference}, and if "
     "the team needs to reply, they'll write to {email}."
 )
 SUPPORT_TICKET_FAILED = (
-    "Sorry, that didn't go through. Press Send request to try again, or email our "
-    "support team directly."
+    "I couldn't submit your request. Our ticket system didn't respond, so nothing "
+    "has been sent and there's no ticket number yet."
 )
 SUPPORT_TICKET_REJECTED = (
     "Sorry, our support system turned this request down, and sending it again "
@@ -1148,7 +1147,7 @@ SUPPORT_TICKET_MAYBE_FILED = (
     "If you don't hear from our support team, email them directly."
 )
 SUPPORT_TICKET_CANCELLED = (
-    "Okay, nothing was sent. Type something new whenever you're ready."
+    "No problem. I haven't sent anything. Is there anything else I can help with?"
 )
 # Not SUPPORT_TICKET_CANCELLED: there is nothing written to have put aside, and
 # saying there is reads as a request going missing.
@@ -1156,10 +1155,7 @@ SUPPORT_NOTHING_TO_SEND = (
     "Okay, there was nothing to send. Type what's on your mind whenever you're ready."
 )
 # A thread that opens on "thanks" or "ok" has nothing to pass on yet.
-SUPPORT_FILLER_OPENER = (
-    "No problem. If there's something you'd like our support team to know, type "
-    "it here and I'll pass it on."
-)
+SUPPORT_FILLER_OPENER = "Hello. What can I help you with today?"
 SUPPORT_SEND_UNCLEAR = (
     "I'm not sure whether that was a go-ahead or something to add. Press Send "
     "request to pass it on exactly as shown, or Cancel to drop it. To add "
@@ -1168,16 +1164,15 @@ SUPPORT_SEND_UNCLEAR = (
 SUPPORT_TICKET_SENDING = (
     "Still sending that one. The reference number will show up here once it's through."
 )
-SUPPORT_ASK_EMAIL = (
-    "Thanks. What email should our support team use if they need to reply?"
-)
+SUPPORT_ASK_EMAIL = "What email address should the team reply to?"
 SUPPORT_ASK_EMAIL_AGAIN = (
     "I still need an email so the team can reply. What's a good one?"
 )
-SUPPORT_ASK_PROBLEM = "What's on your mind? Type it here and I'll pass it on."
+SUPPORT_ASK_PROBLEM = (
+    "What's on your mind? Type it here and I'll pass it on. You can also skip this."
+)
 SUPPORT_ANSWER_CLOSED = (
-    "Glad that helped. If anything else comes up, type it here and I'll pass it "
-    "on to our support team."
+    "Glad that helped. If anything else comes up, I'm here, and so is the support team."
 )
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
