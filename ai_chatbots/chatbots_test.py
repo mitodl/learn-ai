@@ -5421,12 +5421,23 @@ def test_support_description_leaves_the_bots_own_words_out():
     )
 
 
-def test_support_description_drops_what_the_go_ahead_line_queried():
+@pytest.mark.parametrize(
+    "unclear_reply",
+    [
+        SUPPORT_SEND_UNCLEAR,
+        # The wording before learn-ai#205, still in threads open at deploy.
+        "I'm not sure whether that was a go-ahead or something to add, and I don't "
+        'want to guess. Reply "send" on its own to pass on the request exactly as '
+        'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
+        "updated version.",
+    ],
+)
+def test_support_description_drops_what_the_go_ahead_line_queried(unclear_reply):
     prior = [
         HumanMessage(SUPPORT_PROBLEM),
         AIMessage("review"),
         HumanMessage("yes please send it asap"),
-        AIMessage(SUPPORT_SEND_UNCLEAR),
+        AIMessage(unclear_reply),
     ]
 
     assert _support_description(prior, "") == SUPPORT_PROBLEM

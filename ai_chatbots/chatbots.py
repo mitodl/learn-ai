@@ -1161,6 +1161,15 @@ SUPPORT_SEND_UNCLEAR = (
     "request to pass it on exactly as shown, or Cancel to drop it. To add "
     "something, just tell me and I'll show you the updated version."
 )
+# Threads open at deploy still hold the earlier wording, and the description
+# filter matches the reply by its exact text.
+SUPPORT_SEND_UNCLEAR_REPLIES = (
+    SUPPORT_SEND_UNCLEAR,
+    "I'm not sure whether that was a go-ahead or something to add, and I don't "
+    'want to guess. Reply "send" on its own to pass on the request exactly as '
+    'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
+    "updated version.",
+)
 SUPPORT_TICKET_SENDING = (
     "Still sending that one. The reference number will show up here once it's through."
 )
@@ -1555,11 +1564,10 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         # Dropped only where we came back and asked what it meant, so the
         # chatter we could not read stays out while the same words typed
         # anywhere else are still the learner's problem.
-        and SUPPORT_SEND_UNCLEAR
-        not in [
-            getattr(reply, "content", "")
+        and not any(
+            getattr(reply, "content", "") in SUPPORT_SEND_UNCLEAR_REPLIES
             for reply in prior_messages[position + 1 : position + 2]
-        ]
+        )
     ]
     typed.append(message)
     return "\n\n".join(
