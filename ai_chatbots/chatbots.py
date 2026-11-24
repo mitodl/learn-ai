@@ -1117,9 +1117,10 @@ class SupportAnsweringState(SummaryState):
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send:"
+# Not a question: a typed "no" cancels and a "yes" files.
 SUPPORT_TICKET_REVIEW_FOOTER = (
-    "Is anything missing? You can add it below before sending. When it looks "
-    "right, press Send request, or press Cancel to drop it."
+    "Add anything that's missing below. When it looks right, press Send "
+    "request, or press Cancel to drop it."
 )
 SUPPORT_TICKET_FILED = (
     "Your request has been submitted. Your reference number is {reference}. The "
@@ -1144,8 +1145,8 @@ SUPPORT_TICKET_BAD_EMAIL = (
 )
 SUPPORT_TICKET_MAYBE_FILED = (
     "I didn't hear back from our support system, so I can't tell whether that "
-    "went through. It may have, so I won't send it again and risk a duplicate. "
-    "If you don't hear from our support team, email them directly."
+    "went through. It may have, so please don't send it again. If you don't "
+    "hear from our support team within 2 business days, email them directly."
 )
 SUPPORT_TICKET_CANCELLED = (
     "No problem. I haven't sent anything. Is there anything else I can help with?"

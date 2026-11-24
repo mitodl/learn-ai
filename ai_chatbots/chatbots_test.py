@@ -5711,3 +5711,14 @@ def test_the_review_boxes_everything_up_to_the_reply_to():
     assert boxed.splitlines()[0] == f"> {SUPPORT_TICKET_REVIEW_HEADER}"
     assert boxed.splitlines()[-1] == "> **Reply to:** learner@example.com"
     assert footer == SUPPORT_TICKET_REVIEW_FOOTER
+
+
+def test_the_review_footer_asks_no_yes_or_no_question():
+    """A typed "no" cancels and a "yes" files, so the footer can't invite either."""
+    assert "?" not in SUPPORT_TICKET_REVIEW_FOOTER
+
+
+def test_the_maybe_filed_reply_does_not_promise_no_duplicate():
+    """The next message starts a new thread, which could file the same request again."""
+    assert "won't send it again" not in SUPPORT_TICKET_MAYBE_FILED
+    assert "don't send it again" in SUPPORT_TICKET_MAYBE_FILED
