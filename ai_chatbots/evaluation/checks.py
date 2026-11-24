@@ -14,7 +14,7 @@ OFFER = re.compile(
     r"\b(?:I(?:'ll| will| can| could)|let me|tell me|just ask|feel free|ask me)\b"
     rf"|\bI(?:'ll| will| can| could)\b[^.!?\n]*?{IF_YOU_WANT}"
     r"|\bwould you like\b"
-    r"|\bdo you want\b|\bwant me to\b|\blet me know if\b|\bhappy to\b|\bshall i\b"
+    r"|\bdo you want\b|\bwant me to\b|\blet me know\b|\bhappy to\b|\bshall i\b"
     r"|\bI can (?:also )?(?:help|look|narrow|find|walk|show|suggest|recommend"
     r"|provide|search|check|give|share|explain|turn|tailor|compare|pull|list|break)"
 )
@@ -111,16 +111,40 @@ def bare_urls(answer: str) -> list[str]:
     return found
 
 
+def tool_use(metadata: dict) -> list[str]:
+    """Return expected tools the bot didn't call, or any it called if none were."""
+    expected = metadata.get("expected_tools")
+    if expected is None:
+        return []
+    called = metadata.get("tool_names") or []
+    if not expected:
+        return [f"called {name}" for name in dict.fromkeys(called)]
+    return [f"didn't call {name}" for name in expected if name not in called]
+
+
+def follow_up_offer(case) -> list[str]:
+    """Return the answer's closing offer, if it ends with one.
+
+    A recommendation reply that asked the user instead of searching is exempt:
+    the prompt tells it to end with its questions.
+    """
+    metadata = case.metadata or {}
+    if metadata.get("bot_name") == "recommendation" and not metadata.get("tool_names"):
+        return []
+    return ends_with_offer(case.actual_output)
+
+
 # Each check, run on an LLMTestCase
 CHECKS = {
-    "follow_up_offer": lambda case: ends_with_offer(case.actual_output),
+    "tool_use": lambda case: tool_use(case.metadata or {}),
+    "follow_up_offer": follow_up_offer,
     "unlinked_resource": lambda case: unlinked_resources(
         case.actual_output, case.retrieval_context
     ),
     "bare_url": lambda case: bare_urls(case.actual_output),
 }
 CHECKS_BY_BOT = {
-    "recommendation": ("follow_up_offer", "unlinked_resource", "bare_url"),
+    "recommendation": ("follow_up_offer", "unlinked_resource", "bare_url", "tool_use"),
     "syllabus": ("follow_up_offer",),
     "syllabus_canvas": ("follow_up_offer",),
     "video_gpt": ("follow_up_offer",),

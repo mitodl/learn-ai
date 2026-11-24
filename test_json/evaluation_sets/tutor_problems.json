@@ -1,0 +1,343 @@
+{
+  "tutor": [
+    {
+      "question": "I don't know where to start with this one.",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "just tell me the two letters",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "ok the left end has the NH3+, so is the first one phenylalanine?",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257"
+        ]
+      },
+      "expected_tools": [],
+      "history": {
+        "chat_history": [
+          {
+            "type": "HumanMessage",
+            "content": "how do I tell which end is the N-terminus?"
+          },
+          {
+            "type": "AIMessage",
+            "content": "Look for the end of the chain that carries a free amino group. Which end of the structure has one?"
+          }
+        ],
+        "intent_history": "[[\"S_STATE\"]]",
+        "assessment_history": [
+          {
+            "type": "HumanMessage",
+            "content": " Student: \"how do I tell which end is the N-terminus?\""
+          },
+          {
+            "type": "AIMessage",
+            "content": "{\"justification\": \"Written for the eval.\", \"selection\": \"h\"}"
+          }
+        ],
+        "metadata": {
+          "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257",
+          "block_siblings": [
+            "block-v1:MITxT+7.00x+2T2026+type@problem+block@c9fa2f6300584a63b128396674d82257"
+          ]
+        }
+      }
+    },
+    {
+      "question": "Should I use delta G or delta G naught here, and why?",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "is the answer ABCDE?",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "so the step with the most negative value goes first?",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e"
+        ]
+      },
+      "expected_tools": [],
+      "history": {
+        "chat_history": [
+          {
+            "type": "HumanMessage",
+            "content": "what does thermodynamically favorable mean?"
+          },
+          {
+            "type": "AIMessage",
+            "content": "A reaction is favorable when it can proceed on its own under the given conditions. Which quantity tells you that inside a cell?"
+          }
+        ],
+        "intent_history": "[[\"S_STATE\"]]",
+        "assessment_history": [
+          {
+            "type": "HumanMessage",
+            "content": " Student: \"what does thermodynamically favorable mean?\""
+          },
+          {
+            "type": "AIMessage",
+            "content": "{\"justification\": \"Written for the eval.\", \"selection\": \"h\"}"
+          }
+        ],
+        "metadata": {
+          "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e",
+          "block_siblings": [
+            "block-v1:MITxT+7.00x+2T2026+type@problem+block@c5a69d84891340cc9179f5222c7a678e"
+          ]
+        }
+      }
+    },
+    {
+      "question": "Why can sulfur make 6 bonds when oxygen can't?",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@b0e436fa05b0400281f0d1d94e976b76",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@b0e436fa05b0400281f0d1d94e976b76"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "is N with a positive charge 3 bonds?",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@b0e436fa05b0400281f0d1d94e976b76",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@b0e436fa05b0400281f0d1d94e976b76"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "how many bonds does carbon make",
+      "extra_init": {
+        "edx_module_id": "block-v1:MITxT+7.00x+2T2026+type@problem+block@b0e436fa05b0400281f0d1d94e976b76",
+        "block_siblings": [
+          "block-v1:MITxT+7.00x+2T2026+type@problem+block@b0e436fa05b0400281f0d1d94e976b76"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "What makes an expression valid in Python?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "I checked 5 ** 2 and 'hello' - 'o'. Is that right?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "but it crashes when I run it, so how can it be valid?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988"
+        ]
+      },
+      "expected_tools": [],
+      "history": {
+        "chat_history": [
+          {
+            "type": "HumanMessage",
+            "content": "does dividing by zero make the first one invalid?"
+          },
+          {
+            "type": "AIMessage",
+            "content": "Think about the difference between how an expression is written and what happens when Python evaluates it. Which of those does the question ask about?"
+          }
+        ],
+        "intent_history": "[[\"P_HYPOTHESIS\"]]",
+        "assessment_history": [
+          {
+            "type": "HumanMessage",
+            "content": " Student: \"does dividing by zero make the first one invalid?\""
+          },
+          {
+            "type": "AIMessage",
+            "content": "{\"justification\": \"Written for the eval.\", \"selection\": \"h\"}"
+          }
+        ],
+        "metadata": {
+          "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988",
+          "block_siblings": [
+            "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@3862a919a7aa4e77a00404498c9bf988"
+          ]
+        }
+      }
+    },
+    {
+      "question": "What's the difference between a class and an object here?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.2+2026_C916+type@problem+block@problem1",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.2+2026_C916+type@problem+block@problem1"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "I picked int, float, str and Loan. What am I missing?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.2+2026_C916+type@problem+block@problem1",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.2+2026_C916+type@problem+block@problem1"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "just give me the full list",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.2+2026_C916+type@problem+block@problem1",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.2+2026_C916+type@problem+block@problem1"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "which lines are wrong?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@30aa23e0cbaf4d7bb025ee36ca7920cf",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@30aa23e0cbaf4d7bb025ee36ca7920cf"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "I think the bug is the input() line.",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@30aa23e0cbaf4d7bb025ee36ca7920cf",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@30aa23e0cbaf4d7bb025ee36ca7920cf"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "What does split(' ') do if you call it on a list?",
+      "extra_init": {
+        "edx_module_id": "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@30aa23e0cbaf4d7bb025ee36ca7920cf",
+        "block_siblings": [
+          "block-v1:UAI_ntua+UAI.1+2026_C916+type@problem+block@30aa23e0cbaf4d7bb025ee36ca7920cf"
+        ]
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "How do I start problem 1, the trinomial call option?",
+      "extra_init": {
+        "run_readable_id": "38477-15.456_FA26+canvas",
+        "problem_set_title": "Problem Set 4"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "What is a martingale, in plain words?",
+      "extra_init": {
+        "run_readable_id": "38477-15.456_FA26+canvas",
+        "problem_set_title": "Problem Set 4"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "For problem 5 can I just apply Ito's lemma to S_T^n?",
+      "extra_init": {
+        "run_readable_id": "38477-15.456_FA26+canvas",
+        "problem_set_title": "Problem Set 4"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "Can you explain what type-I and type-II arbitrage are?",
+      "extra_init": {
+        "run_readable_id": "38477-15.456_FA26+canvas",
+        "problem_set_title": "Problem Set 2"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "for problem 5 is the answer yes or no?",
+      "extra_init": {
+        "run_readable_id": "38477-15.456_FA26+canvas",
+        "problem_set_title": "Problem Set 2"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "How do I find the risk-neutral probabilities in problem 2?",
+      "extra_init": {
+        "run_readable_id": "38477-15.456_FA26+canvas",
+        "problem_set_title": "Problem Set 2"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "What is the big-M method, and why does M have to be valid?",
+      "extra_init": {
+        "run_readable_id": "38524-15.095_FA26+canvas",
+        "problem_set_title": "Problem Set 1"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "Is statement 1(a) true?",
+      "extra_init": {
+        "run_readable_id": "38524-15.095_FA26+canvas",
+        "problem_set_title": "Problem Set 1"
+      },
+      "expected_tools": []
+    },
+    {
+      "question": "How should I approach problem 2?",
+      "extra_init": {
+        "run_readable_id": "38524-15.095_FA26+canvas",
+        "problem_set_title": "Problem Set 1"
+      },
+      "expected_tools": []
+    }
+  ]
+}

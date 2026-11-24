@@ -9,6 +9,7 @@ from ai_chatbots.evaluation.checks import (
     bare_urls,
     ends_with_offer,
     run_checks,
+    tool_use,
     unlinked_resources,
 )
 
@@ -28,6 +29,12 @@ def _search(*results):
         ("Here they are.\n\nWould you like more options?", True),
         # A trailing rule or comment is not the last paragraph
         ("Here they are.\n\nLet me know if that helps.\n\n---", True),
+        # gpt-4o-mini's no-results ending, with no "if" after "let me know"
+        (
+            "Here they are.\n\nIf you're looking for something more specific or "
+            "different, please let me know!",
+            True,
+        ),
         ("Here they are.\n\nBoth are free.", False),
         # An offer earlier in the answer doesn't count
         ("If you want a certificate, pick the first.\n\nBoth start in May.", False),
@@ -98,7 +105,10 @@ def test_bare_urls(answer, found):
 @pytest.mark.parametrize(
     ("bot", "checks"),
     [
-        ("recommendation", {"follow_up_offer", "unlinked_resource", "bare_url"}),
+        (
+            "recommendation",
+            {"follow_up_offer", "unlinked_resource", "bare_url", "tool_use"},
+        ),
         ("syllabus", {"follow_up_offer"}),
         ("syllabus_canvas", {"follow_up_offer"}),
         ("video_gpt", {"follow_up_offer"}),
@@ -117,3 +127,42 @@ def test_run_checks_by_bot(bot, checks):
     assert set(found) == checks
     if checks:
         assert found["follow_up_offer"]
+
+
+@pytest.mark.parametrize(
+    ("bot", "called", "flagged"),
+    [
+        # A recommendation reply that asks instead of searching ends with questions
+        ("recommendation", [], False),
+        ("recommendation", ["search_courses"], True),
+        ("syllabus", [], True),
+    ],
+)
+def test_follow_up_offer_exempts_clarifying_questions(bot, called, flagged):
+    """Only a recommendation reply that didn't search may end with a question."""
+    case = LLMTestCase(
+        input="q",
+        actual_output="What's your background?\n\nDo you want a certificate?",
+        retrieval_context=[],
+        metadata={"bot_name": bot, "tool_names": called},
+    )
+    assert bool(run_checks(bot, case)["follow_up_offer"]) is flagged
+
+
+@pytest.mark.parametrize(
+    ("expected", "called", "found"),
+    [
+        # A case that doesn't say which tools it expects isn't checked
+        (None, [], []),
+        (None, ["search_courses"], []),
+        ([], [], []),
+        ([], ["search_courses", "search_courses"], ["called search_courses"]),
+        (["search_courses"], ["search_courses"], []),
+        # Other tools alongside the expected one are fine
+        (["search_courses"], ["search_content_files", "search_courses"], []),
+        (["search_courses"], [], ["didn't call search_courses"]),
+    ],
+)
+def test_tool_use(expected, called, found):
+    """Flag a missing expected tool, or any tool call when none was expected."""
+    assert tool_use({"expected_tools": expected, "tool_names": called}) == found

@@ -138,6 +138,24 @@ class TestRecommendationBotEvaluator:
         assert len(response["messages"]) == 1
         assert response["messages"][0].content == "Response"
 
+    async def test_history_comes_before_the_question(self, evaluator, mocker):
+        """A follow-up case sends the earlier turns, then the answer to them."""
+        history = [
+            {"role": "user", "content": "I want to learn about quantum computing."},
+            {"role": "assistant", "content": "What's your background?"},
+        ]
+        chatbot = mocker.Mock(config={"configurable": {}})
+        chatbot.agent.ainvoke = mocker.AsyncMock()
+        case = TestCaseSpec(question="I'm a CS student.", metadata={"history": history})
+
+        await evaluator.collect_response(chatbot, case)
+
+        sent = chatbot.agent.ainvoke.call_args.args[0]
+        assert sent["messages"] == [
+            *history,
+            {"role": "user", "content": "I'm a CS student."},
+        ]
+
 
 class TestSyllabusBotEvaluator:
     """Test cases for SyllabusBotEvaluator."""

@@ -4,11 +4,15 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from deepeval.test_case import LLMTestCaseParams
+from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
-from ai_chatbots.evaluation.orchestrator import EvaluationOrchestrator, _bot_metrics
+from ai_chatbots.evaluation.orchestrator import (
+    RECOMMENDATION_PAIRWISE_CRITERIA,
+    EvaluationOrchestrator,
+    _bot_metrics,
+)
 from ai_chatbots.evaluation.timeout_wrapper import TimeoutMetricWrapper
 
 NUM_METRICS = 5
@@ -16,8 +20,6 @@ NUM_METRICS = 5
 
 def _answer(model, question="Q1", case_id=None):
     """Build an answer shaped like the ones evaluate_model returns."""
-    from deepeval.test_case import LLMTestCase
-
     case_id = case_id or f"f.json#{question}"
     return LLMTestCase(
         input=question,
@@ -763,6 +765,23 @@ class TestPairwise:
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "Pairwise wins for syllabus: {'model-a': 1, 'model-b': 2}" in output
 
+    @pytest.mark.parametrize(
+        ("bot", "has_rule"), [("recommendation", True), ("syllabus", False)]
+    )
+    def test_run_pairwise_ask_first_rule(
+        self, orchestrator, config, arena, bot, has_rule
+    ):
+        """Only the recommendation judge is told when asking first is right."""
+        arena_class, metric, _ = arena
+        metric.measure.return_value = "model-a"
+
+        orchestrator._run_pairwise(  # noqa: SLF001
+            bot, [_answer("model-a"), _answer("model-b")], config
+        )
+
+        criteria = arena_class.call_args.kwargs["criteria"]
+        assert (RECOMMENDATION_PAIRWISE_CRITERIA in criteria) is has_rule
+
     def test_run_pairwise_by_side(self, orchestrator, config, arena):
         """A baseline run's contestants and winners are sides: model plus prompt."""
         metric = arena[1]
@@ -988,9 +1007,9 @@ class TestFailuresAndBaseline:
     @pytest.mark.parametrize(
         ("judge", "models"),
         [
-            ("gpt-5.4", ["openai/gpt-5.4", "openai/gpt-4o-mini"]),
-            ("openai/gpt-5.4", ["gpt-5.4"]),
-            ("GPT-5.4", ["openai/gpt-5.4"]),
+            ("gpt-6-sol", ["openai/gpt-6-sol", "openai/gpt-4o-mini"]),
+            ("openai/gpt-6-sol", ["gpt-6-sol"]),
+            ("GPT-6-SOL", ["openai/gpt-6-sol"]),
         ],
     )
     def test_judge_under_test_is_refused(self, orchestrator, judge, models):
@@ -1040,6 +1059,30 @@ class TestFailuresAndBaseline:
         saved = orchestrator.stdout.write.call_args.args[0]
         assert saved.startswith("ANSWER_JSON ")
         assert '"context": ["evidence"]' in saved
+
+    @pytest.mark.parametrize(
+        ("bot_name", "correctness_only", "context"),
+        [
+            ("syllabus", True, ["The user's question: Q1", "evidence"]),
+            # Not scored on Faithfulness, so its material is left alone
+            ("recommendation", True, ["evidence"]),
+            # The default metrics include others that read the material
+            ("syllabus", False, ["evidence"]),
+        ],
+    )
+    def test_faithfulness_sees_the_question(
+        self, orchestrator, deepeval_returns, bot_name, correctness_only, context
+    ):
+        """Facts from the question count as supported, on a copy of the case."""
+        config = self._config(orchestrator, correctness_only=correctness_only)
+        case = _answer("model-a")
+        mock_deepeval = deepeval_returns()
+
+        orchestrator._run_deepeval_evaluation([case], config, 2, bot_name=bot_name)  # noqa: SLF001
+
+        (judged,) = mock_deepeval.evaluate.call_args.kwargs["test_cases"]
+        assert judged.retrieval_context == context
+        assert case.retrieval_context == ["evidence"]
 
     def test_scores_recorded_under_threshold_names(
         self, orchestrator, deepeval_returns, mocker

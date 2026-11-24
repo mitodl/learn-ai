@@ -55,7 +55,7 @@ GROUNDED_BOTS = {"syllabus", "syllabus_canvas", "video_gpt"}
 
 
 def _model_name(model_id: str) -> str:
-    """Strip the provider prefix from a model id: openai/gpt-5.4 -> gpt-5.4."""
+    """Strip the provider prefix from a model id: openai/gpt-6-sol -> gpt-6-sol."""
     return model_id.rsplit("/", maxsplit=1)[-1].strip().lower()
 
 
@@ -77,6 +77,18 @@ def _answer_key(metadata: dict | None) -> tuple:
         metadata.get("model"),
         metadata.get("prompt_label"),
     )
+
+
+def _with_question(test_case):
+    """Copy a case with its question as the first piece of retrieved material.
+
+    deepeval's Faithfulness judge sees only the answer and the retrieved
+    material, so numbers the question gives (a truck bought for 10,000 on Jan
+    1, 2020) count as made up when the answer works through them.
+    """
+    context = [f"The user's question: {test_case.input}"]
+    context += test_case.retrieval_context or []
+    return test_case.model_copy(update={"retrieval_context": context})
 
 
 def _bot_metrics(config: EvaluationConfig, bot_name: str | None) -> list:
@@ -117,6 +129,20 @@ TUTOR_PAIRWISE_CRITERIA = (
     "student said, moving them forward with a concrete hint or guiding "
     "question, and not giving away the final answer or doing the "
     "remaining work for them.  Prefer clear, chat-length responses."
+)
+
+
+# The recommendation prompt's rule for when to ask before searching
+RECOMMENDATION_PAIRWISE_CRITERIA = (
+    "  For course recommendations: when the user makes a broad request for "
+    'guidance (a career or goal, a whole field, "where should I start") '
+    "without saying much about what they want, prefer a response that briefly "
+    "asks about it once over one that recommends right away.  When the request "
+    "already narrows it down (a specific subject, a level, free or paid, a "
+    "certificate, a format), prefer one that recommends.  Price and certificate "
+    "are separate preferences, so prefer asking about them separately.  After "
+    "the assistant has asked, prefer a response that recommends with whatever "
+    "the user answered, unless they switched to a different subject or goal."
 )
 
 
@@ -641,8 +667,16 @@ class EvaluationOrchestrator:
         for metric in metrics:
             if isinstance(metric, TimeoutMetricWrapper):
                 metric.prepare()
+        # With correctness_only, Faithfulness is the only metric that reads the
+        # retrieved material; the default metrics include others that do
+        judged = (
+            [_with_question(case) for case in test_cases]
+            if config.correctness_only
+            and "Faithfulness" in {m.__name__ for m in metrics}
+            else test_cases
+        )
         result = deepeval.evaluate(
-            test_cases=test_cases,
+            test_cases=judged,
             metrics=metrics,
             error_config=ErrorConfig(ignore_errors=True),
             async_config=async_config,
@@ -711,6 +745,11 @@ class EvaluationOrchestrator:
                 "prefer responses that guide the learner toward the solution "
                 "with hints or questions over ones that give the method or "
                 "answer away."
+                + (
+                    RECOMMENDATION_PAIRWISE_CRITERIA
+                    if bot_name == "recommendation"
+                    else ""
+                )
             ),
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
