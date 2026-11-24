@@ -100,3 +100,16 @@ def test_support_widget_copy_strips_a_pasted_byte_order_mark():
     with pytest.raises(ValidationError) as excinfo:
         SupportWidgetCopy(send_label="﻿Send").full_clean()
     assert "send_label" in excinfo.value.message_dict
+
+
+@pytest.mark.django_db
+def test_support_widget_copy_save_validates(support_widget_copy):
+    """A save outside the admin gets the same cleanup and checks."""
+    support_widget_copy.launcher_label = "  Need help?  "
+    support_widget_copy.save()
+    support_widget_copy.refresh_from_db()
+    assert support_widget_copy.launcher_label == "Need help?"
+
+    support_widget_copy.cancel_label = "Send request"
+    with pytest.raises(ValidationError):
+        support_widget_copy.save()

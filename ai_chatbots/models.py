@@ -230,3 +230,8 @@ class SupportWidgetCopy(TimestampedModel):
             )
         if errors:
             raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        # Writes outside the admin (shell, scripts) skip full_clean() otherwise.
+        self.full_clean()
+        super().save(*args, **kwargs)
