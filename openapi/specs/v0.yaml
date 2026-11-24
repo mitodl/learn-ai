@@ -286,12 +286,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SystemPrompt'
           description: ''
-  /api/v0/support_widget_copy/:
+  /api/v0/support_widget_text/:
     get:
-      operationId: support_widget_copy_retrieve
+      operationId: support_widget_text_retrieve
       description: The Contact us widget's text as edited in the admin.
       tags:
-      - support_widget_copy
+      - support_widget_text
       security:
       - {}
       responses:
@@ -299,7 +299,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SupportWidgetCopy'
+                $ref: '#/components/schemas/SupportWidgetText'
           description: ''
   /http/recommendation_agent/:
     post:
@@ -567,7 +567,7 @@ components:
       x-enum-descriptions:
       - Like
       - Dislike
-    SupportWidgetCopy:
+    SupportWidgetText:
       type: object
       description: Only the filled-in strings, so the widget keeps its default for
         the rest.

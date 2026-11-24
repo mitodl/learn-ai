@@ -27,7 +27,7 @@ from ai_chatbots.learn_api import LearnError
 from ai_chatbots.models import (
     DjangoCheckpoint,
     LLMModel,
-    SupportWidgetCopy,
+    SupportWidgetText,
     UserChatSession,
 )
 from ai_chatbots.permissions import IsThreadOwner
@@ -36,7 +36,7 @@ from ai_chatbots.serializers import (
     ChatMessageSerializer,
     ChatRatingSerializer,
     LLMModelSerializer,
-    SupportWidgetCopySerializer,
+    SupportWidgetTextSerializer,
     SystemPromptSerializer,
     UserChatSessionSerializer,
 )
@@ -185,16 +185,16 @@ class LLMModelViewSet(ReadOnlyModelViewSet):
     ordering_fields = ["provider", "name", "litellm_id"]
 
 
-@extend_schema(responses=SupportWidgetCopySerializer)
-class SupportWidgetCopyView(ApiView):
+@extend_schema(responses=SupportWidgetTextSerializer)
+class SupportWidgetTextView(ApiView):
     """The Contact us widget's text as edited in the admin."""
 
     http_method_names = ["get"]
     permission_classes = (AllowAny,)
 
     def get(self, request, *args, **kwargs):  # noqa: ARG002
-        copy = SupportWidgetCopy.objects.first()
-        response = Response(SupportWidgetCopySerializer(copy).data if copy else {})
+        row = SupportWidgetText.objects.first()
+        response = Response(SupportWidgetTextSerializer(row).data if row else {})
         patch_cache_control(response, max_age=300)
         # learn.mit.edu and courses.learn.mit.edu share one browser cache, so a
         # cached CORS answer for one host would otherwise be reused on the other.

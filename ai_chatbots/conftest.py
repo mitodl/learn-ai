@@ -19,7 +19,7 @@ from ai_chatbots.factories import (
     ToolMessageFactory,
     VideoGPTAgentStateFactory,
 )
-from ai_chatbots.models import SupportWidgetCopy
+from ai_chatbots.models import SupportWidgetText
 from main.factories import UserFactory
 
 
@@ -309,9 +309,9 @@ def mock_async_get_client(mocker):
 
 
 @pytest.fixture
-def support_widget_copy():
+def support_widget_text():
     """
     Return the row the migration creates. Transactional tests elsewhere flush the
-    table, so tests can't rely on the migration's copy.
+    table, so tests can't rely on the migration's row.
     """
-    return SupportWidgetCopy.objects.get_or_create(pk=1)[0]
+    return SupportWidgetText.objects.get_or_create(pk=1)[0]

@@ -22,7 +22,7 @@ from ai_chatbots.factories import (
     LLMModelFactory,
     UserChatSessionFactory,
 )
-from ai_chatbots.models import ChatResponseRating, LLMModel, SupportWidgetCopy
+from ai_chatbots.models import ChatResponseRating, LLMModel, SupportWidgetText
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING, parse_prompt
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
@@ -367,24 +367,24 @@ def test_llm_model_viewset_enabled_only(client):
     ]
 
 
-SUPPORT_WIDGET_COPY_URL = "/api/v0/support_widget_copy/"
+SUPPORT_WIDGET_TEXT_URL = "/api/v0/support_widget_text/"
 
 
-@pytest.mark.usefixtures("support_widget_copy")
-def test_support_widget_copy_empty_row(client):
+@pytest.mark.usefixtures("support_widget_text")
+def test_support_widget_text_empty_row(client):
     """A row with nothing filled in leaves every string to the widget's default."""
-    response = client.get(SUPPORT_WIDGET_COPY_URL)
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
     assert response.status_code == 200
     assert response.json() == {}
 
 
-def test_support_widget_copy_returns_only_filled_fields(client, support_widget_copy):
+def test_support_widget_text_returns_only_filled_fields(client, support_widget_text):
     """Only the fields product filled in are sent; blank ones are left out."""
-    support_widget_copy.launcher_label = "Need help?"
-    support_widget_copy.cancel_label = "Never mind"
-    support_widget_copy.greeting = "**Hi**\n\nAsk me anything."
-    support_widget_copy.save()
-    response = client.get(SUPPORT_WIDGET_COPY_URL)
+    support_widget_text.launcher_label = "Need help?"
+    support_widget_text.cancel_label = "Never mind"
+    support_widget_text.greeting = "**Hi**\n\nAsk me anything."
+    support_widget_text.save()
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
     assert response.status_code == 200
     assert response.json() == {
         "launcher_label": "Need help?",
@@ -393,24 +393,24 @@ def test_support_widget_copy_returns_only_filled_fields(client, support_widget_c
     }
 
 
-def test_support_widget_copy_missing_row(client):
+def test_support_widget_text_missing_row(client):
     """A deleted row reads as nothing set, not an error."""
-    SupportWidgetCopy.objects.all().delete()
-    response = client.get(SUPPORT_WIDGET_COPY_URL)
+    SupportWidgetText.objects.all().delete()
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
     assert response.status_code == 200
     assert response.json() == {}
 
 
-def test_support_widget_copy_cache_headers(client):
+def test_support_widget_text_cache_headers(client):
     """Browsers may keep it 5 minutes, keyed per origin since both hosts share a cache."""
-    response = client.get(SUPPORT_WIDGET_COPY_URL)
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
     assert response["Cache-Control"] == "max-age=300"
     assert "Origin" in response["Vary"]
 
 
-def test_support_widget_copy_sets_no_cookies(client):
+def test_support_widget_text_sets_no_cookies(client):
     """The widget fetches without credentials, so the response must not need any."""
-    response = client.get(SUPPORT_WIDGET_COPY_URL)
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
     assert not response.cookies
 
 

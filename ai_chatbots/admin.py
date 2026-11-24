@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from ai_chatbots.models import LLMModel, SupportWidgetCopy, UserChatSession
+from ai_chatbots.models import LLMModel, SupportWidgetText, UserChatSession
 
 
 @admin.register(UserChatSession)
@@ -34,8 +34,8 @@ class LLMModelAdmin(admin.ModelAdmin):
     ordering = ("provider", "name", "litellm_id")
 
 
-@admin.register(SupportWidgetCopy)
-class SupportWidgetCopyAdmin(admin.ModelAdmin):
+@admin.register(SupportWidgetText)
+class SupportWidgetTextAdmin(admin.ModelAdmin):
     """The Contact us widget's text. One row; a blank field keeps the default."""
 
     readonly_fields = ("updated_on",)
@@ -43,7 +43,7 @@ class SupportWidgetCopyAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return (
             super().has_add_permission(request)
-            and not SupportWidgetCopy.objects.exists()
+            and not SupportWidgetText.objects.exists()
         )
 
     def has_delete_permission(self, request, obj=None):  # noqa: ARG002

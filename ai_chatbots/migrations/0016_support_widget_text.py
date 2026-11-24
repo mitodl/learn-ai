@@ -4,7 +4,7 @@ from django.db import migrations, models
 
 
 def create_row(apps, schema_editor):
-    apps.get_model("ai_chatbots", "SupportWidgetCopy").objects.get_or_create(pk=1)
+    apps.get_model("ai_chatbots", "SupportWidgetText").objects.get_or_create(pk=1)
 
 
 class Migration(migrations.Migration):
@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name="SupportWidgetCopy",
+            name="SupportWidgetText",
             fields=[
                 (
                     "id",
@@ -83,7 +83,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "verbose_name_plural": "support widget copy",
+                "verbose_name_plural": "support widget text",
             },
         ),
         migrations.RunPython(create_row, migrations.RunPython.noop),

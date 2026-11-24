@@ -10,7 +10,7 @@ from ai_chatbots.models import (
     ChatResponseScore,
     DjangoCheckpoint,
     LLMModel,
-    SupportWidgetCopy,
+    SupportWidgetText,
     UserChatSession,
 )
 
@@ -301,11 +301,11 @@ class CanvasTutorChatRequestSerializer(ChatRequestSerializer):
         return attrs
 
 
-class SupportWidgetCopySerializer(serializers.ModelSerializer):
+class SupportWidgetTextSerializer(serializers.ModelSerializer):
     """Only the filled-in strings, so the widget keeps its default for the rest."""
 
     class Meta:
-        model = SupportWidgetCopy
+        model = SupportWidgetText
         fields = [
             "launcher_label",
             "escalate_label",
