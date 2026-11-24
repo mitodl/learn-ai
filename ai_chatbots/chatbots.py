@@ -1648,8 +1648,12 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     lines = [SUPPORT_TICKET_REVIEW_HEADER, "", f"**Your message:** {description}"]
     if page_url:
         lines += ["", f"**Where you were:** {page_url}"]
-    lines += ["", f"**Reply to:** {email}", "", SUPPORT_TICKET_REVIEW_FOOTER]
-    return "\n".join(lines)
+    lines += ["", f"**Reply to:** {email}"]
+    # A blockquote, which the widget draws as a box around the request.
+    boxed = "\n".join(
+        f"> {line}" if line else ">" for line in "\n".join(lines).splitlines()
+    )
+    return f"{boxed}\n\n{SUPPORT_TICKET_REVIEW_FOOTER}"
 
 
 def _quotes_the_reply_to(message: BaseMessage) -> bool:
@@ -1658,7 +1662,7 @@ def _quotes_the_reply_to(message: BaseMessage) -> bool:
     Defensive: no path replays one today.
     """
     return isinstance(message, AIMessage) and str(message.content).startswith(
-        SUPPORT_TICKET_REVIEW_HEADER
+        f"> {SUPPORT_TICKET_REVIEW_HEADER}"
     )
 
 

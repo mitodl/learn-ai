@@ -61,6 +61,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_TICKET_FAILED,
     SUPPORT_TICKET_MAYBE_FILED,
     SUPPORT_TICKET_REJECTED,
+    SUPPORT_TICKET_REVIEW_FOOTER,
     SUPPORT_TICKET_REVIEW_HEADER,
     SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
@@ -2653,7 +2654,7 @@ async def test_an_intake_in_progress_is_not_interrupted_by_an_answer(
     first = await _say(chatbot, SUPPORT_PROBLEM)
     second = await _say(chatbot, "it also happens on week 4")
 
-    assert first.startswith(SUPPORT_TICKET_REVIEW_HEADER)
+    assert first.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
     assert SUPPORT_PROBLEM in second
     assert "an answer" not in second
@@ -5379,7 +5380,7 @@ async def test_a_failed_answer_leaves_only_the_scripted_exchange(
 
     reply = await _say(chatbot, SUPPORT_PROBLEM)
 
-    assert reply.startswith(SUPPORT_TICKET_REVIEW_HEADER)
+    assert reply.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     messages = (await _state_of(chatbot))["messages"]
     assert [type(msg) for msg in messages] == [HumanMessage, AIMessage]
     assert messages[0].content == SUPPORT_PROBLEM
@@ -5400,7 +5401,7 @@ async def test_a_bot_that_cannot_answer_runs_todays_intake_unchanged(
     filed = await _say(chatbot, "yes")
 
     # _say carries an address, so the opening turn is the review.
-    assert review.startswith(SUPPORT_TICKET_REVIEW_HEADER)
+    assert review.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert SUPPORT_PROBLEM in review
     assert "77" in filed
     assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
@@ -5537,7 +5538,7 @@ async def test_a_signed_in_learner_sees_the_review_on_the_first_message(
 
     reply = await _say(chatbot, SUPPORT_PROBLEM, confirm=[True])
 
-    assert reply.startswith(SUPPORT_TICKET_REVIEW_HEADER)
+    assert reply.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert SUPPORT_PROBLEM in reply
     assert _metadata_of(reply)["awaiting_send"] is True
     mock_file.assert_not_called()
@@ -5569,7 +5570,7 @@ async def test_a_filler_opener_does_not_start_a_request(
 
     assert reply.startswith(chatbots_module.SUPPORT_FILLER_OPENER)
     assert _metadata_of(reply)["awaiting_send"] is False
-    assert review.startswith(SUPPORT_TICKET_REVIEW_HEADER)
+    assert review.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert filler not in review.split("**Where you were:**")[0]
 
 
@@ -5697,3 +5698,16 @@ async def test_filed_flag_without_a_reference(
     assert expected in reply
     assert _metadata_of(reply)["filed"] is done
     assert _metadata_of(later)["filed"] is done
+
+
+def test_the_review_boxes_everything_up_to_the_reply_to():
+    """The widget draws a blockquote as a box; the footer sits under it."""
+    review = _support_review(
+        "line one\n\nline two", "https://learn.mit.edu/x", "learner@example.com"
+    )
+    boxed, footer = review.rsplit("\n\n", 1)
+
+    assert all(line.startswith(">") for line in boxed.splitlines())
+    assert boxed.splitlines()[0] == f"> {SUPPORT_TICKET_REVIEW_HEADER}"
+    assert boxed.splitlines()[-1] == "> **Reply to:** learner@example.com"
+    assert footer == SUPPORT_TICKET_REVIEW_FOOTER
