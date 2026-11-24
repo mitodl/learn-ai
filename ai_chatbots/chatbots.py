@@ -1168,9 +1168,7 @@ SUPPORT_ASK_EMAIL = "What email address should the team reply to?"
 SUPPORT_ASK_EMAIL_AGAIN = (
     "I still need an email so the team can reply. What's a good one?"
 )
-SUPPORT_ASK_PROBLEM = (
-    "What's on your mind? Type it here and I'll pass it on. You can also skip this."
-)
+SUPPORT_ASK_PROBLEM = "What's on your mind? Type it here and I'll pass it on."
 SUPPORT_ANSWER_CLOSED = (
     "Glad that helped. If anything else comes up, I'm here, and so is the support team."
 )
