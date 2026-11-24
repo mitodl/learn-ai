@@ -404,6 +404,23 @@ async def search_content_files(
     )
 
 
+# The message given to the model when this tool actually runs.
+REPLY_NOT_SHOWN = (
+    "This message was not shown to the user.  Call reply_without_searching on its "
+    "own, with your full message."
+)
+
+
+# Lets gpt-6-luna reply without searching; see show_reply_without_searching in
+# chatbots.py for why.  The docstring below is the description the model sees.
+@tool
+def reply_without_searching(message: str) -> str:  # noqa: ARG001
+    """Reply to the user without searching. The message is shown to the user as your reply."""  # noqa: E501
+    # The recommendation bot's post_model_hook shows a lone call's message and never
+    # runs this.  It runs only for an empty message or a call made alongside others.
+    return REPLY_NOT_SHOWN
+
+
 @tool(args_schema=SearchRelatedCourseContentFilesToolSchema)
 async def search_related_course_content_files(
     q: str, state: Annotated[dict, InjectedState]

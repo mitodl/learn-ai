@@ -12,6 +12,7 @@ from ai_chatbots.evaluation.base import (
     EvaluationConfig,
     RunFailures,
     TestCaseSpec,
+    judge_input,
     sample_cases,
 )
 
@@ -595,3 +596,27 @@ def test_create_llm_test_case_search_errors(evaluator, name, content, is_error):
     assert case.metadata["tool_call_count"] == 1
     assert case.metadata["tool_names"] == [name]
     assert case.metadata["blocked_account_calls"] == ["get_enrollments"]
+
+
+@pytest.mark.parametrize(
+    ("history", "expected"),
+    [
+        (None, "Free is fine."),
+        ([], "Free is fine."),
+        # The tutor's history is a dict and reaches the judges another way
+        ({"chat_history": []}, "Free is fine."),
+        (
+            [
+                {"role": "user", "content": "I want to learn quantum computing."},
+                {"role": "assistant", "content": "What's your background?"},
+            ],
+            "Conversation so far:\n"
+            "User: I want to learn quantum computing.\n"
+            "Assistant: What's your background?\n\n"
+            "Latest user message: Free is fine.",
+        ),
+    ],
+)
+def test_judge_input(history, expected):
+    """The judges see the earlier turns of a follow-up case, then its question."""
+    assert judge_input("Free is fine.", history) == expected

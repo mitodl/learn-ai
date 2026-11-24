@@ -132,6 +132,20 @@ TUTOR_PAIRWISE_CRITERIA = (
 )
 
 
+# The recommendation prompt's rule for when to ask before searching
+RECOMMENDATION_PAIRWISE_CRITERIA = (
+    "  For course recommendations: when the user makes a broad request for "
+    'guidance (a career or goal, a whole field, "where should I start") '
+    "without saying much about what they want, prefer a response that briefly "
+    "asks about it once over one that recommends right away.  When the request "
+    "already narrows it down (a specific subject, a level, free or paid, a "
+    "certificate, a format), prefer one that recommends.  Price and certificate "
+    "are separate preferences, so prefer asking about them separately.  After "
+    "the assistant has asked, prefer a response that recommends with whatever "
+    "the user answered, unless they switched to a different subject or goal."
+)
+
+
 class EvaluationOrchestrator:
     """Orchestrates evaluation across multiple bots and models."""
 
@@ -731,6 +745,11 @@ class EvaluationOrchestrator:
                 "prefer responses that guide the learner toward the solution "
                 "with hints or questions over ones that give the method or "
                 "answer away."
+                + (
+                    RECOMMENDATION_PAIRWISE_CRITERIA
+                    if bot_name == "recommendation"
+                    else ""
+                )
             ),
             evaluation_params=[
                 LLMTestCaseParams.INPUT,

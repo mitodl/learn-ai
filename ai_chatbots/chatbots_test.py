@@ -80,6 +80,7 @@ from ai_chatbots.chatbots import (
     _the_answer_in,
     get_canvas_problem_set,
     get_problem_from_edx_block,
+    show_reply_without_searching,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -468,42 +469,20 @@ async def test_recommendation_bot_create_agent_graph(mocker, mock_checkpointer):
         "anonymous", mock_checkpointer, thread_id="12345678-1234-5678-9abc-123456789abc"
     )
     agent = chatbot.create_agent_graph()
-    for node in ("agent", "tools", "pre_model_hook"):
+    for node in ("agent", "tools", "pre_model_hook", "post_model_hook"):
         assert node in agent.nodes
     graph = agent.get_graph()
     tool = graph.nodes["tools"].data.tools_by_name["search_courses"]
     assert tool.args_schema == SearchToolSchema
     assert tool.coroutine.__name__ == "search_courses"
-    edges = graph.edges
-    assert len(edges) == 5
-    summary_edge = edges[3]
-    for test_condition in (
-        summary_edge.source == "pre_model_hook",
-        summary_edge.target == "agent",
-        not summary_edge.conditional,
-    ):
-        assert test_condition
-    tool_agent_edge = edges[4]
-    for test_condition in (
-        tool_agent_edge.source == "tools",
-        tool_agent_edge.target == "pre_model_hook",
-        not tool_agent_edge.conditional,
-    ):
-        assert test_condition
-    agent_tool_edge = edges[2]
-    for test_condition in (
-        agent_tool_edge.source == "agent",
-        agent_tool_edge.target == "tools",
-        agent_tool_edge.conditional,
-    ):
-        assert test_condition
-    agent_end_edge = edges[1]
-    for test_condition in (
-        agent_end_edge.source == "agent",
-        agent_end_edge.target == "__end__",
-        agent_end_edge.conditional,
-    ):
-        assert test_condition
+    edges = {(e.source, e.target, e.conditional) for e in graph.edges}
+    assert {
+        ("pre_model_hook", "agent", False),
+        ("agent", "post_model_hook", False),
+        ("post_model_hook", "tools", True),
+        ("post_model_hook", "__end__", True),
+        ("tools", "pre_model_hook", False),
+    } <= edges
 
 
 @pytest.fixture
@@ -2144,6 +2123,111 @@ class _FakeToolCallingModel(GenericFakeChatModel):
 
     def bind_tools(self, *args, **kwargs):  # noqa: ARG002
         return self
+
+
+def _reply_call(message, call_id="call-1"):
+    """Build a tool call to reply_without_searching."""
+    return {
+        "name": "reply_without_searching",
+        "args": {"message": message},
+        "id": call_id,
+    }
+
+
+def test_show_reply_without_searching():
+    """A lone reply_without_searching call becomes a plain reply."""
+    call = AIMessage(
+        content="", tool_calls=[_reply_call("What's your level?")], id="m1"
+    )
+    update = show_reply_without_searching({"messages": [HumanMessage("ML?"), call]})
+    removed, reply = update["messages"]
+    assert removed.id == "m1"
+    assert isinstance(reply, AIMessage)
+    assert reply.content == "What's your level?"
+    assert not reply.tool_calls
+
+
+@pytest.mark.parametrize(
+    "tool_calls",
+    [
+        [],
+        [_reply_call("")],
+        [_reply_call("   ")],
+        [{"name": "reply_without_searching", "args": {}, "id": "call-1"}],
+        [
+            _reply_call("Level?"),
+            {"name": "search_courses", "args": {"q": "ml"}, "id": "c2"},
+        ],
+        [{"name": "search_courses", "args": {"q": "ml"}, "id": "call-1"}],
+    ],
+)
+def test_show_reply_without_searching_leaves_the_rest(tool_calls):
+    """Anything but a lone call with a message goes on to the tools unchanged."""
+    message = AIMessage(content="", tool_calls=tool_calls, id="m1")
+    assert show_reply_without_searching({"messages": [message]}) == {}
+
+
+def test_reply_without_searching_tool_asks_again():
+    """The tool runs only when its message wasn't shown, and says so."""
+    assert (
+        tools.reply_without_searching.invoke({"message": ""}) == tools.REPLY_NOT_SHOWN
+    )
+
+
+class _PromptRecordingModel(FakeMessagesListChatModel):
+    """A fake tool-calling model that records each call's system prompt.
+
+    It doesn't stream, so a tool call with no content reaches the graph whole.
+    """
+
+    prompts: list = []
+
+    def bind_tools(self, *args, **kwargs):  # noqa: ARG002
+        return self
+
+    def _generate(self, messages, *args, **kwargs):
+        self.prompts.append(messages[0].content)
+        return super()._generate(messages, *args, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_recommendation_bot_replies_through_the_tool(
+    mocker, mock_checkpointer, mock_openai_astream
+):
+    """The tool's message is streamed and stored as the reply."""
+    mocker.stop(mock_openai_astream)
+    mocker.patch(
+        "ai_chatbots.chatbots.ResourceRecommendationBot.get_tool_metadata",
+        return_value="{}",
+    )
+    chatbot = await sync_to_async(ResourceRecommendationBot)(
+        "user", mock_checkpointer, thread_id=uuid4().hex
+    )
+    chatbot.llm = _PromptRecordingModel(
+        prompts=[],
+        responses=[
+            AIMessage(content="", tool_calls=[_reply_call("What's your level?")]),
+            AIMessage(content="Try 6.0001."),
+        ],
+    )
+    chatbot.agent = chatbot.create_agent_graph()
+
+    async def reply(message):
+        # get_completion appends a "<!-- {checkpoint_pk ...} -->" trailer
+        text = "".join([c async for c in chatbot.get_completion(message)])
+        return text.split("<!--")[0].strip()
+
+    assert await reply("ML?") == "What's your level?"
+    assert await reply("Beginner") == "Try 6.0001."
+    messages = (await chatbot.agent.aget_state(chatbot.config)).values["messages"]
+    assert [(type(m).__name__, m.content) for m in messages] == [
+        ("HumanMessage", "ML?"),
+        ("AIMessage", "What's your level?"),
+        ("HumanMessage", "Beginner"),
+        ("AIMessage", "Try 6.0001."),
+    ]
+    assert not any(getattr(m, "tool_calls", None) for m in messages)
+    assert chatbot.llm.prompts == [SYSTEM_PROMPT_MAPPING["recommendation"]] * 2
 
 
 async def _answering_bot(mocker, mock_checkpointer, result=None):

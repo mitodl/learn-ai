@@ -9,6 +9,7 @@ from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 from ai_chatbots.chatbots import ResourceRecommendationBot
 from ai_chatbots.evaluation.base import EvaluationConfig
 from ai_chatbots.evaluation.orchestrator import (
+    RECOMMENDATION_PAIRWISE_CRITERIA,
     EvaluationOrchestrator,
     _bot_metrics,
 )
@@ -763,6 +764,23 @@ class TestPairwise:
         ]
         output = " ".join(str(c.args[0]) for c in mock_stdout.write.call_args_list)
         assert "Pairwise wins for syllabus: {'model-a': 1, 'model-b': 2}" in output
+
+    @pytest.mark.parametrize(
+        ("bot", "has_rule"), [("recommendation", True), ("syllabus", False)]
+    )
+    def test_run_pairwise_ask_first_rule(
+        self, orchestrator, config, arena, bot, has_rule
+    ):
+        """Only the recommendation judge is told when asking first is right."""
+        arena_class, metric, _ = arena
+        metric.measure.return_value = "model-a"
+
+        orchestrator._run_pairwise(  # noqa: SLF001
+            bot, [_answer("model-a"), _answer("model-b")], config
+        )
+
+        criteria = arena_class.call_args.kwargs["criteria"]
+        assert (RECOMMENDATION_PAIRWISE_CRITERIA in criteria) is has_rule
 
     def test_run_pairwise_by_side(self, orchestrator, config, arena):
         """A baseline run's contestants and winners are sides: model plus prompt."""

@@ -130,6 +130,26 @@ def test_run_checks_by_bot(bot, checks):
 
 
 @pytest.mark.parametrize(
+    ("bot", "called", "flagged"),
+    [
+        # A recommendation reply that asks instead of searching ends with questions
+        ("recommendation", [], False),
+        ("recommendation", ["search_courses"], True),
+        ("syllabus", [], True),
+    ],
+)
+def test_follow_up_offer_exempts_clarifying_questions(bot, called, flagged):
+    """Only a recommendation reply that didn't search may end with a question."""
+    case = LLMTestCase(
+        input="q",
+        actual_output="What's your background?\n\nDo you want a certificate?",
+        retrieval_context=[],
+        metadata={"bot_name": bot, "tool_names": called},
+    )
+    assert bool(run_checks(bot, case)["follow_up_offer"]) is flagged
+
+
+@pytest.mark.parametrize(
     ("expected", "called", "found"),
     [
         # A case that doesn't say which tools it expects isn't checked

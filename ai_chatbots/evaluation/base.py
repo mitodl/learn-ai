@@ -126,6 +126,22 @@ def sample_cases(cases: list, n: int | None, seed: int = SAMPLE_SEED) -> list:
     return [cases[i] for i in picked]
 
 
+def judge_input(question: str, history: Any) -> str:
+    """Return what the judges see as the input: the conversation, then the question.
+
+    Without the earlier turns, a judge can't tell that a reply like "I'm a
+    beginner" answers the bot's own questions.  A history that isn't a list of
+    messages (the tutor's) reaches the judges another way.
+    """
+    if not history or not isinstance(history, list):
+        return question
+    turns = "\n".join(
+        f"{'User' if m.get('role') == 'user' else 'Assistant'}: {m.get('content', '')}"
+        for m in history
+    )
+    return f"Conversation so far:\n{turns}\n\nLatest user message: {question}"
+
+
 @dataclass
 class TestCaseSpec:
     """Specification for a test case."""
@@ -331,7 +347,9 @@ class BaseBotEvaluator(ABC):
                 "tool_names": [m.name for m in tool_messages],
                 "blocked_account_calls": response.get("blocked_account_calls", []),
             },
-            input=test_case.question,
+            input=judge_input(
+                test_case.question, (test_case.metadata or {}).get("history")
+            ),
             actual_output=response["messages"][-1].content,
             expected_output=test_case.expected_output,
             retrieval_context=context,

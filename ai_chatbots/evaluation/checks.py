@@ -122,10 +122,22 @@ def tool_use(metadata: dict) -> list[str]:
     return [f"didn't call {name}" for name in expected if name not in called]
 
 
+def follow_up_offer(case) -> list[str]:
+    """Return the answer's closing offer, if it ends with one.
+
+    A recommendation reply that asked the user instead of searching is exempt:
+    the prompt tells it to end with its questions.
+    """
+    metadata = case.metadata or {}
+    if metadata.get("bot_name") == "recommendation" and not metadata.get("tool_names"):
+        return []
+    return ends_with_offer(case.actual_output)
+
+
 # Each check, run on an LLMTestCase
 CHECKS = {
     "tool_use": lambda case: tool_use(case.metadata or {}),
-    "follow_up_offer": lambda case: ends_with_offer(case.actual_output),
+    "follow_up_offer": follow_up_offer,
     "unlinked_resource": lambda case: unlinked_resources(
         case.actual_output, case.retrieval_context
     ),

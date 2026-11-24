@@ -23,6 +23,7 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
+    RemoveMessage,
     SystemMessage,
     ToolMessage,
 )
@@ -540,6 +541,23 @@ class TruncatingChatbot(BaseChatbot):
         )
 
 
+def show_reply_without_searching(state: dict) -> dict:
+    """Turn a lone reply_without_searching call into the bot's reply.
+
+    With search tools bound, gpt-6-luna rarely asks clarifying questions in plain
+    text, and on Chat Completions it often writes a plain-text reply twice.
+    Replying through this tool avoids both.
+    """
+    last = state["messages"][-1]
+    calls = getattr(last, "tool_calls", None) or []
+    if len(calls) != 1 or calls[0]["name"] != tools.reply_without_searching.name:
+        return {}
+    message = calls[0]["args"].get("message")
+    if not isinstance(message, str) or not message.strip():
+        return {}
+    return {"messages": [RemoveMessage(id=last.id), AIMessage(content=message)]}
+
+
 class RecommendationAgentState(SummaryState):
     """
     State for the recommendation bot. Passes pinned search filters
@@ -587,7 +605,23 @@ class ResourceRecommendationBot(TruncatingChatbot):
 
     def create_tools(self) -> list[BaseTool]:
         """Create tools required by the agent"""
-        return [tools.search_courses, tools.search_content_files]
+        return [
+            tools.search_courses,
+            tools.search_content_files,
+            tools.reply_without_searching,
+        ]
+
+    def create_agent_graph(self) -> CompiledStateGraph:
+        """Generate the truncating react agent graph, with the reply hook."""
+        return create_react_agent(
+            self.llm,
+            tools=self.tools,
+            checkpointer=self.checkpointer,
+            pre_model_hook=MessageTruncationNode(),
+            post_model_hook=show_reply_without_searching,
+            state_schema=self.STATE_CLASS,
+            prompt=self.instructions,
+        )
 
     async def get_tool_metadata(self) -> str:
         """Return the metadata for the search tool"""

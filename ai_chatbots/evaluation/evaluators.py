@@ -154,6 +154,7 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
                 metadata={
                     "extra_state": case_data.get("extra_state", {}),
                     "extra_init": case_data.get("extra_init", {}),
+                    "history": case_data.get("history", []),
                 },
             )
             for case_data in test_data.get("recommendation", [])
@@ -187,7 +188,11 @@ class RecommendationBotEvaluator(BaseBotEvaluator):
 
         return await chatbot.agent.ainvoke(
             {
-                "messages": [{"content": test_case.question, "role": "user"}],
+                # Earlier turns of the conversation, such as the bot's questions
+                "messages": [
+                    *metadata.get("history", []),
+                    {"content": test_case.question, "role": "user"},
+                ],
                 **extra_state,
             },
             config=chatbot.config["configurable"],
