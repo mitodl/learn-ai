@@ -1778,6 +1778,7 @@ def test_support_process_extra_state_trusts_only_the_session_email(
         "user_name": [async_user.name],
         "user_username": [async_user.username],
         "confirm": [False],
+        "cancel": [False],
         "escalate": [False],
     }
 
@@ -1824,6 +1825,19 @@ def test_support_process_extra_state_carries_the_confirm_flag(
     assert extra_state["confirm"] == [expected]
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({}, False), ({"cancel": False}, False), ({"cancel": True}, True)],
+)
+def test_support_process_extra_state_carries_the_cancel_flag(
+    support_consumer, body, expected
+):
+    """Absent must read as "not cancelled", or every review would be dropped."""
+    extra_state = support_consumer.process_extra_state({"page_url": "", **body})
+
+    assert extra_state["cancel"] == [expected]
+
+
 def test_support_process_extra_state_falls_back_to_the_body_email(support_consumer):
     """
     Nothing gives learn-ai an APISIX session for a learner arriving from the edX
@@ -1849,6 +1863,7 @@ def test_support_process_extra_state_falls_back_to_the_body_email(support_consum
         "user_name": ["Ada Lovelace"],
         "user_username": ["ada"],
         "confirm": [False],
+        "cancel": [False],
         "escalate": [False],
     }
 
@@ -1885,6 +1900,7 @@ def test_support_process_extra_state_anonymous_learner(support_consumer):
         "user_name": [""],
         "user_username": [""],
         "confirm": [False],
+        "cancel": [False],
         "escalate": [False],
     }
 

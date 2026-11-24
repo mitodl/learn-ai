@@ -2064,13 +2064,13 @@ class SupportBot(TruncatingChatbot):
         ), {"user_email": [email], "awaiting_send": [True]}
 
     async def _send_edit_or_cancel(
-        self, message: str, *, extra_state: dict, prior_state: dict, session, confirmed
+        self, message: str, *, extra_state: dict, prior_state: dict, session, button
     ) -> tuple[str, dict]:
         """Act on what the learner said about the request they were shown."""
         prior_messages = prior_state.get("messages") or []
         # The question on screen here is whether to send, so a plain "no"
         # answers it. Cancelling costs a turn to undo; filing cannot be undone.
-        if _is_cancellation(message) or _is_decline(message):
+        if button == "cancel" or _is_cancellation(message) or _is_decline(message):
             return SUPPORT_TICKET_CANCELLED, {
                 "awaiting_send": [False],
                 # This turn's own exchange is written alongside this update, so
@@ -2085,7 +2085,7 @@ class SupportBot(TruncatingChatbot):
         # confirm is the widget's Send button; the phrases are for learners who
         # type instead. Anything else is an edit to the request, so it is shown
         # back rather than sent - the learner has not read this version yet.
-        if not (confirmed or _is_affirmative(message)):
+        if not (button == "send" or _is_affirmative(message)):
             if _is_unclear_go_ahead(message):
                 return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
             return _support_review(
@@ -2181,6 +2181,7 @@ class SupportBot(TruncatingChatbot):
         # Popped, not stored: it is this turn's Send button, and a checkpointed
         # one would approve every turn after it.
         confirmed = any(extra_state.pop("confirm", None) or [])
+        cancelled = any(extra_state.pop("cancel", None) or [])
         # Same reason: this turn's "contact the support team" button. What
         # sticks for the thread is handed_off, merged in below.
         escalated = any(extra_state.pop("escalate", None) or [])
@@ -2216,7 +2217,8 @@ class SupportBot(TruncatingChatbot):
                 extra_state=extra_state,
                 prior_state=prior_state,
                 session=session,
-                confirmed=confirmed,
+                # Cancel first: filing cannot be undone.
+                button="cancel" if cancelled else "send" if confirmed else None,
             )
             if confirmed:
                 # Blanked after the decision, so a cancel still wins, but before

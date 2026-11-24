@@ -1001,5 +1001,6 @@ class SupportBotHttpConsumer(BaseBotHttpConsumer):
             # but Zendesk's username field should only ever be the account handle.
             "user_username": [session_username or data.get("user_username", "") or ""],
             "confirm": [bool(data.get("confirm", False))],
+            "cancel": [bool(data.get("cancel", False))],
             "escalate": [bool(data.get("escalate", False))],
         }

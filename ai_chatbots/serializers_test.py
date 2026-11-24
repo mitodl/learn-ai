@@ -256,6 +256,18 @@ def test_support_serializer_takes_an_escalate_press(body, expected):
     assert serializer.validated_data["escalate"] is expected
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({}, False), ({"cancel": False}, False), ({"cancel": True}, True)],
+)
+def test_support_serializer_takes_a_cancel_press(body, expected):
+    """Cancel is a button too, so a renamed label still cancels."""
+    serializer = SupportChatRequestSerializer(data={"message": "help", **body})
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["cancel"] is expected
+
+
 def test_support_serializer_rejects_a_malformed_user_email():
     """The address becomes the Zendesk requester, so junk must not reach the tool."""
     serializer = SupportChatRequestSerializer(
