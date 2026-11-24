@@ -44,6 +44,7 @@ from open_learning_ai_tutor.utils import (
 from openai import BadRequestError
 from pydantic.warnings import PydanticDeprecatedSince20
 
+from ai_chatbots import chatbots as chatbots_module
 from ai_chatbots import tools
 from ai_chatbots.chatbots import (
     AFFIRMATIVE_PHRASES,
@@ -51,17 +52,16 @@ from ai_chatbots.chatbots import (
     SUPPORT_ANSWER_CLOSED,
     SUPPORT_ASK_EMAIL,
     SUPPORT_ASK_EMAIL_AGAIN,
-    SUPPORT_ASK_MORE,
     SUPPORT_ASK_PROBLEM,
     SUPPORT_FILING_LOCK_PREFIX,
     SUPPORT_NOTHING_TO_SEND,
-    SUPPORT_OFFER_TICKET,
     SUPPORT_SEND_UNCLEAR,
     SUPPORT_TICKET_BAD_EMAIL,
     SUPPORT_TICKET_CANCELLED,
     SUPPORT_TICKET_FAILED,
     SUPPORT_TICKET_MAYBE_FILED,
     SUPPORT_TICKET_REJECTED,
+    SUPPORT_TICKET_REVIEW_FOOTER,
     SUPPORT_TICKET_REVIEW_HEADER,
     SUPPORT_TICKET_SENDING,
     ResourceRecommendationBot,
@@ -2658,7 +2658,7 @@ async def test_an_intake_in_progress_is_not_interrupted_by_an_answer(
     first = await _say(chatbot, SUPPORT_PROBLEM)
     second = await _say(chatbot, "it also happens on week 4")
 
-    assert first.startswith(SUPPORT_ASK_MORE)
+    assert first.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
     assert SUPPORT_PROBLEM in second
     assert "an answer" not in second
@@ -2680,17 +2680,14 @@ async def test_a_close_out_reopens_answering(mocker, mock_checkpointer):
 
 
 @pytest.mark.asyncio
-async def test_support_bot_answers_and_still_offers_the_ticket(
-    mocker, mock_checkpointer
-):
+async def test_support_bot_answers_without_a_ticket_footer(mocker, mock_checkpointer):
     chatbot = await _answering_support_bot(
         mocker, mock_checkpointer, "You're enrolled in 18.01x."
     )
 
     reply = await _say(chatbot, "what am I enrolled in?")
 
-    assert "You're enrolled in 18.01x." in reply
-    assert SUPPORT_OFFER_TICKET in reply
+    assert reply.split("\n\n<!--")[0] == "You're enrolled in 18.01x."
     state = await _state_of(chatbot)
     # An answer is not a request, so nothing is queued to send.
     assert (state.get("awaiting_send") or [False])[-1] is False
@@ -2723,7 +2720,7 @@ async def test_an_answer_reaches_the_learner_from_a_real_tool_call(
     reply = await _say(chatbot, "what's my grade?")
 
     assert "Which course did you mean?" in reply
-    assert SUPPORT_ASK_MORE not in reply
+    assert SUPPORT_TICKET_REVIEW_HEADER not in reply
 
 
 @pytest.mark.asyncio
@@ -2732,8 +2729,7 @@ async def test_support_bot_collects_when_it_cannot_answer(mocker, mock_checkpoin
 
     reply = await _say(chatbot, "why was I charged twice?")
 
-    assert SUPPORT_ASK_MORE in reply
-    assert SUPPORT_OFFER_TICKET not in reply
+    assert SUPPORT_TICKET_REVIEW_HEADER in reply
 
 
 @pytest.mark.asyncio
@@ -2788,7 +2784,6 @@ async def test_send_after_disagreeing_with_an_answer_files_both(
     review = await _say(chatbot, "send")
 
     assert "still 90.0%" in again
-    assert SUPPORT_OFFER_TICKET in again
     assert SUPPORT_TICKET_REVIEW_HEADER in review
     assert "What's my grade in AT.101x?" in review
     assert disagreement in review
@@ -2901,7 +2896,6 @@ async def test_yes_after_an_answer_takes_up_the_offer(mocker, mock_checkpointer)
 
     assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
     assert "another answer" not in reply
-    assert SUPPORT_OFFER_TICKET not in reply
     assert SUPPORT_ANSWER_CLOSED not in reply
     assert "my certificate is missing" in reply
     assert (await _state_of(chatbot))["answered"][-1] is False
@@ -2917,7 +2911,6 @@ async def test_support_bot_escalates_to_the_intake_script(mocker, mock_checkpoin
     reply = await _say(chatbot, "Contact the support team", escalate=[True])
 
     assert SUPPORT_ASK_PROBLEM in reply
-    assert SUPPORT_OFFER_TICKET not in reply
     SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
     state = await _state_of(chatbot)
     assert state["handed_off"][-1] is True
@@ -3039,7 +3032,7 @@ async def test_a_scripted_support_bot_never_attempts_an_answer(
 
     reply = await _say(chatbot, SUPPORT_PROBLEM)
 
-    assert SUPPORT_ASK_MORE in reply
+    assert SUPPORT_TICKET_REVIEW_HEADER in reply
     SupportBot._try_to_answer.assert_not_called()  # noqa: SLF001
     assert chatbot._answering_agent is None  # noqa: SLF001
 
@@ -3057,24 +3050,13 @@ async def test_support_bot_reviews_before_it_files(mocker, mock_checkpointer):
     )
     chatbot = await _support_bot(mocker, mock_checkpointer, [])
 
-    # Turn 1: we already know the authenticated learner's address, so the bot
-    # invites more detail rather than filing or reviewing straight away.
-    first = "".join(
-        [
-            chunk
-            async for chunk in chatbot.get_completion(
-                SUPPORT_PROBLEM, extra_state=_support_state("signedin@mit.edu")
-            )
-        ]
-    )
-    assert SUPPORT_ASK_MORE in first
-
-    # Turn 2: now the review is shown, still without filing.
+    # We already know the authenticated learner's address, so the first
+    # message is shown back for review. Filing waits on a later Send.
     reply = "".join(
         [
             chunk
             async for chunk in chatbot.get_completion(
-                "that's everything", extra_state=_support_state("signedin@mit.edu")
+                SUPPORT_PROBLEM, extra_state=_support_state("signedin@mit.edu")
             )
         ]
     )
@@ -3822,7 +3804,7 @@ async def test_support_bot_reports_a_zendesk_failure(mocker, mock_checkpointer):
         ]
     )
 
-    assert "could not" in reply.lower()
+    assert SUPPORT_TICKET_FAILED in reply
     session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
     assert session.support_ticket_reference == ""
 
@@ -4770,6 +4752,7 @@ async def test_support_bot_offers_no_send_while_a_ticket_is_sent_or_filed(
     assert expected_reply in reply
     metadata = _metadata_of(reply)
     assert metadata["awaiting_send"] is False
+    assert metadata["filed"] is (held == "filed")
 
 
 @pytest.fixture
@@ -5400,7 +5383,7 @@ async def test_a_failed_answer_leaves_only_the_scripted_exchange(
 
     reply = await _say(chatbot, SUPPORT_PROBLEM)
 
-    assert reply.startswith(SUPPORT_ASK_MORE)
+    assert reply.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     messages = (await _state_of(chatbot))["messages"]
     assert [type(msg) for msg in messages] == [HumanMessage, AIMessage]
     assert messages[0].content == SUPPORT_PROBLEM
@@ -5417,12 +5400,11 @@ async def test_a_bot_that_cannot_answer_runs_todays_intake_unchanged(
     )
     chatbot = await _support_bot(mocker, mock_checkpointer, [])
 
-    first = await _say(chatbot, SUPPORT_PROBLEM)
-    review = await _say(chatbot, "nothing else")
+    review = await _say(chatbot, SUPPORT_PROBLEM)
     filed = await _say(chatbot, "yes")
 
-    # _say carries an address, so the opening turn asks for more detail.
-    assert first.startswith(SUPPORT_ASK_MORE)
+    # _say carries an address, so the opening turn is the review.
+    assert review.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
     assert SUPPORT_PROBLEM in review
     assert "77" in filed
     assert mock_file.call_args.kwargs["description"] == SUPPORT_PROBLEM
@@ -5441,6 +5423,28 @@ def test_support_description_leaves_the_bots_own_words_out():
     assert _support_description(prior, "and my refund?") == (
         "did I pass 18.01x?\n\nand my refund?"
     )
+
+
+@pytest.mark.parametrize(
+    "unclear_reply",
+    [
+        SUPPORT_SEND_UNCLEAR,
+        # The wording before learn-ai#205, still in threads open at deploy.
+        "I'm not sure whether that was a go-ahead or something to add, and I don't "
+        'want to guess. Reply "send" on its own to pass on the request exactly as '
+        'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
+        "updated version.",
+    ],
+)
+def test_support_description_drops_what_the_go_ahead_line_queried(unclear_reply):
+    prior = [
+        HumanMessage(SUPPORT_PROBLEM),
+        AIMessage("review"),
+        HumanMessage("yes please send it asap"),
+        AIMessage(unclear_reply),
+    ]
+
+    assert _support_description(prior, "") == SUPPORT_PROBLEM
 
 
 @pytest.mark.parametrize(
@@ -5525,3 +5529,199 @@ async def test_the_answering_graph_hands_the_tools_the_page_course(
 
     assert seen["course_id"] == ["course-v1:MITx+18.01x+2T2025"]
     assert seen["platform"] == ["mitxonline"]
+
+
+@pytest.mark.asyncio
+async def test_a_signed_in_learner_sees_the_review_on_the_first_message(
+    mocker, mock_checkpointer
+):
+    """The review still waits on a Send press, so nothing files on turn 1."""
+    mock_file = mocker.patch("ai_chatbots.chatbots.file_support_ticket")
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    reply = await _say(chatbot, SUPPORT_PROBLEM, confirm=[True])
+
+    assert reply.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
+    assert SUPPORT_PROBLEM in reply
+    assert _metadata_of(reply)["awaiting_send"] is True
+    mock_file.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("filler", ["thanks", "ok", "Thank you!"])
+@pytest.mark.parametrize("email", ["", "learner@mit.edu"])
+async def test_a_filler_opener_does_not_start_a_request(
+    mocker, mock_checkpointer, filler, email
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state(email)
+                )
+            ]
+        )
+
+    reply = await say(filler)
+    await say(SUPPORT_PROBLEM)
+    if not email:
+        await say("learner@mit.edu")
+    review = await say("it also happens on week 4")
+
+    assert reply.startswith(chatbots_module.SUPPORT_FILLER_OPENER)
+    assert _metadata_of(reply)["awaiting_send"] is False
+    assert review.startswith(f"> {SUPPORT_TICKET_REVIEW_HEADER}")
+    assert filler not in review.split("**Where you were:**")[0]
+
+
+@pytest.mark.asyncio
+async def test_after_a_filler_opener_the_first_email_ask_is_not_again(
+    mocker, mock_checkpointer
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("")
+                )
+            ]
+        )
+
+    await say("thanks")
+    first = await say(SUPPORT_PROBLEM)
+    second = await say("it also happens on week 4")
+
+    assert first.startswith(SUPPORT_ASK_EMAIL)
+    assert not first.startswith(SUPPORT_ASK_EMAIL_AGAIN)
+    assert second.startswith(SUPPORT_ASK_EMAIL_AGAIN)
+
+
+@pytest.mark.asyncio
+async def test_after_a_filler_opener_an_address_in_the_problem_is_not_the_reply_to(
+    mocker, mock_checkpointer
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("")
+                )
+            ]
+        )
+
+    await say("thanks")
+    reply = await say("My colleague bob@example.com cannot log in")
+
+    assert reply.startswith(SUPPORT_ASK_EMAIL)
+
+
+@pytest.mark.asyncio
+async def test_a_bare_address_after_a_cancel_replaces_the_reply_to(
+    mocker, mock_checkpointer
+):
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    async def say(message):
+        return "".join(
+            [
+                chunk
+                async for chunk in chatbot.get_completion(
+                    message, extra_state=_support_state("")
+                )
+            ]
+        )
+
+    await say(SUPPORT_PROBLEM)
+    await say("old@example.com")
+    await say("cancel")
+    await say("new@example.com")
+    review = await say(SUPPORT_PROBLEM)
+
+    assert "new@example.com" in review
+    assert "old@example.com" not in review
+
+
+@pytest.mark.asyncio
+async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
+    mocker, mock_checkpointer
+):
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    review = await _say(chatbot, SUPPORT_PROBLEM)
+    filed = await _say(chatbot, "send")
+    again = await _say(chatbot, "hello?")
+
+    assert _metadata_of(review)["filed"] is False
+    assert "912" in filed
+    assert _metadata_of(filed)["filed"] is True
+    assert _metadata_of(again)["filed"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("result", "expected", "done"),
+    [
+        # The thread files nothing more, so the next request needs its own.
+        ({"reference": None, "uncertain": True}, SUPPORT_TICKET_MAYBE_FILED, True),
+        (
+            {"reference": None, "reason": TICKET_REJECTED},
+            SUPPORT_TICKET_REJECTED,
+            True,
+        ),
+        # A retry on this thread can still file it.
+        ({"reference": None}, SUPPORT_TICKET_FAILED, False),
+    ],
+)
+async def test_filed_flag_without_a_reference(
+    mocker, mock_checkpointer, result, expected, done
+):
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value=result),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    await _say(chatbot, SUPPORT_PROBLEM)
+    reply = await _say(chatbot, "send")
+    later = await _say(chatbot, "hello?")
+
+    assert expected in reply
+    assert _metadata_of(reply)["filed"] is done
+    assert _metadata_of(later)["filed"] is done
+
+
+def test_the_review_boxes_everything_up_to_the_reply_to():
+    """The widget draws a blockquote as a box; the footer sits under it."""
+    review = _support_review(
+        "line one\n\nline two", "https://learn.mit.edu/x", "learner@example.com"
+    )
+    boxed, footer = review.rsplit("\n\n", 1)
+
+    assert all(line.startswith(">") for line in boxed.splitlines())
+    assert boxed.splitlines()[0] == f"> {SUPPORT_TICKET_REVIEW_HEADER}"
+    assert boxed.splitlines()[-1] == "> **Reply to:** learner@example.com"
+    assert footer == SUPPORT_TICKET_REVIEW_FOOTER
+
+
+def test_the_review_footer_asks_no_yes_or_no_question():
+    """A typed "no" cancels and a "yes" files, so the footer can't invite either."""
+    assert "?" not in SUPPORT_TICKET_REVIEW_FOOTER
+
+
+def test_the_maybe_filed_reply_does_not_promise_no_duplicate():
+    """The next message starts a new thread, which could file the same request again."""
+    assert "won't send it again" not in SUPPORT_TICKET_MAYBE_FILED
+    assert "don't send it again" in SUPPORT_TICKET_MAYBE_FILED

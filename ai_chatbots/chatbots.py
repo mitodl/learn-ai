@@ -1120,84 +1120,72 @@ class SupportAnsweringState(SummaryState):
     platform: Annotated[list[str] | None, add]
 
 
-SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send to the support team:"
+SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send:"
+# Not a question: a typed "no" cancels and a "yes" files.
 SUPPORT_TICKET_REVIEW_FOOTER = (
-    'Reply "send" and I\'ll pass this on, or "cancel" to drop it. Anything else '
-    "you type I'll add to the request and show you again."
+    "Add anything that's missing below. When it looks right, press Send "
+    "request, or press Cancel to drop it."
 )
 SUPPORT_TICKET_FILED = (
-    "Thanks - I've passed that on to the MIT Open Learning support team. Your "
-    "reference number is {reference}, and they'll follow up at {email}."
+    "Your request has been submitted. Your reference number is {reference}. The "
+    "support team will reply to {email}, usually within 2 business days."
 )
 SUPPORT_TICKET_ALREADY_FILED = (
-    "I've already filed this one for you - your reference number is {reference}, "
-    "and the support team will follow up at {email}."
+    "That one's already been sent. Your reference number is {reference}, and if "
+    "the team needs to reply, they'll write to {email}."
 )
 SUPPORT_TICKET_FAILED = (
-    'Sorry, I could not file your support request just now. Reply "send" to try '
-    "again, or email support directly and they'll pick it up."
+    "I couldn't submit your request, so nothing has been sent and there's no "
+    "ticket number yet. Press Send request to try again, or email our support "
+    "team directly."
 )
 SUPPORT_TICKET_REJECTED = (
-    "Sorry - the support system turned this request down, and sending it again "
-    "won't change that. Please email the MIT Open Learning support team directly "
-    "and they'll pick it up. I've flagged this so our team can look into it."
+    "Sorry, our support system turned this request down, and sending it again "
+    "won't change that. Please email our support team directly. I've flagged it "
+    "so the team can look into it."
 )
 SUPPORT_TICKET_BAD_EMAIL = (
-    "That address isn't one the support team can reply to. What's another email "
-    "I can give them?"
+    "Our support team can't reply to that address. What's another email they can use?"
 )
 SUPPORT_TICKET_MAYBE_FILED = (
-    "I didn't get an answer back from the support system, so I can't tell you "
-    "whether that went through. It may well have, so I won't send it a second "
-    "time and risk a duplicate. If you haven't heard from the MIT Open Learning "
-    "support team in a day or two, email them directly."
+    "I didn't hear back from our support system, so I can't tell whether that "
+    "went through. It may have, so please don't send it again. If you don't "
+    "hear from our support team within 2 business days, email them directly."
 )
 SUPPORT_TICKET_CANCELLED = (
-    "No problem - I haven't sent anything, and I've put aside what you'd written "
-    "so far. Tell me about it again whenever you're ready and we'll start fresh."
+    "No problem. I haven't sent anything. Is there anything else I can help with?"
 )
 # Not SUPPORT_TICKET_CANCELLED: there is nothing written to have put aside, and
 # saying there is reads as a request going missing.
 SUPPORT_NOTHING_TO_SEND = (
-    "No problem - there was nothing to pass on, so I haven't sent anything. Tell "
-    "me what's going on whenever you'd like the MIT Open Learning support team to "
-    "take a look."
+    "Okay, there was nothing to send. Type what's on your mind whenever you're ready."
 )
+# A thread that opens on "thanks" or "ok" has nothing to pass on yet.
+SUPPORT_FILLER_OPENER = "Hello. What can I help you with today?"
 SUPPORT_SEND_UNCLEAR = (
+    "I'm not sure whether that was a go-ahead or something to add. Press Send "
+    "request to pass it on exactly as shown, or Cancel to drop it. To add "
+    "something, just tell me and I'll show you the updated version."
+)
+# Threads open at deploy still hold the earlier wording, and the description
+# filter matches the reply by its exact text.
+SUPPORT_SEND_UNCLEAR_REPLIES = (
+    SUPPORT_SEND_UNCLEAR,
     "I'm not sure whether that was a go-ahead or something to add, and I don't "
     'want to guess. Reply "send" on its own to pass on the request exactly as '
     'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
-    "updated version."
+    "updated version.",
 )
 SUPPORT_TICKET_SENDING = (
-    "I'm still sending that one over - give me a moment and I'll come back with "
-    "the reference number."
+    "Still sending that one. The reference number will show up here once it's through."
 )
-SUPPORT_ASK_EMAIL = (
-    "Thanks for letting us know. What's the best email address for the support "
-    "team to reply to?"
-)
+SUPPORT_ASK_EMAIL = "What email address should the team reply to?"
 SUPPORT_ASK_EMAIL_AGAIN = (
-    "I still need an email address so the support team can reply. What's the best "
-    "one to reach you at?"
+    "I still need an email so the team can reply. What's a good one?"
 )
-SUPPORT_ASK_MORE = (
-    "Thanks for letting us know. Is there anything else you'd like to add before I "
-    "pass this on to the MIT Open Learning support team?"
-)
-SUPPORT_ASK_PROBLEM = (
-    "What's going on? Tell me what you need help with and I'll pass it on to the "
-    "MIT Open Learning support team."
-)
-# Appended in code so the route to a person never depends on the answer. A
-# statement, not a question: "yes" to "did that help?" reads like "yes, send it".
-SUPPORT_OFFER_TICKET = (
-    "If that didn't sort it out, reply \"send\" and I'll pass it to the MIT Open "
-    "Learning support team."
-)
+SUPPORT_ASK_PROBLEM = "What's on your mind? Type it here and I'll pass it on."
 SUPPORT_ANSWER_CLOSED = (
-    "Glad that helped. If something else comes up, just ask - and I can still "
-    "pass a request to the MIT Open Learning support team whenever you want."
+    "Glad that helped. If anything else comes up, I'm here, and so is the support team."
 )
 
 EMAIL_IN_MESSAGE = re.compile(r"[^@\s,;<>()\[\]]+@[^@\s,;<>()\[\]]+\.[A-Za-z]{2,}")
@@ -1582,11 +1570,10 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         # Dropped only where we came back and asked what it meant, so the
         # chatter we could not read stays out while the same words typed
         # anywhere else are still the learner's problem.
-        and SUPPORT_SEND_UNCLEAR
-        not in [
-            getattr(reply, "content", "")
+        and not any(
+            getattr(reply, "content", "") in SUPPORT_SEND_UNCLEAR_REPLIES
             for reply in prior_messages[position + 1 : position + 2]
-        ]
+        )
     ]
     typed.append(message)
     return "\n\n".join(
@@ -1634,8 +1621,16 @@ def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
     would let the chat name a stranger as the requester.
     """
     # On the opening message an address is part of the problem ("can't log in
-    # as x@y.com"), not a reply-to, so it only counts once we have asked.
-    parsed_reply_to = _reply_to_email(message) if prior_state.get("messages") else ""
+    # as x@y.com"), not a reply-to, so it only counts once we have asked. A
+    # "thanks" opener asked nothing, so the message after it still opens. A bare
+    # address after a cancel is a correction, not a problem.
+    prior_messages = prior_state.get("messages") or []
+    asked = prior_messages[_cancelled_after(prior_state) :]
+    parsed_reply_to = (
+        _reply_to_email(message)
+        if asked or (prior_messages and _is_bare_reply_to(message))
+        else ""
+    )
     # The body address is a fallback, not the latest word: a host that resends
     # it every request would otherwise undo a correction on the turn that files.
     known = _accumulated(prior_state, {}, "user_email") or _latest(
@@ -1658,8 +1653,12 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     lines = [SUPPORT_TICKET_REVIEW_HEADER, "", f"**Your message:** {description}"]
     if page_url:
         lines += ["", f"**Where you were:** {page_url}"]
-    lines += ["", f"**Reply to:** {email}", "", SUPPORT_TICKET_REVIEW_FOOTER]
-    return "\n".join(lines)
+    lines += ["", f"**Reply to:** {email}"]
+    # A blockquote, which the widget draws as a box around the request.
+    boxed = "\n".join(
+        f"> {line}" if line else ">" for line in "\n".join(lines).splitlines()
+    )
+    return f"{boxed}\n\n{SUPPORT_TICKET_REVIEW_FOOTER}"
 
 
 def _quotes_the_reply_to(message: BaseMessage) -> bool:
@@ -1668,7 +1667,7 @@ def _quotes_the_reply_to(message: BaseMessage) -> bool:
     Defensive: no path replays one today.
     """
     return isinstance(message, AIMessage) and str(message.content).startswith(
-        SUPPORT_TICKET_REVIEW_HEADER
+        f"> {SUPPORT_TICKET_REVIEW_HEADER}"
     )
 
 
@@ -1906,7 +1905,13 @@ class SupportBot(TruncatingChatbot):
             return ""
 
     async def _reply_without_the_model(
-        self, message: str, reply: str, extra_state: dict, *, awaiting_send: bool
+        self,
+        message: str,
+        reply: str,
+        extra_state: dict,
+        *,
+        awaiting_send: bool,
+        filed: bool,
     ) -> AsyncGenerator[str, None]:
         """
         Yield a reply the model had no part in, and leave the same trace behind
@@ -1927,7 +1932,9 @@ class SupportBot(TruncatingChatbot):
             as_node="agent",
         )
         yield reply
-        metadata = await self.get_metadata(extra={"awaiting_send": awaiting_send})
+        metadata = await self.get_metadata(
+            extra={"awaiting_send": awaiting_send, "filed": filed}
+        )
         yield f"\n\n<!-- {metadata} -->\n\n"
 
     async def _send_to_zendesk(self, *, session, ticket: dict) -> tuple[str, dict]:
@@ -2024,16 +2031,21 @@ class SupportBot(TruncatingChatbot):
         model only adds a dependency and a way for every intake to fail.
         """
         prior_messages = prior_state.get("messages") or []
+        # Moving cancelled_after past this exchange keeps it out of the request.
+        if not prior_messages and (_is_filler(message) or _closes_the_answer(message)):
+            return SUPPORT_FILLER_OPENER, {"cancelled_after": [2]}
         email = _support_email(prior_state, extra_state, message)
         if not email:
-            return (
-                SUPPORT_ASK_EMAIL_AGAIN if prior_messages else SUPPORT_ASK_EMAIL
-            ), {}
+            # Only this request's turns count: a "thanks" opener asked nothing.
+            asked = prior_messages[_cancelled_after(prior_state) :]
+            return (SUPPORT_ASK_EMAIL_AGAIN if asked else SUPPORT_ASK_EMAIL), {}
         description = _support_description(
             prior_messages, message, since=_cancelled_after(prior_state)
         )
         # Nothing to review yet. A cancel or close-out ends it; anything else asks.
-        if not prior_messages or not description:
+        # The opening message is reviewed straight away: filing still waits on a
+        # Send press, which can only come on a later turn.
+        if not description:
             if prior_messages and (
                 _is_cancellation(message)
                 or _closes_the_answer(message)
@@ -2042,10 +2054,7 @@ class SupportBot(TruncatingChatbot):
                 return SUPPORT_NOTHING_TO_SEND, {
                     "cancelled_after": [len(prior_messages) + 2],
                 }
-            # An opening message that carried the address still has a problem
-            # in it; a bare escalate press has nothing to thank them for.
-            reply = SUPPORT_ASK_MORE if description else SUPPORT_ASK_PROBLEM
-            return reply, {"user_email": [email]}
+            return SUPPORT_ASK_PROBLEM, {"user_email": [email]}
         return _support_review(
             description,
             _accumulated(prior_state, extra_state, "page_url"),
@@ -2122,7 +2131,7 @@ class SupportBot(TruncatingChatbot):
         intake_started = not answered_before and len(
             prior_state.get("messages") or []
         ) > _cancelled_after(prior_state)
-        # A "yes" after an answer accepts the offer to pass it on.
+        # A "yes" or "send" after an answer asks to pass it on.
         took_up_the_offer = answered_before and _is_affirmative(message)
         # Not gated on _answering_agent, so a flag turned off mid-thread still
         # closes out.
@@ -2144,7 +2153,7 @@ class SupportBot(TruncatingChatbot):
         ):
             answer = await self._try_to_answer(message, prior_state, extra_state)
             if answer:
-                return f"{answer}\n\n{SUPPORT_OFFER_TICKET}", {"answered": [True]}
+                return answer, {"answered": [True]}
 
         reply, updates = self._collect_the_request(
             message,
@@ -2238,7 +2247,18 @@ class SupportBot(TruncatingChatbot):
                 or [False]
             )[-1]
         )
+        # Tells the widget to start a new thread with the next message. This one
+        # files nothing more once Zendesk returned a reference, may hold a ticket
+        # it never confirmed, or turned the request down.
+        filed = bool(session and session.support_ticket_reference) or any(
+            (updates.get(key) or prior_state.get(key) or [False])[-1]
+            for key in ("filing_uncertain", "filing_blocked")
+        )
         async for chunk in self._reply_without_the_model(
-            message, reply, {**extra_state, **updates}, awaiting_send=awaiting_send
+            message,
+            reply,
+            {**extra_state, **updates},
+            awaiting_send=awaiting_send,
+            filed=filed,
         ):
             yield chunk
