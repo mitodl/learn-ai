@@ -57,7 +57,12 @@ from ai_chatbots.api import (
 )
 from ai_chatbots.constants import APP_NAME, AZURE_MODEL_PREFIX
 from ai_chatbots.learner_api import COURSE_KEY_RE
-from ai_chatbots.models import UserChatSession
+from ai_chatbots.models import (
+    SUPPORT_WIDGET_CANCEL_DEFAULT,
+    SUPPORT_WIDGET_SEND_DEFAULT,
+    SupportWidgetText,
+    UserChatSession,
+)
 from ai_chatbots.posthog import TokenTrackingCallbackHandler
 from ai_chatbots.prompts import (
     CONTEXT_LOST_PROMPT,
@@ -1121,10 +1126,16 @@ class SupportAnsweringState(SummaryState):
 
 
 SUPPORT_TICKET_REVIEW_HEADER = "Here's what I'll send:"
+# The replies below that name a button are filled with the labels the admin
+# gave it, so they name what the widget shows.
+DEFAULT_BUTTON_LABELS = {
+    "send": SUPPORT_WIDGET_SEND_DEFAULT,
+    "cancel": SUPPORT_WIDGET_CANCEL_DEFAULT,
+}
 # Not a question: a typed "no" cancels and a "yes" files.
 SUPPORT_TICKET_REVIEW_FOOTER = (
-    "Add anything that's missing below. When it looks right, press Send "
-    "request, or press Cancel to drop it."
+    "Add anything that's missing below. When it looks right, press {send}, "
+    "or press {cancel} to drop it."
 )
 SUPPORT_TICKET_FILED = (
     "Your request has been submitted. Your reference number is {reference}. The "
@@ -1136,7 +1147,7 @@ SUPPORT_TICKET_ALREADY_FILED = (
 )
 SUPPORT_TICKET_FAILED = (
     "I couldn't submit your request, so nothing has been sent and there's no "
-    "ticket number yet. Press Send request to try again, or email our support "
+    "ticket number yet. Press {send} to try again, or email our support "
     "team directly."
 )
 SUPPORT_TICKET_REJECTED = (
@@ -1162,19 +1173,15 @@ SUPPORT_NOTHING_TO_SEND = (
 )
 # A thread that opens on "thanks" or "ok" has nothing to pass on yet.
 SUPPORT_FILLER_OPENER = "Hello. What can I help you with today?"
-SUPPORT_SEND_UNCLEAR = (
-    "I'm not sure whether that was a go-ahead or something to add. Press Send "
-    "request to pass it on exactly as shown, or Cancel to drop it. To add "
-    "something, just tell me and I'll show you the updated version."
+# The description filter finds this reply by its opening, which no button
+# label changes and which the wording before learn-ai#205 shares.
+SUPPORT_SEND_UNCLEAR_OPENING = (
+    "I'm not sure whether that was a go-ahead or something to add"
 )
-# Threads open at deploy still hold the earlier wording, and the description
-# filter matches the reply by its exact text.
-SUPPORT_SEND_UNCLEAR_REPLIES = (
-    SUPPORT_SEND_UNCLEAR,
-    "I'm not sure whether that was a go-ahead or something to add, and I don't "
-    'want to guess. Reply "send" on its own to pass on the request exactly as '
-    'shown, "cancel" to drop it, or tell me what to add and I\'ll show you the '
-    "updated version.",
+SUPPORT_SEND_UNCLEAR = (
+    f"{SUPPORT_SEND_UNCLEAR_OPENING}. Press {{send}} to pass it on exactly as "
+    "shown, or {cancel} to drop it. To add something, just tell me and I'll "
+    "show you the updated version."
 )
 SUPPORT_TICKET_SENDING = (
     "Still sending that one. The reference number will show up here once it's through."
@@ -1571,7 +1578,7 @@ def _support_description(prior_messages: list, message: str, *, since: int = 0) 
         # chatter we could not read stays out while the same words typed
         # anywhere else are still the learner's problem.
         and not any(
-            getattr(reply, "content", "") in SUPPORT_SEND_UNCLEAR_REPLIES
+            getattr(reply, "content", "").startswith(SUPPORT_SEND_UNCLEAR_OPENING)
             for reply in prior_messages[position + 1 : position + 2]
         )
     ]
@@ -1648,7 +1655,9 @@ def _support_email(prior_state: dict, extra_state: dict, message: str) -> str:
     )
 
 
-def _support_review(description: str, page_url: str, email: str) -> str:
+def _support_review(
+    description: str, page_url: str, email: str, *, labels: dict[str, str]
+) -> str:
     """Show the learner the ticket before it exists, in their own words."""
     lines = [SUPPORT_TICKET_REVIEW_HEADER, "", f"**Your message:** {description}"]
     if page_url:
@@ -1658,7 +1667,7 @@ def _support_review(description: str, page_url: str, email: str) -> str:
     boxed = "\n".join(
         f"> {line}" if line else ">" for line in "\n".join(lines).splitlines()
     )
-    return f"{boxed}\n\n{SUPPORT_TICKET_REVIEW_FOOTER}"
+    return f"{boxed}\n\n{SUPPORT_TICKET_REVIEW_FOOTER.format(**labels)}"
 
 
 def _quotes_the_reply_to(message: BaseMessage) -> bool:
@@ -1730,6 +1739,8 @@ class SupportBot(TruncatingChatbot):
     # Answering calls a model, so the deploy check in checks.py covers this bot.
     CALLS_THE_MODEL = True
     SETS_UP_THE_MODEL_EAGERLY = False
+    # Read from the admin at the start of each turn.
+    button_labels = DEFAULT_BUTTON_LABELS
 
     def __init__(  # noqa: PLR0913
         self,
@@ -1967,7 +1978,7 @@ class SupportBot(TruncatingChatbot):
                 }
             # awaiting_send stays set, so the learner's next message retries
             # rather than starting the review over.
-            return SUPPORT_TICKET_FAILED, {}
+            return SUPPORT_TICKET_FAILED.format(**self.button_labels), {}
         reply = SUPPORT_TICKET_FILED.format(
             reference=result["reference"], email=ticket["email"]
         )
@@ -2059,6 +2070,7 @@ class SupportBot(TruncatingChatbot):
             description,
             _accumulated(prior_state, extra_state, "page_url"),
             email,
+            labels=self.button_labels,
             # An address parsed out of this turn reaches state no other way,
             # and the turn that files has to still know it.
         ), {"user_email": [email], "awaiting_send": [True]}
@@ -2087,11 +2099,14 @@ class SupportBot(TruncatingChatbot):
         # back rather than sent - the learner has not read this version yet.
         if not (button == "send" or _is_affirmative(message)):
             if _is_unclear_go_ahead(message):
-                return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
+                return SUPPORT_SEND_UNCLEAR.format(**self.button_labels), {
+                    "awaiting_send": [True]
+                }
             return _support_review(
                 _support_description(prior_messages, message, since=since),
                 page_url,
                 email,
+                labels=self.button_labels,
             ), {"user_email": [email], "awaiting_send": [True]}
 
         reply, filing_updates = await self._file_the_ticket(
@@ -2192,6 +2207,11 @@ class SupportBot(TruncatingChatbot):
             thread_id=self.thread_id
         ).afirst()
         prior_state = await self._prior_state()
+        text = await SupportWidgetText.objects.afirst()
+        self.button_labels = {
+            "send": (text and text.send_label) or SUPPORT_WIDGET_SEND_DEFAULT,
+            "cancel": (text and text.cancel_label) or SUPPORT_WIDGET_CANCEL_DEFAULT,
+        }
 
         if session and session.support_ticket_reference:
             reply, updates = (

@@ -48,6 +48,7 @@ from ai_chatbots import chatbots as chatbots_module
 from ai_chatbots import tools
 from ai_chatbots.chatbots import (
     AFFIRMATIVE_PHRASES,
+    DEFAULT_BUTTON_LABELS,
     PAUSE_PHRASES,
     SUPPORT_ANSWER_CLOSED,
     SUPPORT_ASK_EMAIL,
@@ -90,7 +91,11 @@ from ai_chatbots.factories import (
     SystemMessageFactory,
     ToolMessageFactory,
 )
-from ai_chatbots.models import DjangoCheckpoint, TutorBotOutput, UserChatSession
+from ai_chatbots.models import (
+    DjangoCheckpoint,
+    TutorBotOutput,
+    UserChatSession,
+)
 from ai_chatbots.prompts import (
     PROMPT_ACCOUNT_TOOLS_CORE,
     PROMPT_SEARCH_SUMMARY_QUERY,
@@ -2557,7 +2562,14 @@ async def test_try_to_answer_keeps_the_review_block_out_of_the_attempt(
     chatbot = await _answering_bot(mocker, mock_checkpointer)
     history = [
         HumanMessage("I can't log in"),
-        AIMessage(_support_review("I can't log in", "", "learner@example.com")),
+        AIMessage(
+            _support_review(
+                "I can't log in",
+                "",
+                "learner@example.com",
+                labels=DEFAULT_BUTTON_LABELS,
+            )
+        ),
     ]
 
     await chatbot._try_to_answer("and my grade?", {"messages": history})  # noqa: SLF001
@@ -3804,7 +3816,7 @@ async def test_support_bot_reports_a_zendesk_failure(mocker, mock_checkpointer):
         ]
     )
 
-    assert SUPPORT_TICKET_FAILED in reply
+    assert SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS) in reply
     session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
     assert session.support_ticket_reference == ""
 
@@ -4474,7 +4486,7 @@ async def test_support_bot_asks_when_the_go_ahead_is_unclear(
     )
 
     mock_file.assert_not_called()
-    assert SUPPORT_SEND_UNCLEAR in reply
+    assert SUPPORT_SEND_UNCLEAR.format(**DEFAULT_BUTTON_LABELS) in reply
     assert reply_text not in reply
 
 
@@ -4707,7 +4719,7 @@ PENDING_SEND = {"user_email": ["signedin@mit.edu"], "awaiting_send": [True]}
             PENDING_SEND,
             "yes, and the course is 18.01",
             {"reference": 4821},
-            SUPPORT_SEND_UNCLEAR,
+            SUPPORT_SEND_UNCLEAR.format(**DEFAULT_BUTTON_LABELS),
             True,
             id="unclear",
         ),
@@ -4716,7 +4728,7 @@ PENDING_SEND = {"user_email": ["signedin@mit.edu"], "awaiting_send": [True]}
             PENDING_SEND,
             "send",
             {"error": "Could not file the support request."},
-            SUPPORT_TICKET_FAILED,
+            SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS),
             True,
             id="failed",
         ),
@@ -5167,7 +5179,7 @@ async def test_support_bot_stops_asking_after_zendesk_turns_the_ticket_down(
 
     assert mock_file.call_count == 1
     assert all(SUPPORT_TICKET_REJECTED in reply for reply in replies)
-    assert SUPPORT_TICKET_FAILED not in replies[0]
+    assert SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS) not in replies[0]
 
 
 @pytest.mark.asyncio
@@ -5393,7 +5405,7 @@ async def test_support_bot_asks_rather_than_dropping_the_request_on_wait(
     ):
         pass
 
-    assert SUPPORT_SEND_UNCLEAR in reply
+    assert SUPPORT_SEND_UNCLEAR.format(**DEFAULT_BUTTON_LABELS) in reply
     assert SUPPORT_TICKET_CANCELLED not in reply
     assert mock_file.await_args.kwargs["description"] == SUPPORT_PROBLEM
 
@@ -5488,7 +5500,9 @@ def test_support_description_leaves_the_bots_own_words_out():
 @pytest.mark.parametrize(
     "unclear_reply",
     [
-        SUPPORT_SEND_UNCLEAR,
+        SUPPORT_SEND_UNCLEAR.format(**DEFAULT_BUTTON_LABELS),
+        # Send and Cancel renamed in the admin.
+        SUPPORT_SEND_UNCLEAR.format(send="Submit it", cancel="Not now"),
         # The wording before learn-ai#205, still in threads open at deploy.
         "I'm not sure whether that was a go-ahead or something to add, and I don't "
         'want to guess. Reply "send" on its own to pass on the request exactly as '
@@ -5742,7 +5756,11 @@ async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
             True,
         ),
         # A retry on this thread can still file it.
-        ({"reference": None}, SUPPORT_TICKET_FAILED, False),
+        (
+            {"reference": None},
+            SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS),
+            False,
+        ),
     ],
 )
 async def test_filed_flag_without_a_reference(
@@ -5763,22 +5781,95 @@ async def test_filed_flag_without_a_reference(
     assert _metadata_of(later)["filed"] is done
 
 
+@pytest.fixture
+def renamed_buttons(transactional_db, support_widget_text):
+    """
+    Send and Cancel renamed in the admin. Transactional, so the bot's async read
+    on another connection sees the save.
+    """
+    support_widget_text.send_label = "Submit it"
+    support_widget_text.cancel_label = "Not now"
+    support_widget_text.save()
+
+
+@pytest.mark.parametrize(
+    ("prior", "state", "message", "zendesk", "expected"),
+    [
+        pytest.param(
+            [],
+            {"user_email": ["signedin@mit.edu"]},
+            SUPPORT_PROBLEM,
+            {"reference": 4821},
+            "press Submit it, or press Not now to drop it.",
+            id="review",
+        ),
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            PENDING_SEND,
+            "yes, and the course is 18.01",
+            {"reference": 4821},
+            "Press Submit it to pass it on exactly as shown, or Not now to drop it.",
+            id="unclear",
+        ),
+        pytest.param(
+            [HumanMessage(SUPPORT_PROBLEM)],
+            PENDING_SEND,
+            "send",
+            {"error": "Could not file the support request."},
+            "Press Submit it to try again",
+            id="failed",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_support_bot_names_the_buttons_the_admin_renamed(  # noqa: PLR0913
+    mocker,
+    mock_checkpointer,
+    renamed_buttons,
+    prior,
+    state,
+    message,
+    zendesk,
+    expected,
+):
+    """A reply that names a button has to use the label the widget shows."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket", AsyncMock(return_value=zendesk)
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, prior, state=state)
+
+    reply = "".join(
+        [
+            chunk
+            async for chunk in chatbot.get_completion(
+                message, extra_state=_support_state("signedin@mit.edu")
+            )
+        ]
+    )
+
+    assert expected in reply
+    assert "Send request" not in reply
+
+
 def test_the_review_boxes_everything_up_to_the_reply_to():
     """The widget draws a blockquote as a box; the footer sits under it."""
     review = _support_review(
-        "line one\n\nline two", "https://learn.mit.edu/x", "learner@example.com"
+        "line one\n\nline two",
+        "https://learn.mit.edu/x",
+        "learner@example.com",
+        labels=DEFAULT_BUTTON_LABELS,
     )
     boxed, footer = review.rsplit("\n\n", 1)
 
     assert all(line.startswith(">") for line in boxed.splitlines())
     assert boxed.splitlines()[0] == f"> {SUPPORT_TICKET_REVIEW_HEADER}"
     assert boxed.splitlines()[-1] == "> **Reply to:** learner@example.com"
-    assert footer == SUPPORT_TICKET_REVIEW_FOOTER
+    assert footer == SUPPORT_TICKET_REVIEW_FOOTER.format(**DEFAULT_BUTTON_LABELS)
 
 
 def test_the_review_footer_asks_no_yes_or_no_question():
     """A typed "no" cancels and a "yes" files, so the footer can't invite either."""
-    assert "?" not in SUPPORT_TICKET_REVIEW_FOOTER
+    assert "?" not in SUPPORT_TICKET_REVIEW_FOOTER.format(**DEFAULT_BUTTON_LABELS)
 
 
 def test_the_maybe_filed_reply_does_not_promise_no_duplicate():

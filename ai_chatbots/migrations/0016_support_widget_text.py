@@ -45,14 +45,22 @@ class Migration(migrations.Migration):
                     "send_label",
                     models.CharField(
                         blank=True,
-                        help_text='Blank shows "Send request".',
+                        help_text=(
+                            'Blank shows "Send request". The bot\'s replies use '
+                            "this name too."
+                        ),
                         max_length=40,
                     ),
                 ),
                 (
                     "cancel_label",
                     models.CharField(
-                        blank=True, help_text='Blank shows "Cancel".', max_length=40
+                        blank=True,
+                        help_text=(
+                            'Blank shows "Cancel". The bot\'s replies use '
+                            "this name too."
+                        ),
+                        max_length=40,
                     ),
                 ),
                 (

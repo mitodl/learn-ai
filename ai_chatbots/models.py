@@ -176,12 +176,18 @@ class SupportWidgetText(TimestampedModel):
     send_label = models.CharField(
         max_length=40,
         blank=True,
-        help_text=f'Blank shows "{SUPPORT_WIDGET_SEND_DEFAULT}".',
+        help_text=(
+            f'Blank shows "{SUPPORT_WIDGET_SEND_DEFAULT}". The bot\'s replies use '
+            "this name too."
+        ),
     )
     cancel_label = models.CharField(
         max_length=40,
         blank=True,
-        help_text=f'Blank shows "{SUPPORT_WIDGET_CANCEL_DEFAULT}".',
+        help_text=(
+            f'Blank shows "{SUPPORT_WIDGET_CANCEL_DEFAULT}". The bot\'s replies use '
+            "this name too."
+        ),
     )
     placeholder = models.CharField(
         max_length=80, blank=True, help_text='Blank shows "Describe what you need".'

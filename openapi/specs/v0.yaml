@@ -582,11 +582,12 @@ components:
           maxLength: 60
         send_label:
           type: string
-          description: Blank shows "Send request".
+          description: Blank shows "Send request". The bot's replies use this name
+            too.
           maxLength: 40
         cancel_label:
           type: string
-          description: Blank shows "Cancel".
+          description: Blank shows "Cancel". The bot's replies use this name too.
           maxLength: 40
         placeholder:
           type: string
