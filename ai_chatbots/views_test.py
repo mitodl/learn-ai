@@ -5,7 +5,9 @@ from random import randint
 from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import pytest
+from django.core.asgi import get_asgi_application
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils.encoding import force_bytes
@@ -27,6 +29,7 @@ from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING, parse_prompt
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
 from main.factories import UserFactory
+from main.middleware.configs import cors_middleware
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -412,6 +415,30 @@ def test_support_widget_text_sets_no_cookies(client):
     """The widget fetches without credentials, so the response must not need any."""
     response = client.get(SUPPORT_WIDGET_TEXT_URL)
     assert not response.cookies
+
+
+@pytest.mark.parametrize(
+    ("origin", "allowed"),
+    [("https://learn.example.edu", True), ("https://elsewhere.example.com", False)],
+)
+@pytest.mark.asyncio
+async def test_support_widget_text_cors(settings, origin, allowed):
+    """
+    Learner pages fetch this cross-origin with a plain GET, so it needs CORS
+    headers for listed sites even though CORS_ALLOW_METHODS leaves GET out.
+    """
+    settings.CORS_ALLOW_ORIGINS = ["https://learn.example.edu"]
+    # Built here: the middleware reads the settings when it is created.
+    app = cors_middleware(get_asgi_application())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as http:
+        response = await http.get(SUPPORT_WIDGET_TEXT_URL, headers={"Origin": origin})
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers.get("access-control-allow-origin") == (
+        origin if allowed else None
+    )
 
 
 def test_get_transcript_block_id():
