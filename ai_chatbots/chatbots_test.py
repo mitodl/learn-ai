@@ -9,10 +9,12 @@ import threading
 import time
 import warnings
 from operator import add
+from types import SimpleNamespace
 from typing import Annotated
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
+import httpx2
 import ol_llm
 import opik
 import pytest
@@ -36,6 +38,7 @@ from langchain_core.tools import tool
 from langchain_litellm import ChatLiteLLM
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import InjectedState
+from ol_llm.testing import override_models
 from open_learning_ai_tutor.constants import Intent
 from open_learning_ai_tutor.utils import (
     filter_out_system_messages,
@@ -43,6 +46,8 @@ from open_learning_ai_tutor.utils import (
 )
 from openai import BadRequestError
 from pydantic.warnings import PydanticDeprecatedSince20
+from pydantic_ai.models.system_one import SystemOneModel
+from pydantic_ai.providers.system_one import SystemOneProvider
 
 from ai_chatbots import chatbots as chatbots_module
 from ai_chatbots import tools
@@ -64,6 +69,8 @@ from ai_chatbots.chatbots import (
     SUPPORT_TICKET_REVIEW_FOOTER,
     SUPPORT_TICKET_REVIEW_HEADER,
     SUPPORT_TICKET_SENDING,
+    ReplyAfterAnAnswer,
+    ReplyToTheReview,
     ResourceRecommendationBot,
     SearchSummaryBot,
     SupportAgentState,
@@ -5725,3 +5732,344 @@ def test_the_maybe_filed_reply_does_not_promise_no_duplicate():
     """The next message starts a new thread, which could file the same request again."""
     assert "won't send it again" not in SUPPORT_TICKET_MAYBE_FILED
     assert "don't send it again" in SUPPORT_TICKET_MAYBE_FILED
+
+
+# Reading replies the phrase lists don't recognize with a decision model.
+
+DECISION_MODEL = "azure-decision:Microsoft-Decision-1.1"
+
+
+@pytest.fixture
+def decision_model(settings):
+    settings.AI_SUPPORT_DECISION_MODEL = DECISION_MODEL
+    settings.AI_SUPPORT_DECISION_MIN_CONFIDENCE = 0.8
+
+
+def _reading(mocker, choice="", *, probability=0.95, error=None):
+    """
+    Answer every decision call with one reading of the reply. A None
+    probability is a response that carries no probabilities.
+    """
+    result = SimpleNamespace(
+        output=SimpleNamespace(reply=choice),
+        provider_details=None
+        if probability is None
+        else {"probabilities": {"reply": {choice: probability}}},
+    )
+    return mocker.patch.object(
+        ol_llm,
+        "complete",
+        AsyncMock(side_effect=error) if error else AsyncMock(return_value=result),
+    )
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_close_out_the_phrase_lists_miss_is_read_as_finished(
+    mocker, mock_checkpointer
+):
+    decide = _reading(mocker, "finished")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    closed = await _say(chatbot, "thanks, that worked perfectly!")
+
+    assert SUPPORT_ANSWER_CLOSED in closed
+    assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
+    # Only the reply is sent: no answer or record of the learner's.
+    [call] = decide.await_args_list
+    use_case, state = call.args
+    assert state == "thanks, that worked perfectly!"
+    assert call.kwargs["output_type"] is ReplyAfterAnAnswer
+    assert use_case.model == DECISION_MODEL
+    assert use_case.timeout_seconds == SupportBot.DECISION_TIMEOUT_SECONDS
+    assert call.kwargs["attribution"] == chatbot.attribution
+
+
+@pytest.mark.asyncio
+async def test_without_a_decision_model_the_reply_is_a_follow_up(
+    mocker, mock_checkpointer, settings
+):
+    settings.AI_SUPPORT_DECISION_MODEL = None
+    decide = _reading(mocker, "finished")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    reply = await _say(chatbot, "thanks, that worked perfectly!")
+
+    assert "second answer" in reply
+    decide.assert_not_called()
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_close_out_the_phrase_lists_know_does_not_ask_the_model(
+    mocker, mock_checkpointer
+):
+    decide = _reading(mocker, "follow_up")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    closed = await _say(chatbot, "thanks")
+
+    assert SUPPORT_ANSWER_CLOSED in closed
+    decide.assert_not_called()
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.parametrize(
+    "reading",
+    [
+        {"choice": "finished", "probability": 0.5},
+        {"choice": "finished", "probability": None},
+        {"error": ol_llm.LLMUnavailable("down", use_case="x", model="y")},
+        # A missing endpoint, or an Entra token that can't be had, raises before
+        # the request, as something other than an LLMError.
+        {"error": ValueError("azure: decision models need an endpoint")},
+        {"error": RuntimeError("credential unavailable")},
+        # Read as finished, but a question asks for more.
+        {"choice": "finished", "message": "ok thanks, is that everything I need?"},
+    ],
+    ids=[
+        "unsure",
+        "no-probabilities",
+        "failed",
+        "misconfigured",
+        "no-token",
+        "a-question",
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_unsure_or_failed_reading_leaves_the_reply_to_the_phrase_lists(
+    mocker, mock_checkpointer, reading
+):
+    message = reading.pop("message", "thanks, that worked perfectly!")
+    _reading(mocker, **reading)
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    reply = await _say(chatbot, message)
+
+    assert "second answer" in reply
+    assert SUPPORT_ANSWER_CLOSED not in reply
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_slow_reading_is_abandoned_at_the_deadline(mocker, mock_checkpointer):
+    async def stalls(*_args, **_kwargs):
+        await asyncio.sleep(5)
+
+    mocker.patch.object(ol_llm, "complete", stalls)
+    mocker.patch.object(SupportBot, "DECISION_DEADLINE_SECONDS", 0.01)
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    reply = await _say(chatbot, "thanks, that worked perfectly!")
+
+    assert "second answer" in reply
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_typed_request_for_a_person_starts_the_intake(
+    mocker, mock_checkpointer
+):
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 77}),
+    )
+    _reading(mocker, "wants_a_person")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "another answer"]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+
+    reply = await _say(chatbot, "that's wrong, can someone from support look at it")
+
+    assert SUPPORT_TICKET_REVIEW_HEADER in reply
+    assert "can someone from support look at it" in reply
+    assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
+    mock_file.assert_not_called()
+    # Not the escalate button's lasting hand-off: a misreading is undone by Cancel.
+    assert not any((await _state_of(chatbot)).get("handed_off") or [])
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_cancelling_a_misread_hand_off_reopens_answering(
+    mocker, mock_checkpointer
+):
+    _reading(mocker, "wants_a_person")
+    chatbot = await _answering_support_bot(
+        mocker,
+        mock_checkpointer,
+        ["You're enrolled in 18.01x.", "Your certificate is ready."],
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "hmm, I thought there was another one")
+
+    cancelled = await _say(chatbot, "cancel")
+    again = await _say(chatbot, "where's my certificate?")
+
+    assert SUPPORT_TICKET_CANCELLED in cancelled
+    assert "Your certificate is ready." in again
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_go_ahead_that_adds_details_is_shown_back_not_filed(
+    mocker, mock_checkpointer
+):
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    decide = _reading(mocker, "adds_details")
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = await _say(chatbot, "yes, and the course is 18.01")
+
+    mock_file.assert_not_called()
+    assert SUPPORT_TICKET_REVIEW_HEADER in reply
+    assert "the course is 18.01" in reply
+    assert await _awaiting_send(chatbot) is True
+    assert decide.await_args.args[1] == "yes, and the course is 18.01"
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.parametrize("choice", ["approves", "unsure"])
+@pytest.mark.asyncio
+async def test_a_go_ahead_read_as_anything_else_still_asks(
+    mocker, mock_checkpointer, choice
+):
+    """The model never files: only the Send button or a plain "send" does."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    _reading(mocker, choice)
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = await _say(chatbot, "yes please send it to support asap")
+
+    mock_file.assert_not_called()
+    assert SUPPORT_SEND_UNCLEAR in reply
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_cancellation_never_asks_the_model(mocker, mock_checkpointer):
+    decide = _reading(mocker, "adds_details")
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = await _say(chatbot, "cancel")
+
+    assert SUPPORT_TICKET_CANCELLED in reply
+    decide.assert_not_called()
+
+
+def test_the_decision_use_case_is_off_without_a_model(settings):
+    settings.AI_SUPPORT_DECISION_MODEL = None
+
+    assert SupportBot.decision_use_case() is None
+
+
+@pytest.mark.usefixtures("decision_model")
+def test_the_decision_use_case_checks_against_the_catalog():
+    use_case = SupportBot.decision_use_case()
+
+    # No warning: the catalog lists the model, with a price for the spend rules.
+    assert ol_llm.check_model_ids([use_case.model]) == ol_llm.catalog.CheckResult(
+        errors=(), warnings=()
+    )
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.parametrize(
+    ("question", "options", "pick"),
+    [
+        (
+            ReplyAfterAnAnswer,
+            {"finished", "follow_up", "wants_a_person"},
+            "wants_a_person",
+        ),
+        (ReplyToTheReview, {"approves", "adds_details", "unsure"}, "adds_details"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_reading_runs_through_a_real_decision_model(
+    mocker, mock_checkpointer, question, options, pick
+):
+    """
+    PydanticAI turns the output type into the question: each option goes out with
+    what it means, and the pick's probability comes back where the bot reads it.
+    """
+    sent = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        sent.append(body)
+        options = list(body["questions"]["reply"]["criteria"])
+        rest = 0.1 / (len(options) - 1)
+        probabilities = {o: 0.9 if o == pick else rest for o in options}
+        return httpx2.Response(
+            200,
+            json={
+                "model": "microsoft-decision-1.1",
+                "answers": {
+                    "reply": {
+                        "type": "choice",
+                        "choice": pick,
+                        "confidence": 0.85,
+                        "probabilities": probabilities,
+                    }
+                },
+                "usage": {"input_tokens": 30, "output_tokens": 0},
+            },
+        )
+
+    model = SystemOneModel(
+        "Microsoft-Decision-1.1",
+        provider=SystemOneProvider(
+            base_url="https://decision.test",
+            http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(answer)),
+        ),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    with override_models(model):
+        reading = await chatbot._read_the_reply(question, "some reply")  # noqa: SLF001
+
+    assert reading == pick
+    [body] = sent
+    assert body["state"] == "some reply"
+    criteria = body["questions"]["reply"]["criteria"]
+    assert set(criteria) == options
+    # Every option carries what it means, not only its label.
+    assert all(criteria.values())
