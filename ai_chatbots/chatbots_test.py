@@ -14,6 +14,7 @@ from typing import Annotated
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
+import httpx2
 import ol_llm
 import opik
 import pytest
@@ -37,6 +38,7 @@ from langchain_core.tools import tool
 from langchain_litellm import ChatLiteLLM
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import InjectedState
+from ol_llm.testing import override_models
 from open_learning_ai_tutor.constants import Intent
 from open_learning_ai_tutor.utils import (
     filter_out_system_messages,
@@ -44,6 +46,8 @@ from open_learning_ai_tutor.utils import (
 )
 from openai import BadRequestError
 from pydantic.warnings import PydanticDeprecatedSince20
+from pydantic_ai.models.system_one import SystemOneModel
+from pydantic_ai.providers.system_one import SystemOneProvider
 
 from ai_chatbots import chatbots as chatbots_module
 from ai_chatbots import tools
@@ -66,6 +70,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_TICKET_REVIEW_HEADER,
     SUPPORT_TICKET_SENDING,
     ReplyAfterAnAnswer,
+    ReplyToTheReview,
     ResourceRecommendationBot,
     SearchSummaryBot,
     SupportAgentState,
@@ -6003,3 +6008,68 @@ def test_the_decision_use_case_checks_against_the_catalog():
     assert ol_llm.check_model_ids([use_case.model]) == ol_llm.catalog.CheckResult(
         errors=(), warnings=()
     )
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.parametrize(
+    ("question", "options", "pick"),
+    [
+        (
+            ReplyAfterAnAnswer,
+            {"finished", "follow_up", "wants_a_person"},
+            "wants_a_person",
+        ),
+        (ReplyToTheReview, {"approves", "adds_details", "unsure"}, "adds_details"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_reading_runs_through_a_real_decision_model(
+    mocker, mock_checkpointer, question, options, pick
+):
+    """
+    PydanticAI turns the output type into the question: each option goes out with
+    what it means, and the pick's probability comes back where the bot reads it.
+    """
+    sent = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        sent.append(body)
+        options = list(body["questions"]["reply"]["criteria"])
+        rest = 0.1 / (len(options) - 1)
+        probabilities = {o: 0.9 if o == pick else rest for o in options}
+        return httpx2.Response(
+            200,
+            json={
+                "model": "microsoft-decision-1.1",
+                "answers": {
+                    "reply": {
+                        "type": "choice",
+                        "choice": pick,
+                        "confidence": 0.85,
+                        "probabilities": probabilities,
+                    }
+                },
+                "usage": {"input_tokens": 30, "output_tokens": 0},
+            },
+        )
+
+    model = SystemOneModel(
+        "Microsoft-Decision-1.1",
+        provider=SystemOneProvider(
+            base_url="https://decision.test",
+            http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(answer)),
+        ),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    with override_models(model):
+        reading = await chatbot._read_the_reply(question, "some reply")  # noqa: SLF001
+
+    assert reading == pick
+    [body] = sent
+    assert body["state"] == "some reply"
+    criteria = body["questions"]["reply"]["criteria"]
+    assert set(criteria) == options
+    # Every option carries what it means, not only its label.
+    assert all(criteria.values())

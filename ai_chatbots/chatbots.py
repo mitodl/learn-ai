@@ -1544,23 +1544,38 @@ def _is_unclear_go_ahead(message: str) -> bool:
 
 
 # What a decision model is asked about a reply the phrase lists did not
-# recognize: each output type's one field is a pick-one question. Every option
-# the bot acts on is cheap to undo: the model never files or cancels, since
-# filing cannot be taken back and a wrong cancellation throws away what the
-# learner typed. Those stay with the phrase lists and the buttons.
+# recognize: each output type's one field is a pick-one question, and each
+# option's description is sent as what that option means. Every option the bot
+# acts on is cheap to undo: the model never files or cancels, since filing
+# cannot be taken back and a wrong cancellation throws away what the learner
+# typed. Those stay with the phrase lists and the buttons.
 class ReplyAfterAnAnswer(BaseModel):
     """The assistant just answered the learner's question about their own courses
     or account, and this is the learner's reply.
     """
 
-    reply: Literal["finished", "follow_up", "wants_a_person"] = Field(
-        description=(
-            "What does the reply do? finished: thanks the assistant or says they "
-            "are done, and asks nothing more. follow_up: asks something more, or "
-            "says the answer was wrong or unhelpful. wants_a_person: asks to reach "
-            "a person or the support team."
-        )
-    )
+    reply: (
+        Annotated[
+            Literal["finished"],
+            Field(
+                description=(
+                    "Thanks the assistant or says they are done, and asks nothing more"
+                )
+            ),
+        ]
+        | Annotated[
+            Literal["follow_up"],
+            Field(
+                description=(
+                    "Asks something more, or says the answer was wrong or unhelpful"
+                )
+            ),
+        ]
+        | Annotated[
+            Literal["wants_a_person"],
+            Field(description="Asks to reach a person or the support team"),
+        ]
+    ) = Field(description="What does the reply do?")
 
 
 class ReplyToTheReview(BaseModel):
@@ -1568,13 +1583,24 @@ class ReplyToTheReview(BaseModel):
     confirm it, and this is their reply.
     """
 
-    reply: Literal["approves", "adds_details", "unsure"] = Field(
-        description=(
-            "What does the reply do? approves: only says to go ahead, with nothing "
-            "support needs to read. adds_details: adds or corrects details that "
-            "support should read. unsure: hesitates, or does not say what they want."
-        )
-    )
+    reply: (
+        Annotated[
+            Literal["approves"],
+            Field(
+                description=(
+                    "Only says to go ahead, with nothing support needs to read"
+                )
+            ),
+        ]
+        | Annotated[
+            Literal["adds_details"],
+            Field(description="Adds or corrects details that support should read"),
+        ]
+        | Annotated[
+            Literal["unsure"],
+            Field(description="Hesitates, or does not say what they want"),
+        ]
+    ) = Field(description="What does the reply do?")
 
 
 def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
