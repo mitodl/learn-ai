@@ -573,7 +573,7 @@ POSTHOG_PROJECT_ID = get_int(
 # the SDK would otherwise send to Comet's hosted Opik.
 OL_LLM_ENVIRONMENT = get_string(name="OL_LLM_ENVIRONMENT", default=ENVIRONMENT)
 OPIK_URL_OVERRIDE = get_string(name="OPIK_URL_OVERRIDE", default=None)
-# The Azure Foundry account that serves azure: decision models, e.g.
+# The Azure Foundry account that serves azure-decision: models, e.g.
 # AI_SUPPORT_DECISION_MODEL. Set by ol-infrastructure; authenticates with the same
 # Entra token provider as Azure OpenAI.
 OL_LLM_AZURE_DECISION_ENDPOINT = get_string(
@@ -633,11 +633,12 @@ AI_DEFAULT_SUPPORT_MODEL = get_string("AI_DEFAULT_SUPPORT_MODEL", AI_DEFAULT_MOD
 # Shorter than a normal request: a slow answer must not hold up the intake.
 AI_SUPPORT_ANSWER_TIMEOUT = get_int("AI_SUPPORT_ANSWER_TIMEOUT", 20)
 # The ol-llm decision model that reads support replies the phrase lists don't
-# recognize, e.g. azure:Microsoft-Decision-1.1. Unset, only the phrase lists read
-# them.
+# recognize, e.g. azure-decision:Microsoft-Decision-1.1. Unset, only the phrase
+# lists read them.
 AI_SUPPORT_DECISION_MODEL = get_string("AI_SUPPORT_DECISION_MODEL", None)
-# The least ChoiceAnswer.confidence the support bot acts on. Below it the reply is
-# read as if no model had been asked. Tune it per model: each calibrates differently.
+# The least probability the decision model must give the option the support bot
+# acts on. Below it the reply is read as if no model had been asked. Tune it per
+# model: each calibrates differently.
 AI_SUPPORT_DECISION_MIN_CONFIDENCE = get_float(
     "AI_SUPPORT_DECISION_MIN_CONFIDENCE", 0.8
 )

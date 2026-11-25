@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from contextlib import aclosing
 from operator import add
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -44,6 +44,7 @@ from open_learning_ai_tutor.utils import (
     tutor_output_to_json,
 )
 from openai import BadRequestError
+from pydantic import BaseModel, Field
 
 from ai_chatbots import learn_api, tools
 from ai_chatbots.admin import LLMModel
@@ -1543,31 +1544,37 @@ def _is_unclear_go_ahead(message: str) -> bool:
 
 
 # What a decision model is asked about a reply the phrase lists did not
-# recognize. Every option the bot acts on is cheap to undo: the model never files
-# or cancels, since filing cannot be taken back and a wrong cancellation throws
-# away what the learner typed. Those stay with the phrase lists and the buttons.
-REPLY_AFTER_AN_ANSWER = ol_llm.Choice(
-    instructions=(
-        "The assistant just answered the learner's question about their own "
-        "courses or account. What does the learner's reply do?"
-    ),
-    options={
-        "finished": "Thanks the assistant or says they are done, and asks nothing more",
-        "follow_up": "Asks something more, or says the answer was wrong or unhelpful",
-        "wants_a_person": "Asks to reach a person or the support team",
-    },
-)
-REPLY_TO_THE_REVIEW = ol_llm.Choice(
-    instructions=(
-        "The learner was shown the support request we are about to send and asked "
-        "to confirm it. What does their reply do?"
-    ),
-    options={
-        "approves": "Only says to go ahead, with nothing support needs to read",
-        "adds_details": "Adds or corrects details that support should read",
-        "unsure": "Hesitates, or does not say what they want",
-    },
-)
+# recognize: each output type's one field is a pick-one question. Every option
+# the bot acts on is cheap to undo: the model never files or cancels, since
+# filing cannot be taken back and a wrong cancellation throws away what the
+# learner typed. Those stay with the phrase lists and the buttons.
+class ReplyAfterAnAnswer(BaseModel):
+    """The assistant just answered the learner's question about their own courses
+    or account, and this is the learner's reply.
+    """
+
+    reply: Literal["finished", "follow_up", "wants_a_person"] = Field(
+        description=(
+            "What does the reply do? finished: thanks the assistant or says they "
+            "are done, and asks nothing more. follow_up: asks something more, or "
+            "says the answer was wrong or unhelpful. wants_a_person: asks to reach "
+            "a person or the support team."
+        )
+    )
+
+
+class ReplyToTheReview(BaseModel):
+    """The learner was shown the support request we are about to send and asked to
+    confirm it, and this is their reply.
+    """
+
+    reply: Literal["approves", "adds_details", "unsure"] = Field(
+        description=(
+            "What does the reply do? approves: only says to go ahead, with nothing "
+            "support needs to read. adds_details: adds or corrects details that "
+            "support should read. unsure: hesitates, or does not say what they want."
+        )
+    )
 
 
 def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
@@ -1863,7 +1870,7 @@ class SupportBot(TruncatingChatbot):
         )
 
     async def _read_the_reply(
-        self, question: ol_llm.Choice, message: str
+        self, question: type[ReplyAfterAnAnswer | ReplyToTheReview], message: str
     ) -> str | None:
         """
         Ask the decision model which of the question's options the reply is.
@@ -1871,40 +1878,41 @@ class SupportBot(TruncatingChatbot):
         Only the reply is sent: the question carries the context, so no answer,
         request or record of the learner's leaves the thread.
 
-        :param question: what to ask about the reply.
+        :param question: the output type whose ``reply`` field is the question.
         :param message: the learner's reply.
         :returns: the option, or None when no model is set, the call fails, or
-            the model is less sure than AI_SUPPORT_DECISION_MIN_CONFIDENCE.
+            the model gives the option less probability than
+            AI_SUPPORT_DECISION_MIN_CONFIDENCE.
         :rtype: str | None
         """
         if (use_case := self.decision_use_case()) is None or not message.strip():
             return None
         try:
-            decision = await asyncio.wait_for(
-                ol_llm.decide(
+            result = await asyncio.wait_for(
+                ol_llm.complete(
                     use_case,
                     message,
-                    {"reply": question},
+                    output_type=question,
                     attribution=self.attribution,
                 ),
                 timeout=self.DECISION_DEADLINE_SECONDS,
             )
+            reply = result.output.reply
+            # The option's own probability: each vendor computes `confidence`
+            # its own way, and this is the same number from every one.
+            probability = result.provider_details["probabilities"]["reply"][reply]
         except Exception as error:  # noqa: BLE001
-            # Anything, not only LLMError: a missing endpoint or a failed Entra
-            # token raises before the request, and the turn must still be read.
-            # Type only, no exc_info, as for the answer attempt.
+            # Anything, not only LLMError: a missing endpoint, a failed Entra
+            # token, or a response without probabilities, and the turn must
+            # still be read. Type only, no exc_info, as for the answer attempt.
             log.warning(
                 "Support reply reading failed, using the phrase lists: %s",
                 type(error).__name__,
             )
             return None
-        reading = decision.choice("reply")
-        if (
-            reading.confidence is None
-            or reading.confidence < settings.AI_SUPPORT_DECISION_MIN_CONFIDENCE
-        ):
+        if probability < settings.AI_SUPPORT_DECISION_MIN_CONFIDENCE:
             return None
-        return reading.choice
+        return reply
 
     async def _ensure_proxy_user(self) -> None:
         """Provision this learner's model budget."""
@@ -2193,7 +2201,7 @@ class SupportBot(TruncatingChatbot):
             # a turn, where asking again leaves the details out of the review.
             if (
                 _is_unclear_go_ahead(message)
-                and await self._read_the_reply(REPLY_TO_THE_REVIEW, message)
+                and await self._read_the_reply(ReplyToTheReview, message)
                 != "adds_details"
             ):
                 return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
@@ -2249,7 +2257,7 @@ class SupportBot(TruncatingChatbot):
             reading = (
                 "finished"
                 if _closes_the_answer(message)
-                else await self._read_the_reply(REPLY_AFTER_AN_ANSWER, message)
+                else await self._read_the_reply(ReplyAfterAnAnswer, message)
             )
         # A question is never a close-out, as for the phrase lists: "ok thanks,
         # is that everything?" asks for more.

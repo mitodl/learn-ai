@@ -9,6 +9,7 @@ import threading
 import time
 import warnings
 from operator import add
+from types import SimpleNamespace
 from typing import Annotated
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
@@ -64,6 +65,7 @@ from ai_chatbots.chatbots import (
     SUPPORT_TICKET_REVIEW_FOOTER,
     SUPPORT_TICKET_REVIEW_HEADER,
     SUPPORT_TICKET_SENDING,
+    ReplyAfterAnAnswer,
     ResourceRecommendationBot,
     SearchSummaryBot,
     SupportAgentState,
@@ -5729,7 +5731,7 @@ def test_the_maybe_filed_reply_does_not_promise_no_duplicate():
 
 # Reading replies the phrase lists don't recognize with a decision model.
 
-DECISION_MODEL = "azure:Microsoft-Decision-1.1"
+DECISION_MODEL = "azure-decision:Microsoft-Decision-1.1"
 
 
 @pytest.fixture
@@ -5738,19 +5740,21 @@ def decision_model(settings):
     settings.AI_SUPPORT_DECISION_MIN_CONFIDENCE = 0.8
 
 
-def _reading(mocker, choice="", *, confidence=0.95, error=None):
-    """Answer every decision call with one reading of the reply."""
-    decision = ol_llm.Decision(
-        answers={"reply": ol_llm.ChoiceAnswer(choice, {choice: 0.9}, confidence)},
-        model=DECISION_MODEL,
-        served_by="microsoft-decision-1.1",
-        input_tokens=12,
-        output_tokens=0,
+def _reading(mocker, choice="", *, probability=0.95, error=None):
+    """
+    Answer every decision call with one reading of the reply. A None
+    probability is a response that carries no probabilities.
+    """
+    result = SimpleNamespace(
+        output=SimpleNamespace(reply=choice),
+        provider_details=None
+        if probability is None
+        else {"probabilities": {"reply": {choice: probability}}},
     )
     return mocker.patch.object(
         ol_llm,
-        "decide",
-        AsyncMock(side_effect=error) if error else AsyncMock(return_value=decision),
+        "complete",
+        AsyncMock(side_effect=error) if error else AsyncMock(return_value=result),
     )
 
 
@@ -5771,9 +5775,9 @@ async def test_a_close_out_the_phrase_lists_miss_is_read_as_finished(
     assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
     # Only the reply is sent: no answer or record of the learner's.
     [call] = decide.await_args_list
-    use_case, state, questions = call.args
+    use_case, state = call.args
     assert state == "thanks, that worked perfectly!"
-    assert list(questions) == ["reply"]
+    assert call.kwargs["output_type"] is ReplyAfterAnAnswer
     assert use_case.model == DECISION_MODEL
     assert use_case.timeout_seconds == SupportBot.DECISION_TIMEOUT_SECONDS
     assert call.kwargs["attribution"] == chatbot.attribution
@@ -5817,8 +5821,8 @@ async def test_a_close_out_the_phrase_lists_know_does_not_ask_the_model(
 @pytest.mark.parametrize(
     "reading",
     [
-        {"choice": "finished", "confidence": 0.5},
-        {"choice": "finished", "confidence": None},
+        {"choice": "finished", "probability": 0.5},
+        {"choice": "finished", "probability": None},
         {"error": ol_llm.LLMUnavailable("down", use_case="x", model="y")},
         # A missing endpoint, or an Entra token that can't be had, raises before
         # the request, as something other than an LLMError.
@@ -5859,7 +5863,7 @@ async def test_a_slow_reading_is_abandoned_at_the_deadline(mocker, mock_checkpoi
     async def stalls(*_args, **_kwargs):
         await asyncio.sleep(5)
 
-    mocker.patch.object(ol_llm, "decide", stalls)
+    mocker.patch.object(ol_llm, "complete", stalls)
     mocker.patch.object(SupportBot, "DECISION_DEADLINE_SECONDS", 0.01)
     chatbot = await _answering_support_bot(
         mocker, mock_checkpointer, ["first answer", "second answer"]
@@ -5995,4 +5999,7 @@ def test_the_decision_use_case_is_off_without_a_model(settings):
 def test_the_decision_use_case_checks_against_the_catalog():
     use_case = SupportBot.decision_use_case()
 
-    assert ol_llm.check_decision_model(use_case) == ()
+    # No warning: the catalog lists the model, with a price for the spend rules.
+    assert ol_llm.check_model_ids([use_case.model]) == ol_llm.catalog.CheckResult(
+        errors=(), warnings=()
+    )
