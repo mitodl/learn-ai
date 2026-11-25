@@ -5820,14 +5820,47 @@ async def test_a_close_out_the_phrase_lists_know_does_not_ask_the_model(
         {"choice": "finished", "confidence": 0.5},
         {"choice": "finished", "confidence": None},
         {"error": ol_llm.LLMUnavailable("down", use_case="x", model="y")},
+        # A missing endpoint, or an Entra token that can't be had, raises before
+        # the request, as something other than an LLMError.
+        {"error": ValueError("azure: decision models need an endpoint")},
+        {"error": RuntimeError("credential unavailable")},
+        # Read as finished, but a question asks for more.
+        {"choice": "finished", "message": "ok thanks, is that everything I need?"},
     ],
-    ids=["unsure", "no-probabilities", "failed"],
+    ids=[
+        "unsure",
+        "no-probabilities",
+        "failed",
+        "misconfigured",
+        "no-token",
+        "a-question",
+    ],
 )
 @pytest.mark.asyncio
 async def test_an_unsure_or_failed_reading_leaves_the_reply_to_the_phrase_lists(
     mocker, mock_checkpointer, reading
 ):
+    message = reading.pop("message", "thanks, that worked perfectly!")
     _reading(mocker, **reading)
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    reply = await _say(chatbot, message)
+
+    assert "second answer" in reply
+    assert SUPPORT_ANSWER_CLOSED not in reply
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_slow_reading_is_abandoned_at_the_deadline(mocker, mock_checkpointer):
+    async def stalls(*_args, **_kwargs):
+        await asyncio.sleep(5)
+
+    mocker.patch.object(ol_llm, "decide", stalls)
+    mocker.patch.object(SupportBot, "DECISION_DEADLINE_SECONDS", 0.01)
     chatbot = await _answering_support_bot(
         mocker, mock_checkpointer, ["first answer", "second answer"]
     )
@@ -5836,15 +5869,14 @@ async def test_an_unsure_or_failed_reading_leaves_the_reply_to_the_phrase_lists(
     reply = await _say(chatbot, "thanks, that worked perfectly!")
 
     assert "second answer" in reply
-    assert SUPPORT_ANSWER_CLOSED not in reply
 
 
 @pytest.mark.usefixtures("decision_model")
 @pytest.mark.asyncio
-async def test_a_typed_request_for_a_person_hands_off_for_good(
+async def test_a_typed_request_for_a_person_starts_the_intake(
     mocker, mock_checkpointer
 ):
-    mocker.patch(
+    mock_file = mocker.patch(
         "ai_chatbots.chatbots.file_support_ticket",
         AsyncMock(return_value={"reference": 77}),
     )
@@ -5857,8 +5889,32 @@ async def test_a_typed_request_for_a_person_hands_off_for_good(
     reply = await _say(chatbot, "that's wrong, can someone from support look at it")
 
     assert SUPPORT_TICKET_REVIEW_HEADER in reply
+    assert "can someone from support look at it" in reply
     assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
-    assert (await _state_of(chatbot))["handed_off"][-1] is True
+    mock_file.assert_not_called()
+    # Not the escalate button's lasting hand-off: a misreading is undone by Cancel.
+    assert not any((await _state_of(chatbot)).get("handed_off") or [])
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_cancelling_a_misread_hand_off_reopens_answering(
+    mocker, mock_checkpointer
+):
+    _reading(mocker, "wants_a_person")
+    chatbot = await _answering_support_bot(
+        mocker,
+        mock_checkpointer,
+        ["You're enrolled in 18.01x.", "Your certificate is ready."],
+    )
+    await _say(chatbot, "what am I enrolled in?")
+    await _say(chatbot, "hmm, I thought there was another one")
+
+    cancelled = await _say(chatbot, "cancel")
+    again = await _say(chatbot, "where's my certificate?")
+
+    assert SUPPORT_TICKET_CANCELLED in cancelled
+    assert "Your certificate is ready." in again
 
 
 @pytest.mark.usefixtures("decision_model")

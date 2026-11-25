@@ -1832,10 +1832,13 @@ class SupportBot(TruncatingChatbot):
     ANSWER_HISTORY_MESSAGES = 10
 
     # A slow or failed reading falls back to the phrase lists, so it gets far less
-    # time than a model call the learner is waiting on.
+    # time than a model call the learner is waiting on. The policy timeout bounds
+    # each HTTP phase of an attempt; the deadline bounds the whole reading,
+    # retries and token refresh included.
     DECISION_TIMEOUT_SECONDS = 3
     DECISION_MAX_RETRIES = 1
     DECISION_MAX_BACKOFF_SECONDS = 0.5
+    DECISION_DEADLINE_SECONDS = 4
 
     @classmethod
     def decision_use_case(cls) -> ol_llm.UseCase | None:
@@ -1876,11 +1879,23 @@ class SupportBot(TruncatingChatbot):
         if (use_case := self.decision_use_case()) is None or not message.strip():
             return None
         try:
-            decision = await ol_llm.decide(
-                use_case, message, {"reply": question}, attribution=self.attribution
+            decision = await asyncio.wait_for(
+                ol_llm.decide(
+                    use_case,
+                    message,
+                    {"reply": question},
+                    attribution=self.attribution,
+                ),
+                timeout=self.DECISION_DEADLINE_SECONDS,
             )
-        except ol_llm.LLMError:
-            log.warning("Support reply reading failed; using the phrase lists")
+        except Exception as error:  # noqa: BLE001
+            # Anything, not only LLMError: a missing endpoint or a failed Entra
+            # token raises before the request, and the turn must still be read.
+            # Type only, no exc_info, as for the answer attempt.
+            log.warning(
+                "Support reply reading failed, using the phrase lists: %s",
+                type(error).__name__,
+            )
             return None
         reading = decision.choice("reply")
         if (
@@ -2235,18 +2250,20 @@ class SupportBot(TruncatingChatbot):
                 if _closes_the_answer(message)
                 else await self._read_the_reply(REPLY_AFTER_AN_ANSWER, message)
             )
-        if reading == "finished":
+        # A question is never a close-out, as for the phrase lists: "ok thanks,
+        # is that everything?" asks for more.
+        if reading == "finished" and "?" not in message:
             return SUPPORT_ANSWER_CLOSED, {
                 "answered": [False],
                 "cancelled_after": [len(prior_state.get("messages") or []) + 2],
             }
-        # Typed rather than pressed: the same hand-off as the escalate button,
-        # keeping the learner's words, which say what they want from a person.
-        handed_off_now = reading == "wants_a_person"
-        handed_off = handed_off or handed_off_now
+        # Asked for in words: this turn starts the intake, with the learner's
+        # words in it. Unlike the escalate button it sets no handed_off, so a
+        # misreading costs a Cancel, after which answering reopens.
         if (
             self._answering_agent
             and not handed_off
+            and reading != "wants_a_person"
             and not intake_started
             and not took_up_the_offer
         ):
@@ -2261,8 +2278,6 @@ class SupportBot(TruncatingChatbot):
         )
         if answered_before:
             updates = {**updates, "answered": [False]}
-        if handed_off_now:
-            updates = {**updates, "handed_off": [True]}
         return reply, updates
 
     async def get_completion(
