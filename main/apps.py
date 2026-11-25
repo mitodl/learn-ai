@@ -13,13 +13,25 @@ class MainConfig(AppConfig):
         import ol_llm
         from django.conf import settings
 
+        from ai_chatbots.utils import get_azure_ad_token_provider
         from main import features
 
         # Initialize features
         features.configure()
         # Before anything uses the Opik SDK, which reads ol-llm's Keycloak auth
         # hook only when it builds its client.
-        ol_llm.configure(ol_llm.Settings(environment=settings.OL_LLM_ENVIRONMENT))
+        decision_endpoint = settings.OL_LLM_AZURE_DECISION_ENDPOINT or None
+        ol_llm.configure(
+            ol_llm.Settings(
+                environment=settings.OL_LLM_ENVIRONMENT,
+                azure_decision_endpoint=decision_endpoint,
+                # Only decision calls read it from here: Azure OpenAI chat models
+                # get the same provider through ChatLiteLLM's kwargs.
+                azure_ad_token_provider=get_azure_ad_token_provider()
+                if decision_endpoint
+                else None,
+            )
+        )
         ol_llm.configure_tracing(
             None if settings.OPIK_URL_OVERRIDE else ol_llm.TracingConfig(enabled=False)
         )

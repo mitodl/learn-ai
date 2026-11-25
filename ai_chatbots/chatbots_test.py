@@ -5725,3 +5725,218 @@ def test_the_maybe_filed_reply_does_not_promise_no_duplicate():
     """The next message starts a new thread, which could file the same request again."""
     assert "won't send it again" not in SUPPORT_TICKET_MAYBE_FILED
     assert "don't send it again" in SUPPORT_TICKET_MAYBE_FILED
+
+
+# Reading replies the phrase lists don't recognize with a decision model.
+
+DECISION_MODEL = "azure:Microsoft-Decision-1.1"
+
+
+@pytest.fixture
+def decision_model(settings):
+    settings.AI_SUPPORT_DECISION_MODEL = DECISION_MODEL
+    settings.AI_SUPPORT_DECISION_MIN_CONFIDENCE = 0.8
+
+
+def _reading(mocker, choice="", *, confidence=0.95, error=None):
+    """Answer every decision call with one reading of the reply."""
+    decision = ol_llm.Decision(
+        answers={"reply": ol_llm.ChoiceAnswer(choice, {choice: 0.9}, confidence)},
+        model=DECISION_MODEL,
+        served_by="microsoft-decision-1.1",
+        input_tokens=12,
+        output_tokens=0,
+    )
+    return mocker.patch.object(
+        ol_llm,
+        "decide",
+        AsyncMock(side_effect=error) if error else AsyncMock(return_value=decision),
+    )
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_close_out_the_phrase_lists_miss_is_read_as_finished(
+    mocker, mock_checkpointer
+):
+    decide = _reading(mocker, "finished")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    closed = await _say(chatbot, "thanks, that worked perfectly!")
+
+    assert SUPPORT_ANSWER_CLOSED in closed
+    assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
+    # Only the reply is sent: no answer or record of the learner's.
+    [call] = decide.await_args_list
+    use_case, state, questions = call.args
+    assert state == "thanks, that worked perfectly!"
+    assert list(questions) == ["reply"]
+    assert use_case.model == DECISION_MODEL
+    assert use_case.timeout_seconds == SupportBot.DECISION_TIMEOUT_SECONDS
+    assert call.kwargs["attribution"] == chatbot.attribution
+
+
+@pytest.mark.asyncio
+async def test_without_a_decision_model_the_reply_is_a_follow_up(
+    mocker, mock_checkpointer, settings
+):
+    settings.AI_SUPPORT_DECISION_MODEL = None
+    decide = _reading(mocker, "finished")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    reply = await _say(chatbot, "thanks, that worked perfectly!")
+
+    assert "second answer" in reply
+    decide.assert_not_called()
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_close_out_the_phrase_lists_know_does_not_ask_the_model(
+    mocker, mock_checkpointer
+):
+    decide = _reading(mocker, "follow_up")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    closed = await _say(chatbot, "thanks")
+
+    assert SUPPORT_ANSWER_CLOSED in closed
+    decide.assert_not_called()
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.parametrize(
+    "reading",
+    [
+        {"choice": "finished", "confidence": 0.5},
+        {"choice": "finished", "confidence": None},
+        {"error": ol_llm.LLMUnavailable("down", use_case="x", model="y")},
+    ],
+    ids=["unsure", "no-probabilities", "failed"],
+)
+@pytest.mark.asyncio
+async def test_an_unsure_or_failed_reading_leaves_the_reply_to_the_phrase_lists(
+    mocker, mock_checkpointer, reading
+):
+    _reading(mocker, **reading)
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["first answer", "second answer"]
+    )
+    await _say(chatbot, "did my certificate come through?")
+
+    reply = await _say(chatbot, "thanks, that worked perfectly!")
+
+    assert "second answer" in reply
+    assert SUPPORT_ANSWER_CLOSED not in reply
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_typed_request_for_a_person_hands_off_for_good(
+    mocker, mock_checkpointer
+):
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 77}),
+    )
+    _reading(mocker, "wants_a_person")
+    chatbot = await _answering_support_bot(
+        mocker, mock_checkpointer, ["You're enrolled in 18.01x.", "another answer"]
+    )
+    await _say(chatbot, "what am I enrolled in?")
+
+    reply = await _say(chatbot, "that's wrong, can someone from support look at it")
+
+    assert SUPPORT_TICKET_REVIEW_HEADER in reply
+    assert SupportBot._try_to_answer.await_count == 1  # noqa: SLF001
+    assert (await _state_of(chatbot))["handed_off"][-1] is True
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_go_ahead_that_adds_details_is_shown_back_not_filed(
+    mocker, mock_checkpointer
+):
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    decide = _reading(mocker, "adds_details")
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = await _say(chatbot, "yes, and the course is 18.01")
+
+    mock_file.assert_not_called()
+    assert SUPPORT_TICKET_REVIEW_HEADER in reply
+    assert "the course is 18.01" in reply
+    assert await _awaiting_send(chatbot) is True
+    assert decide.await_args.args[1] == "yes, and the course is 18.01"
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.parametrize("choice", ["approves", "unsure"])
+@pytest.mark.asyncio
+async def test_a_go_ahead_read_as_anything_else_still_asks(
+    mocker, mock_checkpointer, choice
+):
+    """The model never files: only the Send button or a plain "send" does."""
+    mock_file = mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 4821}),
+    )
+    _reading(mocker, choice)
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = await _say(chatbot, "yes please send it to support asap")
+
+    mock_file.assert_not_called()
+    assert SUPPORT_SEND_UNCLEAR in reply
+
+
+@pytest.mark.usefixtures("decision_model")
+@pytest.mark.asyncio
+async def test_a_cancellation_never_asks_the_model(mocker, mock_checkpointer):
+    decide = _reading(mocker, "adds_details")
+    chatbot = await _support_bot(
+        mocker,
+        mock_checkpointer,
+        [HumanMessage(SUPPORT_PROBLEM)],
+        state={"user_email": ["signedin@mit.edu"], "awaiting_send": [True]},
+    )
+
+    reply = await _say(chatbot, "cancel")
+
+    assert SUPPORT_TICKET_CANCELLED in reply
+    decide.assert_not_called()
+
+
+def test_the_decision_use_case_is_off_without_a_model(settings):
+    settings.AI_SUPPORT_DECISION_MODEL = None
+
+    assert SupportBot.decision_use_case() is None
+
+
+@pytest.mark.usefixtures("decision_model")
+def test_the_decision_use_case_checks_against_the_catalog():
+    use_case = SupportBot.decision_use_case()
+
+    assert ol_llm.check_decision_model(use_case) == ()

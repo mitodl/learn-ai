@@ -1542,6 +1542,34 @@ def _is_unclear_go_ahead(message: str) -> bool:
     )
 
 
+# What a decision model is asked about a reply the phrase lists did not
+# recognize. Every option the bot acts on is cheap to undo: the model never files
+# or cancels, since filing cannot be taken back and a wrong cancellation throws
+# away what the learner typed. Those stay with the phrase lists and the buttons.
+REPLY_AFTER_AN_ANSWER = ol_llm.Choice(
+    instructions=(
+        "The assistant just answered the learner's question about their own "
+        "courses or account. What does the learner's reply do?"
+    ),
+    options={
+        "finished": "Thanks the assistant or says they are done, and asks nothing more",
+        "follow_up": "Asks something more, or says the answer was wrong or unhelpful",
+        "wants_a_person": "Asks to reach a person or the support team",
+    },
+)
+REPLY_TO_THE_REVIEW = ol_llm.Choice(
+    instructions=(
+        "The learner was shown the support request we are about to send and asked "
+        "to confirm it. What does their reply do?"
+    ),
+    options={
+        "approves": "Only says to go ahead, with nothing support needs to read",
+        "adds_details": "Adds or corrects details that support should read",
+        "unsure": "Hesitates, or does not say what they want",
+    },
+)
+
+
 def _support_description(prior_messages: list, message: str, *, since: int = 0) -> str:
     """
     Join everything the learner typed about the problem. An address they gave is
@@ -1802,6 +1830,65 @@ class SupportBot(TruncatingChatbot):
     # Enough thread for a follow-up to make sense, without resending a long
     # intake conversation to the model every turn.
     ANSWER_HISTORY_MESSAGES = 10
+
+    # A slow or failed reading falls back to the phrase lists, so it gets far less
+    # time than a model call the learner is waiting on.
+    DECISION_TIMEOUT_SECONDS = 3
+    DECISION_MAX_RETRIES = 1
+    DECISION_MAX_BACKOFF_SECONDS = 0.5
+
+    @classmethod
+    def decision_use_case(cls) -> ol_llm.UseCase | None:
+        """
+        Return the use case that reads replies, or None when no model is set.
+
+        :returns: the use case.
+        :rtype: ol_llm.UseCase | None
+        """
+        if not settings.AI_SUPPORT_DECISION_MODEL:
+            return None
+        return ol_llm.UseCase(
+            app=APP_NAME,
+            name="support-reply-reading",
+            profile="request",
+            model=settings.AI_SUPPORT_DECISION_MODEL,
+            timeout_seconds=cls.DECISION_TIMEOUT_SECONDS,
+            max_retries=cls.DECISION_MAX_RETRIES,
+            max_backoff_seconds=cls.DECISION_MAX_BACKOFF_SECONDS,
+            policy_reason="the phrase lists read the reply when this call fails",
+        )
+
+    async def _read_the_reply(
+        self, question: ol_llm.Choice, message: str
+    ) -> str | None:
+        """
+        Ask the decision model which of the question's options the reply is.
+
+        Only the reply is sent: the question carries the context, so no answer,
+        request or record of the learner's leaves the thread.
+
+        :param question: what to ask about the reply.
+        :param message: the learner's reply.
+        :returns: the option, or None when no model is set, the call fails, or
+            the model is less sure than AI_SUPPORT_DECISION_MIN_CONFIDENCE.
+        :rtype: str | None
+        """
+        if (use_case := self.decision_use_case()) is None or not message.strip():
+            return None
+        try:
+            decision = await ol_llm.decide(
+                use_case, message, {"reply": question}, attribution=self.attribution
+            )
+        except ol_llm.LLMError:
+            log.warning("Support reply reading failed; using the phrase lists")
+            return None
+        reading = decision.choice("reply")
+        if (
+            reading.confidence is None
+            or reading.confidence < settings.AI_SUPPORT_DECISION_MIN_CONFIDENCE
+        ):
+            return None
+        return reading.choice
 
     async def _ensure_proxy_user(self) -> None:
         """Provision this learner's model budget."""
@@ -2086,7 +2173,13 @@ class SupportBot(TruncatingChatbot):
         # type instead. Anything else is an edit to the request, so it is shown
         # back rather than sent - the learner has not read this version yet.
         if not (confirmed or _is_affirmative(message)):
-            if _is_unclear_go_ahead(message):
+            # A go-ahead that carries details is an edit: showing it back costs
+            # a turn, where asking again leaves the details out of the review.
+            if (
+                _is_unclear_go_ahead(message)
+                and await self._read_the_reply(REPLY_TO_THE_REVIEW, message)
+                != "adds_details"
+            ):
                 return SUPPORT_SEND_UNCLEAR, {"awaiting_send": [True]}
             return _support_review(
                 _support_description(prior_messages, message, since=since),
@@ -2135,16 +2228,22 @@ class SupportBot(TruncatingChatbot):
         took_up_the_offer = answered_before and _is_affirmative(message)
         # Not gated on _answering_agent, so a flag turned off mid-thread still
         # closes out.
-        if (
-            answered_before
-            and not handed_off
-            and not took_up_the_offer
-            and _closes_the_answer(message)
-        ):
+        reading = None
+        if answered_before and not handed_off and not took_up_the_offer:
+            reading = (
+                "finished"
+                if _closes_the_answer(message)
+                else await self._read_the_reply(REPLY_AFTER_AN_ANSWER, message)
+            )
+        if reading == "finished":
             return SUPPORT_ANSWER_CLOSED, {
                 "answered": [False],
                 "cancelled_after": [len(prior_state.get("messages") or []) + 2],
             }
+        # Typed rather than pressed: the same hand-off as the escalate button,
+        # keeping the learner's words, which say what they want from a person.
+        handed_off_now = reading == "wants_a_person"
+        handed_off = handed_off or handed_off_now
         if (
             self._answering_agent
             and not handed_off
@@ -2162,6 +2261,8 @@ class SupportBot(TruncatingChatbot):
         )
         if answered_before:
             updates = {**updates, "answered": [False]}
+        if handed_off_now:
+            updates = {**updates, "handed_off": [True]}
         return reply, updates
 
     async def get_completion(
