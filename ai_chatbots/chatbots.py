@@ -1833,8 +1833,9 @@ class SupportBot(TruncatingChatbot):
 
     # A slow or failed reading falls back to the phrase lists, so it gets far less
     # time than a model call the learner is waiting on. The policy timeout bounds
-    # each HTTP phase of an attempt; the deadline bounds the whole reading,
-    # retries and token refresh included.
+    # each HTTP phase of an attempt; the deadline bounds the whole reading with
+    # its retries. It cannot cut short the Entra token fetch, which is
+    # synchronous, as it is for the Azure OpenAI chat models.
     DECISION_TIMEOUT_SECONDS = 3
     DECISION_MAX_RETRIES = 1
     DECISION_MAX_BACKOFF_SECONDS = 0.5
