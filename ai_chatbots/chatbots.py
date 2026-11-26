@@ -1148,21 +1148,29 @@ SUPPORT_TICKET_ALREADY_FILED = (
 SUPPORT_TICKET_FAILED = (
     "I couldn't submit your request, so nothing has been sent and there's no "
     "ticket number yet. Press {send} to try again, or email our support "
-    "team at {support_email}."
+    "team{at_support_email}."
 )
 SUPPORT_TICKET_REJECTED = (
     "Sorry, our support system turned this request down, and sending it again "
-    "won't change that. Please email our support team at {support_email}. I've "
-    "flagged it so the team can look into it."
+    "won't change that. Please email our support team{at_support_email}. "
+    "I've flagged it so the team can look into it."
 )
+
+
+def support_email_phrase() -> str:
+    """Name the support address only when one is configured."""
+    if settings.EMAIL_SUPPORT:
+        return f" at {settings.EMAIL_SUPPORT}"
+    return " directly"
+
+
 SUPPORT_TICKET_BAD_EMAIL = (
     "Our support team can't reply to that address. What's another email they can use?"
 )
 SUPPORT_TICKET_MAYBE_FILED = (
     "I didn't hear back from our support system, so I can't tell whether that "
     "went through. It may have, so please don't send it again. If you don't "
-    "hear from our support team within 2 business days, email them at "
-    "{support_email}."
+    "hear from our support team within 2 business days, email them{at_support_email}."
 )
 SUPPORT_TICKET_CANCELLED = (
     "No problem. I haven't sent anything. Is there anything else I can help with?"
@@ -1963,7 +1971,7 @@ class SupportBot(TruncatingChatbot):
                 # A ticket may exist that we never learned the id of, so the
                 # thread stops here rather than risk filing a second one.
                 return SUPPORT_TICKET_MAYBE_FILED.format(
-                    support_email=settings.EMAIL_SUPPORT
+                    at_support_email=support_email_phrase()
                 ), {
                     "awaiting_send": [False],
                     "filing_uncertain": [True],
@@ -1976,7 +1984,7 @@ class SupportBot(TruncatingChatbot):
                 # Zendesk will answer the same way every time, so offering a
                 # retry only walks the learner around the same loop.
                 return SUPPORT_TICKET_REJECTED.format(
-                    support_email=settings.EMAIL_SUPPORT
+                    at_support_email=support_email_phrase()
                 ), {
                     "awaiting_send": [False],
                     "filing_blocked": [True],
@@ -1984,7 +1992,7 @@ class SupportBot(TruncatingChatbot):
             # awaiting_send stays set, so the learner's next message retries
             # rather than starting the review over.
             return SUPPORT_TICKET_FAILED.format(
-                **self.button_labels, support_email=settings.EMAIL_SUPPORT
+                **self.button_labels, at_support_email=support_email_phrase()
             ), {}
         reply = SUPPORT_TICKET_FILED.format(
             reference=result["reference"], email=ticket["email"]
@@ -2232,13 +2240,15 @@ class SupportBot(TruncatingChatbot):
         # on this thread files again - there is no way to tell from here.
         elif (prior_state.get("filing_uncertain") or [False])[-1]:
             reply = SUPPORT_TICKET_MAYBE_FILED.format(
-                support_email=settings.EMAIL_SUPPORT
+                at_support_email=support_email_phrase()
             )
             updates = {}
         # Zendesk turned this thread's request down on its merits, so the same
         # words sent again get the same answer.
         elif (prior_state.get("filing_blocked") or [False])[-1]:
-            reply = SUPPORT_TICKET_REJECTED.format(support_email=settings.EMAIL_SUPPORT)
+            reply = SUPPORT_TICKET_REJECTED.format(
+                at_support_email=support_email_phrase()
+            )
             updates = {}
         # Latest wins, not any(): a cancellation appends False, and reading the
         # whole list would let the send the learner called off come back.

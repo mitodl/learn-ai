@@ -81,6 +81,7 @@ from ai_chatbots.chatbots import (
     _the_answer_in,
     get_canvas_problem_set,
     get_problem_from_edx_block,
+    support_email_phrase,
 )
 from ai_chatbots.checkpointers import AsyncDjangoSaver
 from ai_chatbots.conftest import MockAsyncIterator
@@ -3818,7 +3819,7 @@ async def test_support_bot_reports_a_zendesk_failure(mocker, mock_checkpointer):
 
     assert (
         SUPPORT_TICKET_FAILED.format(
-            **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+            **DEFAULT_BUTTON_LABELS, at_support_email=support_email_phrase()
         )
         in reply
     )
@@ -4734,7 +4735,7 @@ PENDING_SEND = {"user_email": ["signedin@mit.edu"], "awaiting_send": [True]}
             "send",
             {"error": "Could not file the support request."},
             SUPPORT_TICKET_FAILED.format(
-                **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+                **DEFAULT_BUTTON_LABELS, at_support_email=support_email_phrase()
             ),
             True,
             id="failed",
@@ -5107,7 +5108,8 @@ async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
 
     assert mock_file.call_count == 1
     assert all(
-        SUPPORT_TICKET_MAYBE_FILED.format(support_email=settings.EMAIL_SUPPORT) in reply
+        SUPPORT_TICKET_MAYBE_FILED.format(at_support_email=support_email_phrase())
+        in reply
         for reply in replies
     )
     # The wording has to stop short of the claim the failure reply makes.
@@ -5140,7 +5142,7 @@ async def test_support_bot_records_an_unclear_outcome_before_replying(
     # Take the reply and walk away, the way a closed tab does.
     stream = chatbot.get_completion("send", extra_state=state)
     assert SUPPORT_TICKET_MAYBE_FILED.format(
-        support_email=settings.EMAIL_SUPPORT
+        at_support_email=support_email_phrase()
     ) in await anext(stream)
     await stream.aclose()
 
@@ -5150,7 +5152,8 @@ async def test_support_bot_records_an_unclear_outcome_before_replying(
 
     assert mock_file.call_count == 1
     assert (
-        SUPPORT_TICKET_MAYBE_FILED.format(support_email=settings.EMAIL_SUPPORT) in retry
+        SUPPORT_TICKET_MAYBE_FILED.format(at_support_email=support_email_phrase())
+        in retry
     )
 
 
@@ -5193,12 +5196,12 @@ async def test_support_bot_stops_asking_after_zendesk_turns_the_ticket_down(
 
     assert mock_file.call_count == 1
     assert all(
-        SUPPORT_TICKET_REJECTED.format(support_email=settings.EMAIL_SUPPORT) in reply
+        SUPPORT_TICKET_REJECTED.format(at_support_email=support_email_phrase()) in reply
         for reply in replies
     )
     assert (
         SUPPORT_TICKET_FAILED.format(
-            **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+            **DEFAULT_BUTTON_LABELS, at_support_email=support_email_phrase()
         )
         not in replies[0]
     )
@@ -5773,19 +5776,19 @@ async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
         # The thread files nothing more, so the next request needs its own.
         (
             {"reference": None, "uncertain": True},
-            SUPPORT_TICKET_MAYBE_FILED.format(support_email=settings.EMAIL_SUPPORT),
+            SUPPORT_TICKET_MAYBE_FILED.format(at_support_email=support_email_phrase()),
             True,
         ),
         (
             {"reference": None, "reason": TICKET_REJECTED},
-            SUPPORT_TICKET_REJECTED.format(support_email=settings.EMAIL_SUPPORT),
+            SUPPORT_TICKET_REJECTED.format(at_support_email=support_email_phrase()),
             True,
         ),
         # A retry on this thread can still file it.
         (
             {"reference": None},
             SUPPORT_TICKET_FAILED.format(
-                **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+                **DEFAULT_BUTTON_LABELS, at_support_email=support_email_phrase()
             ),
             False,
         ),
@@ -5807,6 +5810,31 @@ async def test_filed_flag_without_a_reference(
     assert expected in reply
     assert _metadata_of(reply)["filed"] is done
     assert _metadata_of(later)["filed"] is done
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        ("help@mit.test", "email our support team at help@mit.test."),
+        ("", "email our support team directly."),
+    ],
+)
+async def test_failed_reply_names_the_support_address_only_when_set(
+    mocker, mock_checkpointer, settings, address, expected
+):
+    settings.EMAIL_SUPPORT = address
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": None}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    await _say(chatbot, SUPPORT_PROBLEM)
+    reply = await _say(chatbot, "send")
+
+    assert expected in reply
+    assert " at ." not in reply
 
 
 @pytest.fixture
