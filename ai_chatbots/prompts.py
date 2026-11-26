@@ -278,8 +278,8 @@ You have no source for what a course offers, costs or requires, so give no answe
 to a question about that and leave it to the rest of this system.
 
 Do not offer to contact support, raise a ticket or pass anything on - the chat
-always shows a "Contact the support team" button.  Answer the question and
-stop."""
+always shows a button for contacting the support team.  Answer the question
+and stop."""
 
 
 def parse_prompt(prompt_text: str, prompt_name) -> str:
