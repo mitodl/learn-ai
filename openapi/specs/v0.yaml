@@ -286,6 +286,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/SystemPrompt'
           description: ''
+  /api/v0/support_widget_text/:
+    get:
+      operationId: support_widget_text_retrieve
+      description: The Contact us widget's text as edited in the admin.
+      tags:
+      - support_widget_text
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportWidgetText'
+          description: ''
   /http/recommendation_agent/:
     post:
       operationId: RecommendationAgentV0
@@ -552,6 +567,40 @@ components:
       x-enum-descriptions:
       - Like
       - Dislike
+    SupportWidgetText:
+      type: object
+      description: Only the filled-in strings, so the widget keeps its default for
+        the rest.
+      properties:
+        launcher_label:
+          type: string
+          description: Blank shows "Contact us".
+          maxLength: 40
+        escalate_label:
+          type: string
+          description: Blank shows "Contact the support team".
+          maxLength: 60
+        send_label:
+          type: string
+          description: Blank shows "Send request". The bot's replies use this name
+            too.
+          maxLength: 40
+        cancel_label:
+          type: string
+          description: Blank shows "Cancel". The bot's replies use this name too.
+          maxLength: 40
+        placeholder:
+          type: string
+          description: Blank shows "Describe what you need".
+          maxLength: 80
+        badge:
+          type: string
+          description: Blank shows "AI ASSISTANT".
+          maxLength: 30
+        greeting:
+          type: string
+          description: Markdown, no images. Blank shows the built-in greeting.
+          maxLength: 1000
     SystemPrompt:
       type: object
       description: Serializer for system prompts

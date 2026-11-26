@@ -28,6 +28,11 @@ v0_urls = [
         name="get_transcript_edx_module_id",
     ),
     path(
+        r"support_widget_text/",
+        views.SupportWidgetTextView.as_view(),
+        name="support_widget_text",
+    ),
+    path(
         r"problem_set_list/",
         views.ProblemSetList.as_view(),
         name="problem_set_list",

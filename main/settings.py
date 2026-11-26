@@ -315,7 +315,7 @@ EMAIL_PORT = get_int("MITOL_EMAIL_PORT", 25)
 EMAIL_HOST_USER = get_string("MITOL_EMAIL_USER", "")
 EMAIL_HOST_PASSWORD = get_string("MITOL_EMAIL_PASSWORD", "")
 EMAIL_USE_TLS = get_bool("MITOL_EMAIL_TLS", False)  # noqa: FBT003
-EMAIL_SUPPORT = get_string("MITOL_SUPPORT_EMAIL", "support@example.com")
+EMAIL_SUPPORT = get_string("MITOL_SUPPORT_EMAIL", "")
 DEFAULT_FROM_EMAIL = get_string("MITOL_FROM_EMAIL", "webmaster@localhost")
 
 MAILGUN_SENDER_DOMAIN = get_string("MAILGUN_SENDER_DOMAIN", None)

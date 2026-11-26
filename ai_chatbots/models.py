@@ -1,5 +1,8 @@
 """ai_chabots models"""
 
+import re
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from ai_chatbots.constants import ChatResponseScore
@@ -144,3 +147,102 @@ class ChatResponseRating(models.Model):
 
     def __str__(self):
         return f"{self.checkpoint.checkpoint_id}-{self.rating}"
+
+
+# The widget's own defaults, in smoot-design ContactUsLauncher.
+SUPPORT_WIDGET_SEND_DEFAULT = "Send request"
+SUPPORT_WIDGET_CANCEL_DEFAULT = "Cancel"
+MARKDOWN_IMAGE = re.compile(r"!\[")
+# A pressed chip's label becomes the learner's own message, which renders as
+# Markdown, so chip labels are held to letters, numbers and plain punctuation.
+PLAIN_LABEL = re.compile(r"[^\W_](?:[^\W_]|[ .,!?'\u2019\"()\-:;&/])*")
+NUMBERED_LIST_START = re.compile(r"\d+[.)]")
+# The widget trims U+FEFF like whitespace; Python's strip() doesn't.
+EDGE_SPACE = re.compile(r"^[\s\ufeff]+|[\s\ufeff]+$")
+
+
+class SupportWidgetText(TimestampedModel):
+    """
+    The Contact us widget's text, edited by product in the admin. One row. A blank
+    field leaves the widget's built-in default in place.
+    """
+
+    launcher_label = models.CharField(
+        max_length=40, blank=True, help_text='Blank shows "Contact us".'
+    )
+    escalate_label = models.CharField(
+        max_length=60, blank=True, help_text='Blank shows "Contact the support team".'
+    )
+    send_label = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text=(
+            f'Blank shows "{SUPPORT_WIDGET_SEND_DEFAULT}". The bot\'s replies use '
+            "this name too."
+        ),
+    )
+    cancel_label = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text=(
+            f'Blank shows "{SUPPORT_WIDGET_CANCEL_DEFAULT}". The bot\'s replies use '
+            "this name too."
+        ),
+    )
+    placeholder = models.CharField(
+        max_length=80, blank=True, help_text='Blank shows "Describe what you need".'
+    )
+    badge = models.CharField(
+        max_length=30, blank=True, help_text='Blank shows "AI ASSISTANT".'
+    )
+    greeting = models.TextField(
+        max_length=1000,
+        blank=True,
+        help_text="Markdown, no images. Blank shows the built-in greeting.",
+    )
+
+    class Meta:
+        verbose_name_plural = "support widget text"
+
+    def __str__(self):
+        return "Support widget text"
+
+    def clean(self):
+        for field in self._meta.get_fields():
+            if isinstance(field, models.CharField | models.TextField):
+                setattr(self, field.name, EDGE_SPACE.sub("", getattr(self, field.name)))
+
+        # Screen readers collapse runs of spaces, so "Send  request" and
+        # "Send request" name the same button. The widget compares the same way.
+        def same(a, b):
+            return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
+
+        errors = {}
+        for field in ("send_label", "cancel_label", "escalate_label"):
+            label = getattr(self, field)
+            if same(label, "send"):
+                errors[field] = (
+                    '"Send" is already the name of the button that sends a message.'
+                )
+            elif label and (
+                not PLAIN_LABEL.fullmatch(label) or NUMBERED_LIST_START.match(label)
+            ):
+                errors[field] = (
+                    "Use letters, numbers, spaces and . , ! ? ' \" ( ) - : ; & /, "
+                    "starting with a letter or number."
+                )
+        if MARKDOWN_IMAGE.search(self.greeting):
+            errors["greeting"] = "Images can't be used in the greeting."
+        send = self.send_label or SUPPORT_WIDGET_SEND_DEFAULT
+        cancel = self.cancel_label or SUPPORT_WIDGET_CANCEL_DEFAULT
+        if same(send, cancel):
+            errors["send_label"] = (
+                f'The Send and Cancel buttons can\'t both say "{send}".'
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        # Writes outside the admin (shell, scripts) skip full_clean() otherwise.
+        self.full_clean()
+        super().save(*args, **kwargs)

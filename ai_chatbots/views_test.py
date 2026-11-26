@@ -5,7 +5,9 @@ from random import randint
 from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import pytest
+from django.core.asgi import get_asgi_application
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils.encoding import force_bytes
@@ -22,11 +24,12 @@ from ai_chatbots.factories import (
     LLMModelFactory,
     UserChatSessionFactory,
 )
-from ai_chatbots.models import ChatResponseRating, LLMModel
+from ai_chatbots.models import ChatResponseRating, LLMModel, SupportWidgetText
 from ai_chatbots.prompts import CHATBOT_PROMPT_MAPPING, parse_prompt
 from ai_chatbots.serializers import ChatMessageSerializer, UserChatSessionSerializer
 from ai_chatbots.views import get_transcript_block_id
 from main.factories import UserFactory
+from main.middleware.configs import cors_middleware
 from main.test_utils import assert_json_equal
 
 pytestmark = pytest.mark.django_db
@@ -365,6 +368,77 @@ def test_llm_model_viewset_enabled_only(client):
     assert disabled_model.litellm_id not in [
         model["litellm_id"] for model in response.json()
     ]
+
+
+SUPPORT_WIDGET_TEXT_URL = "/api/v0/support_widget_text/"
+
+
+@pytest.mark.usefixtures("support_widget_text")
+def test_support_widget_text_empty_row(client):
+    """A row with nothing filled in leaves every string to the widget's default."""
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
+    assert response.status_code == 200
+    assert response.json() == {}
+
+
+def test_support_widget_text_returns_only_filled_fields(client, support_widget_text):
+    """Only the fields product filled in are sent; blank ones are left out."""
+    support_widget_text.launcher_label = "Need help?"
+    support_widget_text.cancel_label = "Never mind"
+    support_widget_text.greeting = "**Hi**\n\nAsk me anything."
+    support_widget_text.save()
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
+    assert response.status_code == 200
+    assert response.json() == {
+        "launcher_label": "Need help?",
+        "cancel_label": "Never mind",
+        "greeting": "**Hi**\n\nAsk me anything.",
+    }
+
+
+def test_support_widget_text_missing_row(client):
+    """A deleted row reads as nothing set, not an error."""
+    SupportWidgetText.objects.all().delete()
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
+    assert response.status_code == 200
+    assert response.json() == {}
+
+
+def test_support_widget_text_cache_headers(client):
+    """Browsers may keep it 5 minutes, keyed per origin since both hosts share a cache."""
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
+    assert response["Cache-Control"] == "max-age=300"
+    assert "Origin" in response["Vary"]
+
+
+def test_support_widget_text_sets_no_cookies(client):
+    """The widget fetches without credentials, so the response must not need any."""
+    response = client.get(SUPPORT_WIDGET_TEXT_URL)
+    assert not response.cookies
+
+
+@pytest.mark.parametrize(
+    ("origin", "allowed"),
+    [("https://learn.example.edu", True), ("https://elsewhere.example.com", False)],
+)
+@pytest.mark.asyncio
+async def test_support_widget_text_cors(settings, origin, allowed):
+    """
+    Learner pages fetch this cross-origin with a plain GET, so it needs CORS
+    headers for listed sites even though CORS_ALLOW_METHODS leaves GET out.
+    """
+    settings.CORS_ALLOW_ORIGINS = ["https://learn.example.edu"]
+    # Built here: the middleware reads the settings when it is created.
+    app = cors_middleware(get_asgi_application())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as http:
+        response = await http.get(SUPPORT_WIDGET_TEXT_URL, headers={"Origin": origin})
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers.get("access-control-allow-origin") == (
+        origin if allowed else None
+    )
 
 
 def test_get_transcript_block_id():
