@@ -3816,7 +3816,12 @@ async def test_support_bot_reports_a_zendesk_failure(mocker, mock_checkpointer):
         ]
     )
 
-    assert SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS) in reply
+    assert (
+        SUPPORT_TICKET_FAILED.format(
+            **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+        )
+        in reply
+    )
     session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
     assert session.support_ticket_reference == ""
 
@@ -4728,7 +4733,9 @@ PENDING_SEND = {"user_email": ["signedin@mit.edu"], "awaiting_send": [True]}
             PENDING_SEND,
             "send",
             {"error": "Could not file the support request."},
-            SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS),
+            SUPPORT_TICKET_FAILED.format(
+                **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+            ),
             True,
             id="failed",
         ),
@@ -5099,7 +5106,10 @@ async def test_support_bot_does_not_file_again_after_an_unclear_outcome(
     replies = [first, await say("still nothing"), await say("send")]
 
     assert mock_file.call_count == 1
-    assert all(SUPPORT_TICKET_MAYBE_FILED in reply for reply in replies)
+    assert all(
+        SUPPORT_TICKET_MAYBE_FILED.format(support_email=settings.EMAIL_SUPPORT) in reply
+        for reply in replies
+    )
     # The wording has to stop short of the claim the failure reply makes.
     assert "could not" not in first.lower()
     session = await UserChatSession.objects.aget(thread_id=chatbot.thread_id)
@@ -5129,7 +5139,9 @@ async def test_support_bot_records_an_unclear_outcome_before_replying(
 
     # Take the reply and walk away, the way a closed tab does.
     stream = chatbot.get_completion("send", extra_state=state)
-    assert SUPPORT_TICKET_MAYBE_FILED in await anext(stream)
+    assert SUPPORT_TICKET_MAYBE_FILED.format(
+        support_email=settings.EMAIL_SUPPORT
+    ) in await anext(stream)
     await stream.aclose()
 
     retry = "".join(
@@ -5137,7 +5149,9 @@ async def test_support_bot_records_an_unclear_outcome_before_replying(
     )
 
     assert mock_file.call_count == 1
-    assert SUPPORT_TICKET_MAYBE_FILED in retry
+    assert (
+        SUPPORT_TICKET_MAYBE_FILED.format(support_email=settings.EMAIL_SUPPORT) in retry
+    )
 
 
 @pytest.mark.asyncio
@@ -5178,8 +5192,16 @@ async def test_support_bot_stops_asking_after_zendesk_turns_the_ticket_down(
     replies = [await say("send"), await say("send"), await say("try it again")]
 
     assert mock_file.call_count == 1
-    assert all(SUPPORT_TICKET_REJECTED in reply for reply in replies)
-    assert SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS) not in replies[0]
+    assert all(
+        SUPPORT_TICKET_REJECTED.format(support_email=settings.EMAIL_SUPPORT) in reply
+        for reply in replies
+    )
+    assert (
+        SUPPORT_TICKET_FAILED.format(
+            **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+        )
+        not in replies[0]
+    )
 
 
 @pytest.mark.asyncio
@@ -5749,16 +5771,22 @@ async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
     ("result", "expected", "done"),
     [
         # The thread files nothing more, so the next request needs its own.
-        ({"reference": None, "uncertain": True}, SUPPORT_TICKET_MAYBE_FILED, True),
+        (
+            {"reference": None, "uncertain": True},
+            SUPPORT_TICKET_MAYBE_FILED.format(support_email=settings.EMAIL_SUPPORT),
+            True,
+        ),
         (
             {"reference": None, "reason": TICKET_REJECTED},
-            SUPPORT_TICKET_REJECTED,
+            SUPPORT_TICKET_REJECTED.format(support_email=settings.EMAIL_SUPPORT),
             True,
         ),
         # A retry on this thread can still file it.
         (
             {"reference": None},
-            SUPPORT_TICKET_FAILED.format(**DEFAULT_BUTTON_LABELS),
+            SUPPORT_TICKET_FAILED.format(
+                **DEFAULT_BUTTON_LABELS, support_email=settings.EMAIL_SUPPORT
+            ),
             False,
         ),
     ],
