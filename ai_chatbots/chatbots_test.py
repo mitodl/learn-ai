@@ -5671,6 +5671,45 @@ async def test_the_filed_reply_tells_the_widget_a_ticket_exists(
 
 
 @pytest.mark.asyncio
+async def test_the_filed_reply_carries_the_reply_to_for_the_next_thread(
+    mocker, mock_checkpointer
+):
+    """A learner with no session typed the address; the widget resends it."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": 912}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    asked = await _say(chatbot, SUPPORT_PROBLEM, user_email=[""])
+    await _say(chatbot, "typed@example.com", user_email=[""])
+    filed = await _say(chatbot, "send", user_email=[""])
+    again = await _say(chatbot, "hello?", user_email=[""])
+
+    assert "user_email" not in _metadata_of(asked)
+    assert _metadata_of(filed)["user_email"] == "typed@example.com"
+    assert _metadata_of(again)["user_email"] == "typed@example.com"
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_request_does_not_carry_the_reply_to(
+    mocker, mock_checkpointer
+):
+    """Zendesk may have turned it down for the address itself."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": None, "reason": TICKET_REJECTED}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    await _say(chatbot, SUPPORT_PROBLEM)
+    reply = await _say(chatbot, "send")
+
+    assert _metadata_of(reply)["filed"] is True
+    assert "user_email" not in _metadata_of(reply)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("result", "expected", "done"),
     [
