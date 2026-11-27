@@ -1904,7 +1904,7 @@ class SupportBot(TruncatingChatbot):
             log.warning("Support answer attempt failed: %s", type(error).__name__)
             return ""
 
-    async def _reply_without_the_model(
+    async def _reply_without_the_model(  # noqa: PLR0913
         self,
         message: str,
         reply: str,
@@ -1912,6 +1912,7 @@ class SupportBot(TruncatingChatbot):
         *,
         awaiting_send: bool,
         filed: bool,
+        user_email: str = "",
     ) -> AsyncGenerator[str, None]:
         """
         Yield a reply the model had no part in, and leave the same trace behind
@@ -1933,7 +1934,12 @@ class SupportBot(TruncatingChatbot):
         )
         yield reply
         metadata = await self.get_metadata(
-            extra={"awaiting_send": awaiting_send, "filed": filed}
+            extra={
+                "awaiting_send": awaiting_send,
+                "filed": filed,
+                # Omitted when empty so ordinary turns are unchanged.
+                **({"user_email": user_email} if user_email else {}),
+            }
         )
         yield f"\n\n<!-- {metadata} -->\n\n"
 
@@ -2260,5 +2266,10 @@ class SupportBot(TruncatingChatbot):
             {**extra_state, **updates},
             awaiting_send=awaiting_send,
             filed=filed,
+            # The widget opens the next thread with this as user_email, so a
+            # learner with no session isn't asked for it again.
+            user_email=_accumulated(prior_state, updates, "user_email")
+            if filed
+            else "",
         ):
             yield chunk
