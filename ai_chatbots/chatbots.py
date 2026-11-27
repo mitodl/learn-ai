@@ -2267,9 +2267,10 @@ class SupportBot(TruncatingChatbot):
             awaiting_send=awaiting_send,
             filed=filed,
             # The widget opens the next thread with this as user_email, so a
-            # learner with no session isn't asked for it again.
-            user_email=_accumulated(prior_state, updates, "user_email")
-            if filed
+            # learner with no session isn't asked for it again. Only once a
+            # ticket exists: a rejected request may have been rejected for it.
+            user_email=session.support_ticket_email
+            if session and session.support_ticket_reference
             else "",
         ):
             yield chunk

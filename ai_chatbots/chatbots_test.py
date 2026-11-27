@@ -5692,6 +5692,24 @@ async def test_the_filed_reply_carries_the_reply_to_for_the_next_thread(
 
 
 @pytest.mark.asyncio
+async def test_a_rejected_request_does_not_carry_the_reply_to(
+    mocker, mock_checkpointer
+):
+    """Zendesk may have turned it down for the address itself."""
+    mocker.patch(
+        "ai_chatbots.chatbots.file_support_ticket",
+        AsyncMock(return_value={"reference": None, "reason": TICKET_REJECTED}),
+    )
+    chatbot = await _support_bot(mocker, mock_checkpointer, [])
+
+    await _say(chatbot, SUPPORT_PROBLEM)
+    reply = await _say(chatbot, "send")
+
+    assert _metadata_of(reply)["filed"] is True
+    assert "user_email" not in _metadata_of(reply)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("result", "expected", "done"),
     [
